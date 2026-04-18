@@ -1,19 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Autoresearch Architecture</title>
+  <title>autoresearch · Architecture</title>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --color-paper:   #f6f8fa;
-      --color-paper-2: #eef1f5;
-      --color-ink:     #1f2328;
-      --color-muted:   #656d76;
-      --color-accent:  #0969da;
-      --color-link:    #0969da;
+      --color-paper:   #faf6f0;
+      --color-paper-2: #f0ebe3;
+      --color-ink:     #1c1917;
+      --color-muted:   #78716c;
+      --color-soft:    #a8a29e;
+      --color-accent:  #d97706;
       --font-sans:     'Geist', system-ui, sans-serif;
       --font-serif:    'Instrument Serif', serif;
       --font-mono:     'Geist Mono', ui-monospace, monospace;
@@ -52,179 +52,162 @@
       margin-bottom: 1.5rem;
     }
 
-    .diagram-container {
-      background: var(--color-paper-2);
-      border: 1px solid rgba(31,35,40,0.12);
-      border-radius: 8px;
-      overflow-x: auto;
-      padding: 1.5rem;
-    }
-
     svg { width: 100%; min-width: 900px; display: block; }
   </style>
 </head>
 <body>
   <div class="frame">
-    <p class="eyebrow">Architecture · Autoresearch</p>
-    <h1>Multi-Agent Iterative Review Pipeline</h1>
+    <p class="eyebrow">Architecture · autoresearch</p>
+    <h1>Multi-Agent Iterative Review System</h1>
 
-    <div class="diagram-container">
-    <svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
-          <circle cx="1" cy="1" r="0.9" fill="rgba(31,35,40,0.10)"/>
+          <circle cx="1" cy="1" r="0.9" fill="rgba(28,25,23,0.10)"/>
         </pattern>
-        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#656d76"/></marker>
-        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0969da"/></marker>
-        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0969da"/></marker>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#78716c"/>
+        </marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#d97706"/>
+        </marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#c05621"/>
+        </marker>
       </defs>
 
-      <rect width="100%" height="100%" fill="#f6f8fa"/>
+      <!-- Background -->
+      <rect width="100%" height="100%" fill="#faf6f0"/>
       <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
 
-      <!-- ===== ARROWS (drawn first, behind nodes) ===== -->
+      <!-- ===== ARROWS (drawn before boxes for z-order) ===== -->
 
-      <!-- GitHub Issue → run.sh -->
-      <line x1="168" y1="120" x2="252" y2="120" stroke="#0969da" stroke-width="1" marker-end="url(#arrow-link)"/>
-      <rect x="184" y="108" width="44" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="206" y="117" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FETCH</text>
+      <!-- 1. GitHub Issue → run.sh -->
+      <line x1="480" y1="88" x2="480" y2="156" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- run.sh → Claude (implement) -->
-      <line x1="412" y1="100" x2="508" y2="72" stroke="#0969da" stroke-width="1" marker-end="url(#arrow-accent)"/>
-      <rect x="420" y="72" width="68" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="454" y="81" fill="#0969da" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ITER 1</text>
+      <!-- 2. .autoresearch/ → run.sh -->
+      <line x1="688" y1="184" x2="588" y2="184" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
+      <rect x="616" y="172" width="52" height="12" rx="2" fill="#faf6f0"/>
+      <text x="642" y="181" fill="#78716c" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CONFIG</text>
 
-      <!-- run.sh → Codex (review) -->
-      <line x1="412" y1="120" x2="508" y2="140" stroke="#656d76" stroke-width="1" marker-end="url(#arrow)"/>
-      <rect x="420" y="116" width="68" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="454" y="125" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ITER 2</text>
+      <!-- 3. run.sh → Claude -->
+      <line x1="420" y1="212" x2="248" y2="300" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- run.sh → OpenCode (review) -->
-      <line x1="412" y1="140" x2="508" y2="208" stroke="#656d76" stroke-width="1" marker-end="url(#arrow)"/>
-      <rect x="420" y="164" width="68" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="454" y="173" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ITER 3</text>
+      <!-- 4. run.sh → Codex -->
+      <line x1="480" y1="212" x2="480" y2="300" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- Agents → Score check (curved back) -->
-      <path d="M 660 72 Q 720 72 720 260 Q 720 300 660 300 L 412 300" stroke="#656d76" stroke-width="1" fill="none" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-      <rect x="704" y="172" width="40" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="724" y="181" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">FIX</text>
+      <!-- 5. run.sh → OpenCode -->
+      <line x1="540" y1="212" x2="712" y2="300" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- Score ≥ 85 → GitHub PR -->
-      <line x1="412" y1="300" x2="412" y2="372" stroke="#0969da" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
-      <rect x="380" y="328" width="64" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="412" y="337" fill="#0969da" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PASS</text>
+      <!-- 6. Claude → Score Gate -->
+      <line x1="212" y1="348" x2="420" y2="436" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- Score < 85 → loop back (left side) -->
-      <path d="M 332 300 Q 240 300 240 200 Q 240 140 332 140" stroke="#656d76" stroke-width="1" fill="none" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-      <rect x="208" y="212" width="52" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="234" y="221" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RETRY</text>
+      <!-- 7. Codex → Score Gate -->
+      <line x1="480" y1="348" x2="480" y2="436" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- run.sh → GitHub PR (direct) -->
-      <line x1="412" y1="392" x2="508" y2="392" stroke="#0969da" stroke-width="1" marker-end="url(#arrow-link)"/>
-      <rect x="428" y="380" width="56" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="456" y="389" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">MERGE</text>
+      <!-- 8. OpenCode → Score Gate -->
+      <line x1="744" y1="348" x2="540" y2="436" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
 
-      <!-- program.md + agents/*.md → run.sh -->
-      <line x1="168" y1="260" x2="332" y2="160" stroke="#656d76" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
-      <rect x="216" y="192" width="56" height="12" rx="2" fill="#f6f8fa"/>
-      <text x="244" y="201" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CONFIG</text>
+      <!-- 9. Score Gate → Auto PR (PASS) -->
+      <line x1="480" y1="484" x2="480" y2="548" stroke="#d97706" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <rect x="456" y="504" width="48" height="12" rx="2" fill="#faf6f0"/>
+      <text x="480" y="513" fill="#d97706" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em" font-weight="600">PASS</text>
+
+      <!-- 10. Score Gate → run.sh (FAIL, loop back) -->
+      <path d="M 372,460 L 80,460 L 80,184 L 372,184" fill="none" stroke="#d97706" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
+      <rect x="56" y="308" width="48" height="12" rx="2" fill="#faf6f0"/>
+      <text x="80" y="317" fill="#d97706" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em" font-weight="600">FAIL</text>
 
       <!-- ===== NODES ===== -->
 
-      <!-- GitHub Issue (external) -->
-      <rect x="28" y="84" width="140" height="72" rx="6" fill="#f6f8fa" stroke="rgba(31,35,40,0.12)" stroke-width="0.8"/>
-      <rect x="36" y="100" width="140" height="72" rx="6" fill="rgba(31,35,40,0.03)" stroke="rgba(31,35,40,0.30)" stroke-width="1"/>
-      <rect x="44" y="106" width="28" height="12" rx="2" fill="transparent" stroke="rgba(31,35,40,0.30)" stroke-width="0.8"/>
-      <text x="58" y="115" fill="rgba(31,35,40,0.60)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GH</text>
-      <text x="106" y="138" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GitHub Issue</text>
-      <text x="106" y="154" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">#N · OPEN</text>
+      <!-- 1. GitHub Issue (external) -->
+      <rect x="408" y="40" width="144" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="408" y="40" width="144" height="48" rx="6" fill="rgba(28,25,23,0.03)" stroke="rgba(28,25,23,0.30)" stroke-width="1"/>
+      <rect x="416" y="46" width="48" height="12" rx="2" fill="transparent" stroke="rgba(28,25,23,0.40)" stroke-width="0.8"/>
+      <text x="440" y="55" fill="rgba(28,25,23,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INPUT</text>
+      <text x="480" y="74" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GitHub Issue</text>
 
-      <!-- run.sh (focal) -->
-      <rect x="252" y="84" width="160" height="80" rx="6" fill="#f6f8fa"/>
-      <rect x="252" y="84" width="160" height="80" rx="6" fill="rgba(9,105,218,0.08)" stroke="#0969da" stroke-width="1"/>
-      <rect x="260" y="90" width="44" height="12" rx="2" fill="transparent" stroke="rgba(9,105,218,0.40)" stroke-width="0.8"/>
-      <text x="282" y="99" fill="rgba(9,105,218,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ORCH</text>
-      <text x="332" y="124" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">run.sh</text>
-      <text x="332" y="140" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">loop + score</text>
+      <!-- 2. run.sh (FOCAL) -->
+      <rect x="372" y="156" width="216" height="56" rx="6" fill="#faf6f0"/>
+      <rect x="372" y="156" width="216" height="56" rx="6" fill="rgba(217,119,6,0.08)" stroke="#d97706" stroke-width="1.2"/>
+      <rect x="380" y="162" width="40" height="12" rx="2" fill="transparent" stroke="rgba(217,119,6,0.50)" stroke-width="0.8"/>
+      <text x="400" y="171" fill="rgba(217,119,6,0.90)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CORE</text>
+      <text x="480" y="192" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">run.sh</text>
 
-      <!-- Score check node -->
-      <rect x="332" y="272" width="160" height="56" rx="6" fill="#f6f8fa"/>
-      <rect x="332" y="272" width="160" height="56" rx="6" fill="rgba(31,35,40,0.05)" stroke="#656d76" stroke-width="1"/>
-      <rect x="340" y="278" width="44" height="12" rx="2" fill="transparent" stroke="rgba(101,109,118,0.40)" stroke-width="0.8"/>
-      <text x="362" y="287" fill="rgba(101,109,118,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CHECK</text>
-      <text x="412" y="308" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Score Gate</text>
-      <text x="412" y="322" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">≥ 85 → pass</text>
+      <!-- 3. .autoresearch/ Config (store) -->
+      <rect x="688" y="160" width="176" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="688" y="160" width="176" height="48" rx="6" fill="rgba(28,25,23,0.05)" stroke="#78716c" stroke-width="1"/>
+      <rect x="696" y="166" width="52" height="12" rx="2" fill="transparent" stroke="rgba(28,25,23,0.30)" stroke-width="0.8"/>
+      <text x="722" y="175" fill="rgba(28,25,23,0.70)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONFIG</text>
+      <text x="776" y="194" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">.autoresearch/</text>
 
-      <!-- Claude agent -->
-      <rect x="508" y="40" width="152" height="64" rx="6" fill="#f6f8fa"/>
-      <rect x="508" y="40" width="152" height="64" rx="6" fill="#ffffff" stroke="#1f2328" stroke-width="1"/>
-      <rect x="516" y="46" width="48" height="12" rx="2" fill="transparent" stroke="rgba(31,35,40,0.40)" stroke-width="0.8"/>
-      <text x="540" y="55" fill="rgba(31,35,40,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
-      <text x="584" y="74" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Claude</text>
-      <text x="584" y="90" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">implement · review</text>
+      <!-- 4. Claude (backend) -->
+      <rect x="148" y="300" width="128" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="148" y="300" width="128" height="48" rx="6" fill="#ffffff" stroke="#1c1917" stroke-width="1"/>
+      <rect x="156" y="306" width="52" height="12" rx="2" fill="transparent" stroke="rgba(28,25,23,0.30)" stroke-width="0.8"/>
+      <text x="182" y="315" fill="rgba(28,25,23,0.70)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+      <text x="212" y="334" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Claude</text>
 
-      <!-- Codex agent -->
-      <rect x="508" y="108" width="152" height="64" rx="6" fill="#f6f8fa"/>
-      <rect x="508" y="108" width="152" height="64" rx="6" fill="#ffffff" stroke="#1f2328" stroke-width="1"/>
-      <rect x="516" y="114" width="48" height="12" rx="2" fill="transparent" stroke="rgba(31,35,40,0.40)" stroke-width="0.8"/>
-      <text x="540" y="123" fill="rgba(31,35,40,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
-      <text x="584" y="142" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Codex</text>
-      <text x="584" y="158" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">review · fix</text>
+      <!-- 5. Codex (backend) -->
+      <rect x="416" y="300" width="128" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="416" y="300" width="128" height="48" rx="6" fill="#ffffff" stroke="#1c1917" stroke-width="1"/>
+      <rect x="424" y="306" width="52" height="12" rx="2" fill="transparent" stroke="rgba(28,25,23,0.30)" stroke-width="0.8"/>
+      <text x="450" y="315" fill="rgba(28,25,23,0.70)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+      <text x="480" y="334" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Codex</text>
 
-      <!-- OpenCode agent -->
-      <rect x="508" y="176" width="152" height="64" rx="6" fill="#f6f8fa"/>
-      <rect x="508" y="176" width="152" height="64" rx="6" fill="#ffffff" stroke="#1f2328" stroke-width="1"/>
-      <rect x="516" y="182" width="48" height="12" rx="2" fill="transparent" stroke="rgba(31,35,40,0.40)" stroke-width="0.8"/>
-      <text x="540" y="191" fill="rgba(31,35,40,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
-      <text x="584" y="210" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">OpenCode</text>
-      <text x="584" y="226" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">review · fix</text>
+      <!-- 6. OpenCode (backend) -->
+      <rect x="680" y="300" width="128" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="680" y="300" width="128" height="48" rx="6" fill="#ffffff" stroke="#1c1917" stroke-width="1"/>
+      <rect x="688" y="306" width="52" height="12" rx="2" fill="transparent" stroke="rgba(28,25,23,0.30)" stroke-width="0.8"/>
+      <text x="714" y="315" fill="rgba(28,25,23,0.70)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+      <text x="744" y="334" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">OpenCode</text>
 
-      <!-- Config: program.md + agents/*.md -->
-      <rect x="28" y="228" width="140" height="64" rx="6" fill="#f6f8fa"/>
-      <rect x="28" y="228" width="140" height="64" rx="6" fill="rgba(31,35,40,0.05)" stroke="#656d76" stroke-width="1"/>
-      <rect x="36" y="234" width="44" height="12" rx="2" fill="transparent" stroke="rgba(101,109,118,0.40)" stroke-width="0.8"/>
-      <text x="58" y="243" fill="rgba(101,109,118,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONF</text>
-      <text x="98" y="264" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Config</text>
-      <text x="98" y="280" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">program.md</text>
+      <!-- 7. Score Gate (backend) -->
+      <rect x="372" y="436" width="216" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="372" y="436" width="216" height="48" rx="6" fill="#ffffff" stroke="#1c1917" stroke-width="1"/>
+      <rect x="380" y="442" width="44" height="12" rx="2" fill="transparent" stroke="rgba(28,25,23,0.30)" stroke-width="0.8"/>
+      <text x="402" y="451" fill="rgba(28,25,23,0.70)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GATE</text>
+      <text x="480" y="468" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Score ≥ 85?</text>
 
-      <!-- GitHub PR (external) -->
-      <rect x="508" y="360" width="152" height="64" rx="6" fill="#f6f8fa"/>
-      <rect x="508" y="360" width="152" height="64" rx="6" fill="rgba(31,35,40,0.03)" stroke="rgba(31,35,40,0.30)" stroke-width="1"/>
-      <rect x="516" y="366" width="28" height="12" rx="2" fill="transparent" stroke="rgba(31,35,40,0.30)" stroke-width="0.8"/>
-      <text x="530" y="375" fill="rgba(31,35,40,0.60)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GH</text>
-      <text x="584" y="396" fill="#1f2328" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GitHub PR</text>
-      <text x="584" y="412" fill="#656d76" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">merge · close</text>
+      <!-- 8. Auto PR → Merge → Close (link/output) -->
+      <rect x="340" y="548" width="280" height="48" rx="6" fill="#faf6f0"/>
+      <rect x="340" y="548" width="280" height="48" rx="6" fill="#ffffff" stroke="#c05621" stroke-width="1"/>
+      <rect x="348" y="554" width="56" height="12" rx="2" fill="transparent" stroke="rgba(192,86,33,0.40)" stroke-width="0.8"/>
+      <text x="376" y="563" fill="rgba(192,86,33,0.80)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OUTPUT</text>
+      <text x="480" y="580" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PR → Merge → Close Issue</text>
 
       <!-- ===== LEGEND ===== -->
-      <line x1="30" y1="468" x2="930" y2="468" stroke="rgba(31,35,40,0.10)" stroke-width="0.8"/>
-      <text x="30" y="488" fill="#656d76" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <line x1="32" y1="620" x2="928" y2="620" stroke="rgba(28,25,23,0.10)" stroke-width="0.8"/>
+      <text x="32" y="644" fill="#78716c" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
 
       <!-- Focal -->
-      <rect x="140" y="478" width="16" height="16" rx="3" fill="rgba(9,105,218,0.08)" stroke="#0969da" stroke-width="1"/>
-      <text x="164" y="490" fill="#1f2328" font-size="8" font-family="'Geist', sans-serif">Orchestrator (focal)</text>
+      <rect x="100" y="636" width="16" height="12" rx="2" fill="rgba(217,119,6,0.08)" stroke="#d97706" stroke-width="1"/>
+      <text x="124" y="646" fill="#78716c" font-size="8" font-family="'Geist', sans-serif">Orchestrator</text>
 
-      <!-- Agent -->
-      <rect x="300" y="478" width="16" height="16" rx="3" fill="#ffffff" stroke="#1f2328" stroke-width="1"/>
-      <text x="324" y="490" fill="#1f2328" font-size="8" font-family="'Geist', sans-serif">Agent</text>
-
-      <!-- External -->
-      <rect x="400" y="478" width="16" height="16" rx="3" fill="rgba(31,35,40,0.03)" stroke="rgba(31,35,40,0.30)" stroke-width="1"/>
-      <text x="424" y="490" fill="#1f2328" font-size="8" font-family="'Geist', sans-serif">External</text>
+      <!-- Backend -->
+      <rect x="224" y="636" width="16" height="12" rx="2" fill="#ffffff" stroke="#1c1917" stroke-width="1"/>
+      <text x="248" y="646" fill="#78716c" font-size="8" font-family="'Geist', sans-serif">Agent / Gate</text>
 
       <!-- Store -->
-      <rect x="520" y="478" width="16" height="16" rx="3" fill="rgba(31,35,40,0.05)" stroke="#656d76" stroke-width="1"/>
-      <text x="544" y="490" fill="#1f2328" font-size="8" font-family="'Geist', sans-serif">Config / State</text>
+      <rect x="340" y="636" width="16" height="12" rx="2" fill="rgba(28,25,23,0.05)" stroke="#78716c" stroke-width="1"/>
+      <text x="364" y="646" fill="#78716c" font-size="8" font-family="'Geist', sans-serif">Config Store</text>
 
-      <!-- Dashed -->
-      <line x1="660" y1="486" x2="696" y2="486" stroke="#656d76" stroke-width="1" stroke-dasharray="5,4"/>
-      <text x="704" y="490" fill="#1f2328" font-size="8" font-family="'Geist', sans-serif">Optional / retry</text>
+      <!-- External -->
+      <rect x="460" y="636" width="16" height="12" rx="2" fill="rgba(28,25,23,0.03)" stroke="rgba(28,25,23,0.30)" stroke-width="1"/>
+      <text x="484" y="646" fill="#78716c" font-size="8" font-family="'Geist', sans-serif">External Input</text>
 
       <!-- Accent arrow -->
-      <line x1="810" y1="486" x2="846" y2="486" stroke="#0969da" stroke-width="1" marker-end="url(#arrow-accent)"/>
-      <text x="854" y="490" fill="#1f2328" font-size="8" font-family="'Geist', sans-serif">Pass</text>
+      <line x1="580" y1="642" x2="608" y2="642" stroke="#d97706" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <text x="618" y="646" fill="#78716c" font-size="8" font-family="'Geist', sans-serif">Primary flow</text>
+
+      <!-- Dashed arrow -->
+      <line x1="720" y1="642" x2="748" y2="642" stroke="#d97706" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
+      <text x="758" y="646" fill="#78716c" font-size="8" font-family="'Geist', sans-serif">Loop back</text>
+
+      <!-- Editorial callout -->
+      <text x="480" y="680" fill="#a8a29e" font-size="9" font-family="'Instrument Serif', serif" font-style="italic" text-anchor="middle">Agents rotate via (iter − 1) % N — each iteration brings a fresh perspective</text>
 
     </svg>
-    </div>
   </div>
 </body>
 </html>

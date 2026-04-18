@@ -7,6 +7,25 @@
 
 支持任意 Git + GitHub 项目（Go、Node.js、Python、Rust、Java 等）。
 
+使用autoresearch实现本项目Issue#2：
+[![asciicast](https://asciinema.org/a/KdHGFHK6pcelUdPg.svg)](https://asciinema.org/a/KdHGFHK6pcelUdPg)
+
+## 架构图
+
+![](docs/architecture.png)
+
+图中展示了 autoresearch 的核心架构:
+- **GitHub Issue** → 触发输入
+- **run.sh** → 核心运行器
+- **.autoresearch/** → 日志记录
+- **Claude / Codex / OpenCode** → 三个 Agent 轮转审核
+- **Score ≥ 85?** → 评分门控,超过85分代码就合格了
+- **PASS** → 自动创建 PR → 合并 → 关闭 Issue
+- **FAIL** → 虚线回路，进入下一轮迭代
+
+_底部斜体注释说明了 Agent 轮转公式：(iter − 1) % N。_
+
+
 ## 快速开始
 
 先下载本项目到你的本地文件，可以下载压缩包或者使用`git clone`下载：
@@ -43,11 +62,15 @@ autoresearch/run.sh -c 42 10
 
 ## 前置条件
 
+需要安装这些工具。
+
+> 这三个Coding CLI你按需安装，如果你想使用这三个，那么就全部工具。
+
 ```bash
-gh auth status          # GitHub CLI
-which claude            # Claude Code CLI
-which codex             # OpenAI Codex CLI
-which opencode          # OpenCode CLI
+gh auth status          # GitHub CLI, https://cli.github.com/
+which claude            # Claude Code CLI, https://code.claude.com/docs/en/quickstart
+which codex             # OpenAI Codex CLI, https://developers.openai.com/codex/cli
+which opencode          # OpenCode CLI, https://opencode.ai/download
 ```
 
 项目需有对应语言的构建工具（Go/Node/Python/Rust/Java）。
