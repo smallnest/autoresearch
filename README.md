@@ -120,3 +120,8 @@ Issue -> Claude 实现 -> [Codex/OpenCode/Claude 轮流审核+修复] -> 自动 
 | `run.sh` | 主脚本 |
 | `program.md` | 默认实现规则与约束 |
 | `agents/*.md` | Agent 提示词模板 |
+
+
+## 类似项目
+
+- [snarktank/ralph](https://github.com/snarktank/ralph)
