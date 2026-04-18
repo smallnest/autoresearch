@@ -122,6 +122,14 @@ annealing_delay() {
     echo $delay
 }
 
+# 检测 Agent 输出是否包含致命错误（区分代码讨论中的 "error" 与真正的运行时错误）
+has_fatal_error() {
+    local log_file="$1"
+    # 仅匹配行首的错误模式，避免误判代码中讨论 "error handling" 等正常内容
+    # 匹配: Error: / ERROR: / Fatal: / Panic: / timeout / rate limit / authentication / API key
+    grep -qE '^(Error|ERROR|Fatal|Panic)[: ]|^(timeout|rate limit|authentication|unauthorized|API key).*error' "$log_file" 2>/dev/null
+}
+
 run_with_retry() {
     local agent=$1
     local prompt="$2"
@@ -151,7 +159,7 @@ run_with_retry() {
         fi
 
         if [ $exit_code -eq 0 ]; then
-            if ! grep -qi "error" "$log_file" 2>/dev/null; then
+            if ! has_fatal_error "$log_file"; then
                 local content_lines
                 content_lines=$(grep -v "^$" "$log_file" | wc -l)
                 if [ "$content_lines" -ge 5 ]; then
@@ -160,6 +168,8 @@ run_with_retry() {
                 else
                     log "警告: 输出内容过少 ($content_lines 行)"
                 fi
+            else
+                log "检测到致命错误，将重试"
             fi
         fi
 
@@ -662,7 +672,10 @@ run_opencode_review() {
 Issue 标题: $ISSUE_TITLE
 
 ---
-请审核代码并给出评分和改进建议:
+请审核代码并给出评分和改进建议。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
 $opencode_instructions
 "
 
@@ -745,7 +758,10 @@ run_claude_review() {
 Issue 标题: $ISSUE_TITLE
 
 ---
-请按照以下指令执行审核:
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
 $claude_instructions
 "
 
@@ -799,7 +815,10 @@ run_codex_review() {
 Issue 标题: $ISSUE_TITLE
 
 ---
-请审核代码并给出评分和改进建议:
+请审核代码并给出评分和改进建议。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
 $codex_instructions
 "
 
@@ -842,6 +861,7 @@ extract_score() {
     score_line=$(echo "$review_result" | grep -Eo '[0-9]+\.?[0-9]*(\s*/\s*100)' | head -1)
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
         echo "$score"
         return
     fi
@@ -850,6 +870,7 @@ extract_score() {
     score_line=$(echo "$review_result" | grep -E '\*\*(评分|Score)[^*]*100' | head -1)
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
         echo "$score"
         return
     fi
@@ -994,6 +1015,25 @@ restore_continue_state() {
     if [ -f "$WORK_DIR/.last_score" ]; then
         FINAL_SCORE=$(cat "$WORK_DIR/.last_score")
         log "上次评分: $FINAL_SCORE/100"
+    fi
+
+    # 恢复连续失败计数：从日志中统计最近连续失败的迭代数
+    if [ -f "$WORK_DIR/log.md" ]; then
+        CONSECUTIVE_ITERATION_FAILURES=0
+        # 从最近的迭代往回数，直到遇到非失败的迭代
+        local iter=$last_iter
+        while [ $iter -gt 0 ]; do
+            local iter_log_header
+            iter_log_header=$(grep -A1 "### 迭代 $iter " "$WORK_DIR/log.md" 2>/dev/null | head -2)
+            # 检查该迭代是否有失败标记（测试失败或审核失败）
+            if echo "$iter_log_header" | grep -qiE '失败|failed|❌'; then
+                CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+            else
+                break
+            fi
+            iter=$((iter - 1))
+        done
+        log "恢复连续失败计数: $CONSECUTIVE_ITERATION_FAILURES"
     fi
 
     # 恢复上次的审核反馈：从最后一个 review log 中提取
