@@ -9,6 +9,12 @@
 
 ## 快速开始
 
+先下载本项目到你的本地文件，可以下载压缩包或者使用`git clone`下载：
+```bash
+git clone git@github.com:smallnest/autoresearch.git
+```
+
+然后就可以使用`autoresearch/run.sh` 执行自动化开发工作了：
 ```bash
 # 处理当前目录项目的 Issue#10
 autoresearch/run.sh 10
