@@ -1,0 +1,153 @@
+[91m[1m| [0m[90m Bash     [0mLists all files in the project to understand the structure.
+
+agents
+CLAUDE.md
+docs
+issue-selector.md
+issue02.cast
+lib
+LICENSE
+program.md
+README.md
+run.sh
+tests
+
+/Users/chaoyuepan/ai/autoresearch/agents:
+claude.md
+codex.md
+opencode.md
+
+/Users/chaoyuepan/ai/autoresearch/docs:
+architecture.html
+architecture.png
+
+/Users/chaoyuepan/ai/autoresearch/lib:
+agent_logic.sh
+
+/Users/chaoyuepan/ai/autoresearch/tests:
+test_agent_logic.sh
+test_extract_score.sh
+
+I will begin by exploring the codebase to understand how agents are currently managed and identify the changes related to Issue #2, "feat: 支持指定启用的 agents 及其顺序".
+
+First, I'll list the files in the repository and then search for any recent changes or files related to agent configuration.
+[94m[1m| [0m[90m Grep     [0m{"pattern":"agent|order|rotation"}
+I will now examine `run.sh` and `lib/agent_logic.sh` to understand how the agent selection and ordering feature was implemented, and I'll also check the corresponding tests.
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will read `run.sh` to see how it handles arguments and interacts with the agent logic, followed by an examination of `lib/agent_logic.sh`.
+[96m[1m| [0m[90m Read     [0mlib/agent_logic.sh
+I have reviewed `run.sh` and `README.md`. The implementation of the new feature appears to be centered in `lib/agent_logic.sh`, which `run.sh` sources and utilizes via `parse_agent_list` and `get_review_agent`. I will now examine `lib/agent_logic.sh`.
+[96m[1m| [0m[90m Read     [0mtests/test_agent_logic.sh
+The logic in `lib/agent_logic.sh` appears solid. `parse_agent_list` correctly handles various input formats and validates agents, while `get_review_agent` effectively rotates through the agent list starting from the second iteration, as `run.sh` special-cases the first for initial implementation. For example, with `claude, codex, opencode`, Iteration 1 uses `claude`, Iteration 2 uses `codex`, and so on. I will now examine the tests in `tests/test_agent_logic.sh`.
+The tests are comprehensive, covering default and custom agent lists, single agents, space handling, validation of names and formats, duplicate agents, and rotation logic across various scenarios. I'll now execute them to verify they pass.
+[91m[1m| [0m[90m Bash     [0mRuns the agent logic unit tests.
+
+=== parse_agent_list() Tests ===
+
+--- Default (empty input) ---
+  PASS: default agent count (expected=3, actual=3)
+  PASS: default first agent (expected=claude, actual=claude)
+  PASS: default second agent (expected=codex, actual=codex)
+  PASS: default third agent (expected=opencode, actual=opencode)
+--- Custom agent list (no spaces) ---
+  PASS: two agents count (expected=2, actual=2)
+  PASS: two agents first (expected=claude, actual=claude)
+  PASS: two agents second (expected=codex, actual=codex)
+  PASS: three custom count (expected=3, actual=3)
+  PASS: three custom first (expected=opencode, actual=opencode)
+  PASS: three custom second (expected=claude, actual=claude)
+  PASS: three custom third (expected=codex, actual=codex)
+--- Single agent ---
+  PASS: single agent count (expected=1, actual=1)
+  PASS: single agent name (expected=claude, actual=claude)
+--- Input with spaces (trimmed) ---
+  PASS: space after comma: count (expected=2, actual=2)
+  PASS: space after comma: first (expected=claude, actual=claude)
+  PASS: space after comma: second (expected=codex, actual=codex)
+  PASS: spaces both sides: count (expected=3, actual=3)
+  PASS: spaces both sides: first (expected=claude, actual=claude)
+  PASS: spaces both sides: second (expected=codex, actual=codex)
+  PASS: spaces both sides: third (expected=opencode, actual=opencode)
+--- Invalid agent name ---
+  PASS: invalid agent rejected
+  PASS: single invalid agent rejected
+--- Invalid list format (empty entry) ---
+  PASS: leading comma rejected
+  PASS: trailing comma rejected
+  PASS: double comma rejected
+--- Duplicate agent (accepted, not blocked) ---
+  PASS: duplicate agents count (expected=2, actual=2)
+  PASS: duplicate agents first (expected=claude, actual=claude)
+  PASS: duplicate agents second (expected=claude, actual=claude)
+
+=== get_review_agent() Tests ===
+
+--- 3 agents (default) ---
+  PASS: iter 1, 3 agents (expected=0, actual=0)
+  PASS: iter 2, 3 agents (expected=1, actual=1)
+  PASS: iter 3, 3 agents (expected=2, actual=2)
+  PASS: iter 4, 3 agents (wraps) (expected=0, actual=0)
+  PASS: iter 5, 3 agents (wraps) (expected=1, actual=1)
+  PASS: iter 6, 3 agents (wraps) (expected=2, actual=2)
+  PASS: iter 7, 3 agents (wraps) (expected=0, actual=0)
+--- 2 agents ---
+  PASS: iter 1, 2 agents (expected=0, actual=0)
+  PASS: iter 2, 2 agents (expected=1, actual=1)
+  PASS: iter 3, 2 agents (wraps) (expected=0, actual=0)
+  PASS: iter 4, 2 agents (wraps) (expected=1, actual=1)
+--- 1 agent ---
+  PASS: iter 1, 1 agent (expected=0, actual=0)
+  PASS: iter 2, 1 agent (expected=0, actual=0)
+  PASS: iter 5, 1 agent (expected=0, actual=0)
+--- Rotation with agent names ---
+  PASS: iter 1 rotates to claude (expected=claude, actual=claude)
+  PASS: iter 2 rotates to codex (expected=codex, actual=codex)
+  PASS: iter 3 rotates to opencode (expected=opencode, actual=opencode)
+  PASS: iter 4 rotates to claude (expected=claude, actual=claude)
+  PASS: iter 5 rotates to codex (expected=codex, actual=codex)
+  PASS: iter 6 rotates to opencode (expected=opencode, actual=opencode)
+--- Custom order rotation ---
+  PASS: custom order iter 1 (expected=opencode, actual=opencode)
+  PASS: custom order iter 2 (expected=claude, actual=claude)
+  PASS: custom order iter 3 (expected=codex, actual=codex)
+  PASS: custom order iter 4 wraps (expected=opencode, actual=opencode)
+
+==========================================
+Total: 52  Passed: 52  Failed: 0
+==========================================
+
+[96m[1m| [0m[90m Read     [0mtests/test_extract_score.sh
+Tests passed, and the `run.sh` implementation correctly uses `AGENT_LIST` and the rotation logic while ensuring security by validating agent names. Error handling, consecutive failure tracking, and `CONTINUE_MODE` are all properly implemented and efficient. Documentation is updated. I'll now briefly check `tests/test_extract_score.sh` to ensure everything remains robust.
+The implementation for Issue #2 is highly effective and well-tested. The new feature fully supports specifying agents and their order via the `-a` flag, with rotation logic that correctly prioritizes the first agent for implementation and others for review. The logic is cleanly abstracted into `lib/agent_logic.sh`, and the comprehensive unit tests in `tests/test_agent_logic.sh` cover a wide range of edge cases. Security is addressed through a whitelist for agent names, and the overall code quality is high, with minimal performance overhead. I'll now finalize the audit report.
+
+## 审核报告
+
+### Issue
+- 编号: #2
+- 迭代次数: 1
+
+### 总体评价
+**评分: 98/100**
+
+该实现非常出色，完整地满足了需求，并且在代码结构、测试覆盖和安全边界处理上都表现得非常专业。
+
+#### 优点：
+1. **架构清晰**：将 Agent 列表解析和轮替逻辑提取到独立的库文件 `lib/agent_logic.sh` 中，保持了主脚本 `run.sh` 的简洁。
+2. **测试详尽**：新增了 `tests/test_agent_logic.sh`，覆盖了从默认配置、自定义顺序、单 Agent 模式到各种无效格式（如多余空格、重复逗号、未知 Agent 名）的 52 个测试用例。
+3. **安全加固**：在解析 Agent 列表时，通过白名单校验确保只有受支持的 Agent (claude, codex, opencode) 能被启用，有效防止了通过参数注入执行非法命令。
+4. **用户友好**：支持带有空格的输入（如 `claude, codex`），并能给出清晰的错误提示。
+5. **按需检查**：依赖检查逻辑已优化为仅检查当前启用的 Agent 对应的 CLI 工具，避免了未启用工具缺失导致的误报。
+
+### 严重问题 (必须修复)
+无。
+
+### 一般问题 (建议修复)
+无。
+
+### 建议改进 (可选)
+1. **Agent 白名单动态化**：目前 `valid_agents` 是硬编码在脚本中的。未来如果 Agent 种类变多，可以考虑通过扫描 `agents/` 目录下的 `.md` 文件来动态生成白名单，不过目前的静态白名单对于安全性来说更稳妥。
+
+### 审核结论
+- [x] 通过 / 需要修改 / 阻塞
+
+该实现已经达到生产级标准，可以直接合并。

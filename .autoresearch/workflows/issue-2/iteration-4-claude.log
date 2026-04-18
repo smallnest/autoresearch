@@ -1,0 +1,15 @@
+所有修复完成。总结改动：
+
+### 修复内容
+
+| # | 问题 | 修复 | 文件 |
+|---|------|------|------|
+| 1 | `AGENT_NAMES` 在使用前未初始化 | 将构建逻辑从第 1226 行移到第 1189 行之前（在 `check_dependencies` 调用之前） | `run.sh` |
+| 2 | 带空格的输入 `-a "claude, codex"` 解析失败 | 添加 `tr -d ' '` 去除空格后再解析 | `run.sh` |
+| 3 | 继续模式下日志搜索依赖当前 agent 列表 | 改用通配符 `ls -t "$WORK_DIR/iteration-${last_iter}-"*-review.log` | `run.sh` |
+| 4 | 缺少新功能的自动化测试 | 创建 `tests/test_agent_logic.sh`，覆盖 49 个测试用例 | 新文件 |
+
+### 测试结果
+
+- `tests/test_agent_logic.sh`: 49/49 passed
+- `tests/test_extract_score.sh`: 96/96 passed
