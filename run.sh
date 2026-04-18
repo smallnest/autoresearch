@@ -126,8 +126,38 @@ annealing_delay() {
 has_fatal_error() {
     local log_file="$1"
     # 仅匹配行首的错误模式，避免误判代码中讨论 "error handling" 等正常内容
-    # 匹配: Error: / ERROR: / Fatal: / Panic: / timeout / rate limit / authentication / API key
-    grep -qE '^(Error|ERROR|Fatal|Panic)[: ]|^(timeout|rate limit|authentication|unauthorized|API key).*error' "$log_file" 2>/dev/null
+    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
+    pattern+='|^(timeout|rate.limit|authentication|unauthorized|API.key).*error'
+    pattern+='|context.length.exceeded'
+    pattern+='|maximum.context.length'
+    pattern+='|token.limit.exceeded'
+    pattern+='|model.is.overloaded'
+    pattern+='|server.error'
+    pattern+='|service.unavailable'
+    pattern+='|internal.server.error'
+    pattern+='|too.many.requests'
+    pattern+='|quota.exceeded'
+    pattern+='|billing.hard.limit'
+    pattern+='|connection.refused'
+    pattern+='|network.error'
+    pattern+='|DNS.resolution'
+    grep -qE "$pattern" "$log_file" 2>/dev/null
+}
+
+# 检测 Agent 输出是否包含 API/网络级别的失败（区分于可恢复的内容错误）
+has_api_failure() {
+    local log_file="$1"
+    # 这些模式表示 API 调用本身失败，而非代码内容问题
+    local pattern='status.4[0-9][0-9]'
+    pattern+='|status.5[0-9][0-9]'
+    pattern+='|HTTP.4[0-9][0-9]'
+    pattern+='|HTTP.5[0-9][0-9]'
+    pattern+='|curl.*error'
+    pattern+='|fetch.failed'
+    pattern+='|request.failed'
+    pattern+='|response.is.empty'
+    pattern+='|no.response.received'
+    grep -qE "$pattern" "$log_file" 2>/dev/null
 }
 
 run_with_retry() {
@@ -159,7 +189,7 @@ run_with_retry() {
         fi
 
         if [ $exit_code -eq 0 ]; then
-            if ! has_fatal_error "$log_file"; then
+            if ! has_fatal_error "$log_file" && ! has_api_failure "$log_file"; then
                 local content_lines
                 content_lines=$(grep -v "^$" "$log_file" | wc -l)
                 if [ "$content_lines" -ge 5 ]; then
@@ -169,7 +199,7 @@ run_with_retry() {
                     log "警告: 输出内容过少 ($content_lines 行)"
                 fi
             else
-                log "检测到致命错误，将重试"
+                log "检测到致命错误或 API 失败，将重试"
             fi
         fi
 
@@ -672,9 +702,19 @@ run_opencode_review() {
 Issue 标题: $ISSUE_TITLE
 
 ---
-请审核代码并给出评分和改进建议。
+请按照以下指令执行审核。
 
 评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
 
 $opencode_instructions
 "
@@ -762,6 +802,16 @@ Issue 标题: $ISSUE_TITLE
 
 评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
 
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
 $claude_instructions
 "
 
@@ -815,9 +865,19 @@ run_codex_review() {
 Issue 标题: $ISSUE_TITLE
 
 ---
-请审核代码并给出评分和改进建议。
+请按照以下指令执行审核。
 
 评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
 
 $codex_instructions
 "
@@ -1244,7 +1304,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         CONSECUTIVE_ITERATION_FAILURES=0
     fi
 
-    if [ $CONSECUTIVE_ITERATION_FAILURES -ge 2 ]; then
+    if [ $CONSECUTIVE_ITERATION_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]; then
         error "连续 $CONSECUTIVE_ITERATION_FAILURES 次迭代失败，停止运行"
         record_final_result "$ISSUE_NUMBER" "agent_failed" "$ITERATION" "$FINAL_SCORE"
         exit 1
