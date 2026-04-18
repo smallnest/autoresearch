@@ -1361,11 +1361,15 @@ if check_score_passed "$FINAL_SCORE"; then
     # 提交所有更改
     log "提交更改..."
     git add -A
-    git commit -m "feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
-Implemented by autoresearch with score $FINAL_SCORE/100 after $ITERATION iterations.
+    # 构建 commit message：包含审核报告
+    COMMIT_MSG="feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
-Closes #$ISSUE_NUMBER" 2>/dev/null || log "没有需要提交的更改"
+$FINAL_REVIEW_REPORT
+
+Closes #$ISSUE_NUMBER"
+
+    git commit -m "$COMMIT_MSG" 2>/dev/null || log "没有需要提交的更改"
 
     # 推送分支
     log "推送分支 $BRANCH_NAME..."
