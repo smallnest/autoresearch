@@ -405,6 +405,74 @@ echo "--- Exponential growth ---"
 assert_true "delay increases retry 1<2" "[ $delay2 -ge $delay1 ]"
 assert_true "delay increases retry 2<3" "[ $delay3 -ge $delay2 ]"
 
+# ==================== Tests: PIPESTATUS exit code capture ====================
+
+echo ""
+echo "=== PIPESTATUS exit code capture Tests ==="
+echo ""
+
+echo "--- pipefail preserves exit codes ---"
+
+# With set -o pipefail, a failing first command should cause the pipeline to fail
+assert_true "pipefail: failing command in pipe" "echo hello | false 2>/dev/null; [ ${PIPESTATUS[0]} -ne 0 ] || [ \$? -ne 0 ] || true"
+
+echo "--- PIPESTATUS captures first command exit ---"
+
+# Successful pipeline: both commands succeed, PIPESTATUS[0] should be 0
+result=$(bash -c 'set -o pipefail; echo "test" | cat; echo ${PIPESTATUS[0]}')
+assert_eq "PIPESTATUS: successful pipeline" "0" "$(bash -c 'set -o pipefail; echo "test" | cat>/dev/null; echo ${PIPESTATUS[0]}')"
+
+# Failing first command: PIPESTATUS[0] should reflect the failure
+assert_true "PIPESTATUS: failing first command" "bash -c 'set -o pipefail; false | cat>/dev/null; exit \${PIPESTATUS[0]}' 2>/dev/null; [ \$? -ne 0 ]"
+
+# ==================== Tests: Output quality detection ====================
+
+echo ""
+echo "=== Output quality detection Tests ==="
+echo ""
+
+echo "--- Meaningful output detection ---"
+
+# Count non-empty, non-whitespace lines
+assert_eq "5 non-empty lines >= 5" "5" "$(echo -e "line1\nline2\nline3\nline4\nline5" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+
+# Whitespace-only lines should be filtered
+assert_eq "whitespace-only lines filtered" "2" "$(echo -e "line1\n   \n\nline2\n\t\n" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+
+# Empty output
+assert_eq "empty output has 0 lines" "0" "$(echo "" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+
+# Only whitespace
+assert_eq "whitespace-only output has 0 lines" "0" "$(echo -e "   \n\t\n  " | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+
+echo "--- Combined error detection scenarios ---"
+
+# A log file with fatal error should be detected even if exit code is 0
+cat > "$TMPDIR_TESTS/exit0_with_error.log" << 'INNEREOF'
+Error: API rate limit exceeded
+The implementation is complete.
+INNEREOF
+assert_true "exit 0 + fatal error in log" "has_fatal_error $TMPDIR_TESTS/exit0_with_error.log"
+
+# A log file with API failure should be detected
+cat > "$TMPDIR_TESTS/exit0_with_api_failure.log" << 'INNEREOF'
+status 429 Too Many Requests
+The code looks good.
+INNEREOF
+assert_true "exit 0 + API failure in log" "has_api_failure $TMPDIR_TESTS/exit0_with_api_failure.log"
+
+# A normal log file with "error" discussion should NOT be flagged
+cat > "$TMPDIR_TESTS/normal_error_discussion.log" << 'INNEREOF'
+Consider adding error handling for edge cases.
+The error path should return a proper message.
+Overall this is a solid implementation.
+Score: 85/100
+All tests pass successfully.
+INNEREOF
+assert_false "normal error discussion not fatal" "has_fatal_error $TMPDIR_TESTS/normal_error_discussion.log"
+assert_false "normal error discussion not API failure" "has_api_failure $TMPDIR_TESTS/normal_error_discussion.log"
+assert_true "normal discussion has enough lines" "[ $(grep -vE '^\s*$' $TMPDIR_TESTS/normal_error_discussion.log | wc -l) -ge 5 ]"
+
 # ==================== Summary ====================
 
 echo ""

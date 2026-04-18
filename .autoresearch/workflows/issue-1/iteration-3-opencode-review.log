@@ -1,0 +1,151 @@
+[91m[1m| [0m[90m Bash     [0mChecking git log for Issue #1 related commits.
+
+commit 2f6800f93b2a9aa1e1118cd298f7b325ec3b04df
+Author: chaoyuepan <chaoyuepan@baidu.com>
+Date:   2026-04-18 18:02:17 +0800
+
+    feat: 完善多 Agent 迭代流程 - 四项待改进修复
+    
+    1. 统一三个 Agent 审核函数的 prompt 一致性：OpenCode/Codex 审核函数
+       的 prompt 改为与 Claude 一致的"请按照以下指令执行审核"，并添加
+       评分维度与权重、评分标准说明
+    
+    2. 修复 CONSECUTIVE_ITERATION_FAILURES 阈值：将硬编码的 >= 2 改为
+       使用 MAX_CONSECUTIVE_FAILURES 常量（默认 3），使配置一致
+    
+    3. 扩展单元测试覆盖：新增 has_fatal_error()、has_api_failure()、
+       check_score_passed()、annealing_delay() 测试，从 28 个测试扩展到
+       84 个测试
+    
+    4. 增强 run_with_retry 错误检测：
+       - has_fatal_error() 新增 Exception、context length exceeded、
+         token limit、model overloaded、server error、quota exceeded、
+         connection refused、network error 等模式
+       - 新增 has_api_failure() 检测 HTTP 4xx/5xx、curl error、
+         fetch failed、request failed、response empty 等模式
+       - run_with_retry 同时检查两种错误检测函数
+
+commit 764f1b20b45809339858bd3e4bc6e4ce4a654c0b
+Author: chaoyuepan <chaoyuepan@baidu.com>
+Date:   2026-04-18 17:29:29 +0800
+
+    feat: 完善多 Agent 迭代流程 - 四项改进
+    
+    1. 审核评分格式一致性: 三个 Agent 审核函数 prompt 统一添加评分格式指导
+       (评分: X/100)，确保 extract_score() 能可靠提取分数
+    
+    2. 继续模式恢复连续失败计数: 从 log.md 中反向统计最近连续失败的
+       迭代数，恢复 CONSECUTIVE_ITERATION_FAILURES 状态
+    
+    3. 新增 extract_score() 单元测试: 25 个测试用例覆盖 6 种评分格式、
+       边界情况和优先级，同时修复百分制小数分数未取整的问题
+    
+    4. 改进 run_with_retry 错误检测: 用 has_fatal_error() 替换
+       grep -qi "error"，仅匹配行首的致命错误模式，避免误判代码中
+       讨论 "error handling" 等正常内容
+
+commit f4e01b55fe53edf7414cbc7935c701d2de1aba54
+Author: chaoyuepan <chaoyuepan@baidu.com>
+Date:   2026-04-18 17:07:49 +0800
+
+    feat: 完善多 Agent 迭代流程与继续模式
+    
+    - 修复 Agent 轮转顺序：迭代2起由 Codex 开始审核，避免 Claude 自己审自己
+    - 新增 -c 继续模式：支持从中断的迭代恢复运行
+    - 更新 README：增加继续模式示例和参数说明
+    - 添加 agent 指令模板、program.md 规则文件、.gitignore
+
+commit ff4a8019a0d0c46ea475f943f66a9e59ade511e2
+Author: smallnest <smallnest@gmail.com>
+Date:   2026-04-18 15:01:02 +0800
+
+    Initial commit
+
+[94m[1m| [0m[90m Glob     [0m{"pattern":"**/*"}
+[94m[1m| [0m[90m Grep     [0m{"pattern":"continue mode|iteration|Agent"}
+[94m[1m| [0m[90m call_omo_agent  [0m{"description":"Search for Issue #1 implementation details","subagent_type":"explore","run_in_background":true,"prompt":"Find the changes implemented for Issue #1: \"feat: 完善多 Agent 迭代流程与继续模式\". Look for changes in iteration logic, agent rotation, and the continue mode flag (-c). Analyze the code in run.sh and related files."}
+[96m[1m| [0m[90m Read     [0mrun.sh
+[96m[1m| [0m[90m Read     [0mtests/test_extract_score.sh
+[94m[1m| [0m[90m background_output  [0mexplore - Search for Issue #1 implementation details
+[96m[1m| [0m[90m Read     [0magents/opencode.md
+[96m[1m| [0m[90m Read     [0magents/claude.md
+[96m[1m| [0m[90m Read     [0magents/codex.md
+## 审核报告
+
+### Issue
+- 编号: #1
+- 迭代次数: 3 (基于 git commit 历史和代码现状)
+
+### 总体评价
+**评分: 99/100**
+
+这项实现非常出色，完整且健壮地解决了 Issue #1 提出的多 Agent 迭代流程与继续模式的需求。代码质量极高，测试覆盖详尽，且在错误处理和状态恢复方面展现了深刻的实用主义思考。
+
+---
+
+### 严重问题 (必须修复)
+无。
+
+---
+
+### 一般问题 (建议修复)
+无。
+
+---
+
+### 建议改进 (可选)
+
+1. **状态存储解耦**:
+   - **当前实现**: `restore_continue_state` 部分依赖于从 `log.md` 中解析中文/英文混合的失败标记来恢复 `CONSECUTIVE_ITERATION_FAILURES`。
+   - **改进建议**: 虽然目前工作良好，但如果未来日志格式微调可能导致解析失败。建议将所有核心状态变量（如 `CONSECUTIVE_FAILURES`, `AGENT_INDEX` 等）统一持久化到一个简单的 JSON 或 Key-Value 文件（如 `.workflow_state`）中。
+
+2. **语言检测扩展**:
+   - **当前实现**: `detect_language` 覆盖了主流语言。
+   - **改进建议**: 可以增加对更多配置文件（如 `workspace.xml` 或 `project.clj`）的识别，或支持用户通过环境变量 `AUTORESEARCH_LANG` 强制指定语言。
+
+---
+
+### 审核结论
+- [x] 通过
+
+这项工作已经达到了可以直接合并的标准。特别值得称赞的是 `tests/test_extract_score.sh` 中对正则表达式和边界情况的严密测试，这为自动化流程的稳定性提供了核心保障。
+[94m[1m| [0m[90m background_output  [0mexplore - Search for Issue #1 implementation details
+The implementation of **Issue #1: "feat: 完善多 Agent 迭代流程与继续模式"** is complete and of high quality. Here is the review report:
+
+## 审核报告
+
+### Issue
+- 编号: #1
+- 迭代次数: 3 (基于代码现状和 Git 历史)
+
+### 总体评价
+**评分: 99/100**
+
+这项实现非常出色，完整且健壮地解决了 Issue #1 提出的核心需求。通过引入多 Agent 轮转审核机制和完善的“继续模式”，极大地提升了自动化流程的可靠性和灵活性。代码逻辑严密，特别是在错误检测和状态恢复方面的处理展现了极高的专业水准。
+
+---
+
+### 严重问题 (必须修复)
+无。
+
+---
+
+### 一般问题 (建议修复)
+无。
+
+---
+
+### 建议改进 (可选)
+
+1. **状态持久化增强**:
+   - 目前 `CONSECUTIVE_ITERATION_FAILURES` 的恢复依赖于对 `log.md` 文本内容的正则解析。虽然目前方案有效，但为了更高的健壮性，建议将所有关键状态变量（如失败计数、当前 Agent 索引等）统一持久化到一个专门的状态文件（如 `.workflow_state.json`）中，以减少对日志格式的依赖。
+
+2. **语言检测能力扩展**:
+   - `detect_language` 函数目前覆盖了主流语言。建议未来可以增加对多模块项目或通过 `AUTORESEARCH_LANG` 环境变量手动指定语言的支持，以适应更复杂的项目结构。
+
+---
+
+### 审核结论
+- [x] 通过
+
+这项工作达到了直接合并的标准。特别是配套的单元测试 `tests/test_extract_score.sh` 为整个自动化闭环提供了坚实的稳定性保障。
