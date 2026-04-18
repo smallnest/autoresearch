@@ -4,12 +4,15 @@
 # 通用版本 - 可处理任意 Git + GitHub 项目
 #
 # 用法:
-#   ./run.sh [-p project_path] <issue_number> [max_iterations]
+#   ./run.sh [-p project_path] [-a agents] [-c] <issue_number> [max_iterations]
 #
 # 示例:
 #   ./run.sh 42                              # 处理当前目录项目的 Issue #42
 #   ./run.sh -p /path/to/project 42         # 处理指定项目的 Issue #42
 #   ./run.sh -p /path/to/project 42 10      # 最多迭代 10 次
+#   ./run.sh -a claude,codex 42              # 只启用 Claude 和 Codex
+#   ./run.sh -a claude 42                    # 单 agent 模式
+#   ./run.sh -a claude,opencode,codex 42     # 自定义 agent 顺序
 #
 # 要求:
 #   - 项目目录必须是 git 仓库
@@ -40,6 +43,15 @@ RETRY_MAX_DELAY=60
 
 # 脚本所在目录（用于查找默认 agents 配置和 program.md）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 共享 agent 逻辑
+AGENT_LOGIC_LIB="$SCRIPT_DIR/lib/agent_logic.sh"
+if [ ! -f "$AGENT_LOGIC_LIB" ]; then
+    echo "ERROR: 缺少 agent 逻辑文件: $AGENT_LOGIC_LIB" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$AGENT_LOGIC_LIB"
 
 # 默认项目根目录 = 当前工作目录 (可通过 -p 参数覆盖)
 PROJECT_ROOT="$(pwd)"
@@ -238,12 +250,14 @@ run_with_retry() {
 }
 
 usage() {
-    echo "用法: $0 [-p project_path] [-c] <issue_number> [max_iterations]"
+    echo "用法: $0 [-p project_path] [-a agents] [-c] <issue_number> [max_iterations]"
     echo ""
     echo "通用自动化 Issue 处理工具，支持任意 Git + GitHub 项目。"
     echo ""
     echo "参数:"
     echo "  -p <path>        项目路径 (默认: 当前目录)"
+    echo "  -a <agents>      逗号分隔的 agent 列表 (默认: claude,codex,opencode)"
+    echo "                   第一个 agent 用于初始实现，后续 agent 按顺序轮流审核+修复"
     echo "  -c               继续模式，从上次中断的迭代继续"
     echo "  issue_number     GitHub Issue 编号"
     echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
@@ -259,7 +273,10 @@ usage() {
     echo "  program.md                   实现规则与约束"
     echo ""
     echo "示例:"
-    echo "  $0 42                                  # 处理当前项目的 Issue #42"
+    echo "  $0 42                                  # 默认: Claude 实现，Codex/OpenCode/Claude 轮流审核"
+    echo "  $0 -a claude,codex 42                  # 只启用 Claude 和 Codex"
+    echo "  $0 -a claude,opencode,codex 42         # 自定义顺序"
+    echo "  $0 -a claude 42                        # 单 agent 模式"
     echo "  $0 -p /path/to/project 42             # 处理指定项目的 Issue #42"
     echo "  $0 -p /path/to/project 42 10          # 最多迭代 10 次"
     echo "  $0 -c 42                              # 继续处理 Issue #42"
@@ -312,20 +329,14 @@ check_dependencies() {
         missing=1
     fi
 
-    if ! command -v claude &> /dev/null; then
-        error "claude (Claude Code CLI) 未安装"
-        missing=1
-    fi
-
-    if ! command -v codex &> /dev/null; then
-        error "codex (OpenAI Codex CLI) 未安装"
-        missing=1
-    fi
-
-    if ! command -v opencode &> /dev/null; then
-        error "opencode CLI 未安装"
-        missing=1
-    fi
+    # 只检查启用的 agent 是否已安装
+    local agent_name
+    for agent_name in "${AGENT_NAMES[@]}"; do
+        if ! command -v "$agent_name" &> /dev/null; then
+            error "$agent_name CLI 未安装 (在 -a 参数中指定)"
+            missing=1
+        fi
+    done
 
     # 检查语言特定工具
     local required=$(get_required_tools)
@@ -1112,13 +1123,9 @@ restore_continue_state() {
     CONSECUTIVE_ITERATION_FAILURES=0
 
     # 恢复上次的审核反馈：从最后一个 review log 中提取
+    # 使用通配符搜索，避免 continue 模式更改 agent 列表后找不到之前 agent 的日志
     local last_review_log=""
-    for agent_name in "${AGENT_NAMES[@]}"; do
-        local f="$WORK_DIR/iteration-${last_iter}-${agent_name}-review.log"
-        if [ -f "$f" ]; then
-            last_review_log="$f"
-        fi
-    done
+    last_review_log=$(ls -t "$WORK_DIR/iteration-${last_iter}-"*-review.log 2>/dev/null | head -1)
 
     if [ -n "$last_review_log" ] && [ -f "$last_review_log" ]; then
         PREVIOUS_FEEDBACK=$(cat "$last_review_log")
@@ -1154,10 +1161,12 @@ restore_continue_state() {
 # ==================== 参数解析 ====================
 
 CONTINUE_MODE=0
+AGENT_LIST=""
 
-while getopts "p:c" opt; do
+while getopts "p:a:c" opt; do
     case $opt in
         p) PROJECT_ROOT="$(cd "$OPTARG" && pwd)" ;;
+        a) AGENT_LIST="$OPTARG" ;;
         c) CONTINUE_MODE=1 ;;
         *) usage ;;
     esac
@@ -1183,6 +1192,14 @@ else
 fi
 log "最大迭代次数: $MAX_ITERATIONS"
 
+# 构建 AGENT_NAMES 数组（必须在 check_dependencies 和日志输出之前）
+if ! parse_agent_list "$AGENT_LIST"; then
+    error "$AGENT_LIST_ERROR"
+    exit 1
+fi
+
+log "Agent 列表: ${AGENT_NAMES[*]} (初始实现: ${AGENT_NAMES[0]})"
+
 # 检查项目环境
 check_project
 
@@ -1200,7 +1217,6 @@ create_branch "$ISSUE_NUMBER"
 
 # ==================== 继续模式：恢复状态 ====================
 
-AGENT_NAMES=("claude" "codex" "opencode")
 ITERATION=0
 PREVIOUS_FEEDBACK=""
 FINAL_SCORE=0
@@ -1228,14 +1244,9 @@ fi
 
 # ==================== 迭代循环 ====================
 
-# Agent 列表: 0=claude, 1=codex, 2=opencode
-# 迭代 1:  Claude 初始实现
-# 迭代 2+: 三 agent 轮流审核 + 修复
-
-get_review_agent() {
-    local iter=$1
-    echo $(( (iter - 1) % 3 ))  # iter=2 → 1=codex, iter=3 → 2=opencode, iter=4 → 0=claude
-}
+# Agent 列表: 第一个用于初始实现，后续按顺序轮流审核
+# 迭代 1:  第一个 agent 初始实现
+# 迭代 2+: 所有 agent 轮流审核 + 修复
 
 run_review_and_fix() {
     local agent_idx=$1
@@ -1288,17 +1299,19 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     log "=========================================="
     log "迭代 $ITERATION/$MAX_ITERATIONS"
     if [ $ITERATION -eq 1 ]; then
-        log "本轮: Claude 初始实现"
+        log "本轮: ${AGENT_NAMES[0]} 初始实现"
     else
         agent_idx=$(get_review_agent $ITERATION)
         log "本轮: ${AGENT_NAMES[$agent_idx]} 审核 + 修复"
     fi
     log "=========================================="
 
-    # ---- 迭代 1: Claude 初始实现 ----
+    # ---- 迭代 1: 第一个 agent 初始实现 ----
     if [ $ITERATION -eq 1 ]; then
-        if ! run_claude "$ISSUE_NUMBER" "$ITERATION" ""; then
-            log "Claude 初始实现失败，跳到下一次迭代"
+        first_agent="${AGENT_NAMES[0]}"
+        first_impl_func="run_${first_agent}"
+        if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
+            log "$first_agent 初始实现失败，跳到下一次迭代"
             ITERATION_FAILED=1
         else
             if ! run_tests "$ITERATION"; then
@@ -1316,7 +1329,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         continue
     fi
 
-    # ---- 迭代 >=2: 三 agent 轮流审核 + 修复 ----
+    # ---- 迭代 >=2: agent 轮流审核 + 修复 ----
     agent_idx=$(get_review_agent $ITERATION)
     run_review_and_fix $agent_idx
 

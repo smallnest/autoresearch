@@ -28,6 +28,12 @@ autoresearch/run.sh -p /path/to/project 10 16
 # 调整达标线为90分，处理 Issue#10
 PASSING_SCORE=90 autoresearch/run.sh 10
 
+# 指定启用的 agents 及顺序（首个 agent 做初始实现）
+autoresearch/run.sh -a claude,codex 10
+
+# 自定义审核轮转顺序
+autoresearch/run.sh -a opencode,claude,codex 10
+
 # 继续处理 Issue#42，默认追加 42 次迭代
 autoresearch/run.sh -c 42
 
@@ -49,11 +55,12 @@ which opencode          # OpenCode CLI
 ## 工作流程
 
 ```
-Issue -> Claude 实现 -> [Codex/OpenCode/Claude 轮流审核+修复] -> 自动 PR -> 自动合并 -> 自动关闭 Issue
+Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 PR -> 自动合并 -> 自动关闭 Issue
 ```
 
-- **迭代 1**: Claude 初始实现
-- **迭代 2+**: Codex / OpenCode / Claude 三 agent 轮流审核并修复
+- **默认 agents**: `claude,codex,opencode`
+- **迭代 1**: `-a` 列表中的第一个 agent 初始实现
+- **迭代 2+**: 所有启用的 agents 按顺序轮流审核并修复
 - 评分达标（默认 >= 85）后自动创建 PR、合并、评论并关闭 Issue
 
 ## 项目自定义配置
@@ -108,6 +115,7 @@ Issue -> Claude 实现 -> [Codex/OpenCode/Claude 轮流审核+修复] -> 自动 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `-p <path>` | 当前目录 | 项目路径 |
+| `-a <agents>` | `claude,codex,opencode` | 指定启用 agents 及顺序（第一个负责初始实现） |
 | `-c` | 关闭 | 继续模式，从上次中断的迭代继续 |
 | `PASSING_SCORE` | 85 | 达标评分线（百分制） |
 | `MAX_CONSECUTIVE_FAILURES` | 3 | 连续失败停止阈值 |
@@ -118,8 +126,10 @@ Issue -> Claude 实现 -> [Codex/OpenCode/Claude 轮流审核+修复] -> 自动 
 | 文件 | 用途 |
 |------|------|
 | `run.sh` | 主脚本 |
+| `lib/agent_logic.sh` | agent 列表解析与轮转共享逻辑 |
 | `program.md` | 默认实现规则与约束 |
 | `agents/*.md` | Agent 提示词模板 |
+| `tests/test_agent_logic.sh` | agent 选择与顺序逻辑测试 |
 
 
 ## 类似项目
