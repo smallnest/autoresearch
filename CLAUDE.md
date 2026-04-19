@@ -24,13 +24,35 @@ There are no build/test/lint commands for autoresearch itself. The only test fil
 ### Iteration Loop
 
 ```
-Iteration 1: Claude implements → tests run
-Iteration 2+: Codex/OpenCode/Claude round-robin review + fix
-    → Score >= 85? → auto commit/PR/merge/close Issue
+Planning Phase: First agent reads Issue → outputs tasks.json with subtask breakdown
+Iteration 1: Agent implements current subtask → tests run
+Iteration 2+: Agent round-robin review + fix per subtask
+    → Score >= 85? → mark subtask passed → advance to next subtask
     → Score < 85?  → agent fixes based on review feedback → next iteration
+    → All subtasks passed? → auto commit/PR/merge/close Issue
 ```
 
-Agent rotation (from iteration 2): `(iter - 1) % 3` maps to codex → opencode → claude → ...
+If planning fails (no tasks.json generated), falls back to original mode: implement entire Issue in one go.
+
+Agent rotation (from iteration 2): `(iter - 1) % N` where N = number of agents.
+
+### Subtask System (tasks.json)
+
+Planning phase (before iteration 1) asks the first agent to split the Issue into subtasks, saved to `.autoresearch/workflows/issue-N/tasks.json`:
+
+```json
+{
+  "issueNumber": 42,
+  "subtasks": [
+    { "id": "T-001", "title": "...", "description": "...", "acceptanceCriteria": [...], "priority": 1, "passes": false }
+  ]
+}
+```
+
+- Each iteration focuses on one `passes: false` subtask
+- Quality gate passes → `mark_subtask_passed()` sets `passes: true`
+- `all_subtasks_passed()` → enters PR/merge flow
+- No tasks.json (planning failure) → backward-compatible original mode
 
 ### Agent Invocation
 
@@ -41,12 +63,13 @@ Agents are external CLIs called via `run_with_retry()` with exponential backoff:
 
 ### Prompt Assembly
 
-Each agent prompt composes three parts:
+Each agent prompt composes these parts:
 1. Task context (Issue info, project path, language, iteration)
-2. `program.md` content — global rules and constraints
-3. Agent-specific instructions from `agents/<name>.md`
+2. Subtask section (current subtask details + progress) — from `get_subtask_section()` / `get_subtask_review_section()`
+3. `program.md` content — global rules and constraints
+4. Agent-specific instructions from `agents/<name>.md`
 
-For review prompts, only task context + agent instructions are included (no program.md).
+For review prompts, only task context + subtask review section + agent instructions are included (no program.md).
 
 ### Configuration Override (Two-Tier)
 
@@ -60,7 +83,7 @@ Project-level configs in `$PROJECT_ROOT/.autoresearch/` take precedence over def
 
 ### Continue Mode (`-c`)
 
-Restores state from `.autoresearch/workflows/issue-N/` log files: iteration count, last score, consecutive failure count, and last review feedback. MAX_ITERATIONS becomes `last_iteration + new_count`.
+Restores state from `.autoresearch/workflows/issue-N/` log files: iteration count, last score, consecutive failure count, last review feedback, and subtask state (from tasks.json). MAX_ITERATIONS becomes `last_iteration + new_count`.
 
 ## Key Design Constraints
 

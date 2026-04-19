@@ -467,6 +467,188 @@ create_branch() {
     fi
 }
 
+# ==================== 子任务 (tasks.json) 相关函数 ====================
+
+# 获取 tasks.json 文件路径
+get_tasks_file() {
+    echo "$WORK_DIR/tasks.json"
+}
+
+# 检查 tasks.json 是否存在且包含子任务
+has_subtasks() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 1
+    fi
+    local count
+    count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+    [ -n "$count" ] && [ "$count" -gt 0 ]
+}
+
+# 获取第一个 passes: false 的子任务信息（JSON 格式）
+get_current_subtask() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo ""
+        return
+    fi
+    jq '.subtasks | map(select(.passes == false)) | .[0]' "$tasks_file" 2>/dev/null
+}
+
+# 获取当前子任务的 ID
+get_current_subtask_id() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        echo ""
+        return
+    fi
+    echo "$subtask" | jq -r '.id' 2>/dev/null
+}
+
+# 获取当前子任务的标题
+get_current_subtask_title() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        echo ""
+        return
+    fi
+    echo "$subtask" | jq -r '.title' 2>/dev/null
+}
+
+# 标记指定子任务为 passes: true
+mark_subtask_passed() {
+    local subtask_id="$1"
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 1
+    fi
+    local tmp_file
+    tmp_file=$(mktemp)
+    jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file" && mv "$tmp_file" "$tasks_file"
+    log "子任务 $subtask_id 已标记为通过"
+}
+
+# 检查所有子任务是否都已通过
+all_subtasks_passed() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        # 无 tasks.json 视为全部通过（兼容旧模式）
+        return 0
+    fi
+    local unfinished
+    unfinished=$(jq '[.subtasks[] | select(.passes == false)] | length' "$tasks_file" 2>/dev/null)
+    [ "$unfinished" = "0" ]
+}
+
+# 获取子任务进度摘要（用于日志和 prompt 注入）
+get_subtask_progress_summary() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo ""
+        return
+    fi
+
+    local total passed current_id current_title
+    total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+    passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+    current_id=$(get_current_subtask_id)
+    current_title=$(get_current_subtask_title)
+
+    echo "子任务进度: $passed/$total 已完成 | 当前子任务: $current_id - $current_title"
+}
+
+# 生成子任务注入文本（用于 prompt）
+get_subtask_section() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        echo ""
+        return
+    fi
+
+    local id title desc criteria
+    id=$(echo "$subtask" | jq -r '.id')
+    title=$(echo "$subtask" | jq -r '.title')
+    desc=$(echo "$subtask" | jq -r '.description')
+    criteria=$(echo "$subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+
+    local progress
+    progress=$(get_subtask_progress_summary)
+
+    cat << EOF
+
+## 当前子任务
+
+$progress
+
+### 子任务详情
+
+- **ID**: $id
+- **标题**: $title
+- **描述**: $desc
+- **验收条件**:
+$(echo "$criteria" | while read -r line; do echo "  - $line"; done)
+
+请专注于实现此子任务，不要处理其他子任务。完成此子任务后等待审核。
+EOF
+}
+
+# 生成规划阶段子任务注入文本（用于审核 prompt，包含所有子任务状态）
+get_subtask_review_section() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo ""
+        return
+    fi
+
+    local progress
+    progress=$(get_subtask_progress_summary)
+
+    local current_subtask
+    current_subtask=$(get_current_subtask)
+    if [ -z "$current_subtask" ] || [ "$current_subtask" = "null" ]; then
+        echo "
+
+## 子任务审核
+
+$progress
+
+所有子任务已完成审核。"
+        return
+    fi
+
+    local id title desc criteria
+    id=$(echo "$current_subtask" | jq -r '.id')
+    title=$(echo "$current_subtask" | jq -r '.title')
+    desc=$(echo "$current_subtask" | jq -r '.description')
+    criteria=$(echo "$current_subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+
+    cat << EOF
+
+## 子任务审核
+
+$progress
+
+请审核当前子任务的实现：
+
+- **ID**: $id
+- **标题**: $title
+- **描述**: $desc
+- **验收条件**:
+$(echo "$criteria" | while read -r line; do echo "  - $line"; done)
+
+请针对此子任务的验收条件进行审核。
+EOF
+}
+
 # ==================== 跨迭代经验日志 (progress.md) ====================
 
 # 初始化 progress.md
@@ -621,6 +803,134 @@ $content
 EOF
 }
 
+# ==================== 规划阶段 ====================
+
+run_planning_phase() {
+    local issue_number=$1
+
+    log "规划阶段: 拆分 Issue #$issue_number 为子任务..."
+
+    # 如果已有 tasks.json（继续模式），跳过规划
+    if has_subtasks; then
+        log "已有 tasks.json，跳过规划阶段"
+        local progress
+        progress=$(get_subtask_progress_summary)
+        log "$progress"
+        return 0
+    fi
+
+    local first_agent="${AGENT_NAMES[0]}"
+    local agent_instructions_file
+    agent_instructions_file=$(get_agent_instructions "$first_agent")
+
+    local agent_instructions=""
+    if [ -n "$agent_instructions_file" ]; then
+        agent_instructions=$(cat "$agent_instructions_file")
+        log "使用指令文件: $agent_instructions_file"
+    fi
+
+    local program_instructions
+    program_instructions=$(get_program_instructions)
+
+    local prompt="规划 GitHub Issue #$issue_number 的子任务拆分
+
+项目路径: $PROJECT_ROOT
+项目语言: $(detect_language)
+Issue 标题: $ISSUE_TITLE
+Issue 内容: $ISSUE_BODY
+
+---
+请分析此 Issue，将其拆分为可独立完成的子任务。每个子任务应能在一次迭代内完成。
+
+输出格式要求：在输出的最后，必须输出一个 JSON 代码块（用 \`\`\`json 和 \`\`\` 包裹），格式如下：
+
+\`\`\`json
+{
+  \"issueNumber\": $issue_number,
+  \"subtasks\": [
+    {
+      \"id\": \"T-001\",
+      \"title\": \"子任务标题\",
+      \"description\": \"详细描述此子任务需要完成的工作\",
+      \"acceptanceCriteria\": [\"验收条件1\", \"验收条件2\"],
+      \"priority\": 1,
+      \"passes\": false
+    },
+    {
+      \"id\": \"T-002\",
+      \"title\": \"子任务标题\",
+      \"description\": \"详细描述\",
+      \"acceptanceCriteria\": [\"验收条件1\"],
+      \"priority\": 2,
+      \"passes\": false
+    }
+  ]
+}
+\`\`\`
+
+拆分原则：
+1. 每个子任务应是一个可独立验证的、在一次迭代内能完成的小目标
+2. 子任务之间应有清晰的依赖顺序（通过 priority 排序）
+3. 每个子任务必须有明确的验收条件（acceptanceCriteria）
+4. 如果 Issue 简单，可以只拆分为 1-2 个子任务
+5. 如果 Issue 复杂，建议拆分为 3-5 个子任务
+6. id 格式为 T-001, T-002, ...
+
+---
+$program_instructions
+
+$agent_instructions
+"
+
+    local log_file="$WORK_DIR/planning.log"
+
+    cd "$PROJECT_ROOT"
+    if ! run_with_retry "$first_agent" "$prompt" "$log_file"; then
+        log "规划阶段失败，将不拆分子任务（回退到原有模式）"
+        return 1
+    fi
+
+    # 从 agent 输出中提取 tasks.json
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+
+    # 尝试提取 ```json ... ``` 代码块
+    local json_content
+    json_content=$(sed -n '/^```json$/,/^```$/{ /^```json$/d; /^```$/d; p; }' "$log_file" | head -200)
+
+    if [ -n "$json_content" ]; then
+        echo "$json_content" > "$tasks_file"
+
+        # 验证 JSON 格式
+        if jq '.' "$tasks_file" > /dev/null 2>&1; then
+            local count
+            count=$(jq '.subtasks | length' "$tasks_file")
+            log "成功拆分为 $count 个子任务"
+
+            # 记录到日志
+            echo "" >> "$WORK_DIR/log.md"
+            echo "### 规划阶段" >> "$WORK_DIR/log.md"
+            echo "" >> "$WORK_DIR/log.md"
+            echo "已拆分为 $count 个子任务，详见: [tasks.json](./tasks.json)" >> "$WORK_DIR/log.md"
+
+            # 打印子任务列表
+            log "子任务列表:"
+            jq -r '.subtasks[] | "  \(.id): \(.title) (priority: \(.priority))"' "$tasks_file" | while read -r line; do
+                log "$line"
+            done
+
+            return 0
+        else
+            log "提取的 JSON 格式无效，回退到原有模式"
+            rm -f "$tasks_file"
+            return 1
+        fi
+    fi
+
+    log "未能从规划输出中提取 tasks.json，回退到原有模式"
+    return 1
+}
+
 # ==================== Agent 实现/修复函数 ====================
 
 run_codex() {
@@ -646,6 +956,9 @@ run_codex() {
     progress_section=$(get_progress_section)
 
     local prompt
+    local subtask_section
+    subtask_section=$(get_subtask_section)
+
     if [ -z "$previous_feedback" ]; then
         prompt="实现 GitHub Issue #$issue_number
 
@@ -655,6 +968,7 @@ Issue 标题: $ISSUE_TITLE
 Issue 内容: $ISSUE_BODY
 
 迭代次数: $iteration
+$subtask_section
 $progress_section
 
 ---
@@ -683,6 +997,7 @@ Issue 标题: $ISSUE_TITLE
 
 审核反馈:
 $previous_feedback
+$subtask_section
 $progress_section
 
 ---
@@ -739,6 +1054,9 @@ run_claude() {
     progress_section=$(get_progress_section)
 
     local prompt
+    local subtask_section
+    subtask_section=$(get_subtask_section)
+
     if [ -z "$previous_feedback" ]; then
         prompt="实现 GitHub Issue #$issue_number
 
@@ -748,6 +1066,7 @@ Issue 标题: $ISSUE_TITLE
 Issue 内容: $ISSUE_BODY
 
 迭代次数: $iteration
+$subtask_section
 $progress_section
 
 ---
@@ -776,6 +1095,7 @@ Issue 标题: $ISSUE_TITLE
 
 审核反馈:
 $previous_feedback
+$subtask_section
 $progress_section
 
 ---
@@ -832,6 +1152,9 @@ run_opencode() {
     progress_section=$(get_progress_section)
 
     local prompt
+    local subtask_section
+    subtask_section=$(get_subtask_section)
+
     if [ -z "$previous_feedback" ]; then
         prompt="实现 GitHub Issue #$issue_number
 
@@ -841,6 +1164,7 @@ Issue 标题: $ISSUE_TITLE
 Issue 内容: $ISSUE_BODY
 
 迭代次数: $iteration
+$subtask_section
 $progress_section
 
 ---
@@ -869,6 +1193,7 @@ Issue 标题: $ISSUE_TITLE
 
 审核反馈:
 $previous_feedback
+$subtask_section
 $progress_section
 
 ---
@@ -919,12 +1244,16 @@ run_opencode_review() {
         log "使用指令文件: $opencode_instructions_file"
     fi
 
+    local subtask_review_section
+    subtask_review_section=$(get_subtask_review_section)
+
     local prompt="审核 Issue #$issue_number 的实现
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
 Issue 标题: $ISSUE_TITLE
 
+$subtask_review_section
 ---
 请按照以下指令执行审核。
 
@@ -1015,12 +1344,16 @@ run_claude_review() {
         log "使用指令文件: $claude_instructions_file"
     fi
 
+    local subtask_review_section
+    subtask_review_section=$(get_subtask_review_section)
+
     local prompt="审核 Issue #$issue_number 的实现
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
 Issue 标题: $ISSUE_TITLE
 
+$subtask_review_section
 ---
 请按照以下指令执行审核。
 
@@ -1082,12 +1415,16 @@ run_codex_review() {
         log "使用指令文件: $codex_instructions_file"
     fi
 
+    local subtask_review_section
+    subtask_review_section=$(get_subtask_review_section)
+
     local prompt="审核 Issue #$issue_number 的实现
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
 Issue 标题: $ISSUE_TITLE
 
+$subtask_review_section
 ---
 请按照以下指令执行审核。
 
@@ -1345,6 +1682,15 @@ restore_continue_state() {
     echo "## 继续运行 (从迭代 $((last_iter + 1)) 继续)" >> "$WORK_DIR/log.md"
     echo "- 继续时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$WORK_DIR/log.md"
     echo "- 上次评分: $FINAL_SCORE/100" >> "$WORK_DIR/log.md"
+
+    # 报告子任务状态（如有）
+    if has_subtasks; then
+        local progress
+        progress=$(get_subtask_progress_summary)
+        echo "- 子任务: $progress" >> "$WORK_DIR/log.md"
+        log "$progress"
+    fi
+
     echo "" >> "$WORK_DIR/log.md"
 }
 
@@ -1432,11 +1778,25 @@ if [ $CONTINUE_MODE -eq 1 ]; then
     fi
 fi
 
+# ==================== 规划阶段 ====================
+
+# 非继续模式时执行规划阶段
+if [ $CONTINUE_MODE -eq 0 ]; then
+    log ""
+    log "=========================================="
+    log "规划阶段: 拆分子任务"
+    log "=========================================="
+
+    if ! run_planning_phase "$ISSUE_NUMBER"; then
+        log "规划阶段未生成子任务，将使用原有模式（一次性实现整个 Issue）"
+    fi
+fi
+
 # ==================== 迭代循环 ====================
 
 # Agent 列表: 第一个用于初始实现，后续按顺序轮流审核
-# 迭代 1:  第一个 agent 初始实现
-# 迭代 2+: 所有 agent 轮流审核 + 修复
+# 有子任务时: 每个子任务独立进入实现→审核→修复循环
+# 无子任务时: 迭代 1 第一个 agent 初始实现，迭代 2+ 轮流审核+修复
 
 run_review_and_fix() {
     local agent_idx=$1
@@ -1460,6 +1820,32 @@ run_review_and_fix() {
         CONSECUTIVE_ITERATION_FAILURES=0
         PASSED=1
         FINAL_REVIEW_REPORT=$(cat "$REVIEW_LOG_FILE" 2>/dev/null || echo "")
+
+        # 如果有子任务，标记当前子任务为通过
+        if has_subtasks; then
+            local current_subtask_id
+            current_subtask_id=$(get_current_subtask_id)
+            if [ -n "$current_subtask_id" ]; then
+                mark_subtask_passed "$current_subtask_id"
+                log "子任务 $current_subtask_id 审核通过"
+
+                # 检查是否还有未通过的子任务
+                if all_subtasks_passed; then
+                    log "所有子任务已通过！"
+                    ALL_SUBTASKS_DONE=1
+                else
+                    # 还有子任务，重置状态准备下一个
+                    local progress
+                    progress=$(get_subtask_progress_summary)
+                    log "$progress"
+                    # 重置审核状态，下一个子任务需要新的审核
+                    PASSED=0
+                    PREVIOUS_FEEDBACK=""
+                    SUBTASK_ADVANCED=1
+                fi
+            fi
+        fi
+
         return
     fi
 
@@ -1480,15 +1866,24 @@ run_review_and_fix() {
     fi
 }
 
+# 有子任务时的循环逻辑
+ALL_SUBTASKS_DONE=0
+
 while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     ITERATION=$((ITERATION + 1))
     PASSED=0
     ITERATION_FAILED=0
+    SUBTASK_ADVANCED=0
 
     log ""
     log "=========================================="
     log "迭代 $ITERATION/$MAX_ITERATIONS"
-    if [ $ITERATION -eq 1 ]; then
+    if has_subtasks; then
+        local subtask_progress
+        subtask_progress=$(get_subtask_progress_summary)
+        log "$subtask_progress"
+    fi
+    if [ $ITERATION -eq 1 ] && ! has_subtasks; then
         log "本轮: ${AGENT_NAMES[0]} 初始实现"
     else
         agent_idx=$(get_review_agent $ITERATION)
@@ -1496,8 +1891,8 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     fi
     log "=========================================="
 
-    # ---- 迭代 1: 第一个 agent 初始实现 ----
-    if [ $ITERATION -eq 1 ]; then
+    # ---- 无子任务模式：迭代 1 第一个 agent 初始实现 ----
+    if [ $ITERATION -eq 1 ] && ! has_subtasks; then
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
@@ -1523,6 +1918,35 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         continue
     fi
 
+    # ---- 有子任务模式：迭代 1 第一个 agent 实现当前子任务 ----
+    if [ $ITERATION -eq 1 ] && has_subtasks; then
+        first_agent="${AGENT_NAMES[0]}"
+        first_impl_func="run_${first_agent}"
+        if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
+            log "$first_agent 初始实现失败，跳到下一次迭代"
+            ITERATION_FAILED=1
+        else
+            if ! run_tests "$ITERATION"; then
+                log "初始实现测试失败，继续下一轮审核修复"
+                PREVIOUS_FEEDBACK="测试失败，请检查测试输出并修复问题。"
+            fi
+            PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
+        fi
+
+        # 追加经验到 progress.md
+        local impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+        local subtask_title
+        subtask_title=$(get_current_subtask_title)
+        append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现 - $subtask_title" ""
+
+        if [ $ITERATION_FAILED -eq 1 ]; then
+            CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+        else
+            CONSECUTIVE_ITERATION_FAILURES=0
+        fi
+        continue
+    fi
+
     # ---- 迭代 >=2: agent 轮流审核 + 修复 ----
     agent_idx=$(get_review_agent $ITERATION)
     local agent_name="${AGENT_NAMES[$agent_idx]}"
@@ -1534,9 +1958,23 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     if [ -f "$review_log" ]; then
         review_feedback_brief=$(cat "$review_log" | head -c 800)
     fi
-    append_to_progress "$ITERATION" "$agent_name" "$review_log" "$SCORE" "审核+修复" "$review_feedback_brief"
 
-    if [ $PASSED -eq 1 ]; then
+    local subtask_label=""
+    if has_subtasks; then
+        local current_id
+        current_id=$(get_current_subtask_id)
+        if [ -n "$current_id" ]; then
+            subtask_label=" - $current_id"
+        fi
+    fi
+    append_to_progress "$ITERATION" "$agent_name" "$review_log" "$SCORE" "审核+修复${subtask_label}" "$review_feedback_brief"
+
+    # 所有子任务完成，跳出循环
+    if [ $ALL_SUBTASKS_DONE -eq 1 ]; then
+        break
+    fi
+
+    if [ $PASSED -eq 1 ] && ! has_subtasks; then
         break
     fi
 
@@ -1593,12 +2031,28 @@ Closes #$ISSUE_NUMBER"
 
     # 创建 PR
     log "创建 Pull Request..."
+
+    # 构建子任务摘要（如有）
+    local subtask_summary=""
+    if has_subtasks; then
+        local tasks_file
+        tasks_file=$(get_tasks_file)
+        local total passed
+        total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+        passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+        subtask_summary="
+## Subtasks
+- Completed: $passed/$total
+$(jq -r '.subtasks[] | "- [\(.passes | if true then "x" else " " end)] \(.id): \(.title)"' "$tasks_file" 2>/dev/null)
+"
+    fi
+
     PR_URL=$(gh pr create --title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" --body "$(cat <<EOF
 ## Summary
 - Implements #$ISSUE_NUMBER
 - Score: $FINAL_SCORE/100
 - Iterations: $ITERATION
-
+$subtask_summary
 ## Test plan
 - [x] All tests pass
 - [x] Code review completed with score >= $PASSING_SCORE
