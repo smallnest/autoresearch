@@ -1,0 +1,14 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m→ [0mRead run.sh
+[0m→ [0mRead .autoresearch/workflows/issue-12/tasks.json
+我来审核 Issue #12 的实现。首先读取
+[0m→ [0mRead run.sh[90m [offset=1736][0m
+[0m
+[0m$ [0mbash -n run.sh && echo "Syntax check passed"
+Syntax check passed
+[0m
+[0m$ [0mshellcheck run.sh 2>&1 | head -50
+zsh:1: command not found: shellcheck
+[0m

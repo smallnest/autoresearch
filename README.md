@@ -3,12 +3,18 @@
 > 全自动化软件开发工具，你只需负责喝茶和睡觉。
 > 一觉醒来,Features 全自动高质量的实现了。
 
+![宣传视频](docs/autoresearch-promo-cn.gif)
+
 基于 [karpathy/autoresearch](https://github.com/karpathy/autoresearch) 思想实现的通用的基于GitHub Issue管理的全自动化开发工具。
 
 支持任意 Git + GitHub 项目（Go、Node.js、Python、Rust、Java 等）。
 
 使用autoresearch实现本项目Issue#2：
 [![asciicast](https://asciinema.org/a/KdHGFHK6pcelUdPg.svg)](https://asciinema.org/a/KdHGFHK6pcelUdPg)
+
+[![asciinema](https://asciinema.org/a/你的录制ID.svg)](https://asciinema.org/a/你的录制ID)
+
+
 
 ## 架构图
 

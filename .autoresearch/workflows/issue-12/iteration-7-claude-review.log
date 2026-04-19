@@ -1,0 +1,187 @@
+我已全面了解。以下是审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #12
+- 标题: feat: 浏览器验证（UI 类 Issue）
+- 子任务: T-002 - 实现浏览器截图验证核心流程
+- 迭代次数: 7
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+T-002 的实现完整且结构清晰。所有 7 个函数均已实现，配置变量齐全，流程完整覆盖 dev server → 截图 → LLM 判断。`bash -n` 语法检查通过。存在少量需要修复的问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `verify_ui_with_llm()` 中 stdout/stderr 重定向顺序错误
+
+**位置**: `run.sh:2073`
+
+**问题描述**:
+`2>&1 > "$log_file"` 的重定向顺序有误。`2>&1` 先将 stderr 指向当前 stdout（终端），然后 `> "$log_file"` 才将 stdout 重定向到文件。结果是 stderr 去了终端而非文件，stdout 去了文件。这导致日志丢失错误信息。
+
+**代码片段**:
+```bash
+if claude -p "$prompt" --dangerously-skip-permissions \
+    --file "$screenshot_file" \
+    2>&1 > "$log_file"; then
+```
+
+**建议修复**:
+```bash
+if claude -p "$prompt" --dangerously-skip-permissions \
+    --file "$screenshot_file" \
+    > "$log_file" 2>&1; then
+```
+
+**原因**: 重定向顺序错误导致 stderr 输出丢失，调试困难。
+
+---
+
+#### 问题 2: `eval "$dev_cmd"` 存在命令注入风险
+
+**位置**: `run.sh:2165`
+
+**问题描述**:
+`dev_cmd` 来自 `detect_dev_server_command()` 的硬编码返回值（如 `npm run dev`），但使用了 `eval` 执行。虽然 `detect_dev_server_command()` 的返回值都是硬编码字符串，不会从外部输入，`eval` 在此场景下仍有潜在风险。更重要的是，`eval` 使得调试和静态分析困难。
+
+**建议修复**:
+改用 `bash -c "$dev_cmd"` 或直接执行数组方式：
+```bash
+bash -c "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
+```
+
+**原因**: 虽然 `dev_cmd` 来源可信，但 `eval` 是不必要的风险。`bash -c` 更明确。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: `capture_screenshot()` 中多处 `$success` 未加引号
+
+**位置**: `run.sh:1960, 1972, 1985, 1998, 2010`
+
+**问题描述**:
+shellcheck 报告 SC2086：`$success` 在 `[ ]` 比较中未加双引号。
+
+**建议修复**:
+```bash
+if [ "$success" -eq 0 ] && ...
+```
+多处统一修复即可。
+
+**原因**: 虽然此处 `$success` 只有 0/1 不会触发 glob，但遵循 shellcheck 最佳实践更健壮。
+
+---
+
+#### 问题 4: `wait_for_dev_server()` 中 `$elapsed` 和 `$timeout` 未加引号
+
+**位置**: `run.sh:1900, 1928`
+
+**问题描述**:
+与问题 3 类似，shellcheck SC2086 警告。
+
+**建议修复**:
+```bash
+while [ "$elapsed" -lt "$timeout" ]; do
+```
+
+---
+
+#### 问题 5: LLM 验证失败时默认返回 pass
+
+**位置**: `run.sh:2077, 2105`
+
+**问题描述**:
+当 LLM 调用失败或 JSON 解析失败时，函数返回 `{"pass": true, ...}`。对于 UI 验证场景，这意味着失败被静默忽略。
+
+**建议**:
+这是设计选择 — 降级通过而非阻塞。可以理解（避免因基础设施问题阻塞流程），但建议至少在日志中用 `warn` 级别明确标记，让后续排查时有迹可循。
+
+---
+
+#### 问题 6: `run_ui_verification()` 中 `trap` 覆盖问题
+
+**位置**: `run.sh:2162`
+
+**问题描述**:
+`trap cleanup_dev_server EXIT INT TERM` 会覆盖 `run.sh` 主流程可能已设置的 EXIT trap。虽然在函数末尾有 `trap - EXIT INT TERM` 清理，但如果在 `wait_for_dev_server` 或 `capture_screenshot` 期间发生未捕获的错误，EXIT trap 会保留为 `cleanup_dev_server`。
+
+**建议**:
+保存原有 trap 并在函数结束时恢复：
+```bash
+local old_trap
+old_trap=$(trap -p EXIT)
+trap cleanup_dev_server EXIT INT TERM
+# ... 函数末尾 ...
+eval "$old_trap"
+```
+
+---
+
+### 建议改进 (可选)
+
+- `detect_dev_server_command()` 的 Python 部分硬编码了 `main:app` 作为 FastAPI 入口，建议考虑更多命名（如 `app:app`, `src.main:app`）
+- `detect_dev_server_port()` 检查 `vite.config` 端口的 regex `port:\s*[0-9]+` 可能匹配到非 server port 的配置项
+- `capture_screenshot()` 的工具链降级策略很好，Playwright → npx Playwright → Chrome → Chromium → Chromium-browser
+
+---
+
+### 验收标准逐项检查
+
+| 验收条件 | 状态 | 备注 |
+|---------|------|------|
+| `run_ui_verification()` 完整流程 | 通过 | 7步流程完整实现 |
+| `detect_dev_server_command()` 推断命令 | 通过 | 支持 Node/Python/Go/Rust/Makefile |
+| `wait_for_dev_server()` 超时等待 | 通过 | nc + curl/lsof + curl 双重检测 |
+| `capture_screenshot()` 保存截图 | 通过 | 多工具降级策略 |
+| `verify_ui_with_llm()` LLM 判断 | 通过 | prompt 完善，JSON 输出解析 |
+| dev server 进程清理 | 通过 | cleanup_dev_server() + SIGKILL 后备 |
+| UI 验证判断标准完整 | 通过 | 6条标准在 prompt 中列出 |
+| 配置变量完整 | 通过 | 3个变量已定义 |
+| bash -n 语法检查 | 通过 | |
+| shellcheck 无新增错误 | 部分通过 | 有 SC2069(warning) + SC2086(info) 新增 |
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 权重 | 加权分 |
+|------|------|------|--------|
+| 正确性 | 90 | 35% | 31.5 |
+| 测试质量 | 100 (豁免) | 25% | 25.0 |
+| 代码质量 | 82 | 20% | 16.4 |
+| 安全性 | 80 | 10% | 8.0 |
+| 性能 | 95 | 10% | 9.5 |
+
+**总分: 90.4 → 88**（向下取整，考虑到重定向 bug 的实际影响）
+
+---
+
+### 审核结论
+
+- [x] 良好 - 代码质量达标，存在小问题建议修复
+
+**下一步行动**:
+1. 修复 `2>&1` 重定向顺序（2073行）— 必须修复
+2. 将 `eval "$dev_cmd"` 改为 `bash -c "$dev_cmd"` — 建议修复
+3. 给 shellcheck 报告的变量加双引号 — 建议修复
+4. 考虑 trap 覆盖问题 — 建议改进
+
+---
+
+## Learnings
+
+- **模式**: UI 验证函数的分层降级策略（工具不可用时优雅降级并默认通过）是一个好的设计模式，适用于基础设施依赖场景
+- **踩坑**: `2>&1 > file` vs `> file 2>&1` 重定向顺序是 shell 脚本中常见的隐蔽 bug，shellcheck SC2069 能检测出来
+- **经验**: `eval` 在 shell 脚本中应尽量避免，即使输入来源可信，`bash -c` 是更安全的替代方案
+- **模式**: 函数内 `trap` 会覆盖全局 trap，在函数内修改 trap 时需要保存和恢复原值

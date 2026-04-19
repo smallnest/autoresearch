@@ -1,0 +1,104 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m→ [0mRead run.sh
+[0m→ [0mRead CLAUDE.md
+我来审核 Issue #12 的 T-004 子任务实现
+[0m→ [0mRead run.sh[90m [offset=1736][0m
+[0m✱ [0mGrep "UI_VERIFY|ui_verify|UIVerify|browser|screenshot|dev.*server|playwright"[90m in . · 72 matches[0m
+[0m
+[0m$ [0mgrep -n "check_dependencies" /Users/smallnest/ai/autoresearch/run.sh | head -20
+449:check_dependencies() {
+2519:# 构建 AGENT_NAMES 数组（必须在 check_dependencies 和日志输出之前）
+2531:check_dependencies
+[0m
+[0m$ [0msed -n '449,480p' /Users/smallnest/ai/autoresearch/run.sh
+check_dependencies() {
+    log "检查依赖..."
+
+    local missing=0
+
+    if ! command -v gh &> /dev/null; then
+        error "gh (GitHub CLI) 未安装"
+        missing=1
+    fi
+
+    # 只检查启用的 agent 是否已安装
+    local agent_name
+    for agent_name in "${AGENT_NAMES[@]}"; do
+        if ! command -v "$agent_name" &> /dev/null; then
+            error "$agent_name CLI 未安装 (在 -a 参数中指定)"
+            missing=1
+        fi
+    done
+
+    # 检查语言特定工具
+    local required=$(get_required_tools)
+    if [ -n "$required" ] && ! command -v "$required" &> /dev/null; then
+        error "$required 未安装 (项目语言: $(detect_language))"
+        missing=1
+    fi
+
+    if [ $missing -eq 1 ]; then
+        exit 1
+    fi
+
+    log "依赖检查通过"
+}
+[0m
+[0m$ [0mbash -n run.sh 2>&1; echo "Exit code: $?"
+Exit code: 0
+[0m
+[0m$ [0mwhich shellcheck && shellcheck run.sh 2>&1 | head -50 || echo "shellcheck not installed"
+/opt/homebrew/bin/shellcheck
+
+In run.sh line 89:
+    local lang=$(detect_language)
+          ^--^ SC2155 (warning): Declare and assign separately to avoid masking return values.
+
+
+In run.sh line 102:
+    local lang=$(detect_language)
+          ^--^ SC2155 (warning): Declare and assign separately to avoid masking return values.
+
+
+In run.sh line 114:
+    local lang=$(detect_language)
+          ^--^ SC2155 (warning): Declare and assign separately to avoid masking return values.
+
+
+In run.sh line 138:
+    echo "=== 硬门禁检查 (迭代 $iteration) ===" >> "$log_file"
+    ^-- SC2129 (style): Consider using { cmd1; cmd2; } >> file instead of individual redirects.
+
+
+In run.sh line 239:
+    local lang=$(detect_language)
+          ^--^ SC2155 (warning): Declare and assign separately to avoid masking return values.
+
+
+In run.sh line 316:
+            sleep $delay
+                  ^----^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean:
+            sleep "$delay"
+
+
+In run.sh line 337:
+        if [ $exit_code -ne 0 ]; then
+             ^--------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean:
+        if [ "$exit_code" -ne 0 ]; then
+
+
+In run.sh line 359:
+        content_lines=$(grep -vE '^\s*$' "$log_file" | wc -l)
+                        ^--------------------------^ SC2126 (style): Consider using 'grep -c' instead of 'grep|wc -l'.
+
+
+In run.sh line 443:
+    local lang=$(detect_language)
+          ^--^ SC2155 (warning): Declare and assign separately to avoid masking return values.
+[0m

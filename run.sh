@@ -13,11 +13,16 @@
 #   ./run.sh -a claude,codex 42              # 只启用 Claude 和 Codex
 #   ./run.sh -a claude 42                    # 单 agent 模式
 #   ./run.sh -a claude,opencode,codex 42     # 自定义 agent 顺序
-#   ./run.sh --no-archive 42                 # 跳过归档（调试用）
+# ./run.sh --no-archive 42 # 跳过归档（调试用）
+#
+# 环境变量配置:
+# UI_VERIFY_ENABLED: 是否启用 UI 验证 (默认: yes)
+# UI_VERIFY_TIMEOUT: dev server 等待超时秒数 (默认: 60)
+# UI_DEV_PORT: dev server 端口 (默认自动检测或使用 3000)
 #
 # 要求:
-#   - 项目目录必须是 git 仓库
-#   - 项目目录必须有 GitHub remote (origin)
+# - 项目目录必须是 git 仓库
+# - 项目目录必须有 GitHub remote (origin)
 #
 # 配置文件 (可选):
 #   在项目根目录创建 .autoresearch/ 目录，可以放置:
@@ -447,36 +452,73 @@ check_project() {
 }
 
 check_dependencies() {
-    log "检查依赖..."
+ log "检查依赖..."
 
-    local missing=0
+ local missing=0
 
-    if ! command -v gh &> /dev/null; then
-        error "gh (GitHub CLI) 未安装"
-        missing=1
-    fi
+ if ! command -v gh &> /dev/null; then
+ error "gh (GitHub CLI) 未安装"
+ missing=1
+ fi
 
-    # 只检查启用的 agent 是否已安装
-    local agent_name
-    for agent_name in "${AGENT_NAMES[@]}"; do
-        if ! command -v "$agent_name" &> /dev/null; then
-            error "$agent_name CLI 未安装 (在 -a 参数中指定)"
-            missing=1
-        fi
-    done
+ # 只检查启用的 agent 是否已安装
+ local agent_name
+ for agent_name in "${AGENT_NAMES[@]}"; do
+ if ! command -v "$agent_name" &> /dev/null; then
+ error "$agent_name CLI 未安装 (在 -a 参数中指定)"
+ missing=1
+ fi
+ done
 
-    # 检查语言特定工具
-    local required=$(get_required_tools)
-    if [ -n "$required" ] && ! command -v "$required" &> /dev/null; then
-        error "$required 未安装 (项目语言: $(detect_language))"
-        missing=1
-    fi
+ # 检查语言特定工具
+ local required
+ required=$(get_required_tools)
+ if [ -n "$required" ] && ! command -v "$required" &> /dev/null; then
+ error "$required 未安装 (项目语言: $(detect_language))"
+ missing=1
+ fi
 
-    if [ $missing -eq 1 ]; then
-        exit 1
-    fi
+ # 检查浏览器工具依赖（仅输出警告，不阻止运行）
+ local ui_verify_disabled=0
+ if [ "${UI_VERIFY_ENABLED:-yes}" != "yes" ] && [ "${UI_VERIFY_ENABLED:-yes}" != "true" ]; then
+ log "UI 验证已禁用，跳过浏览器工具检测"
+ ui_verify_disabled=1
+ fi
 
-    log "依赖检查通过"
+ if [ $ui_verify_disabled -eq 0 ]; then
+ local browser_tools_available=0
+ local browser_tool_name=""
+
+ # 检查 playwright
+ if command -v playwright &> /dev/null || command -v npx &> /dev/null; then
+ browser_tools_available=1
+ browser_tool_name="playwright"
+ log "浏览器工具检测: playwright 可用"
+ fi
+
+ # 检查 chrome-devtools MCP
+ if [ $browser_tools_available -eq 0 ] && command -v npx &> /dev/null; then
+ if npx -y @anthropic-ai/chrome-devtools-mcp --help &> /dev/null 2>&1; then
+ browser_tools_available=1
+ browser_tool_name="chrome-devtools-mcp"
+ log "浏览器工具检测: chrome-devtools-mcp 可用"
+ fi
+ fi
+
+ if [ $browser_tools_available -eq 0 ]; then
+ log "警告: 未检测到浏览器截图工具 (playwright 或 chrome-devtools-mCP)"
+ log "警告: UI 验证功能将被禁用，不影响主流程"
+ UI_VERIFY_ENABLED="no"
+ else
+ log "浏览器工具检测通过: $browser_tool_name"
+ fi
+ fi
+
+ if [ $missing -eq 1 ]; then
+ exit 1
+ fi
+
+ log "依赖检查通过"
 }
 
 get_issue_info() {
@@ -730,6 +772,30 @@ all_subtasks_passed() {
     [ "$unfinished" = "0" ]
 }
 
+# 检测当前子任务是否为 UI 类型
+# 返回: 0 = UI 类型, 1 = 非 UI 类型
+is_ui_subtask() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        return 1
+    fi
+    local subtask_type
+    subtask_type=$(echo "$subtask" | jq -r '.type // "code"' 2>/dev/null)
+    [ "$subtask_type" = "ui" ]
+}
+
+# 统计 UI 子任务数量
+get_ui_subtasks_count() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo "0"
+        return
+    fi
+    jq '[.subtasks[] | select(.type == "ui")] | length' "$tasks_file" 2>/dev/null || echo "0"
+}
+
 # 获取子任务进度摘要（用于日志和 prompt 注入）
 get_subtask_progress_summary() {
     local tasks_file
@@ -757,14 +823,26 @@ get_subtask_section() {
         return
     fi
 
-    local id title desc criteria
+    local id title desc criteria subtask_type
     id=$(echo "$subtask" | jq -r '.id')
     title=$(echo "$subtask" | jq -r '.title')
     desc=$(echo "$subtask" | jq -r '.description')
     criteria=$(echo "$subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+    subtask_type=$(echo "$subtask" | jq -r '.type // "code"' 2>/dev/null)
 
     local progress
     progress=$(get_subtask_progress_summary)
+
+    local ui_hint=""
+    if [ "$subtask_type" = "ui" ]; then
+        ui_hint="
+
+⚠️ **UI 类型任务**: 此子任务涉及 UI 变更，实现时请注意：
+- 确保页面布局、样式正确渲染
+- 确保交互元素（按钮、表单、链接等）功能正常
+- 确保无 console 错误或页面崩溃
+- 实现完成后将进行浏览器截图验证"
+    fi
 
     cat << EOF
 
@@ -776,10 +854,11 @@ $progress
 
 - **ID**: $id
 - **标题**: $title
+- **类型**: $subtask_type
 - **描述**: $desc
 - **验收条件**:
 $(echo "$criteria" | while read -r line; do echo "  - $line"; done)
-
+$ui_hint
 请专注于实现此子任务，不要处理其他子任务。完成此子任务后等待审核。
 EOF
 }
@@ -809,11 +888,29 @@ $progress
         return
     fi
 
-    local id title desc criteria
+    local id title desc criteria subtask_type
     id=$(echo "$current_subtask" | jq -r '.id')
     title=$(echo "$current_subtask" | jq -r '.title')
     desc=$(echo "$current_subtask" | jq -r '.description')
     criteria=$(echo "$current_subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+    subtask_type=$(echo "$current_subtask" | jq -r '.type // "code"' 2>/dev/null)
+
+    local ui_review_section=""
+    if [ "$subtask_type" = "ui" ]; then
+        ui_review_section="
+
+### UI 验证标准（此子任务为 UI 类型）
+
+审核时请额外关注以下 UI 验证标准：
+- 页面无空白或崩溃：页面能正常加载，无白屏或错误页面
+- 关键元素可见：页面标题、内容、导航等关键元素正确渲染
+- 交互元素可点击：按钮、链接、表单等可正常交互
+- 无 console 错误：浏览器控制台无 JavaScript 错误
+- 样式一致性：CSS 样式与设计稿或现有风格一致
+- 响应式布局：在不同屏幕尺寸下布局合理（如适用）
+
+此子任务通过代码审核后，将进行浏览器截图验证以确认 UI 渲染正确。"
+    fi
 
     cat << EOF
 
@@ -825,9 +922,11 @@ $progress
 
 - **ID**: $id
 - **标题**: $title
+- **类型**: $subtask_type
 - **描述**: $desc
 - **验收条件**:
 $(echo "$criteria" | while read -r line; do echo "  - $line"; done)
+$ui_review_section
 
 请针对此子任务的验收条件进行审核。
 EOF
@@ -1038,6 +1137,7 @@ Issue 内容: $ISSUE_BODY
       \"description\": \"详细描述此子任务需要完成的工作\",
       \"acceptanceCriteria\": [\"验收条件1\", \"验收条件2\"],
       \"priority\": 1,
+      \"type\": \"code\",
       \"passes\": false
     },
     {
@@ -1059,6 +1159,16 @@ Issue 内容: $ISSUE_BODY
 4. 如果 Issue 简单，可以只拆分为 1-2 个子任务
 5. 如果 Issue 复杂，建议拆分为 3-5 个子任务
 6. id 格式为 T-001, T-002, ...
+
+UI 类型识别：
+- 分析 Issue 内容，如果涉及以下变更，对应子任务应标注 \"type\": \"ui\"：
+  * 页面布局、样式、组件的增删改
+  * 前端交互逻辑（表单、按钮、导航等）
+  * CSS/样式文件的新增或修改
+  * HTML/模板文件的修改
+  * 前端框架组件（React/Vue/Svelte 等）的修改
+- 不涉及 UI 变更的子任务不添加 type 字段（默认为 \"code\"）
+- 示例：{\"id\": \"T-001\", \"title\": \"添加登录页面\", \"type\": \"ui\", ...}
 
 ---
 $program_instructions
@@ -1688,15 +1798,579 @@ $codex_instructions
     return 0
 }
 
+# ==================== UI 验证相关 ====================
+
+# UI 验证配置变量（可通过环境变量覆盖）
+UI_VERIFY_ENABLED="${UI_VERIFY_ENABLED:-yes}"
+UI_VERIFY_TIMEOUT="${UI_VERIFY_TIMEOUT:-60}"
+UI_DEV_PORT="${UI_DEV_PORT:-}"
+
+# 存储 dev server 进程 ID 的全局变量（用于清理）
+_UI_DEV_SERVER_PID=""
+
+# 从项目配置推断 dev server 启动命令
+# 返回: dev server 命令字符串，如果无法推断则返回空
+detect_dev_server_command() {
+  local project_root="$1"
+  local lang=$(detect_language)
+  local cmd=""
+
+  # Node.js 项目
+  if [ "$lang" = "node" ]; then
+    if [ -f "$project_root/package.json" ]; then
+      # 检查 package.json 中的 scripts
+      if jq -e '.scripts.dev' "$project_root/package.json" > /dev/null 2>&1; then
+        cmd="npm run dev"
+      elif jq -e '.scripts.start' "$project_root/package.json" > /dev/null 2>&1; then
+        cmd="npm start"
+      elif jq -e '.scripts.serve' "$project_root/package.json" > /dev/null 2>&1; then
+        cmd="npm run serve"
+      fi
+    fi
+    # 如果没有 npm scripts，检查常见工具
+    if [ -z "$cmd" ]; then
+      if [ -f "$project_root/vite.config.ts" ] || [ -f "$project_root/vite.config.js" ]; then
+        cmd="npx vite"
+      elif [ -f "$project_root/next.config.js" ] || [ -f "$project_root/next.config.ts" ]; then
+        cmd="npx next dev"
+      elif [ -f "$project_root/angular.json" ]; then
+        cmd="npx ng serve"
+      elif [ -f "$project_root/webpack.config.js" ]; then
+        cmd="npx webpack serve"
+      fi
+    fi
+  fi
+
+  # Python 项目（Flask/Django/FastAPI）
+  if [ "$lang" = "python" ]; then
+    if [ -f "$project_root/manage.py" ]; then
+      cmd="python manage.py runserver"
+    elif grep -q "flask" "$project_root/requirements.txt" 2>/dev/null; then
+      cmd="flask run"
+    elif grep -q "fastapi" "$project_root/requirements.txt" 2>/dev/null; then
+      if command -v uvicorn > /dev/null 2>&1; then
+        cmd="uvicorn main:app --reload"
+      fi
+    fi
+  fi
+
+  # Go 项目
+  if [ "$lang" = "go" ]; then
+    if [ -f "$project_root/main.go" ]; then
+      cmd="go run main.go"
+    elif [ -f "$project_root/cmd/main.go" ]; then
+      cmd="go run cmd/main.go"
+    fi
+  fi
+
+  # Rust 项目
+  if [ "$lang" = "rust" ]; then
+    cmd="cargo run"
+  fi
+
+  # 检查 Makefile
+  if [ -z "$cmd" ] && [ -f "$project_root/Makefile" ]; then
+    if grep -qE '^dev:|^serve:|^run:' "$project_root/Makefile"; then
+      if grep -qE '^dev:' "$project_root/Makefile"; then
+        cmd="make dev"
+      elif grep -qE '^serve:' "$project_root/Makefile"; then
+        cmd="make serve"
+      elif grep -qE '^run:' "$project_root/Makefile"; then
+        cmd="make run"
+      fi
+    fi
+  fi
+
+  echo "$cmd"
+}
+
+# 从 dev server 命令或项目配置检测端口号
+# 返回: 端口号（数字），如果无法检测则返回默认值 3000
+detect_dev_server_port() {
+  local project_root="$1"
+  local port=""
+
+  # 如果环境变量已设置，优先使用
+  if [ -n "$UI_DEV_PORT" ]; then
+    echo "$UI_DEV_PORT"
+    return
+  fi
+
+  # 检查 package.json
+  if [ -f "$project_root/package.json" ]; then
+    # 检查 vite config
+    if [ -f "$project_root/vite.config.ts" ] || [ -f "$project_root/vite.config.js" ]; then
+      port=$(grep -oE 'port:\s*[0-9]+' "$project_root/vite.config.ts" "$project_root/vite.config.js" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    fi
+    # 检查 next config
+    if [ -z "$port" ] && ([ -f "$project_root/next.config.js" ] || [ -f "$project_root/next.config.ts" ]); then
+      port="3000"
+    fi
+  fi
+
+  # 检查 .env 文件
+  if [ -z "$port" ]; then
+    for env_file in "$project_root/.env" "$project_root/.env.local" "$project_root/.env.development"; do
+      if [ -f "$env_file" ]; then
+        port=$(grep -E '^PORT=|^VITE_PORT=|^NEXT_PORT=' "$env_file" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+        if [ -n "$port" ]; then
+          break
+        fi
+      fi
+    done
+  fi
+
+  # 默认端口
+  if [ -z "$port" ]; then
+    port="3000"
+  fi
+
+  echo "$port"
+}
+
+# 等待 dev server 就绪
+# 参数: $1 = 端口号, $2 = 超时秒数（可选，默认 UI_VERIFY_TIMEOUT）
+# 返回: 0 = 就绪, 1 = 超时
+wait_for_dev_server() {
+ local port="$1"
+ local timeout="${2:-$UI_VERIFY_TIMEOUT}"
+ local start_time
+ start_time=$(date +%s)
+ local elapsed=0
+
+ log "等待 dev server 就绪 (端口: $port, 超时: ${timeout}秒)..."
+
+ # 检查端口是否已被占用
+ if command -v lsof > /dev/null 2>&1 && lsof -i :"$port" > /dev/null 2>&1; then
+ log "警告: 端口 $port 已被占用，可能另一个 dev server 正在运行"
+ fi
+
+ while [ $elapsed -lt "$timeout" ]; do
+ # 检查端口是否被监听
+ if command -v nc > /dev/null 2>&1; then
+ if nc -z localhost "$port" 2>/dev/null; then
+ # 端口已监听，再等待一下确保服务完全启动
+ sleep 1
+ # 尝试 HTTP 请求确认服务真正可用
+ if curl -s "http://localhost:$port" > /dev/null 2>&1 || \
+ curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
+ log "dev server 已就绪 (端口: $port)"
+ return 0
+ else
+ log "端口 $port 已监听但 HTTP 请求失败，继续等待..."
+ fi
+ fi
+ elif command -v lsof > /dev/null 2>&1; then
+ if lsof -i :"$port" > /dev/null 2>&1; then
+ sleep 1
+ if curl -s "http://localhost:$port" > /dev/null 2>&1 || \
+ curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
+ log "dev server 已就绪 (端口: $port)"
+ return 0
+ else
+ log "端口 $port 已监听但 HTTP 请求失败，继续等待..."
+ fi
+ fi
+ fi
+
+ sleep 1
+ elapsed=$(( $(date +%s) - start_time ))
+
+ # 每 10 秒输出一次进度
+ if [ $((elapsed % 10)) -eq 0 ] && [ $elapsed -gt 0 ]; then
+ log "已等待 ${elapsed} 秒..."
+ fi
+ done
+
+ error "等待 dev server 超时 (${timeout}秒)"
+ return 1
+}
+
+# 捕获浏览器截图
+# 参数: $1 = 目标 URL, $2 = 输出文件路径
+# 返回: 0 = 成功, 1 = 失败
+capture_screenshot() {
+ local target_url="$1"
+ local output_file="$2"
+ local success=0
+ local work_dir
+ work_dir=$(dirname "$output_file")
+
+ log "捕获截图: $target_url -> $output_file"
+
+ # 创建截图目录
+ mkdir -p "$work_dir" 2>/dev/null || true
+
+ # 检查截图工具可用性
+ local tools_available=0
+ if command -v playwright &> /dev/null || command -v npx &> /dev/null; then
+ tools_available=1
+ fi
+ if command -v google-chrome &> /dev/null || command -v chromium &> /dev/null || command -v chromium-browser &> /dev/null; then
+ tools_available=1
+ fi
+
+ if [ $tools_available -eq 0 ]; then
+ error "截图失败: 无可用截图工具 (playwright, google-chrome, chromium 均不可用)"
+ echo "截图工具不可用，跳过 UI 验证" >> "$work_dir/verify.log" 2>/dev/null || true
+ return 1
+ fi
+
+ # 优先使用 playwright
+ if [ $success -eq 0 ]; then
+ if command -v playwright &> /dev/null; then
+ log "使用 playwright 截图..."
+ if playwright screenshot \
+ --viewport-size="1280,720" \
+ --wait-for-timeout=5000 \
+ "$target_url" \
+ "$output_file" 2>/dev/null; then
+ success=1
+ log "playwright 截图成功"
+ else
+ log "playwright 截图失败，尝试下一个工具..."
+ fi
+ fi
+ fi
+
+ # 如果 playwright 失败，尝试使用 npx playwright
+ if [ $success -eq 0 ]; then
+ if command -v npx &> /dev/null; then
+ log "尝试使用 npx playwright 截图..."
+ if npx playwright screenshot \
+ --viewport-size="1280,720" \
+ --wait-for-timeout=5000 \
+ "$target_url" \
+ "$output_file" 2>/dev/null; then
+ success=1
+ log "npx playwright 截图成功"
+ else
+ log "npx playwright 截图失败，尝试下一个工具..."
+ fi
+ fi
+ fi
+
+ # 如果 playwright 都失败，尝试使用 google-chrome
+ if [ $success -eq 0 ]; then
+ if command -v google-chrome &> /dev/null; then
+ log "尝试使用 google-chrome 截图..."
+ if timeout 30 google-chrome \
+ --headless \
+ --disable-gpu \
+ --screenshot="$output_file" \
+ --window-size=1280,720 \
+ "$target_url" 2>/dev/null; then
+ success=1
+ log "google-chrome 截图成功"
+ else
+ log "google-chrome 截图失败，尝试下一个工具..."
+ fi
+ fi
+ fi
+
+ # 尝试 chromium
+ if [ $success -eq 0 ]; then
+ if command -v chromium &> /dev/null; then
+ log "尝试使用 chromium 截图..."
+ if timeout 30 chromium \
+ --headless \
+ --disable-gpu \
+ --screenshot="$output_file" \
+ --window-size=1280,720 \
+ "$target_url" 2>/dev/null; then
+ success=1
+ log "chromium 截图成功"
+ else
+ log "chromium 截图失败，尝试下一个工具..."
+ fi
+ fi
+ fi
+
+ # 尝试 chromium-browser
+ if [ $success -eq 0 ]; then
+ if command -v chromium-browser &> /dev/null; then
+ log "尝试使用 chromium-browser 截图..."
+ if timeout 30 chromium-browser \
+ --headless \
+ --disable-gpu \
+ --screenshot="$output_file" \
+ --window-size=1280,720 \
+ "$target_url" 2>/dev/null; then
+ success=1
+ log "chromium-browser 截图成功"
+ else
+ log "chromium-browser 截图失败"
+ fi
+ fi
+ fi
+
+ # 记录结果到日志
+ if [ $success -eq 1 ]; then
+ log "截图成功: $output_file"
+ echo "截图成功: $output_file" >> "$work_dir/verify.log" 2>/dev/null || true
+ return 0
+ else
+ error "截图失败: 无法使用任何可用工具捕获截图"
+ echo "截图失败: 所有可用工具均无法完成截图" >> "$work_dir/verify.log" 2>/dev/null || true
+ return 1
+ fi
+}
+
+# 使用 LLM 验证 UI 截图
+# 参数: $1 = 截图文件路径, $2 = 子任务描述（可选）
+# 输出: JSON 格式 {"pass": true/false, "feedback": "..."}
+verify_ui_with_llm() {
+ local screenshot_file="$1"
+ local subtask_desc="${2:-}"
+ local work_dir
+ work_dir=$(dirname "$screenshot_file")
+
+ log "使用 LLM 验证 UI 截图..."
+
+ # 检查 claude CLI 是否可用
+ if ! command -v claude > /dev/null 2>&1; then
+ error "claude CLI 不可用，无法进行 UI 验证"
+ echo '{"pass": true, "feedback": "claude CLI 不可用，跳过 UI 验证"}'
+ return 0
+ fi
+
+ # 检查截图文件是否存在
+ if [ ! -f "$screenshot_file" ]; then
+ error "截图文件不存在: $screenshot_file"
+ echo '{"pass": true, "feedback": "截图文件不存在，跳过 UI 验证"}'
+ return 0
+ fi
+
+ # 构建验证 prompt
+ local prompt="请分析以下 UI 截图，验证页面是否正确渲染。
+
+## UI 验证标准
+请检查以下方面：
+1. 页面无空白或崩溃：页面能正常加载，无白屏、错误页面或明显的布局错乱
+2. 关键元素可见：页面标题、内容、导航等关键元素是否正确渲染并可见
+3. 交互元素可点击：按钮、链接、表单等交互元素是否正常显示
+4. 无 console 错误：页面不应有明显的 JavaScript 错误导致的显示问题
+5. 样式一致性：CSS 样式应该与设计稿或现有风格一致
+6. 响应式布局：布局应该合理（如适用）
+
+## 验证要求
+- 如果页面看起来正常，关键元素可见且无明显问题，返回 pass
+- 如果发现任何问题（空白、崩溃、关键元素缺失、样式错乱等），返回 fail 并详细描述问题
+
+## 输出格式
+必须返回以下 JSON 格式（严格遵循）：
+\`\`\`json
+{
+ \"pass\": true/false,
+ \"feedback\": \"验证结果说明，包括发现的问题（如有）\"
+}
+\`\`\`"
+
+ if [ -n "$subtask_desc" ]; then
+ prompt="$prompt
+
+## 子任务描述
+$subtask_desc"
+ fi
+
+ # 调用 claude 进行验证，带重试逻辑
+ local log_file="$work_dir/ui-verify-llm.log"
+ local result
+ local retry=0
+ local max_llm_retries=3
+ local llm_success=0
+
+ while [ $retry -lt $max_llm_retries ] && [ $llm_success -eq 0 ]; do
+ retry=$((retry + 1))
+
+ if [ $retry -gt 1 ]; then
+ log "LLM 验证重试 $retry/$max_llm_retries..."
+ sleep $((retry * 2))
+ fi
+
+ if claude -p "$prompt" --dangerously-skip-permissions \
+ --file "$screenshot_file" \
+ > "$log_file" 2>&1; then
+ result=$(cat "$log_file")
+ llm_success=1
+ else
+ error "LLM 验证调用失败 (尝试 $retry/$max_llm_retries)"
+ fi
+ done
+
+ if [ $llm_success -eq 0 ]; then
+ error "LLM 验证调用失败，已达最大重试次数"
+ echo '{"pass": true, "feedback": "LLM 验证调用失败，跳过验证"}'
+ return 0
+ fi
+
+ # 从结果中提取 JSON
+ local json_result
+ json_result=$(echo "$result" | sed -n '/^\`\`\`json$/,/^\`\`\`$/p' | sed '/^\`\`\`/d')
+
+ if [ -z "$json_result" ]; then
+ # 如果没有找到 JSON 代码块，尝试直接提取 JSON
+ json_result=$(echo "$result" | grep -A5 '"pass"' | head -20)
+ fi
+
+ # 验证 JSON 格式
+ if echo "$json_result" | jq '.' > /dev/null 2>&1; then
+ local pass
+ pass=$(echo "$json_result" | jq -r '.pass // "true"')
+ if [ "$pass" = "true" ]; then
+ log "UI 验证通过"
+ else
+ local feedback
+ feedback=$(echo "$json_result" | jq -r '.feedback // "UI 验证未通过"')
+ log "UI 验证未通过: $feedback"
+ fi
+ echo "$json_result"
+ else
+ # JSON 解析失败，默认通过并记录警告
+ log "警告: 无法解析 LLM 验证结果，默认通过"
+ echo '{"pass": true, "feedback": "无法解析验证结果，默认通过"}'
+ fi
+}
+
+# 清理 dev server 进程
+cleanup_dev_server() {
+  if [ -n "$_UI_DEV_SERVER_PID" ] && kill -0 "$_UI_DEV_SERVER_PID" 2>/dev/null; then
+    log "清理 dev server 进程 (PID: $_UI_DEV_SERVER_PID)..."
+    kill "$_UI_DEV_SERVER_PID" 2>/dev/null || true
+    sleep 1
+    # 确保进程已终止
+    if kill -0 "$_UI_DEV_SERVER_PID" 2>/dev/null; then
+      kill -9 "$_UI_DEV_SERVER_PID" 2>/dev/null || true
+    fi
+    _UI_DEV_SERVER_PID=""
+  fi
+}
+
+# 运行完整的 UI 验证流程
+# 参数: $1 = 工作目录, $2 = 子任务描述（可选）
+# 返回: 0 = 通过, 1 = 失败
+# 输出: 验证结果 JSON 到 stdout
+run_ui_verification() {
+  local work_dir="$1"
+  local subtask_desc="${2:-}"
+  local result_file="$work_dir/ui-verify-result.json"
+  local screenshot_file="$work_dir/ui-screenshot.png"
+
+  log "========== UI 验证开始 =========="
+
+  # 检查 UI 验证是否启用
+  if [ "$UI_VERIFY_ENABLED" != "yes" ] && [ "$UI_VERIFY_ENABLED" != "true" ]; then
+    log "UI 验证已禁用"
+    echo '{"pass": true, "feedback": "UI 验证已禁用"}'
+    return 0
+  fi
+
+  # 步骤 1: 检测 dev server 命令
+  local dev_cmd
+  dev_cmd=$(detect_dev_server_command "$PROJECT_ROOT")
+  if [ -z "$dev_cmd" ]; then
+    log "警告: 无法检测 dev server 启动命令，跳过 UI 验证"
+    echo '{"pass": true, "feedback": "无法检测 dev server 命令，跳过 UI 验证"}'
+    return 0
+  fi
+  log "检测到 dev server 命令: $dev_cmd"
+
+  # 步骤 2: 检测端口号
+  local port
+  port=$(detect_dev_server_port "$PROJECT_ROOT")
+  log "检测到的 dev server 端口: $port"
+
+  # 步骤 3: 启动 dev server
+  log "启动 dev server..."
+  cd "$PROJECT_ROOT"
+
+  # 保存原 trap 并设置清理 trap
+  local prev_trap_exit prev_trap_int prev_trap_term
+  prev_trap_exit=$(trap -p EXIT | sed "s/trap -- '//;s/' EXIT$//")
+  prev_trap_int=$(trap -p INT | sed "s/trap -- '//;s/' INT$//")
+  prev_trap_term=$(trap -p TERM | sed "s/trap -- '//;s/' TERM$//")
+  trap cleanup_dev_server EXIT INT TERM
+
+  # 后台启动 dev server
+  bash -c "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
+  _UI_DEV_SERVER_PID=$!
+  log "dev server 已启动 (PID: $_UI_DEV_SERVER_PID)"
+
+  # 步骤 4: 等待 dev server 就绪
+  if ! wait_for_dev_server "$port" "$UI_VERIFY_TIMEOUT"; then
+    cleanup_dev_server
+    [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
+    [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
+    [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
+    echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}" >> "$work_dir/log.md" 2>/dev/null
+    echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}"
+    return 1
+  fi
+
+ # 步骤 5: 捕获截图
+ local screenshot_success=0
+ local target_url="http://localhost:$port"
+ if capture_screenshot "$target_url" "$screenshot_file"; then
+ screenshot_success=1
+ else
+ # 截图失败：记录警告但继续，尝试降级处理
+ log "截图失败，尝试降级处理..."
+ echo "截图失败时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$work_dir/ui-screenshot-error.log" 2>/dev/null || true
+ fi
+
+ # 步骤 6: 使用 LLM 验证截图（如果截图成功）
+ local verify_result
+ if [ $screenshot_success -eq 1 ]; then
+ verify_result=$(verify_ui_with_llm "$screenshot_file" "$subtask_desc")
+ else
+ # 截图失败时的降级处理：记录警告但标记为通过，不阻塞主流程
+ log "截图不可用，UI 验证降级为通过"
+ verify_result='{"pass": true, "feedback": "截图工具不可用，跳过 UI 验证（降级处理）"}'
+ fi
+
+  # 步骤 7: 清理 dev server
+  cleanup_dev_server
+  # 恢复原 trap
+  [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
+  [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
+  [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
+
+  # 保存验证结果
+  echo "$verify_result" > "$result_file"
+
+  # 记录到日志
+  local pass
+  pass=$(echo "$verify_result" | jq -r '.pass // "false"')
+  local feedback
+  feedback=$(echo "$verify_result" | jq -r '.feedback // ""')
+
+  log "========== UI 验证结果 =========="
+  if [ "$pass" = "true" ]; then
+    log "结果: 通过"
+  else
+    log "结果: 未通过"
+  fi
+  log "反馈: $feedback"
+  log "=================================="
+
+  echo "$verify_result"
+
+  if [ "$pass" = "true" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 # ==================== 评分相关 ====================
 
 # 检测审核输出中的 sentinel 标记
 # 三重保护：1) 独特格式 AUTORESEARCH_RESULT:PASS/FAIL 不会巧合出现在普通文本中
-#           2) 只检测最后 5 个非空行（trim 后整行精确匹配）
-#           3) grep -x 要求整行完全等于 sentinel
+# 2) 只检测最后 5 个非空行（trim 后整行精确匹配）
+# 3) grep -x 要求整行完全等于 sentinel
 # 返回: "pass" 表示检测到 AUTORESEARCH_RESULT:PASS
-#       "fail" 表示检测到 AUTORESEARCH_RESULT:FAIL
-#       "none" 表示未检测到 sentinel
+# "fail" 表示检测到 AUTORESEARCH_RESULT:FAIL
+# "none" 表示未检测到 sentinel
 check_sentinel() {
     local review_result="$1"
     local last_lines
@@ -2072,6 +2746,31 @@ run_review_and_fix() {
             local current_subtask_id
             current_subtask_id=$(get_current_subtask_id)
             if [ -n "$current_subtask_id" ]; then
+                # UI 类型子任务：先进行浏览器验证
+                if is_ui_subtask; then
+                    local subtask_title
+                    subtask_title=$(get_current_subtask_title)
+                    local ui_result
+                    ui_result=$(run_ui_verification "$WORK_DIR" "$subtask_title") || true
+                    local ui_pass
+                    ui_pass=$(echo "$ui_result" | jq -r '.pass // "true"')
+
+                    # 记录 UI 验证结果到日志
+                    local ui_feedback
+                    ui_feedback=$(echo "$ui_result" | jq -r '.feedback // ""')
+                    echo "- UI 验证: $ui_pass - $ui_feedback" >> "$WORK_DIR/log.md"
+
+                    if [ "$ui_pass" != "true" ]; then
+                        # UI 验证失败：不标记 passed，反馈传递给下一迭代
+                        log "UI 验证未通过，反馈传递给下一迭代"
+                        UI_VERIFY_FAILED=1
+                        PREVIOUS_FEEDBACK="代码审核通过，但 UI 验证未通过：$ui_feedback"
+                        PASSED=0
+                        return
+                    fi
+                    log "UI 验证通过"
+                fi
+
                 mark_subtask_passed "$current_subtask_id"
                 log "子任务 $current_subtask_id 审核通过"
 
@@ -2127,6 +2826,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     ITERATION_FAILED=0
     SUBTASK_ADVANCED=0
     HARD_GATE_FAILED=0
+    UI_VERIFY_FAILED=0
 
     log ""
     log "=========================================="
@@ -2244,11 +2944,14 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         break
     fi
 
-    if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
-        CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-    elif [ $HARD_GATE_FAILED -eq 0 ]; then
-        CONSECUTIVE_ITERATION_FAILURES=0
-    fi
+# UI_VERIFY_FAILED=1 时：不增加也不重置计数器（与 hard gate 失败同等待遇）
+if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ] && [ $UI_VERIFY_FAILED -eq 0 ]; then
+    CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+    log "连续迭代失败次数: $CONSECUTIVE_ITERATION_FAILURES/$MAX_CONSECUTIVE_FAILURES"
+elif [ $HARD_GATE_FAILED -eq 0 ] && [ $UI_VERIFY_FAILED -eq 0 ]; then
+    # 只有非 hard gate 失败且非 UI 验证失败时才重置
+    CONSECUTIVE_ITERATION_FAILURES=0
+fi
 
     if [ $CONSECUTIVE_ITERATION_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]; then
         error "连续 $CONSECUTIVE_ITERATION_FAILURES 次迭代失败，停止运行"
@@ -2312,12 +3015,24 @@ $(jq -r '.subtasks[] | "- [\(.passes | if true then "x" else " " end)] \(.id): \
 "
     fi
 
+    # 构建 UI 验证摘要（如有）
+    ui_verify_summary=""
+    if [ -f "$WORK_DIR/ui-verify-result.json" ]; then
+        ui_pass_status=$(jq -r '.pass // "N/A"' "$WORK_DIR/ui-verify-result.json" 2>/dev/null)
+        ui_feedback_text=$(jq -r '.feedback // ""' "$WORK_DIR/ui-verify-result.json" 2>/dev/null)
+        ui_verify_summary="
+## UI Verification
+- Result: $ui_pass_status
+- Feedback: $ui_feedback_text
+"
+    fi
+
     PR_URL=$(gh pr create --title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" --body "$(cat <<EOF
 ## Summary
 - Implements #$ISSUE_NUMBER
 - Score: $FINAL_SCORE/100
 - Iterations: $ITERATION
-$subtask_summary
+$subtask_summary$ui_verify_summary
 ## Test plan
 - [x] All tests pass
 - [x] Code review completed with score >= $PASSING_SCORE
@@ -2334,15 +3049,11 @@ EOF
         log "合并 PR #$PR_NUMBER..."
         gh pr merge "$PR_NUMBER" --merge --delete-branch
 
-        # 添加评论到 Issue（包含最终审核报告）
+        # 添加评论到 Issue（仅包含总结信息）
         log "添加评论到 Issue #$ISSUE_NUMBER..."
-        FINAL_REVIEW_SECTION=""
-        if [ -n "$FINAL_REVIEW_REPORT" ]; then
-            FINAL_REVIEW_SECTION="
----
-
-$FINAL_REVIEW_REPORT
-"
+        local log_summary=""
+        if [ -f "$WORK_DIR/log.md" ]; then
+            log_summary=$(cat "$WORK_DIR/log.md")
         fi
         gh issue comment "$ISSUE_NUMBER" --body "$(cat <<EOF
 ## 自动处理完成
@@ -2351,7 +3062,9 @@ $FINAL_REVIEW_REPORT
 - **评分**: $FINAL_SCORE/100
 - **迭代次数**: $ITERATION
 - **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[@]})
-${FINAL_REVIEW_SECTION}
+
+${log_summary}
+
 该 Issue 已由 autoresearch 自动实现、审核并合并。
 EOF
 )" 2>/dev/null || log "警告: 添加评论失败"
