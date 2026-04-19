@@ -4,7 +4,7 @@
 # 通用版本 - 可处理任意 Git + GitHub 项目
 #
 # 用法:
-#   ./run.sh [-p project_path] [-a agents] [-c] <issue_number> [max_iterations]
+#   ./run.sh [-p project_path] [-a agents] [-c] [--no-archive] <issue_number> [max_iterations]
 #
 # 示例:
 #   ./run.sh 42                              # 处理当前目录项目的 Issue #42
@@ -13,6 +13,7 @@
 #   ./run.sh -a claude,codex 42              # 只启用 Claude 和 Codex
 #   ./run.sh -a claude 42                    # 单 agent 模式
 #   ./run.sh -a claude,opencode,codex 42     # 自定义 agent 顺序
+#   ./run.sh --no-archive 42                 # 跳过归档（调试用）
 #
 # 要求:
 #   - 项目目录必须是 git 仓库
@@ -375,7 +376,7 @@ run_with_retry() {
 }
 
 usage() {
-    echo "用法: $0 [-p project_path] [-a agents] [-c] <issue_number> [max_iterations]"
+    echo "用法: $0 [-p project_path] [-a agents] [-c] [--no-archive] <issue_number> [max_iterations]"
     echo ""
     echo "通用自动化 Issue 处理工具，支持任意 Git + GitHub 项目。"
     echo ""
@@ -384,6 +385,7 @@ usage() {
     echo "  -a <agents>      逗号分隔的 agent 列表 (默认: claude,codex,opencode)"
     echo "                   第一个 agent 用于初始实现，后续 agent 按顺序轮流审核+修复"
     echo "  -c               继续模式，从上次中断的迭代继续"
+    echo "  --no-archive     跳过归档其他 Issue 的 workflows 数据 (调试用)"
     echo "  issue_number     GitHub Issue 编号"
     echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
     echo ""
@@ -503,8 +505,65 @@ get_issue_info() {
     log "Issue 标签: $ISSUE_LABELS"
 }
 
+# 归档 workflows 目录下其他 Issue 的数据
+# 将非当前 Issue 的 issue-* 目录移动到 .autoresearch/archive/YYYY-MM-DD-issue-N/
+archive_old_workflows() {
+    local current_issue=$1
+    local workflows_dir="$PROJECT_ROOT/.autoresearch/workflows"
+    local archive_dir="$PROJECT_ROOT/.autoresearch/archive"
+
+    if [ ! -d "$workflows_dir" ]; then
+        return 0
+    fi
+
+    local archived_count=0
+    local current_date
+    current_date=$(date '+%Y-%m-%d')
+
+    for dir in "$workflows_dir"/issue-*; do
+        [ -d "$dir" ] || continue
+
+        local dirname
+        dirname=$(basename "$dir")
+        # 跳过当前 Issue 的目录
+        if [ "$dirname" = "issue-$current_issue" ]; then
+            continue
+        fi
+
+        # 从目录名提取 Issue 编号
+        local issue_num
+        issue_num=$(echo "$dirname" | grep -oE '[0-9]+$')
+        [ -z "$issue_num" ] && continue
+
+        local target_dir="$archive_dir/${current_date}-issue-${issue_num}"
+
+        # 处理目标目录已存在的情况：追加数字后缀
+        if [ -d "$target_dir" ]; then
+            local suffix=1
+            while [ -d "${target_dir}-${suffix}" ]; do
+                suffix=$((suffix + 1))
+            done
+            target_dir="${target_dir}-${suffix}"
+        fi
+
+        mkdir -p "$archive_dir"
+        mv "$dir" "$target_dir"
+        log "已归档: $dirname -> $archive_dir/${current_date}-issue-${issue_num}"
+        archived_count=$((archived_count + 1))
+    done
+
+    if [ $archived_count -gt 0 ]; then
+        log "归档完成，共归档 $archived_count 个 Issue 目录"
+    fi
+}
+
 setup_work_directory() {
     local issue_number=$1
+
+    # 归档其他 Issue 的 workflows 数据（非继续模式且未禁用归档时）
+    if [ $CONTINUE_MODE -eq 0 ] && [ $NO_ARCHIVE -eq 0 ]; then
+        archive_old_workflows "$issue_number"
+    fi
 
     WORK_DIR="$PROJECT_ROOT/.autoresearch/workflows/issue-$issue_number"
     mkdir -p "$WORK_DIR"
@@ -1822,13 +1881,20 @@ restore_continue_state() {
 # ==================== 参数解析 ====================
 
 CONTINUE_MODE=0
+NO_ARCHIVE=0
 AGENT_LIST=""
 
-while getopts "p:a:c" opt; do
+while getopts "p:a:c-:" opt; do
     case $opt in
         p) PROJECT_ROOT="$(cd "$OPTARG" && pwd)" ;;
         a) AGENT_LIST="$OPTARG" ;;
         c) CONTINUE_MODE=1 ;;
+        -)
+            case "$OPTARG" in
+                no-archive) NO_ARCHIVE=1 ;;
+                *) usage ;;
+            esac
+            ;;
         *) usage ;;
     esac
 done
