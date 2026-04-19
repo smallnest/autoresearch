@@ -284,6 +284,169 @@ annealing_delay() {
     echo $delay
 }
 
+# ==================== tasks.json functions ====================
+
+# These functions depend on WORK_DIR being set.
+
+get_tasks_file() {
+    echo "$WORK_DIR/tasks.json"
+}
+
+has_subtasks() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 1
+    fi
+    local count
+    count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+    [ -n "$count" ] && [ "$count" -gt 0 ]
+}
+
+get_current_subtask() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo ""
+        return
+    fi
+    jq '.subtasks | map(select(.passes == false)) | .[0]' "$tasks_file" 2>/dev/null
+}
+
+get_current_subtask_id() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        echo ""
+        return
+    fi
+    echo "$subtask" | jq -r '.id' 2>/dev/null
+}
+
+get_current_subtask_title() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        echo ""
+        return
+    fi
+    echo "$subtask" | jq -r '.title' 2>/dev/null
+}
+
+mark_subtask_passed() {
+    local subtask_id="$1"
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 1
+    fi
+    local tmp_file
+    tmp_file=$(mktemp)
+    jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file" && mv "$tmp_file" "$tasks_file"
+}
+
+all_subtasks_passed() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 0
+    fi
+    local unfinished
+    unfinished=$(jq '[.subtasks[] | select(.passes == false)] | length' "$tasks_file" 2>/dev/null)
+    [ "$unfinished" = "0" ]
+}
+
+get_subtask_progress_summary() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo ""
+        return
+    fi
+    local total passed current_id current_title
+    total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+    passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+    current_id=$(get_current_subtask_id)
+    current_title=$(get_current_subtask_title)
+    echo "子任务进度: $passed/$total 已完成 | 当前子任务: $current_id - $current_title"
+}
+
+get_subtask_section() {
+    local subtask
+    subtask=$(get_current_subtask)
+    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+        echo ""
+        return
+    fi
+    local id title desc criteria
+    id=$(echo "$subtask" | jq -r '.id')
+    title=$(echo "$subtask" | jq -r '.title')
+    desc=$(echo "$subtask" | jq -r '.description')
+    criteria=$(echo "$subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+    local progress
+    progress=$(get_subtask_progress_summary)
+    cat << EOF
+
+## 当前子任务
+
+$progress
+
+### 子任务详情
+
+- **ID**: $id
+- **标题**: $title
+- **描述**: $desc
+- **验收条件**:
+$(echo "$criteria" | while read -r line; do echo "  - $line"; done)
+
+请专注于实现此子任务，不要处理其他子任务。完成此子任务后等待审核。
+EOF
+}
+
+get_subtask_review_section() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        echo ""
+        return
+    fi
+    local progress
+    progress=$(get_subtask_progress_summary)
+    local current_subtask
+    current_subtask=$(get_current_subtask)
+    if [ -z "$current_subtask" ] || [ "$current_subtask" = "null" ]; then
+        echo "
+
+## 子任务审核
+
+$progress
+
+所有子任务已完成审核。"
+        return
+    fi
+    local id title desc criteria
+    id=$(echo "$current_subtask" | jq -r '.id')
+    title=$(echo "$current_subtask" | jq -r '.title')
+    desc=$(echo "$current_subtask" | jq -r '.description')
+    criteria=$(echo "$current_subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+    cat << EOF
+
+## 子任务审核
+
+$progress
+
+请审核当前子任务的实现：
+
+- **ID**: $id
+- **标题**: $title
+- **描述**: $desc
+- **验收条件**:
+$(echo "$criteria" | while read -r line; do echo "  - $line"; done)
+
+请针对此子任务的验收条件进行审核。
+EOF
+}
+
 # ==================== Test Framework ====================
 
 PASS=0
@@ -745,6 +908,191 @@ done
 truncated_content=$(get_progress_content)
 content_len=$(echo "$truncated_content" | wc -c | tr -d ' ')
 assert_true "truncated content stays within limit" "[ $content_len -le 8000 ]"
+
+# ==================== Tests: tasks.json functions ====================
+
+echo ""
+echo "=== tasks.json functions Tests ==="
+echo ""
+
+# Setup: create a temporary WORK_DIR for tasks tests
+WORK_DIR="$TMPDIR_TESTS/tasks_test_workdir"
+rm -rf "$WORK_DIR"
+mkdir -p "$WORK_DIR"
+
+# --- get_tasks_file() ---
+echo "--- get_tasks_file() ---"
+
+tasks_file_result=$(get_tasks_file)
+assert_eq "get_tasks_file returns correct path" "$WORK_DIR/tasks.json" "$tasks_file_result"
+
+# --- has_subtasks() when no tasks.json ---
+echo "--- has_subtasks() when no file ---"
+
+assert_false "no tasks.json returns false" "has_subtasks"
+
+# --- Create a valid tasks.json ---
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{
+  "issueNumber": 42,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "添加 tasks.json 解析函数",
+      "description": "实现 tasks.json 的创建、读取、更新函数",
+      "acceptanceCriteria": ["JSON 可正确解析", "子任务状态可更新"],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "修改迭代循环",
+      "description": "修改 run.sh 迭代循环以支持子任务粒度",
+      "acceptanceCriteria": ["迭代按子任务执行", "子任务通过后自动切换"],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "更新 prompt 注入",
+      "description": "将子任务信息注入到 agent prompt 中",
+      "acceptanceCriteria": ["实现和审核 prompt 包含子任务信息"],
+      "priority": 3,
+      "passes": false
+    }
+  ]
+}
+INNEREOF
+
+# --- has_subtasks() with valid file ---
+echo "--- has_subtasks() with valid file ---"
+
+assert_true "valid tasks.json returns true" "has_subtasks"
+
+# --- get_current_subtask() ---
+echo "--- get_current_subtask() ---"
+
+current=$(get_current_subtask)
+assert_true "returns non-null subtask" "[ '$current' != 'null' ]"
+assert_true "current subtask has id T-001" "echo '$current' | jq -r '.id' | grep -q 'T-001'"
+
+# --- get_current_subtask_id() ---
+echo "--- get_current_subtask_id() ---"
+
+assert_eq "current subtask id is T-001" "T-001" "$(get_current_subtask_id)"
+
+# --- get_current_subtask_title() ---
+echo "--- get_current_subtask_title() ---"
+
+current_title=$(get_current_subtask_title)
+assert_true "current subtask title contains 解析函数" "echo '$current_title' | grep -q '解析函数'"
+
+# --- mark_subtask_passed() ---
+echo "--- mark_subtask_passed() ---"
+
+mark_subtask_passed "T-001"
+
+# After marking T-001, current should be T-002
+assert_eq "after T-001 passes, current is T-002" "T-002" "$(get_current_subtask_id)"
+
+# Verify T-001 is marked as passed in the file
+t001_passes=$(jq -r '.subtasks[0].passes' "$WORK_DIR/tasks.json")
+assert_eq "T-001 passes is true" "true" "$t001_passes"
+
+# --- get_subtask_progress_summary() ---
+echo "--- get_subtask_progress_summary() ---"
+
+progress_summary=$(get_subtask_progress_summary)
+assert_true "progress summary contains 1/3" "echo '$progress_summary' | grep -q '1/3'"
+assert_true "progress summary contains T-002" "echo '$progress_summary' | grep -q 'T-002'"
+
+# --- all_subtasks_passed() ---
+echo "--- all_subtasks_passed() ---"
+
+assert_false "not all subtasks passed" "all_subtasks_passed"
+
+# Mark remaining subtasks as passed
+mark_subtask_passed "T-002"
+mark_subtask_passed "T-003"
+
+assert_true "all subtasks passed" "all_subtasks_passed"
+assert_eq "current subtask id is empty" "" "$(get_current_subtask_id)"
+
+# --- get_subtask_section() ---
+echo "--- get_subtask_section() ---"
+
+# Reset tasks.json for section tests
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{
+  "issueNumber": 42,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "测试子任务",
+      "description": "测试子任务描述",
+      "acceptanceCriteria": ["条件1", "条件2"],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+INNEREOF
+
+section=$(get_subtask_section)
+assert_true "section has 当前子任务 header" "echo '$section' | grep -q '当前子任务'"
+assert_true "section has T-001" "echo '$section' | grep -q 'T-001'"
+assert_true "section has 测试子任务" "echo '$section' | grep -q '测试子任务'"
+assert_true "section has 条件1" "echo '$section' | grep -q '条件1'"
+
+# --- get_subtask_review_section() ---
+echo "--- get_subtask_review_section() ---"
+
+review_section=$(get_subtask_review_section)
+assert_true "review section has 子任务审核 header" "echo '$review_section' | grep -q '子任务审核'"
+assert_true "review section has T-001" "echo '$review_section' | grep -q 'T-001'"
+assert_true "review section has 验收条件" "echo '$review_section' | grep -q '验收条件'"
+
+# --- Edge cases ---
+echo "--- Edge cases ---"
+
+# Test with empty tasks.json (no subtasks)
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{
+  "issueNumber": 42,
+  "subtasks": []
+}
+INNEREOF
+
+assert_false "empty subtasks array returns false" "has_subtasks"
+assert_eq "empty subtasks current id is empty" "" "$(get_current_subtask_id)"
+
+# Test with all passed
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{
+  "issueNumber": 42,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "已完成",
+      "description": "desc",
+      "acceptanceCriteria": [],
+      "priority": 1,
+      "passes": true
+    }
+  ]
+}
+INNEREOF
+
+assert_true "all passed returns true for all_subtasks_passed" "all_subtasks_passed"
+assert_eq "all passed current id is empty" "" "$(get_current_subtask_id)"
+
+# Test with no tasks.json (backward compatibility)
+rm -f "$WORK_DIR/tasks.json"
+assert_true "no tasks.json: all_subtasks_passed returns true (backward compat)" "all_subtasks_passed"
+assert_eq "no tasks.json: get_subtask_section returns empty" "" "$(get_subtask_section)"
+
+# Clean up tasks test dir
+rm -rf "$WORK_DIR"
 
 # ==================== Summary ====================
 
