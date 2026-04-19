@@ -1,0 +1,929 @@
+I'll begin by analyzing the implementation of Issue #5: "feat: 跨迭代经验日志 (progress.md)". I'll explore the codebase to understand how this feature was integrated into the automated workflow.
+
+First, I'll search for the issue description and identify the files modified or created in relation to this feature.
+[91m[1m| [0m[90m Bash     [0mList all files, check git status, and view recent commits to identify Issue #5 changes.
+
+agents
+CLAUDE.md
+docs
+issue-selector.md
+lib
+LICENSE
+program.md
+README.md
+run.sh
+tests
+
+/Users/chaoyuepan/ai/autoresearch/agents:
+claude.md
+codex.md
+opencode.md
+
+/Users/chaoyuepan/ai/autoresearch/docs:
+architecture.html
+architecture.png
+screenshots
+
+/Users/chaoyuepan/ai/autoresearch/docs/screenshots:
+issue#5.png
+
+/Users/chaoyuepan/ai/autoresearch/lib:
+agent_logic.sh
+
+/Users/chaoyuepan/ai/autoresearch/tests:
+test_agent_logic.sh
+test_extract_score.sh
+On branch feature/issue-5
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   README.md
+	modified:   agents/claude.md
+	modified:   agents/codex.md
+	modified:   agents/opencode.md
+	modified:   run.sh
+	modified:   tests/test_extract_score.sh
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.autoresearch/workflows/issue-5/
+	docs/screenshots/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+b6e035a update readme
+be45516 Merge pull request #4 from smallnest/feature/issue-2
+9f634b1 feat: implement issue #2 - feat: 支持指定启用的 agents 及其顺序
+366c49f update readme to add snarktank/ralph
+7170d04 feat: commit message 包含审核报告
+[94m[1m| [0m[90m Grep     [0m{"pattern":"progress.md"}
+I will search for "progress.md" in the codebase to understand its implementation and usage, and then examine the changes in the modified files.
+[91m[1m| [0m[90m Bash     [0mView the changes made for Issue #5.
+
+diff --git a/README.md b/README.md
+index 2e64aa9..67635a7 100644
+--- a/README.md
++++ b/README.md
+@@ -158,3 +158,41 @@ Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 P
+ ## 类似项目
+ 
+ - [snarktank/ralph](https://github.com/snarktank/ralph)
++
++### autoresearch vs ralph 对比
++
++| 维度 | **autoresearch** | **ralph** |
++|------|-----------------|-----------|
++| **核心理念** | GitHub Issue → 多 Agent 轮转审核 → PR/合并/关闭 | PRD → 单 Agent 迭代实现 → 完成 |
++| **输入** | GitHub Issue 编号 | PRD（`prd.json`，结构化用户故事） |
++| **Agent 模型** | 多 Agent 轮转（Claude/Codex/OpenCode），迭代间换人审核 | 单 Agent 反复启动新实例（Amp 或 Claude Code），每次干净上下文 |
++| **质量门禁** | LLM 评分 ≥ 85/100，6 种正则提取分数 | 类型检查 + Lint + 测试，必须全部通过才更新状态 |
++| **审核机制** | Agent 自审自修（同一迭代内审核和修复是同一 Agent） | 无独立审核，靠自动化测试和 lint 守关 |
++| **状态持久化** | 日志文件（`workflows/issue-N/`）、`.last_score` | `prd.json`（故事完成状态）+ `progress.txt`（经验日志）+ `AGENTS.md`（目录级知识）+ Git 历史 |
++| **记忆模型** | 无跨迭代记忆，仅传递上一轮 review 反馈 | 四通道持久化：Git / `progress.txt` / `prd.json` / `AGENTS.md` |
++| **PR/合并** | 自动创建 PR → 合并 → 评论 Issue → 关闭 Issue | 完成后发 `COMPLETE` 信号，未内置 PR 创建 |
++| **任务粒度** | 一个 Issue 一次性实现 | PRD 拆分为多个用户故事，每迭代完成一个 |
++| **配置** | 两层覆盖：默认 `program.md` + 项目级 `.autoresearch/` | `prompt.md`(Amp) / `CLAUDE.md`(Claude Code) 指导行为 |
++| **实现语言** | 单个 Bash 脚本 `run.sh` | 单个 Bash 脚本 `ralph.sh` |
++| **重试/容错** | 指数退避重试（5 次）+ 连续失败硬停止 + Continue 模式 | 质量检查不过则不更新状态，下次重试同一故事 |
++| **沙箱/安全** | `--dangerously-skip-permissions` / `--full-auto`，无沙箱 | 同样无沙箱，全权委托 |
++
++#### 各自优势
++
++**autoresearch 优势：**
++- 多 Agent 轮转提供了一定程度的交叉审核（虽然同一迭代内仍是自审）
++- GitHub 原生集成完整：Issue → PR → 合并 → 关闭，端到端自动化
++- 分数制质量门禁比单纯测试通过更严格（但也更脆弱）
++
++**ralph 优势：**
++- PRD 驱动拆分任务，粒度更细，失败范围更小
++- 四通道记忆模型让每次迭代都能积累经验，避免重复踩坑
++- 质量门禁基于确定性工具（测试/lint），不依赖 LLM 输出解析
++- `AGENTS.md` 实现了目录级知识积累，类似自进化能力
++
++#### 关键差异总结
++
++1. **质量门禁哲学不同**：autoresearch 信任 LLM 判断（评分制），ralph 信任工具链（测试/lint 制）。前者更灵活但脆弱（正则提取分数可能失败），后者更可靠但覆盖面窄（测试无法覆盖所有质量问题）。
++2. **记忆 vs 无记忆**：ralph 的 `progress.txt` + `AGENTS.md` 让 Agent 在后续迭代中避免重复错误；autoresearch 仅传递上一轮反馈，历史经验丢失。
++3. **任务分解**：ralph 先拆 PRD 再逐个实现，更可控；autoresearch 一次性实现整个 Issue，复杂需求容易失控。
++4. **端到端程度**：autoresearch 真正做到了 Issue → 合并的全自动；ralph 止步于代码完成，需人工创建 PR。
+diff --git a/agents/claude.md b/agents/claude.md
+index 38e2d1b..416dec9 100644
+--- a/agents/claude.md
++++ b/agents/claude.md
+@@ -621,6 +621,27 @@ if secretKey == "" {
+ 
+ ---
+ 
++## 跨迭代经验
++
++每次实现或审核完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
++
++1. **发现的关键模式**：代码库中的重要模式和约定
++2. **踩过的坑**：遇到的问题和解决方案
++3. **可复用的经验**：其他迭代可能受益的经验
++
++格式示例：
++```markdown
++## Learnings
++
++- **模式**: [发现的可复用模式]
++- **踩坑**: [遇到的问题及解决方式]
++- **经验**: [对后续迭代有帮助的经验]
++```
++
++如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
++
++---
++
+ ## 质量保障
+ 
+ 每次审核确保：
+diff --git a/agents/codex.md b/agents/codex.md
+index 4829b09..e9bb203 100644
+--- a/agents/codex.md
++++ b/agents/codex.md
+@@ -236,6 +236,27 @@ func TestParse(t *testing.T) {
+ 
+ ---
+ 
++## 跨迭代经验
++
++每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
++
++1. **发现的关键模式**：代码库中的重要模式和约定
++2. **踩过的坑**：遇到的问题和解决方案
++3. **可复用的经验**：其他迭代可能受益的经验
++
++格式示例：
++```markdown
++## Learnings
++
++- **模式**: [发现的可复用模式]
++- **踩坑**: [遇到的问题及解决方式]
++- **经验**: [对后续迭代有帮助的经验]
++```
++
++如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
++
++---
++
+ ## 迭代限制
+ 
+ - 最大迭代次数: 5 次
+diff --git a/agents/opencode.md b/agents/opencode.md
+index 4e74d68..6204eb0 100644
+--- a/agents/opencode.md
++++ b/agents/opencode.md
+@@ -133,3 +133,24 @@
+ ### 审核结论
+ - [ ] 通过 / 需要修改 / 阻塞
+ ```
++
++---
++
++## 跨迭代经验
++
++每次实现或审核完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
++
++1. **发现的关键模式**：代码库中的重要模式和约定
++2. **踩过的坑**：遇到的问题和解决方案
++3. **可复用的经验**：其他迭代可能受益的经验
++
++格式示例：
++```markdown
++## Learnings
++
++- **模式**: [发现的可复用模式]
++- **踩坑**: [遇到的问题及解决方式]
++- **经验**: [对后续迭代有帮助的经验]
++```
++
++如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+diff --git a/run.sh b/run.sh
+index 656c714..21392e5 100755
+--- a/run.sh
++++ b/run.sh
+@@ -408,6 +408,9 @@ setup_work_directory() {
+ ## 迭代记录
+ 
+ EOF
++
++    # 初始化跨迭代经验日志
++    init_progress
+ }
+ 
+ # 获取 agent 指令文件路径
+@@ -464,6 +467,160 @@ create_branch() {
+     fi
+ }
+ 
++# ==================== 跨迭代经验日志 (progress.md) ====================
++
++# 初始化 progress.md
++init_progress() {
++    local progress_file="$WORK_DIR/progress.md"
++    cat > "$progress_file" << EOF
++# Issue #$ISSUE_NUMBER 经验日志
++
++## Codebase Patterns
++
++> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
++
++EOF
++    log "初始化经验日志: $progress_file"
++}
++
++# 从 Agent 输出日志中提取 Learnings 部分
++# 优先查找 ## Learnings 区块，否则截取前 30 行非空内容作为摘要
++extract_learnings_from_log() {
++    local log_file="$1"
++
++    if [ ! -f "$log_file" ]; then
++        echo ""
++        return
++    fi
++
++    # 优先提取 ## Learnings 区块
++    if grep -q "^## Learnings" "$log_file" 2>/dev/null; then
++        sed -n '/^## Learnings/,/^## [^L]/{ /^## [^L]/!p; }' "$log_file" 2>/dev/null | head -50
++        return
++    fi
++
++    # 回退：截取前 30 行非空内容作为摘要
++    grep -vE '^\s*$' "$log_file" 2>/dev/null | head -30
++}
++
++# 追加迭代经验到 progress.md
++append_to_progress() {
++    local iteration="$1"
++    local agent_name="$2"
++    local log_file="$3"
++    local score="${4:-N/A}"
++    local entry_type="$5"  # "实现" 或 "审核+修复"
++    local review_summary="$6"
++
++    local progress_file="$WORK_DIR/progress.md"
++    if [ ! -f "$progress_file" ]; then
++        init_progress
++    fi
++
++    local date_str
++    date_str=$(date '+%Y-%m-%d')
++
++    # 从日志中提取 learnings
++    local learnings
++    learnings=$(extract_learnings_from_log "$log_file")
++
++    # 限制 learnings 大小（约 1500 字符）
++    local learnings_truncated
++    learnings_truncated=$(echo "$learnings" | head -c 1500)
++    if [ ${#learnings} -gt 1500 ]; then
++        learnings_truncated="${learnings_truncated}
++
++... (内容过长，已截断)"
++    fi
++
++    # 构建经验条目
++    local entry="
++## Iteration $iteration - $date_str
++
++- **Agent**: $agent_name
++- **类型**: $entry_type
++- **评分**: $score/100
++"
++
++    # 如果有审核反馈摘要，追加
++    if [ -n "$review_summary" ]; then
++        # 截取审核反馈的前 800 字符
++        local review_brief
++        review_brief=$(echo "$review_summary" | head -c 800)
++        entry="$entry
++- **审核要点**:
++
++${review_brief}
++"
++    fi
++
++    # 追加 learnings
++    if [ -n "$learnings_truncated" ]; then
++        entry="$entry
++- **经验与发现**:
++
++${learnings_truncated}
++"
++    fi
++
++    echo "$entry" >> "$progress_file"
++    log "已追加迭代 $iteration 经验到 progress.md"
++}
++
++# 获取 progress.md 内容用于 prompt 注入
++# 返回 ## Codebase Patterns 区 + 最近的迭代记录
++get_progress_content() {
++    local progress_file="$WORK_DIR/progress.md"
++    if [ ! -f "$progress_file" ]; then
++        echo ""
++        return
++    fi
++
++    local content
++    content=$(cat "$progress_file")
++
++    # 安全限制：最大 5000 字符，避免过多 token 消耗
++    local max_chars=5000
++    local content_len
++    content_len=$(echo "$content" | wc -c | tr -d ' ')
++
++    if [ "$content_len" -le "$max_chars" ]; then
++        echo "$content"
++        return
++    fi
++
++    # 超长时：保留 ## Codebase Patterns 区 + 最后 3000 字符
++    local patterns_section
++    patterns_section=$(awk '/^## Codebase Patterns/,/^## [^C]/{ if (/^## [^C]/) next; print }' "$progress_file")
++
++    local recent_entries
++    recent_entries=$(tail -c 3000 "$progress_file")
++
++    echo "$patterns_section
++
++... (中间迭代记录已省略)
++
++$recent_entries"
++}
++
++# 获取格式化的经验注入文本（用于 prompt）
++get_progress_section() {
++    local content
++    content=$(get_progress_content)
++    if [ -z "$content" ]; then
++        echo ""
++        return
++    fi
++    cat << EOF
++
++## 跨迭代经验
++
++以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
++
++$content
++EOF
++}
++
+ # ==================== Agent 实现/修复函数 ====================
+ 
+ run_codex() {
+@@ -485,6 +642,9 @@ run_codex() {
+     local program_instructions
+     program_instructions=$(get_program_instructions)
+ 
++    local progress_section
++    progress_section=$(get_progress_section)
++
+     local prompt
+     if [ -z "$previous_feedback" ]; then
+         prompt="实现 GitHub Issue #$issue_number
+@@ -495,6 +655,7 @@ Issue 标题: $ISSUE_TITLE
+ Issue 内容: $ISSUE_BODY
+ 
+ 迭代次数: $iteration
++$progress_section
+ 
+ ---
+ 请按以下步骤执行:
+@@ -505,6 +666,9 @@ Issue 内容: $ISSUE_BODY
+ ## 第二步：逐步实现
+ 按照任务清单逐步实现，每完成一个任务标记为已完成。
+ 
++## 第三步：总结经验
++实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
++
+ ---
+ $program_instructions
+ 
+@@ -519,6 +683,7 @@ Issue 标题: $ISSUE_TITLE
+ 
+ 审核反馈:
+ $previous_feedback
++$progress_section
+ 
+ ---
+ 请按以下步骤执行:
+@@ -529,6 +694,9 @@ $previous_feedback
+ ## 第二步：逐步实现
+ 按照任务清单逐步修复，每完成一个任务标记为已完成。
+ 
++## 第三步：总结经验
++修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
++
+ ---
+ $codex_instructions
+ "
+@@ -567,6 +735,9 @@ run_claude() {
+     local program_instructions
+     program_instructions=$(get_program_instructions)
+ 
++    local progress_section
++    progress_section=$(get_progress_section)
++
+     local prompt
+     if [ -z "$previous_feedback" ]; then
+         prompt="实现 GitHub Issue #$issue_number
+@@ -577,6 +748,7 @@ Issue 标题: $ISSUE_TITLE
+ Issue 内容: $ISSUE_BODY
+ 
+ 迭代次数: $iteration
++$progress_section
+ 
+ ---
+ 请按以下步骤执行:
+@@ -587,6 +759,9 @@ Issue 内容: $ISSUE_BODY
+ ## 第二步：逐步实现
+ 按照任务清单逐步实现，每完成一个任务标记为已完成。
+ 
++## 第三步：总结经验
++实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
++
+ ---
+ $program_instructions
+ 
+@@ -601,6 +776,7 @@ Issue 标题: $ISSUE_TITLE
+ 
+ 审核反馈:
+ $previous_feedback
++$progress_section
+ 
+ ---
+ 请按以下步骤执行:
+@@ -611,6 +787,9 @@ $previous_feedback
+ ## 第二步：逐步实现
+ 按照任务清单逐步修复，每完成一个任务标记为已完成。
+ 
++## 第三步：总结经验
++修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
++
+ ---
+ $claude_instructions
+ "
+@@ -649,6 +828,9 @@ run_opencode() {
+     local program_instructions
+     program_instructions=$(get_program_instructions)
+ 
++    local progress_section
++    progress_section=$(get_progress_section)
++
+     local prompt
+     if [ -z "$previous_feedback" ]; then
+         prompt="实现 GitHub Issue #$issue_number
+@@ -659,6 +841,7 @@ Issue 标题: $ISSUE_TITLE
+ Issue 内容: $ISSUE_BODY
+ 
+ 迭代次数: $iteration
++$progress_section
+ 
+ ---
+ 请按以下步骤执行:
+@@ -669,6 +852,9 @@ Issue 内容: $ISSUE_BODY
+ ## 第二步：逐步实现
+ 按照任务清单逐步实现，每完成一个任务标记为已完成。
+ 
++## 第三步：总结经验
++实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
++
+ ---
+ $program_instructions
+ 
+@@ -683,6 +869,7 @@ Issue 标题: $ISSUE_TITLE
+ 
+ 审核反馈:
+ $previous_feedback
++$progress_section
+ 
+ ---
+ 请按以下步骤执行:
+@@ -693,6 +880,9 @@ $previous_feedback
+ ## 第二步：逐步实现
+ 按照任务清单逐步修复，每完成一个任务标记为已完成。
+ 
++## 第三步：总结经验
++修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
++
+ ---
+ $opencode_instructions
+ "
+@@ -749,7 +939,7 @@ Issue 标题: $ISSUE_TITLE
+ 
+ 评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+ 注意: 评分 ≥ 85 才算达标。
+-
++$(get_progress_section)
+ $opencode_instructions
+ "
+ 
+@@ -845,7 +1035,7 @@ Issue 标题: $ISSUE_TITLE
+ 
+ 评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+ 注意: 评分 ≥ 85 才算达标。
+-
++$(get_progress_section)
+ $claude_instructions
+ "
+ 
+@@ -912,7 +1102,7 @@ Issue 标题: $ISSUE_TITLE
+ 
+ 评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+ 注意: 评分 ≥ 85 才算达标。
+-
++$(get_progress_section)
+ $codex_instructions
+ "
+ 
+@@ -1321,6 +1511,10 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+             PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
+         fi
+ 
++        # 追加经验到 progress.md
++        local impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
++        append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现" ""
++
+         if [ $ITERATION_FAILED -eq 1 ]; then
+             CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+         else
+@@ -1331,8 +1525,17 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+ 
+     # ---- 迭代 >=2: agent 轮流审核 + 修复 ----
+     agent_idx=$(get_review_agent $ITERATION)
++    local agent_name="${AGENT_NAMES[$agent_idx]}"
+     run_review_and_fix $agent_idx
+ 
++    # 追加经验到 progress.md
++    local review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
++    local review_feedback_brief=""
++    if [ -f "$review_log" ]; then
++        review_feedback_brief=$(cat "$review_log" | head -c 800)
++    fi
++    append_to_progress "$ITERATION" "$agent_name" "$review_log" "$SCORE" "审核+修复" "$review_feedback_brief"
++
+     if [ $PASSED -eq 1 ]; then
+         break
+     fi
+diff --git a/tests/test_extract_score.sh b/tests/test_extract_score.sh
+index 41863c8..23fe641 100755
+--- a/tests/test_extract_score.sh
++++ b/tests/test_extract_score.sh
+@@ -133,6 +133,143 @@ check_score_passed() {
+     awk -v score="$score" -v passing="$passing" 'BEGIN { exit (score >= passing) ? 0 : 1 }'
+ }
+ 
++# ==================== progress.md functions ====================
++
++# These functions depend on WORK_DIR and ISSUE_NUMBER being set.
++
++init_progress() {
++    local progress_file="$WORK_DIR/progress.md"
++    cat > "$progress_file" << EOF
++# Issue #$ISSUE_NUMBER 经验日志
++
++## Codebase Patterns
++
++> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
++
++EOF
++}
++
++extract_learnings_from_log() {
++    local log_file="$1"
++
++    if [ ! -f "$log_file" ]; then
++        echo ""
++        return
++    fi
++
++    if grep -q "^## Learnings" "$log_file" 2>/dev/null; then
++        sed -n '/^## Learnings/,/^## [^L]/{ /^## [^L]/!p; }' "$log_file" 2>/dev/null | head -50
++        return
++    fi
++
++    grep -vE '^\s*$' "$log_file" 2>/dev/null | head -30
++}
++
++append_to_progress() {
++    local iteration="$1"
++    local agent_name="$2"
++    local log_file="$3"
++    local score="${4:-N/A}"
++    local entry_type="$5"
++    local review_summary="$6"
++
++    local progress_file="$WORK_DIR/progress.md"
++    if [ ! -f "$progress_file" ]; then
++        init_progress
++    fi
++
++    local date_str
++    date_str=$(date '+%Y-%m-%d')
++
++    local learnings
++    learnings=$(extract_learnings_from_log "$log_file")
++
++    local learnings_truncated
++    learnings_truncated=$(echo "$learnings" | head -c 1500)
++    if [ ${#learnings} -gt 1500 ]; then
++        learnings_truncated="${learnings_truncated}
++
++... (内容过长，已截断)"
++    fi
++
++    local entry="
++## Iteration $iteration - $date_str
++
++- **Agent**: $agent_name
++- **类型**: $entry_type
++- **评分**: $score/100
++"
++
++    if [ -n "$review_summary" ]; then
++        local review_brief
++        review_brief=$(echo "$review_summary" | head -c 800)
++        entry="$entry
++- **审核要点**:
++
++${review_brief}
++"
++    fi
++
++    if [ -n "$learnings_truncated" ]; then
++        entry="$entry
++- **经验与发现**:
++
++${learnings_truncated}
++"
++    fi
++
++    echo "$entry" >> "$progress_file"
++}
++
++get_progress_content() {
++    local progress_file="$WORK_DIR/progress.md"
++    if [ ! -f "$progress_file" ]; then
++        echo ""
++        return
++    fi
++
++    local content
++    content=$(cat "$progress_file")
++
++    local max_chars=5000
++    local content_len
++    content_len=$(echo "$content" | wc -c | tr -d ' ')
++
++    if [ "$content_len" -le "$max_chars" ]; then
++        echo "$content"
++        return
++    fi
++
++    local patterns_section
++    patterns_section=$(awk '/^## Codebase Patterns/,/^## [^C]/{ if (/^## [^C]/) next; print }' "$progress_file")
++
++    local recent_entries
++    recent_entries=$(tail -c 3000 "$progress_file")
++
++    echo "$patterns_section
++
++... (中间迭代记录已省略)
++
++$recent_entries"
++}
++
++get_progress_section() {
++    local content
++    content=$(get_progress_content)
++    if [ -z "$content" ]; then
++        echo ""
++        return
++    fi
++    cat << EOF
++
++## 跨迭代经验
++
++以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
++
++$content
++EOF
++}
++
+ annealing_delay() {
+     local retry=$1
+     local delay=$((RETRY_BASE_DELAY * (1 << (retry - 1))))
+@@ -473,6 +610,142 @@ assert_false "normal error discussion not fatal" "has_fatal_error $TMPDIR_TESTS/
+ assert_false "normal error discussion not API failure" "has_api_failure $TMPDIR_TESTS/normal_error_discussion.log"
+ assert_true "normal discussion has enough lines" "[ $(grep -vE '^\s*$' $TMPDIR_TESTS/normal_error_discussion.log | wc -l) -ge 5 ]"
+ 
++# ==================== Tests: progress.md functions ====================
++
++echo ""
++echo "=== progress.md functions Tests ==="
++echo ""
++
++# Setup: create a temporary WORK_DIR for progress tests
++WORK_DIR="$TMPDIR_TESTS/progress_test_workdir"
++mkdir -p "$WORK_DIR"
++
++# --- init_progress() ---
++echo "--- init_progress() ---"
++
++ISSUE_NUMBER=99
++init_progress
++
++assert_true "progress.md created" "[ -f '$WORK_DIR/progress.md' ]"
++assert_true "has Codebase Patterns header" "grep -q '## Codebase Patterns' '$WORK_DIR/progress.md'"
++
++# --- extract_learnings_from_log() ---
++echo "--- extract_learnings_from_log() ---"
++
++# Create a log file with ## Learnings section
++cat > "$TMPDIR_TESTS/learnings_log.txt" << 'INNEREOF'
++I implemented the feature.
++## Learnings
++
++- **模式**: The project uses dependency injection
++- **踩坑**: Config must be loaded before init
++- **经验**: Always check nil before accessing map
++
++## Other Section
++This should not be included.
++INNEREOF
++
++learnings_result=$(extract_learnings_from_log "$TMPDIR_TESTS/learnings_log.txt")
++assert_true "extracts Learnings section" "echo '$learnings_result' | grep -q 'dependency injection'"
++assert_true "Learnings includes 踩坑" "echo '$learnings_result' | grep -q '踩坑'"
++# The "## Other Section" heading should not be included (it's the next ## section)
++assert_false "excludes non-Learnings section" "echo '$learnings_result' | grep -q 'Other Section'"
++
++# Create a log file WITHOUT ## Learnings section (fallback)
++cat > "$TMPDIR_TESTS/no_learnings_log.txt" << 'INNEREOF'
++Line 1 of output
++Line 2 of output
++Line 3 of output
++INNEREOF
++
++fallback_result=$(extract_learnings_from_log "$TMPDIR_TESTS/no_learnings_log.txt")
++assert_true "fallback returns content" "[ -n '$fallback_result' ]"
++assert_true "fallback includes line 1" "echo '$fallback_result' | grep -q 'Line 1'"
++
++# Non-existent log file
++empty_result=$(extract_learnings_from_log "/tmp/nonexistent_log_$$_test.txt")
++assert_eq "nonexistent file returns empty" "" "$empty_result"
++
++# --- append_to_progress() ---
++echo "--- append_to_progress() ---"
++
++# Re-init for clean state
++rm -f "$WORK_DIR/progress.md"
++init_progress
++
++# Append an iteration entry
++cat > "$TMPDIR_TESTS/iter1_log.txt" << 'INNEREOF'
++## Learnings
++
++- **模式**: Project uses factory pattern
++- **踩坑**: Avoid global state
++INNEREOF
++
++append_to_progress 1 "claude" "$TMPDIR_TESTS/iter1_log.txt" "N/A" "初始实现" ""
++
++assert_true "progress.md has Iteration 1" "grep -q '## Iteration 1' '$WORK_DIR/progress.md'"
++assert_true "progress.md has agent name" "grep -q 'claude' '$WORK_DIR/progress.md'"
++assert_true "progress.md has learnings content" "grep -q 'factory pattern' '$WORK_DIR/progress.md'"
++
++# Append a second iteration with review feedback
++append_to_progress 2 "codex" "$TMPDIR_TESTS/iter1_log.txt" "65" "审核+修复" "Hardcoded secret found in auth.go"
++
++assert_true "progress.md has Iteration 2" "grep -q '## Iteration 2' '$WORK_DIR/progress.md'"
++assert_true "progress.md has review score" "grep -q '65/100' '$WORK_DIR/progress.md'"
++assert_true "progress.md has review feedback" "grep -q 'Hardcoded secret' '$WORK_DIR/progress.md'"
++
++# Codebase Patterns section should still be at top
++assert_true "Codebase Patterns still at top after appends" "head -5 '$WORK_DIR/progress.md' | grep -q '## Codebase Patterns'"
++
++# --- get_progress_content() ---
++echo "--- get_progress_content() ---"
++
++content=$(get_progress_content)
++assert_true "returns non-empty content" "[ -n '$content' ]"
++assert_true "includes Codebase Patterns" "echo '$content' | grep -q '## Codebase Patterns'"
++assert_true "includes iteration entries" "echo '$content' | grep -q '## Iteration 1'"
++
++# Test with no progress.md
++rm -f "$WORK_DIR/progress.md"
++empty_content=$(get_progress_content)
++assert_eq "no progress.md returns empty" "" "$empty_content"
++
++# --- get_progress_section() ---
++echo "--- get_progress_section() ---"
++
++# Re-create progress.md
++init_progress
++append_to_progress 1 "claude" "$TMPDIR_TESTS/iter1_log.txt" "N/A" "初始实现" ""
++
++section=$(get_progress_section)
++assert_true "section has 跨迭代经验 header" "echo '$section' | grep -q '跨迭代经验'"
++assert_true "section includes Codebase Patterns" "echo '$section' | grep -q '## Codebase Patterns'"
++assert_true "section includes iteration data" "echo '$section' | grep -q '## Iteration 1'"
++
++# Test with no progress.md
++rm -f "$WORK_DIR/progress.md"
++empty_section=$(get_progress_section)
++assert_eq "no progress.md returns empty section" "" "$empty_section"
++
++# --- Truncation test ---
++echo "--- Truncation test ---"
++
++rm -f "$WORK_DIR/progress.md"
++init_progress
++
++# Append many iterations to exceed 5000 char limit
++for i in $(seq 1 20); do
++    echo "Pattern $i: $(printf 'A%.0s' {1..100})" >> "$WORK_DIR/progress.md"
++    echo "" >> "$WORK_DIR/progress.md"
++    echo "## Iteration $i - 2024-01-15" >> "$WORK_DIR/progress.md"
++    echo "Content for iteration $i with enough text to fill space." >> "$WORK_DIR/progress.md"
++    echo "" >> "$WORK_DIR/progress.md"
++done
++
++truncated_content=$(get_progress_content)
++content_len=$(echo "$truncated_content" | wc -c | tr -d ' ')
++assert_true "truncated content stays within limit" "[ $content_len -le 8000 ]"
++
+ # ==================== Summary ====================
+ 
+ echo ""
+
+I will read the changes in `run.sh`, the agent prompt files, and the test file to analyze the implementation of the "progress.md" feature.
+[96m[1m| [0m[90m Read     [0mlib/agent_logic.sh
+I will check the contents of `lib/agent_logic.sh` and `tests/test_agent_logic.sh` to see if the implementation should have been moved there and to evaluate the overall structure.
+[94m[1m| [0m[90m Grep     [0m{"pattern":"run_review_and_fix()"}
+I will read the `run_review_and_fix` function in `run.sh` to verify the log file names and ensure that the `append_to_progress` calls are using the correct paths.
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will read the `run_review_and_fix` function and the surrounding code in `run.sh` to understand how review logs are handled.
+I will search for the definition of `run_review_and_fix` in `run.sh` to understand how it calls the agent-specific review functions.
+[94m[1m| [0m[90m Grep     [0m{"pattern":"run_review_and_fix() {"}
+[94m[1m| [0m[90m Grep     [0m{"pattern":"run_review_and_fix\\(.*\\) {"}
+I will search for the definition of `run_review_and_fix` in `run.sh` using an escaped regex to locate the function.
+I will search for the definition of `run_review_and_fix` in `run.sh` using a simpler pattern.
+[94m[1m| [0m[90m Grep     [0m{"pattern":"run_review_and_fix()"}
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will read the code around line 1180 in `run.sh` to find the definition of `run_review_and_fix`.
+[94m[1m| [0m[90m Grep     [0m{"pattern":"run_review_and_fix() {"}
+I will search for the definition of `run_review_and_fix` in `run.sh` to find its location.
+[94m[1m| [0m[90m ast_grep_search  [0m{"lang":"bash","pattern":"run_review_and_fix() { $$$ }"}
+I will search for the definition of `run_review_and_fix` in `run.sh` using `ast_grep_search` to avoid regex errors.
+[91m[1m| [0m[90m Bash     [0mFind the line number of run_review_and_fix in run.sh.
+
+1441:run_review_and_fix() {
+
+I will search for the string `run_review_and_fix` in `run.sh` to locate its definition.
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will read the `run_review_and_fix` function in `run.sh` starting from line 1441.
+I will check the main logic of `run.sh` to see if `setup_work_directory` (and thus `init_progress`) is called when running in continue mode (`-c`).
+[96m[1m| [0m[90m Read     [0mrun.sh
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will read more lines of `run.sh` to find where `setup_work_directory` is called and determine if it's executed during continue mode.
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will read the `setup_work_directory` function in `run.sh` to check if it overwrites `progress.md` when running in continue mode.
+## 审核报告
+
+### Issue
+- 编号: #5
+- 迭代次数: 1
+
+### 总体评价
+该实现完整地引入了跨迭代经验日志功能 (`progress.md`)，通过在每次迭代后提取 Agent 的 `Learnings` 并将其注入到后续迭代的提示词中，有效地解决了 autoresearch 之前缺乏长期记忆的问题。代码结构清晰，集成了自动化测试，并考虑了 Token 消耗的截断逻辑。
+
+**评分: 93/100**
+
+### 严重问题 (必须修复)
+无。
+
+### 一般问题 (建议修复)
+1. **测试用例中的代码冗余**: `tests/test_extract_score.sh` 中通过重定义函数（`init_progress` 等）来进行测试，而不是直接测试 `run.sh` 中的代码。这虽然在当前单脚本架构下是一种权衡，但增加了维护成本：如果 `run.sh` 中的实现逻辑变更，测试可能无法及时反映真实的运行情况。建议未来将核心逻辑抽离到 `lib/` 下的独立脚本。
+2. **截断逻辑可能导致日志破损**: `tail -c 3000` 简单按字节截断，可能会切断 Markdown 的标题行或列表项。建议使用 `tail -n` 或按行处理以保证注入内容的结构完整性。
+
+### 建议改进 (可选)
+1. **完善审核阶段的经验收集**: 当前 `run_review_and_fix` 只在最后追加一次经验（通常使用 review log）。如果 Agent 在修复阶段（impl log）产生了重要的 `Learnings`，这部分内容目前不会被自动合并到 `progress.md` 中。可以考虑合并 review 和 fix 的经验输出。
+2. **支持多轮 Learnings 提取**: `extract_learnings_from_log` 使用 `sed` 提取第一个 `## Learnings` 区块。如果 Agent 输出中包含多个该区块，后续的将被忽略。
+
+### 审核结论
+- [x] 通过
+
+---
+
+## Learnings
+
+- **模式**: 采用了“注入-提取-存储”的循环模式实现 Agent 的跨迭代记忆。
+- **踩坑**: 在 Bash 中处理长文本注入时，需要通过字符数限制（如 `wc -c`）和内容截断（`tail` / `awk`）来平衡上下文深度与 Token 成本。
+- **经验**: 对于单脚本（monolithic）项目，测试脚本往往需要复制部分函数逻辑。为了提高测试的准确性，应优先考虑将核心函数库化（Library-ify）。
+
+### Codebase Patterns 建议
+- **经验注入**: 在所有 Agent 任务（实现、修复、审核）的 Prompt 中一致性地注入 `$(get_progress_section)`，确保经验流转闭环。
+- **质量门禁与记忆结合**: 经验日志中包含评分信息，有助于 Agent 理解哪些做法导致了高分，哪些导致了低分。

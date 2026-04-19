@@ -158,3 +158,41 @@ Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 P
 ## 类似项目
 
 - [snarktank/ralph](https://github.com/snarktank/ralph)
+
+### autoresearch vs ralph 对比
+
+| 维度 | **autoresearch** | **ralph** |
+|------|-----------------|-----------|
+| **核心理念** | GitHub Issue → 多 Agent 轮转审核 → PR/合并/关闭 | PRD → 单 Agent 迭代实现 → 完成 |
+| **输入** | GitHub Issue 编号 | PRD（`prd.json`，结构化用户故事） |
+| **Agent 模型** | 多 Agent 轮转（Claude/Codex/OpenCode），迭代间换人审核 | 单 Agent 反复启动新实例（Amp 或 Claude Code），每次干净上下文 |
+| **质量门禁** | LLM 评分 ≥ 85/100，6 种正则提取分数 | 类型检查 + Lint + 测试，必须全部通过才更新状态 |
+| **审核机制** | Agent 自审自修（同一迭代内审核和修复是同一 Agent） | 无独立审核，靠自动化测试和 lint 守关 |
+| **状态持久化** | 日志文件（`workflows/issue-N/`）、`.last_score` | `prd.json`（故事完成状态）+ `progress.txt`（经验日志）+ `AGENTS.md`（目录级知识）+ Git 历史 |
+| **记忆模型** | 无跨迭代记忆，仅传递上一轮 review 反馈 | 四通道持久化：Git / `progress.txt` / `prd.json` / `AGENTS.md` |
+| **PR/合并** | 自动创建 PR → 合并 → 评论 Issue → 关闭 Issue | 完成后发 `COMPLETE` 信号，未内置 PR 创建 |
+| **任务粒度** | 一个 Issue 一次性实现 | PRD 拆分为多个用户故事，每迭代完成一个 |
+| **配置** | 两层覆盖：默认 `program.md` + 项目级 `.autoresearch/` | `prompt.md`(Amp) / `CLAUDE.md`(Claude Code) 指导行为 |
+| **实现语言** | 单个 Bash 脚本 `run.sh` | 单个 Bash 脚本 `ralph.sh` |
+| **重试/容错** | 指数退避重试（5 次）+ 连续失败硬停止 + Continue 模式 | 质量检查不过则不更新状态，下次重试同一故事 |
+| **沙箱/安全** | `--dangerously-skip-permissions` / `--full-auto`，无沙箱 | 同样无沙箱，全权委托 |
+
+#### 各自优势
+
+**autoresearch 优势：**
+- 多 Agent 轮转提供了一定程度的交叉审核（虽然同一迭代内仍是自审）
+- GitHub 原生集成完整：Issue → PR → 合并 → 关闭，端到端自动化
+- 分数制质量门禁比单纯测试通过更严格（但也更脆弱）
+
+**ralph 优势：**
+- PRD 驱动拆分任务，粒度更细，失败范围更小
+- 四通道记忆模型让每次迭代都能积累经验，避免重复踩坑
+- 质量门禁基于确定性工具（测试/lint），不依赖 LLM 输出解析
+- `AGENTS.md` 实现了目录级知识积累，类似自进化能力
+
+#### 关键差异总结
+
+1. **质量门禁哲学不同**：autoresearch 信任 LLM 判断（评分制），ralph 信任工具链（测试/lint 制）。前者更灵活但脆弱（正则提取分数可能失败），后者更可靠但覆盖面窄（测试无法覆盖所有质量问题）。
+2. **记忆 vs 无记忆**：ralph 的 `progress.txt` + `AGENTS.md` 让 Agent 在后续迭代中避免重复错误；autoresearch 仅传递上一轮反馈，历史经验丢失。
+3. **任务分解**：ralph 先拆 PRD 再逐个实现，更可控；autoresearch 一次性实现整个 Issue，复杂需求容易失控。
+4. **端到端程度**：autoresearch 真正做到了 Issue → 合并的全自动；ralph 止步于代码完成，需人工创建 PR。
