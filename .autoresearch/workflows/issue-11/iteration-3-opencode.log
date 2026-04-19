@@ -1,0 +1,302 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m→ [0mRead agents/claude.md
+[0m→ [0mRead agents/codex.md
+我将根据审核反馈修复 Issue #11 的实现。首先让我读取三个 agent 文件了解当前状态
+[0m→ [0mRead agents/opencode.md
+[0m
+[0m# [0mTodos
+[ ] 在 codex.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[ ] 在 opencode.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[ ] 在 claude.md 中调整自检位置，将质量保障改为 Phase 4
+[ ] 在三个文件中添加审核者自检验证指令
+[0m
+## 修复计划
+
+根据审核反馈，我需要完成以下任务：
+
+### 任务清单
+
+1. **在 codex.md 和 opencode.md 中添加 Phase 4 自检阶段**
+2. **在三个文件中添加审核者自检验证指令**
+3. **调整 claude.md 中自检阶段的位置和标题
+[0m← [0mEdit agents/codex.md
+Index: /Users/smallnest/ai/autoresearch/agents/codex.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/codex.md
++++ /Users/smallnest/ai/autoresearch/agents/codex.md
+@@ -45,8 +45,34 @@
+ ```
+ 
+ > **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+ 
++### Phase 4: 质量自检
++
++```
++实现完成后，必须执行以下自检：
++
++### 编译/类型检查
++- [ ] 代码可以编译通过（如适用）
++- [ ] 类型检查无错误（如适用）
++
++### 代码质量
++- [ ] Lint 无新增错误
++- [ ] 代码风格符合项目规范
++- [ ] 无硬编码配置
++
++### 测试验证
++- [ ] 相关测试通过
++- [ ] 新代码有对应的测试覆盖
++- [ ] 测试覆盖率 ≥ 70%（如适用）
++
++### 其他检查
++- [ ] 错误处理完整
++- [ ] 无安全漏洞
++
++> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
++```
++
+ ---
+ 
+ ## 输出格式
+ 
+
+[0m
+[0m→ [0mRead agents/codex.md[90m [offset=140, limit=60][0m
+[0m
+[0m← [0mEdit agents/codex.md
+Index: /Users/smallnest/ai/autoresearch/agents/codex.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/codex.md
++++ /Users/smallnest/ai/autoresearch/agents/codex.md
+@@ -209,8 +209,14 @@
+ - [建议]: [原因]
+ 
+ ### 新增改动
+ - [描述新增的改动]
++
++### 自检执行
++- [ ] 代码编译通过
++- [ ] Lint 无新增错误
++- [ ] 测试全部通过
++- [ ] 测试覆盖率达标
+ ```
+ 
+ ---
+ 
+
+[0m
+[0m# [0mTodos
+[x] 在 codex.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[ ] 在 opencode.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[ ] 在 claude.md 中调整自检位置，将质量保障改为 Phase 4
+[ ] 在三个文件中添加审核者自检验证指令
+[0m
+[0m← [0mEdit agents/opencode.md
+Index: /Users/smallnest/ai/autoresearch/agents/opencode.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/opencode.md
++++ /Users/smallnest/ai/autoresearch/agents/opencode.md
+@@ -43,8 +43,34 @@
+ 3. 确保测试覆盖核心逻辑
+ 4. 运行测试验证实现
+ ```
+ 
++### Phase 4: 质量自检
++
++实现完成后，必须执行以下检查：
++
++```markdown
++### 编译/类型检查
++- [ ] 代码可以编译通过（如适用）
++- [ ] 类型检查无错误（如适用）
++
++### 代码质量
++- [ ] Lint 无新增错误
++- [ ] 代码风格符合项目规范
++- [ ] 无硬编码配置
++
++### 测试验证
++- [ ] 相关测试通过
++- [ ] 新代码有对应的测试覆盖
++- [ ] 测试覆盖率 ≥ 70%（如适用）
++
++### 其他检查
++- [ ] 错误处理完整
++- [ ] 无安全漏洞
++
++> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
++```
++
+ ---
+ 
+ ## 审核原则
+ 
+
+[0m
+[0m# [0mTodos
+[x] 在 codex.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[x] 在 opencode.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[ ] 在 claude.md 中调整自检位置，将质量保障改为 Phase 4
+[ ] 在三个文件中添加审核者自检验证指令
+[0m
+[0m→ [0mRead agents/claude.md[90m [offset=39, limit=20][0m
+[0m→ [0mRead agents/claude.md[90m [offset=390, limit=60][0m
+[0m→ [0mRead agents/claude.md[90m [offset=660, limit=30][0m
+[0m
+[0m← [0mEdit agents/claude.md
+Index: /Users/smallnest/ai/autoresearch/agents/claude.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/claude.md
++++ /Users/smallnest/ai/autoresearch/agents/claude.md
+@@ -44,8 +44,34 @@
+ 3. 确保测试覆盖核心逻辑
+ 4. 运行测试验证实现
+ ```
+ 
++### Phase 4: 质量自检
++
++实现完成后，必须执行以下检查：
++
++```markdown
++### 编译/类型检查
++- [ ] 代码可以编译通过（如适用）
++- [ ] 类型检查无错误（如适用）
++
++### 代码质量
++- [ ] Lint 无新增错误
++- [ ] 代码风格符合项目规范
++- [ ] 无硬编码配置
++
++### 测试验证
++- [ ] 相关测试通过
++- [ ] 新代码有对应的测试覆盖
++- [ ] 测试覆盖率 ≥ 70%（如适用）
++
++### 其他检查
++- [ ] 错误处理完整
++- [ ] 无安全漏洞
++
++> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
++```
++
+ ---
+ 
+ ## 审核原则
+ 
+
+[0m
+[0m→ [0mRead agents/claude.md[90m [offset=690, limit=30][0m
+[0m
+[0m← [0mEdit agents/claude.md
+Index: /Users/smallnest/ai/autoresearch/agents/claude.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/claude.md
++++ /Users/smallnest/ai/autoresearch/agents/claude.md
+@@ -688,8 +688,22 @@
+ ```
+ 
+ ---
+ 
++## 自检验证
++
++审核前确认实现者已完成以下自检：
++
++```markdown
++### 实现者自检确认
++- [ ] 实现者已执行编译/类型检查
++- [ ] 实现者已执行 Lint 检查
++- [ ] 实现者已运行相关测试
++- [ ] 实现者已确认测试覆盖
++
++> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
++```
++
+ ## 质量保障
+ 
+ 每次审核确保：
+ 
+
+[0m
+[0m→ [0mRead agents/codex.md[90m [offset=320, limit=50][0m
+[0m→ [0mRead agents/opencode.md[90m [offset=100, limit=80][0m
+[0m
+[0m← [0mEdit agents/codex.md
+Index: /Users/smallnest/ai/autoresearch/agents/codex.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/codex.md
++++ /Users/smallnest/ai/autoresearch/agents/codex.md
+@@ -171,8 +171,22 @@
+ ## 面对审核反馈
+ 
+ 当审核者 (Claude) 提出批评意见时：
+ 
++### 审核者自检验证
++
++作为审核者时，审核前确认实现者已完成以下自检：
++
++```markdown
++### 实现者自检确认
++- [ ] 实现者已执行编译/类型检查
++- [ ] 实现者已执行 Lint 检查
++- [ ] 实现者已运行相关测试
++- [ ] 实现者已确认测试覆盖
++
++> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
++```
++
+ ### 1. 理解反馈
+ 
+ ```markdown
+ ## 反馈理解
+
+[0m
+[0m→ [0mRead agents/opencode.md[90m [offset=158, limit=50][0m
+[0m
+[0m← [0mEdit agents/opencode.md
+Index: /Users/smallnest/ai/autoresearch/agents/opencode.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/agents/opencode.md
++++ /Users/smallnest/ai/autoresearch/agents/opencode.md
+@@ -160,9 +160,23 @@
+ [列出建议]
+ 
+ ### 审核结论
+ - [ ] 通过 / 需要修改 / 阻塞
++
++### 自检验证
++
++作为审核者时，审核前确认实现者已完成以下自检：
++
++```markdown
++### 实现者自检确认
++- [ ] 实现者已执行编译/类型检查
++- [ ] 实现者已执行 Lint 检查
++- [ ] 实现者已运行相关测试
++- [ ] 实现者已确认测试覆盖
++
++> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+ ```
++```
+ 
+ ---
+ 
+ ## 跨迭代经验
+
+[0m
+[0m# [0mTodos
+[x] 在 codex.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[x] 在 opencode.md 的 Phase 3 后添加 Phase 4 质量自检阶段
+[x] 在 claude.md 中调整自检位置，将质量保障改为 Phase 4
+[x] 在三个文件中添加审核者自检验证指令
+[0m
+[0m→ [0mRead agents/claude.md[90m [offset=39, limit=40][0m
+[0m→ [0mRead agents/claude.md[90m [offset=695, limit=35][0m
+[0m→ [0mRead agents/codex.md[90m [offset=39, limit=50][0m
+让我验证所有修改是否正确应用
+[0m→ [0mRead agents/codex.md[90m [offset=195, limit=40][0m
+[0m→ [0mRead agents/opencode.md[90m [offset=39, limit=50][0m
+[0m→ [0mRead agents/codex.md[90m [offset=235, limit=30][0m
+[0m→ [0mRead agents/opencode.md[90m [offset=158, limit=35][0m
+[0m→ [0mRead agents/codex.md[90m [offset=165, limit=40][0m
