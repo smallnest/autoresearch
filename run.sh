@@ -370,7 +370,7 @@ get_issue_info() {
     ISSUE_LABELS=$(echo "$ISSUE_INFO" | jq -r '.labels[].name' | tr '\n' ',' | sed 's/,$//')
 
     if [ "$ISSUE_STATE" != "OPEN" ]; then
-        error "Issue #$issue_number 状态为 $ISSUE_STATE，不是 OPEN"
+        error "Issue #$issue_number 状态为 ${ISSUE_STATE}，不是 OPEN"
         exit 1
     fi
 
@@ -1634,7 +1634,7 @@ restore_continue_state() {
         exit 1
     fi
 
-    log "上次运行到迭代 $last_iter，从迭代 $((last_iter + 1)) 继续"
+    log "上次运行到迭代 ${last_iter}，从迭代 $((last_iter + 1)) 继续"
 
     # 恢复迭代计数
     ITERATION=$last_iter
@@ -1652,7 +1652,7 @@ restore_continue_state() {
     # 恢复上次的审核反馈：从最后一个 review log 中提取
     # 使用通配符搜索，避免 continue 模式更改 agent 列表后找不到之前 agent 的日志
     local last_review_log=""
-    last_review_log=$(ls -t "$WORK_DIR/iteration-${last_iter}-"*-review.log 2>/dev/null | head -1)
+    last_review_log=$(ls -t "$WORK_DIR/iteration-${last_iter}-"*-review.log 2>/dev/null | head -1) || true
 
     if [ -n "$last_review_log" ] && [ -f "$last_review_log" ]; then
         PREVIOUS_FEEDBACK=$(cat "$last_review_log")
@@ -1671,7 +1671,7 @@ restore_continue_state() {
         BRANCH_NAME="$branch"
         log "已切换到分支: $branch"
     else
-        error "未找到分支 $branch，无法继续"
+        error "未找到分支 ${branch}，无法继续"
         exit 1
     fi
 
@@ -1770,7 +1770,7 @@ if [ $CONTINUE_MODE -eq 1 ]; then
     # 不指定轮数时，总迭代数=默认值；指定时，总迭代数=已有+指定轮数
     if [ -z "$2" ]; then
         MAX_ITERATIONS=$DEFAULT_MAX_ITERATIONS
-        local remaining=$((MAX_ITERATIONS - ITERATION))
+        remaining=$((MAX_ITERATIONS - ITERATION))
         log "继续运行: 已完成 $ITERATION 轮，再跑 $remaining 轮 (总计 $MAX_ITERATIONS)"
     else
         MAX_ITERATIONS=$((ITERATION + $2))
@@ -1879,7 +1879,6 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     log "=========================================="
     log "迭代 $ITERATION/$MAX_ITERATIONS"
     if has_subtasks; then
-        local subtask_progress
         subtask_progress=$(get_subtask_progress_summary)
         log "$subtask_progress"
     fi
@@ -1907,7 +1906,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         fi
 
         # 追加经验到 progress.md
-        local impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+        impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
         append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现" ""
 
         if [ $ITERATION_FAILED -eq 1 ]; then
@@ -1934,8 +1933,8 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         fi
 
         # 追加经验到 progress.md
-        local impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
-        local subtask_title
+        impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+        subtask_title=
         subtask_title=$(get_current_subtask_title)
         append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现 - $subtask_title" ""
 
@@ -1949,19 +1948,19 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 
     # ---- 迭代 >=2: agent 轮流审核 + 修复 ----
     agent_idx=$(get_review_agent $ITERATION)
-    local agent_name="${AGENT_NAMES[$agent_idx]}"
+    agent_name="${AGENT_NAMES[$agent_idx]}"
     run_review_and_fix $agent_idx
 
     # 追加经验到 progress.md
-    local review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
-    local review_feedback_brief=""
+    review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
+    review_feedback_brief=""
     if [ -f "$review_log" ]; then
         review_feedback_brief=$(cat "$review_log" | head -c 800)
     fi
 
-    local subtask_label=""
+    subtask_label=""
     if has_subtasks; then
-        local current_id
+        current_id=
         current_id=$(get_current_subtask_id)
         if [ -n "$current_id" ]; then
             subtask_label=" - $current_id"
@@ -2033,11 +2032,10 @@ Closes #$ISSUE_NUMBER"
     log "创建 Pull Request..."
 
     # 构建子任务摘要（如有）
-    local subtask_summary=""
+    subtask_summary=""
     if has_subtasks; then
-        local tasks_file
         tasks_file=$(get_tasks_file)
-        local total passed
+        total= passed=
         total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
         passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
         subtask_summary="
