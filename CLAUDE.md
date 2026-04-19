@@ -15,11 +15,21 @@ autoresearch is a fully automated software development tool: given a GitHub Issu
 # With project path, max iterations, or continue mode
 ./run.sh -p /path/to/project 42 16
 ./run.sh -c 42 10              # Continue from last interrupted iteration
+
+# Skip archiving of previous workflows (useful for debugging)
+./run.sh --no-archive 42
 ```
 
 There are no build/test/lint commands for autoresearch itself. The only test file is `tests/test_extract_score.sh` which tests the score parsing logic.
 
 ## Architecture
+
+### Archiving Mechanism
+
+Before a new run starts (and not in continue mode), `run.sh` automatically archives old workflow data:
+- Scans `.autoresearch/workflows/` for `issue-*` directories.
+- Moves non-current issue directories to `.autoresearch/archive/YYYY-MM-DD-issue-N/`.
+- If the target archive directory already exists, it appends a numeric suffix (e.g., `-1`, `-2`).
 
 ### Iteration Loop
 
