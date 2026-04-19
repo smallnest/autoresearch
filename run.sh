@@ -1468,11 +1468,22 @@ $opencode_instructions
     local review_result
     review_result=$(cat "$log_file")
 
-    score=$(extract_score "$review_result")
+    # 先检测 sentinel 标记
+    local sentinel
+    sentinel=$(check_sentinel "$review_result")
+    if [ "$sentinel" = "pass" ]; then
+        log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>，直接判定通过"
+        score=100
+    elif [ "$sentinel" = "fail" ]; then
+        log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>，直接判定不通过"
+        score=0
+    else
+        score=$(extract_score "$review_result")
 
-    if [ -z "$score" ] || [ "$score" = "0" ]; then
-        log "警告: 无法从审核结果中提取评分，默认为 50"
-        score=50
+        if [ -z "$score" ] || [ "$score" = "0" ]; then
+            log "警告: 无法从审核结果中提取评分，默认为 50"
+            score=50
+        fi
     fi
 
     echo "- 审核评分 (OpenCode): $score/100" >> "$WORK_DIR/log.md"
@@ -1568,11 +1579,22 @@ $claude_instructions
     local review_result
     review_result=$(cat "$log_file")
 
-    score=$(extract_score "$review_result")
+    # 先检测 sentinel 标记
+    local sentinel
+    sentinel=$(check_sentinel "$review_result")
+    if [ "$sentinel" = "pass" ]; then
+        log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>，直接判定通过"
+        score=100
+    elif [ "$sentinel" = "fail" ]; then
+        log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>，直接判定不通过"
+        score=0
+    else
+        score=$(extract_score "$review_result")
 
-    if [ -z "$score" ] || [ "$score" = "0" ]; then
-        log "警告: 无法从审核结果中提取评分，默认为 50"
-        score=50
+        if [ -z "$score" ] || [ "$score" = "0" ]; then
+            log "警告: 无法从审核结果中提取评分，默认为 50"
+            score=50
+        fi
     fi
 
     echo "- 审核评分 (Claude): $score/100" >> "$WORK_DIR/log.md"
@@ -1639,11 +1661,22 @@ $codex_instructions
     local review_result
     review_result=$(cat "$log_file")
 
-    score=$(extract_score "$review_result")
+    # 先检测 sentinel 标记
+    local sentinel
+    sentinel=$(check_sentinel "$review_result")
+    if [ "$sentinel" = "pass" ]; then
+        log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>，直接判定通过"
+        score=100
+    elif [ "$sentinel" = "fail" ]; then
+        log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>，直接判定不通过"
+        score=0
+    else
+        score=$(extract_score "$review_result")
 
-    if [ -z "$score" ] || [ "$score" = "0" ]; then
-        log "警告: 无法从审核结果中提取评分，默认为 50"
-        score=50
+        if [ -z "$score" ] || [ "$score" = "0" ]; then
+            log "警告: 无法从审核结果中提取评分，默认为 50"
+            score=50
+        fi
     fi
 
     echo "- 审核评分 (Codex): $score/100" >> "$WORK_DIR/log.md"
@@ -1656,6 +1689,23 @@ $codex_instructions
 }
 
 # ==================== 评分相关 ====================
+
+# 检测审核输出中的 sentinel 标记
+# 返回: "pass" 表示检测到 <AUTORESEARCH_PASS/>
+#       "fail" 表示检测到 <AUTORESEARCH_FAIL/>
+#       "none" 表示未检测到 sentinel
+check_sentinel() {
+    local review_result="$1"
+    if echo "$review_result" | grep -qF '<AUTORESEARCH_PASS/>'; then
+        echo "pass"
+        return
+    fi
+    if echo "$review_result" | grep -qF '<AUTORESEARCH_FAIL/>'; then
+        echo "fail"
+        return
+    fi
+    echo "none"
+}
 
 extract_score() {
     local review_result="$1"

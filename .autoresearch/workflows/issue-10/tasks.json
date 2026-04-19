@@ -1,0 +1,33 @@
+{
+  "issueNumber": 10,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "run.sh 新增 sentinel 检测逻辑",
+      "description": "在 run.sh 中新增 check_sentinel() 函数，检测审核输出中的 <AUTORESEARCH_PASS/> 和 <AUTORESEARCH_FAIL/> 标记。修改三个 review 函数（run_opencode_review、run_claude_review、run_codex_review），在 extract_score() 之前先调用 sentinel 检测：检测到 PASS sentinel 则直接设分数为 100 并记录日志跳过分数提取；检测到 FAIL sentinel 则直接设分数为 0；未检测到则走现有 extract_score 逻辑。同时在 tests/test_extract_score.sh 中新增 check_sentinel() 的单元测试。",
+      "acceptanceCriteria": [
+        "check_sentinel() 函数能正确检测 <AUTORESEARCH_PASS/> 和 <AUTORESEARCH_FAIL/>",
+        "三个 review 函数中 sentinel 检测优先于 extract_score()",
+        "sentinel 检测到时日志中记录 sentinel 通道信息",
+        "未检测到 sentinel 时走原有 extract_score 逻辑，行为不变",
+        "test_extract_score.sh 新增 check_sentinel 的单元测试且全部通过"
+      ],
+      "priority": 1,
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "agents/*.md 增加 sentinel 输出格式要求",
+      "description": "修改 agents/claude.md、agents/codex.md、agents/opencode.md 三个文件，在审核输出格式说明中增加 sentinel 机制的使用说明：审核通过时在输出末尾另起一行输出 <AUTORESEARCH_PASS/>，审核不通过时在输出末尾另起一行输出 <AUTORESEARCH_FAIL/>。确保说明与现有评分格式要求兼容，sentinel 是可选的快速通道，不影响评分输出。",
+      "acceptanceCriteria": [
+        "三个 agent .md 文件都包含 sentinel 输出格式说明",
+        "说明清晰表明 sentinel 是可选的，与评分机制并存",
+        "PASS sentinel 表示代码质量达标（相当于评分 ≥ 85）",
+        "FAIL sentinel 表示代码质量不达标（相当于评分 < 85）",
+        "不影响 agent 现有的评分输出格式"
+      ],
+      "priority": 2,
+      "passes": true
+    }
+  ]
+}
