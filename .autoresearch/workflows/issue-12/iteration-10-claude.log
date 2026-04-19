@@ -1,0 +1,43 @@
+所有修复已完成。以下是已实现内容的总结：
+
+## 变更总结
+
+### 修复1（关键）：将 UI 验证集成到 `run_review_and_fix()` 中
+- **位置**：`run.sh:2617-2640`
+- 当子任务通过审查（`score >= PASSING_SCORE`）且为 UI 类型时，调用 `run_ui_verification()`
+- UI 验证通过 → 子任务正常标记为已通过
+- UI 验证失败 → 设置 `UI_VERIFY_FAILED=1`，将反馈传递给下一次迭代，不标记为已通过
+- 记录 UI 验证结果到 `log.md`
+
+### 修复2：添加 `UI_VERIFY_FAILED` 变量
+- **位置**：`run.sh:2697`（初始化），`run.sh:2815-2817`（连续失败检查）
+- `UI_VERIFY_FAILED=0` 在每次迭代开始时设置
+- 连续失败计数现在在递增时排除 UI 验证失败（与硬门槛失败相同）
+
+### 修复3：Agent 指南已更新
+- 将“UI 验证指引”部分添加到 `agents/claude.md`、`agents/codex.md`、`agents/opencode.md`
+- 涵盖了 UI 类型子任务的审查员和实现者视角
+
+### 修复4：PR 中的 UI 验证摘要
+- **位置**：`run.sh:2873-2883`
+- 从 `ui-verify-result.json`（如果存在）构建 UI 验证摘要
+- 包含在 PR 描述模板中
+
+### 修复5：将 `eval` 替换为 `bash -c`
+- **位置**：`run.sh:2179`（约，在 `run_ui_verification` 中）
+- 更安全的 dev server 命令执行替代方案
+
+### 修复6：次要修复
+- 修复 `verify_ui_with_llm()` 中的重定向顺序 (`2>&1 > file` → `> file 2>&1`) (SC2069)
+- 在覆盖全局陷阱之前保存/恢复陷阱
+- 将 dev server 启动失败记录到 `log.md`
+
+### 验证
+- `bash -n run.sh` 通过，无错误
+
+## 学习要点
+- **模式**：UI 验证集成遵循与硬门槛检查相同的模式——拦截“通过”路径，添加额外的门，并有条件地设置一个标志
+- **陷阱**：函数定义 ≠ 函数被调用。审核者正确识别出 `run_ui_verification()` 存在但从未被调用
+- **经验**：在 shell 脚本中，陷阱保存/恢复应使用 `trap -p SIGNAL` 和 `sed` 来提取命令，然后条件性地恢复
+- **经验**：shell 中的 `2>&1 > file` 与 `> file 2>&1` 具有截然不同的语义（前者将 stderr 重定向到 stdout 所指向的位置，然后重定向 stdout；后者将两者都重定向到文件）
+- **模式**：不增加连续失败计数的失败标志（`HARD_GATE_FAILED`、`UI_VERIFY_FAILED`）是一种避免因基础设施问题而非代码问题导致提前终止的有用模式

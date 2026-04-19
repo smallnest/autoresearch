@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>autoresearch — 全自动化软件开发</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+  #root { width: 100vw; height: 100vh; }
+
+  .canvas { width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #0a0e17; }
+  .scene { position: absolute; inset: 0; }
+  .controls { margin-top: 16px; display: flex; align-items: center; gap: 12px; color: #fff; font-family: system-ui, sans-serif; font-size: 13px; justify-content: center; }
+  .controls button { padding: 8px 20px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.1); color: #fff; cursor: pointer; font-size: 14px; }
+  .controls button:hover { background: rgba(255,255,255,.2); }
+  .controls span { font-variant-numeric: tabular-nums; min-width: 120px; }
+  .particle { position: absolute; border-radius: 50%; pointer-events: none; }
+  .grid-line { position: absolute; pointer-events: none; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .cursor { display: inline-block; width: 8px; height: 16px; background: #10b981; animation: blink 1s step-end infinite; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* =====================================================
+   autoresearch 中文版宣传动画
+   Pure vanilla JS — no React/Babel dependency
+   ===================================================== */
+
+const C = {
+  bg:'#0a0e17', bgCard:'#111827', green:'#10b981', cyan:'#06b6d4', blue:'#3b82f6',
+  purple:'#8b5cf6', orange:'#f59e0b', red:'#ef4444', white:'#f1f5f9',
+  gray:'#64748b', grayLight:'#94a3b8', grayDark:'#1e293b', border:'#334155',
+};
+const mono = "'JetBrains Mono', monospace";
+const sans = "'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif";
+const DURATION = 24;
+
+let currentTime = 0, playing = false, startTs = null, raf = null;
+
+// Easing
+const ease = {
+  linear: t => t,
+  easeOut: t => t*(2-t),
+  easeInOut: t => t<0.5?2*t*t:-1+(4-2*t)*t,
+  elastic: t => t===0||t===1?t:-Math.pow(2,10*(t-1))*Math.sin((t-1.1)*5*Math.PI),
+};
+function lerp(a,b,t,fn=ease.linear){ return a+(b-a)*fn(Math.max(0,Math.min(1,t))); }
+function fadeIn(time,start,dur=0.3){ return ease.easeOut(Math.max(0,Math.min(1,(time-start)/dur))); }
+function spriteP(time,start,end){ return time<start||time>end?-1:(time-start)/(end-start); }
+
+// Particles
+const particles=[];
+for(let i=0;i<50;i++) particles.push({x:Math.random()*1920,y:Math.random()*1080,size:1+Math.random()*2,speed:0.3+Math.random()*0.7,baseOp:0.1+Math.random()*0.3});
+
+function particleHtml(time){
+  let h='';
+  for(const p of particles){
+    const y=((p.y-time*p.speed*30)%1080+1080)%1080;
+    const op=p.baseOp*(0.5+0.5*Math.sin(time*2+p.x));
+    h+=`<div class="particle" style="left:${p.x}px;top:${y}px;width:${p.size}px;height:${p.size}px;background:${C.green};opacity:${op.toFixed(3)}"></div>`;
+  }
+  return h;
+}
+
+function gridHtml(time){
+  let h='';
+  for(let x=0;x<=1920;x+=120){const op=0.03+0.02*Math.sin(time+x*0.01);h+=`<div class="grid-line" style="left:${x}px;top:0;width:1px;height:100%;background:rgba(16,185,129,${op.toFixed(4)})"></div>`;}
+  for(let y=0;y<=1080;y+=120){const op=0.03+0.02*Math.sin(time+y*0.01);h+=`<div class="grid-line" style="left:0;top:${y}px;width:100%;height:1px;background:rgba(16,185,129,${op.toFixed(4)})"></div>`;}
+  return h;
+}
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function arrowSvg(x,y,op,time){
+  const d=-time*40;
+  return `<svg style="position:absolute;left:${x}px;top:${y}px;opacity:${op}" width="60" height="24" viewBox="0 0 60 24"><line x1="0" y1="12" x2="45" y2="12" stroke="${C.green}" stroke-width="2" stroke-dasharray="6 3" stroke-dashoffset="${d}" opacity="0.7"/><polygon points="42,6 54,12 42,18" fill="${C.green}" opacity="0.8"/></svg>`;
+}
+
+// ==================== Scenes ====================
+
+function sceneTitle(t){
+  if(t<0||t>5)return'';
+  // 打字机效果
+  const tagFull='> 你只管睡觉，功能自己上线。';
+  const tagChars=Math.min(tagFull.length,Math.floor(Math.max(0,t-3)*20));
+
+  // 扫描线 (前1.5s)
+  const scanY=t<1.5?lerp(-100,1200,Math.min(1,t/1.5),ease.easeOut):-100;
+
+  // 下划线展开
+  const ulScale=lerp(0,1,Math.min(1,Math.max(0,(t-1.3)*3)),ease.easeOut);
+
+  // 淡入
+  const oBadge=fadeIn(t,0.4);
+  const oTitle=fadeIn(t,0.7);
+  const oSub=fadeIn(t,1.4);
+  const oTag=fadeIn(t,3.0);
+  const oCorners=fadeIn(t,0.6);
+
+  // 标题上滑
+  const titleY=lerp(40,0,Math.max(0,spriteP(t,0.7,2.0)),ease.easeOut);
+
+  return `<div class="scene">
+    ${particleHtml(t)}
+    ${gridHtml(t)}
+
+    <!-- 巨型发光球 -->
+    <div style="position:absolute;top:250px;left:50%;transform:translateX(-50%);width:1000px;height:500px;border-radius:50%;background:radial-gradient(ellipse,${C.green}14,transparent 70%);filter:blur(60px);opacity:${Math.min(1,t*0.6).toFixed(2)}"></div>
+    <div style="position:absolute;top:100px;left:150px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,${C.cyan}08,transparent 70%);filter:blur(80px)"></div>
+    <div style="position:absolute;top:100px;right:150px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,${C.blue}08,transparent 70%);filter:blur(80px)"></div>
+
+    <!-- 水平扫描线 -->
+    ${t<1.5?`<div style="position:absolute;left:0;top:${scanY}px;width:100%;height:2px;background:linear-gradient(90deg,transparent,${C.green}90,transparent);box-shadow:0 0 40px 10px ${C.green}30"></div>`:''}
+
+    <!-- 四角装饰框 -->
+    <div style="position:absolute;top:40px;left:40px;width:60px;height:60px;border-top:2px solid ${C.green}40;border-left:2px solid ${C.green}40;opacity:${oCorners}"></div>
+    <div style="position:absolute;top:40px;right:40px;width:60px;height:60px;border-top:2px solid ${C.green}40;border-right:2px solid ${C.green}40;opacity:${oCorners}"></div>
+    <div style="position:absolute;bottom:40px;left:40px;width:60px;height:60px;border-bottom:2px solid ${C.green}40;border-left:2px solid ${C.green}40;opacity:${oCorners}"></div>
+    <div style="position:absolute;bottom:40px;right:40px;width:60px;height:60px;border-bottom:2px solid ${C.green}40;border-right:2px solid ${C.green}40;opacity:${oCorners}"></div>
+
+    <!-- 版本徽章 -->
+    <div style="position:absolute;top:260px;left:50%;transform:translateX(-50%) translateY(${lerp(15,0,oBadge,ease.easeOut)}px);display:inline-flex;align-items:center;gap:10px;padding:10px 24px;border-radius:24px;background:${C.green}10;border:1px solid ${C.green}25;color:${C.green};font-size:15px;font-weight:600;font-family:${mono};letter-spacing:1px;opacity:${oBadge}">v1.0 <span style="color:${C.gray}">|</span> github.com/smallnest/autoresearch</div>
+
+    <!-- 主标题 -->
+    <div style="position:absolute;top:340px;left:0;right:0;text-align:center;opacity:${oTitle};transform:translateY(${titleY}px)">
+      <span style="font-size:110px;font-weight:700;color:${C.white};font-family:${mono};letter-spacing:-4px;line-height:1;text-shadow:0 0 60px ${C.green}30,0 0 120px ${C.green}10">autoresearch</span>
+    </div>
+
+    <!-- 强调下划线 -->
+    <div style="position:absolute;top:470px;left:50%;transform:translateX(-50%) scaleX(${ulScale.toFixed(3)});width:500px;height:3px;border-radius:2px;background:linear-gradient(90deg,transparent,${C.green},transparent);box-shadow:0 0 20px ${C.green}40;opacity:${oTitle}"></div>
+
+    <!-- 副标题 -->
+    <div style="position:absolute;top:510px;left:0;right:0;text-align:center;font-size:30px;color:${C.grayLight};font-weight:500;letter-spacing:2px;opacity:${oSub};transform:translateY(${lerp(15,0,oSub,ease.easeOut)}px);font-family:${sans}">全自动化软件开发</div>
+
+    <!-- 口号 (打字机效果) -->
+    <div style="position:absolute;top:600px;left:0;right:0;text-align:center;font-size:19px;color:${C.green};font-family:${sans};opacity:${oTag}">${esc(tagFull.substring(0,tagChars))}${tagChars<tagFull.length?'<span class="cursor" style="width:10px;height:20px;margin-left:2px"></span>':''}</div>
+
+    <!-- 底部二进制装饰 -->
+    <div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);display:flex;gap:36px;font-family:${mono};font-size:11px;color:${C.green}18;opacity:${fadeIn(t,1.5)}">
+      ${['01001','11010','00111','10101','01110','10010','11100','01011'].map((b,i)=>`<span style="opacity:${(0.3+0.3*Math.sin(t*2+i)).toFixed(2)}">${b}</span>`).join('')}
+    </div>
+  </div>`;
+}
+
+function scenePipeline(t){
+  if(t<5||t>12)return'';
+  const phase=t<5.5?0:t<7?1:t<8.5?2:3;
+  const agents=[
+    {name:'Claude',icon:'\u{1F916}',color:C.blue,x:0},
+    {name:'Codex',icon:'\u26A1',color:C.green,x:220},
+    {name:'OpenCode',icon:'\u{1F504}',color:C.purple,x:440},
+  ];
+  let agentsHtml='';
+  for(let i=0;i<agents.length;i++){
+    const a=agents[i],active=phase===1;
+    const op=fadeIn(t,5.0+i*0.15);
+    const pulse=active?0.5+0.5*Math.sin(t*4+i):0;
+    agentsHtml+=`<div style="position:absolute;left:${a.x}px;top:0;width:200px;padding:20px 16px;background:${C.bgCard};border-radius:12px;text-align:center;border:1px solid ${active?a.color:C.border};opacity:${op};transform:translateY(${lerp(30,0,op,ease.easeOut)}px) scale(${lerp(0.9,1,op,ease.easeOut)});box-shadow:${active?`0 0 ${20*pulse}px ${4*pulse}px ${a.color}30`:'0 4px 24px rgba(0,0,0,0.3)'}">
+      <div style="width:48px;height:48px;border-radius:50%;background:${a.color}12;border:2px solid ${active?a.color+'cc':a.color+'40'};display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:20px;color:${a.color}">${a.icon}</div>
+      <div style="color:${C.white};font-size:15px;font-weight:600;font-family:${mono}">${a.name}</div>
+      <div style="margin-top:8px;font-size:11px;letter-spacing:1px;font-weight:600;color:${active?a.color:C.gray};font-family:${sans}">${active?'执行中':'审查中'}</div>
+    </div>`;
+  }
+  const score=phase>=2?Math.round(lerp(0,92,fadeIn(t,6.5),ease.easeOut)):0;
+  const sc=score>=85?C.green:C.orange;
+  const rad=50,circ=2*Math.PI*rad,filled=circ*(score/100);
+  const step4Active=phase===3;
+  let s4='';
+  for(const item of [{icon:'\u{1F500}',text:'创建 PR'},{icon:'\u2705',text:'自动合并'},{icon:'\u{1F512}',text:'关闭 Issue'}]){
+    s4+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;opacity:${step4Active?1:0.4};color:${step4Active?C.white:C.gray};font-size:15px;font-weight:500;font-family:${sans}"><span style="font-size:16px">${item.icon}</span> ${item.text}${step4Active?`<span style="margin-left:auto;color:${C.green};font-size:12px;font-weight:600">\u2713</span>`:''}</div>`;
+  }
+  let dots='';
+  const ai=Math.floor((t-4)*2)%5;
+  for(let i=0;i<5;i++) dots+=`<div style="height:10px;border-radius:5px;width:${i===ai?32:10}px;background:${i===ai?C.green:C.grayDark};transition:all 0.3s"></div>`;
+  return `<div class="scene">
+    ${particleHtml(t)}
+    <div style="position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:16px;letter-spacing:4px;color:${C.green};font-weight:600;font-family:${sans};opacity:${fadeIn(t,4.2)}">工 作 原 理</div>
+    <div style="position:absolute;left:80px;top:200px;width:320px;padding:24px;background:${C.bgCard};border-radius:12px;border:1px solid ${phase===0?C.green:C.border};box-shadow:${phase===0?`0 0 30px ${C.green}15`:'none'};opacity:${fadeIn(t,4.4)};transform:translateY(${lerp(20,0,fadeIn(t,4.4),ease.easeOut)}px)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:36px;height:36px;border-radius:8px;background:#1f2937;display:flex;align-items:center;justify-content:center;font-size:18px">\u{1F4CB}</div><div><div style="color:${C.white};font-size:16px;font-weight:600;font-family:${sans}">GitHub Issue</div><div style="color:${C.gray};font-size:12px;font-family:${mono}">#42 feat: 用户认证</div></div></div>
+      <div style="border-top:1px solid ${C.border};padding-top:12px;color:${C.grayLight};font-size:14px;line-height:1.7;font-family:${sans}">提供 Issue 编号，autoresearch 自动阅读、拆分子任务并开始实现。</div>
+    </div>
+    <div style="position:absolute;left:80px;top:172px;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);color:${C.cyan};font-size:13px;font-weight:600;font-family:${sans};opacity:${fadeIn(t,4.4)};transform:scale(${lerp(0.8,1,fadeIn(t,4.4),ease.elastic)})">\u2460 输入</div>
+    ${arrowSvg(420,245,fadeIn(t,5.2),t)}
+    <div style="position:absolute;left:500px;top:140px">${agentsHtml}
+      <div style="position:absolute;left:160px;top:-28px;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);color:${C.purple};font-size:13px;font-weight:600;font-family:${sans};opacity:${fadeIn(t,5.0)};transform:scale(${lerp(0.8,1,fadeIn(t,5.0),ease.elastic)})">\u2461 多智能体协作</div>
+      <div style="position:absolute;top:180px;left:140px;padding:10px 16px;border-radius:8px;background:${C.bgCard};border:1px solid ${C.border};font-family:${mono};font-size:13px;color:${C.grayLight};opacity:${fadeIn(t,5.5)}">agent = <span style="color:${C.green}">(iter-1) % N</span></div>
+    </div>
+    ${arrowSvg(980,245,fadeIn(t,6.2),t)}
+    <div style="position:absolute;left:1060px;top:140px;opacity:${fadeIn(t,6.0)}">
+      <div style="position:absolute;left:30px;top:-28px;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);color:${C.orange};font-size:13px;font-weight:600;font-family:${sans};transform:scale(${lerp(0.8,1,fadeIn(t,6.0),ease.elastic)})">\u2462 质量关卡</div>
+      <div style="position:absolute;left:30px;top:10px;width:140px;height:140px">
+        <svg width="140" height="140" style="transform:rotate(-90deg)"><circle cx="70" cy="70" r="${rad}" fill="none" stroke="${C.grayDark}" stroke-width="6"/><circle cx="70" cy="70" r="${rad}" fill="none" stroke="${sc}" stroke-width="6" stroke-dasharray="${filled} ${circ}" stroke-linecap="round" style="filter:drop-shadow(0 0 6px ${sc}60)"/></svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:32px;font-weight:700;color:${sc};font-family:${mono};line-height:1">${score}</div><div style="font-size:11px;color:${C.gray};margin-top:2px;font-family:${sans}">/ 85 通过</div></div>
+      </div>
+      <div style="position:absolute;top:170px;left:0;width:200px;text-align:center"><div style="color:${C.grayLight};font-size:13px;font-family:${sans}">评分阈值</div><div style="color:${C.white};font-size:15px;font-weight:600;font-family:${mono};margin-top:4px">${phase>=2?'PASS':'等待中'}</div></div>
+    </div>
+    ${arrowSvg(1300,245,fadeIn(t,7.2),t)}
+    <div style="position:absolute;left:1380px;top:200px;opacity:${fadeIn(t,7.0)}">
+      <div style="position:absolute;left:0;top:-28px;display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:${C.green};font-size:13px;font-weight:600;font-family:${sans};transform:scale(${lerp(0.8,1,fadeIn(t,7.0),ease.elastic)})">\u2463 输出</div>
+      <div style="padding:20px;background:${C.bgCard};border-radius:12px;border:1px solid ${phase===3?C.green:C.border};width:280px;box-shadow:${phase===3?`0 0 30px ${C.green}15`:'none'}">${s4}</div>
+    </div>
+    <div style="position:absolute;bottom:120px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;opacity:${fadeIn(t,8.0)}">${dots}<span style="color:${C.gray};font-size:13px;font-family:${sans};margin-left:8px">第 ${Math.min(5,Math.max(1,Math.floor((t-4)*1.5)))} 轮 / 共 5 轮</span></div>
+  </div>`;
+}
+
+function sceneTerminal(t){
+  if(t<11||t>17)return'';
+  const allLines=[
+    {cls:'cmd',text:'./run.sh 42'},
+    {cls:''},
+    {cls:'info',text:'\u2192 读取 Issue #42: feat: 添加用户认证功能'},
+    {cls:'info',text:'\u2192 规划阶段: 拆分为 3 个子任务'},
+    {cls:'info',text:'\u2192 子任务 T-001: 添加认证中间件 (优先级 1)'},
+    {cls:'info',text:'\u2192 子任务 T-002: 添加登录/注册接口 (优先级 2)'},
+    {cls:'info',text:'\u2192 子任务 T-003: 添加认证测试 (优先级 3)'},
+    {cls:''},
+    {cls:'bright',text:'\u2550\u2550\u2550 第 1 轮 \u2014 Claude (实现 T-001) \u2550\u2550\u2550'},
+    {cls:'pass',text:'\u2713 实现完成'},
+    {cls:'bright',text:'\u2550\u2550\u2550 第 2 轮 \u2014 Codex (审查 T-001) \u2550\u2550\u2550'},
+    {cls:'pass',text:'\u2713 审查评分: 92/100 (\u2265 85 通过)'},
+    {cls:'pass',text:'\u2713 子任务 T-001 通过'},
+    {cls:'bright',text:'\u2550\u2550\u2550 第 3 轮 \u2014 OpenCode (审查 T-002) \u2550\u2550\u2550'},
+    {cls:'fail',text:'\u2717 审查评分: 78/100 (< 85 未通过)'},
+    {cls:'info',text:'\u2192 根据审查反馈修复中...'},
+    {cls:'bright',text:'\u2550\u2550\u2550 第 4 轮 \u2014 Claude (审查 T-002) \u2550\u2550\u2550'},
+    {cls:'pass',text:'\u2713 审查评分: 88/100 (\u2265 85 通过)'},
+    {cls:'pass',text:'\u2713 子任务 T-002 通过'},
+    {cls:'bright',text:'\u2550\u2550\u2550 第 5 轮 \u2014 Codex (审查 T-003) \u2550\u2550\u2550'},
+    {cls:'pass',text:'\u2713 审查评分: 95/100 (\u2265 85 通过)'},
+    {cls:'pass',text:'\u2713 所有子任务通过!'},
+    {cls:''},
+    {cls:'pass',text:'\u2192 创建 PR #43... \u2713'},
+    {cls:'pass',text:'\u2192 合并 PR #43... \u2713'},
+    {cls:'pass',text:'\u2192 评论 Issue #42... \u2713'},
+    {cls:'pass',text:'\u2192 关闭 Issue #42... \u2713'},
+    {cls:''},
+    {cls:'pass',text:'\u2705 Issue #42 已完成，共 5 轮迭代 (评分: 95/100)'},
+  ];
+  const lineProg=Math.min(1,(t-11.5)*0.22);
+  const n=Math.floor(allLines.length*lineProg);
+  let linesHtml='';
+  for(let i=0;i<n&&i<allLines.length;i++){
+    const l=allLines[i];
+    if(!l.cls){linesHtml+='\n';continue;}
+    if(l.cls==='cmd') linesHtml+=`<span style="color:${C.green}">$ </span><span style="color:${C.white}">${esc(l.text)}</span>\n`;
+    else linesHtml+=`<span style="color:${l.cls==='pass'?C.green:l.cls==='fail'?C.red:l.cls==='bright'?C.white:C.gray}">${esc(l.text)}</span>\n`;
+  }
+  if(t>12) linesHtml+='<span class="cursor"></span>';
+  const termOp=fadeIn(t,11.5);
+  const statsOp=fadeIn(t,14);
+  const stats=[
+    {icon:'\u{1F504}',value:'5',label:'迭代轮数'},
+    {icon:'\u2B50',value:'95/100',label:'最终评分'},
+    {icon:'\u{1F916}',value:'3',label:'智能体数'},
+    {icon:'\u{1F4A4}',value:'0 分钟',label:'人工投入'},
+  ];
+  let sh='';
+  for(const s of stats) sh+=`<div style="text-align:center;padding:16px 24px;background:${C.bgCard};border-radius:12px;border:1px solid ${C.border};min-width:160px"><div style="font-size:22px;margin-bottom:4px">${s.icon}</div><div style="font-size:22px;font-weight:700;color:${C.white};font-family:${mono}">${s.value}</div><div style="font-size:12px;color:${C.gray};margin-top:4px;letter-spacing:1px;font-family:${sans}">${s.label}</div></div>`;
+  return `<div class="scene">
+    ${particleHtml(t)}
+    ${gridHtml(t)}
+    <div style="position:absolute;top:50px;left:50%;transform:translateX(-50%);font-size:16px;letter-spacing:4px;color:${C.green};font-weight:600;font-family:${sans};opacity:${fadeIn(t,11.2)}">一 条 命 令，全 自 动 化</div>
+    <div style="position:absolute;left:260px;top:110px;width:1400px;height:520px;background:#0d1117;border-radius:12px;border:1px solid ${C.border};overflow:hidden;box-shadow:0 0 40px rgba(16,185,129,0.08);opacity:${termOp};transform:translateY(${lerp(20,0,termOp,ease.easeOut)}px)">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:#161b22;border-bottom:1px solid ${C.border}"><div style="width:10px;height:10px;border-radius:50%;background:#ff5f57"></div><div style="width:10px;height:10px;border-radius:50%;background:#febc2e"></div><div style="width:10px;height:10px;border-radius:50%;background:#28c840"></div><span style="margin-left:12px;color:${C.grayLight};font-size:12px;font-family:${mono}">bash \u2014 autoresearch</span></div>
+      <div style="padding:16px;font-family:${mono};font-size:13px;line-height:1.8;color:${C.grayLight};white-space:pre">${linesHtml}</div>
+    </div>
+    <div style="position:absolute;bottom:120px;left:50%;transform:translateX(-50%);display:flex;gap:60px;opacity:${statsOp}">${sh}</div>
+  </div>`;
+}
+
+function sceneFeatures(t){
+  if(t<17||t>24)return'';
+  const features=[
+    {icon:'\u{1F500}',title:'多智能体轮转',desc:'Claude、Codex、OpenCode 轮流审查和修复代码',color:C.blue},
+    {icon:'\u{1F3AF}',title:'智能质量关卡',desc:'基于 LLM 的评分系统，85/100 为通过阈值',color:C.orange},
+    {icon:'\u{1F4E6}',title:'子任务自动规划',desc:'将复杂 Issue 自动拆分为可管理的子任务',color:C.purple},
+    {icon:'\u{1F504}',title:'自动 PR 与合并',desc:'自动创建 PR、合并代码、评论并关闭 Issue',color:C.green},
+    {icon:'\u26A1',title:'断点续跑模式',desc:'从中断的迭代中恢复，完整保留状态',color:C.cyan},
+    {icon:'\u{1F310}',title:'多语言支持',desc:'支持 Go、Python、TypeScript、Rust、Java 等语言',color:C.red},
+  ];
+  let fh='';
+  for(let i=0;i<features.length;i++){
+    const f=features[i],col=i%3,row=Math.floor(i/3),op=fadeIn(t,17.4+i*0.2);
+    fh+=`<div style="position:absolute;left:${140+col*560}px;top:${140+row*240}px;width:500px;padding:28px;background:${C.bgCard};border-radius:12px;border:1px solid ${C.border};display:flex;gap:20px;align-items:flex-start;opacity:${op};transform:translateY(${lerp(20,0,op,ease.easeOut)}px)">
+      <div style="width:48px;height:48px;border-radius:10px;background:${f.color}12;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${f.icon}</div>
+      <div><div style="color:${C.white};font-size:17px;font-weight:600;margin-bottom:6px;font-family:${sans}">${f.title}</div><div style="color:${C.grayLight};font-size:14px;line-height:1.6;font-family:${sans}">${f.desc}</div></div>
+    </div>`;
+  }
+  const ctaOp=fadeIn(t,20);
+  return `<div class="scene">
+    ${particleHtml(t)}
+    <div style="position:absolute;top:50px;left:50%;transform:translateX(-50%);font-size:16px;letter-spacing:4px;color:${C.green};font-weight:600;font-family:${sans};opacity:${fadeIn(t,17.2)}">核 心 特 性</div>
+    ${fh}
+    <div style="position:absolute;bottom:100px;left:50%;transform:translateX(-50%);text-align:center;opacity:${ctaOp}">
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:8px;background:${C.bgCard};border:1px solid ${C.border};font-family:${mono};font-size:14px;color:${C.green};margin-bottom:20px">$ git clone git@github.com:smallnest/autoresearch.git</div>
+      <div style="font-size:20px;color:${C.grayLight};margin-top:12px;font-family:${sans}">灵感来自 <span style="color:${C.green}">karpathy/autoresearch</span></div>
+    </div>
+  </div>`;
+}
+
+// ==================== Render ====================
+
+function render(){
+  const canvas=document.getElementById('canvas');
+  if(!canvas)return;
+  const t=currentTime;
+  canvas.innerHTML=sceneTitle(t)+scenePipeline(t)+sceneTerminal(t)+sceneFeatures(t);
+  document.getElementById('time-display').textContent=`${t.toFixed(2)}s / ${DURATION}s`;
+  document.getElementById('time-slider').value=t;
+}
+
+function tick(now){
+  if(!playing)return;
+  const elapsed=(now-startTs)/1000;
+  if(elapsed>=DURATION){currentTime=DURATION;playing=false;document.getElementById('play-btn').textContent='\u25B6 播放';render();return;}
+  currentTime=elapsed;
+  render();
+  raf=requestAnimationFrame(tick);
+}
+
+function togglePlay(){
+  if(playing){playing=false;if(raf)cancelAnimationFrame(raf);document.getElementById('play-btn').textContent='\u25B6 播放';}
+  else{playing=true;startTs=performance.now()-currentTime*1000;document.getElementById('play-btn').textContent='\u23F8 暂停';raf=requestAnimationFrame(tick);}
+}
+
+function onSliderChange(e){currentTime=parseFloat(e.target.value);if(playing)startTs=performance.now()-currentTime*1000;render();}
+
+function init(){
+  document.getElementById('root').innerHTML=`
+    <div style="width:100vw;height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center;background:#000">
+      <div id="canvas" class="canvas"></div>
+    </div>
+    <div class="controls">
+      <button id="play-btn" onclick="togglePlay()">\u25B6 播放</button>
+      <input id="time-slider" type="range" min="0" max="${DURATION}" step="0.05" value="0" oninput="onSliderChange(event)" style="width:400px;accent-color:${C.green}">
+      <span id="time-display" style="font-variant-numeric:tabular-nums;min-width:120px">0.00s / ${DURATION}s</span>
+    </div>`;
+  function scaleCanvas(){
+    const canvas=document.getElementById('canvas');
+    const container=canvas.parentElement;
+    if(!container)return;
+    const s=Math.min(container.clientWidth/1920,container.clientHeight/1080)*0.95;
+    canvas.style.transform=`scale(${s})`;
+    canvas.style.transformOrigin='center center';
+  }
+  scaleCanvas();
+  window.addEventListener('resize',scaleCanvas);
+  render();
+}
+
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>

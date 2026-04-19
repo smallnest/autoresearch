@@ -1,0 +1,209 @@
+我已经全面了解了T-003的实现。这是我的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #12
+- 标题: feat: 浏览器验证（UI 类 Issue）
+- 当前子任务: T-003 - 将 UI 验证步骤集成到主迭代循环和 Agent prompt 中
+- 迭代次数: 9
+
+---
+
+### 总体评价
+
+**评分: 72/100**
+
+T-003 的核心要求——将 UI 验证集成到主迭代循环中——**完全未实现**。`run_review_and_fix()` 中没有调用 `run_ui_verification()`，UI 验证失败不计入 CONSECUTIVE_ITERATION_FAILURES 的逻辑也没有实现。Agent prompt 模板和 `agents/*.md` 文件中也缺少 UI 验证相关指引。已实现的部分（T-001/T-002 的 `is_ui_subtask()`、`get_subtask_section()` 中的 UI 提示、`get_subtask_review_section()` 中的 UI 验证标准、`run_ui_verification()` 函数本身）质量不错，但 T-003 要求的集成工作缺失。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `run_review_and_fix()` 中缺少 UI 验证集成
+
+**位置**: `run.sh:2596-2627`
+
+**问题描述**:
+T-003 要求"当子任务通过审核（score >= PASSING_SCORE）且为 UI 类型时，调用 `run_ui_verification()` 执行浏览器验证"。但在 `run_review_and_fix()` 的通过分支（第 2596-2628 行）中，完全没有调用 `run_ui_verification()`。代码在 `mark_subtask_passed()` 后直接返回，没有插入 UI 验证逻辑。
+
+**代码片段**:
+```bash
+# 当前代码 (line 2596-2627):
+if check_score_passed "$SCORE"; then
+    ...
+    if has_subtasks; then
+        ...
+        mark_subtask_passed "$current_subtask_id"  # 直接标记通过，没有先做 UI 验证
+        ...
+    fi
+    return
+fi
+```
+
+**建议修复**:
+在 `mark_subtask_passed()` 之前，插入 UI 类型检测和验证逻辑：
+```bash
+if [ -n "$current_subtask_id" ]; then
+    # UI 类型子任务：先进行浏览器验证
+    if is_ui_subtask; then
+        local ui_result
+        ui_result=$(run_ui_verification "$WORK_DIR" "$(get_current_subtask_title)")
+        local ui_pass
+        ui_pass=$(echo "$ui_result" | jq -r '.pass // "true"')
+        
+        # 记录 UI 验证结果到日志
+        local ui_feedback
+        ui_feedback=$(echo "$ui_result" | jq -r '.feedback // ""')
+        echo "- UI 验证: $ui_pass - $ui_feedback" >> "$WORK_DIR/log.md"
+        
+        if [ "$ui_pass" != "true" ]; then
+            # UI 验证失败：不标记 passed，反馈传递给下一迭代
+            log "UI 验证未通过，反馈传递给下一迭代"
+            PREVIOUS_FEEDBACK="代码审核通过，但 UI 验证未通过：$ui_feedback"
+            PASSED=0
+            return
+        fi
+        log "UI 验证通过"
+    fi
+    
+    mark_subtask_passed "$current_subtask_id"
+    ...
+fi
+```
+
+**原因**: 这是 T-003 的核心功能，缺少它意味着 UI 验证流程完全不工作。
+
+---
+
+#### 问题 2: UI 验证失败不计入 CONSECUTIVE_ITERATION_FAILURES 逻辑未实现
+
+**位置**: `run.sh:2779-2783`
+
+**问题描述**:
+T-003 要求"UI 验证失败不计入 CONSECUTIVE_ITERATION_FAILURES（与 hard gate 失败同等待遇）"。当前主循环中的 CONSECUTIVE_ITERATION_FAILURES 递增逻辑只区分了 `ITERATION_FAILED` 和 `HARD_GATE_FAILED`，没有 `UI_VERIFY_FAILED` 的处理。
+
+**建议修复**:
+新增 `UI_VERIFY_FAILED=0` 变量，在 UI 验证失败时设置 `UI_VERIFY_FAILED=1`，然后在主循环的失败计数逻辑中增加判断：
+```bash
+if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ] && [ $UI_VERIFY_FAILED -eq 0 ]; then
+    CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+elif [ $HARD_GATE_FAILED -eq 0 ] && [ $UI_VERIFY_FAILED -eq 0 ]; then
+    CONSECUTIVE_ITERATION_FAILURES=0
+fi
+```
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: agents/*.md 缺少 UI 验证相关指引
+
+**位置**: `agents/claude.md`, `agents/codex.md`, `agents/opencode.md`
+
+**问题描述**:
+T-003 要求"更新 agents/claude.md、agents/codex.md、agents/opencode.md 增加 UI 验证相关指引"。三个文件中都没有关于 UI 验证的任何指引内容。应该在审核维度或工作流程中增加 UI 验证相关说明，例如提醒审核者关注 UI 类型子任务时的浏览器验证标准。
+
+**建议修复**:
+在三个文件中增加类似以下内容：
+```markdown
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+```
+
+---
+
+#### 问题 4: PR 描述中未包含 UI 验证结果摘要
+
+**位置**: `run.sh:2847-2859`
+
+**问题描述**:
+T-003 要求"在最终 PR 描述中包含 UI 验证结果摘要（如有）"。当前 PR 描述模板只包含子任务摘要，没有 UI 验证结果。如果存在 `$WORK_DIR/ui-verify-result.json`，应在 PR 描述中包含验证结果。
+
+**建议修复**:
+在 PR body 构建中增加 UI 验证摘要部分。
+
+---
+
+#### 问题 5: `run_ui_verification()` 中 `eval` 的使用存在安全风险
+
+**位置**: `run.sh:2165`
+
+**问题描述**:
+```bash
+eval "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
+```
+`eval` 执行来自 `detect_dev_server_command()` 的字符串，虽然输入来源是项目配置文件，但这仍是不必要的风险。
+
+**建议修复**:
+根据之前的跨迭代经验，应使用 `bash -c` 替代：
+```bash
+bash -c "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
+```
+
+---
+
+### 建议改进 (可选)
+
+- `verify_ui_with_llm()` 第 2073 行有重定向顺序问题：`2>&1 > "$log_file"` 应为 `> "$log_file" 2>&1`（shellcheck SC2069）
+- `run_ui_verification()` 第 2162 行在函数内设置 `trap` 会覆盖全局 trap，应该保存和恢复原值（跨迭代经验中已记录此模式）
+- 考虑在 `run_ui_verification()` 调用失败时（如 dev server 启动超时），除了返回 `pass: false`，还应将失败信息记录到 `log.md`
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 |
+|---------|------|
+| 主迭代循环中 UI 子任务通过审核后自动触发 UI 验证 | **未实现** |
+| UI 验证通过 → 子任务正常标记 passed | **未实现**（集成逻辑缺失） |
+| UI 验证不通过 → 反馈传递给下一迭代，不标记 passed | **未实现** |
+| UI 验证失败不计入 CONSECUTIVE_ITERATION_FAILURES | **未实现** |
+| Agent 实现 prompt 中包含 UI 验证说明（仅 UI 类型子任务） | **部分实现**（`get_subtask_section()` 中有 UI 提示，但非 T-003 要求的 prompt 模板级别改动） |
+| Agent review prompt 中包含 UI 验证维度 | **部分实现**（`get_subtask_review_section()` 中有 UI 验证标准） |
+| agents/*.md 增加 UI 验证相关指引 | **未实现** |
+| log.md 记录 UI 验证结果 | **未实现** |
+| 非 UI 类子任务不受影响（向后兼容） | 是 |
+| bash -n run.sh 语法检查通过 | 通过 |
+| shellcheck run.sh 无新增错误 | 未验证（需运行 shellcheck） |
+
+---
+
+### 评分计算
+
+- **正确性 (35%)**: 40/100 — 核心集成逻辑完全缺失
+- **测试质量 (25%)**: 100/100 — Shell 脚本豁免
+- **代码质量 (20%)**: 75/100 — 已有代码质量不错，但 T-003 的改动几乎不存在
+- **安全性 (10%)**: 85/100 — `eval` 使用问题
+- **性能 (10%)**: 90/100 — 无明显性能问题
+
+总分 = 40×0.35 + 100×0.25 + 75×0.20 + 85×0.10 + 90×0.10 = 14 + 25 + 15 + 8.5 + 9 = **71.5 ≈ 72/100**
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+需要在 `run_review_and_fix()` 中集成 UI 验证调用（问题 1 是最关键的），并增加 `UI_VERIFY_FAILED` 变量处理连续失败计数（问题 2），更新 `agents/*.md` 文件（问题 3），以及在 PR 描述中包含 UI 验证摘要（问题 4）。
+
+---
+
+## Learnings
+
+- **模式**: T-001/T-002 的基础设施（函数、检测逻辑、prompt 注入）已就绪且设计合理，但集成到主循环是独立的步骤，容易被遗漏
+- **踩坑**: 审核子任务时需要验证**集成调用点**是否存在，而不仅仅是验证函数是否已定义。函数定义 ≠ 函数被调用
+- **经验**: 对于多子任务的 Issue，后续子任务（如 T-003 集成）依赖前序子任务（T-001/T-002）的产出，但实现时可能只完成了前序子任务而忽略了当前子任务的集成工作
