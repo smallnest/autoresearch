@@ -3,3 +3,4 @@
 2026-04-18T22:51:22+08:00	2	feat: 支持指定启用的 agents 及其顺序	completed	6	false	98	98	feature/issue-2	
 2026-04-19T12:00:42+08:00	5	feat: 跨迭代经验日志 (progress.md)	completed	3	false	85	85	feature/issue-5	
 2026-04-19T13:17:59+08:00	6	feat: Issue 自动拆分为子任务 (tasks.json)	completed	4	false	88	88	feature/issue-6	
+2026-04-19T15:51:15+08:00	7	feat: 确定性质量检查优先于 LLM 评分	completed	7	false	90	90	feature/issue-7	

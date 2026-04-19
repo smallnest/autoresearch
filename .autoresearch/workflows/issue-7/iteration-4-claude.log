@@ -1,0 +1,20 @@
+所有 6 项验收标准都已处理。修改总结如下：
+
+### 已完成的更改
+
+1. **`run_review_and_fix()`** (行 1987-1996): 在 agent 修复后，增加了 `run_hard_gate_checks()`。如果失败，设置 `HARD_GATE_FAILED=1`，将错误详情反馈给 `PREVIOUS_FEEDBACK`，并跳过评审轮次。
+
+2. **迭代 1 - 无子任务分支** (行 2035-2041): 在初始实现后，增加了 `run_hard_gate_checks()`。通过后，设置 `PREVIOUS_FEEDBACK="初始实现完成..."`；否则将门禁错误反馈给 agent。
+
+3. **迭代 1 - 子任务分支** (行 2069-2075): 逻辑与上述相同。
+
+4. **`HARD_GATE_FAILED` 标志** (行 2008): 在每次迭代开始时初始化为 0。当 `HARD_GATE_FAILED=1` 时，`CONSECUTIVE_ITERATION_FAILURES` 不会增加（在所有 3 个位置）。
+
+5. **连续失败硬停止逻辑** 保持不变——仅在 `HARD_GATE_FAILED=0` 时计数。
+
+6. **日志记录**: `run_hard_gate_checks()` 已在内部记录到 `hard-gate-$iteration.log`，并且调用位置也记录了 `log "硬门禁检查未通过/通过"`。
+
+## 经验教训
+
+- **模式**: 对于“将现有函数集成到调用点”的任务，请在编辑前后始终通过 `grep` 验证函数是否实际被调用。在本次案例中，T-001 定义了函数，但 T-002 集成它却被完全遗漏了。
+- **经验**: 在多位置编辑时，`HARD_GATE_FAILED` 标志需要在每次迭代开始时重置以避免状态泄漏，并且 `CONSECUTIVE_ITERATION_FAILURES` 的保护必须应用到所有 3 个位置，以保持一致性。
