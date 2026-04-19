@@ -93,6 +93,19 @@ extract_score() {
     echo "0"
 }
 
+check_sentinel() {
+    local review_result="$1"
+    if echo "$review_result" | grep -qF '<AUTORESEARCH_PASS/>'; then
+        echo "pass"
+        return
+    fi
+    if echo "$review_result" | grep -qF '<AUTORESEARCH_FAIL/>'; then
+        echo "fail"
+        return
+    fi
+    echo "none"
+}
+
 has_fatal_error() {
     local log_file="$1"
     local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
@@ -641,6 +654,36 @@ assert_false "normal output" "has_api_failure $(make_log 'api_ok1.log' 'Implemen
 assert_false "status discussion" "has_api_failure $(make_log 'api_ok2.log' 'Check the HTTP status codes for error handling')"
 assert_false "empty file" "has_api_failure $(make_log 'api_ok3.log' '')"
 assert_false "nonexistent file" "has_api_failure /tmp/nonexistent_file_$$_test2.log"
+
+# ==================== Tests: check_sentinel() ====================
+
+echo ""
+echo "=== check_sentinel() Tests ==="
+echo ""
+
+echo "--- PASS sentinel detection ---"
+
+assert_eq "PASS sentinel at end" "pass" "$(check_sentinel "Review output\n\n<AUTORESEARCH_PASS/>")"
+assert_eq "PASS sentinel in middle" "pass" "$(check_sentinel "Some review\n<AUTORESEARCH_PASS/>\nMore text")"
+assert_eq "PASS sentinel only" "pass" "$(check_sentinel "<AUTORESEARCH_PASS/>")"
+
+echo "--- FAIL sentinel detection ---"
+
+assert_eq "FAIL sentinel at end" "fail" "$(check_sentinel "Review output\n\n<AUTORESEARCH_FAIL/>")"
+assert_eq "FAIL sentinel in middle" "fail" "$(check_sentinel "Some review\n<AUTORESEARCH_FAIL/>\nMore text")"
+assert_eq "FAIL sentinel only" "fail" "$(check_sentinel "<AUTORESEARCH_FAIL/>")"
+
+echo "--- No sentinel ---"
+
+assert_eq "no sentinel returns none" "none" "$(check_sentinel "Just a normal review output")"
+assert_eq "empty string returns none" "none" "$(check_sentinel "")"
+assert_eq "partial sentinel returns none" "none" "$(check_sentinel "<AUTORESEARCH_PASS")"
+assert_eq "wrong case returns none" "none" "$(check_sentinel "<autoresearch_pass/>")"
+assert_eq "extra space returns none" "none" "$(check_sentinel "<AUTORESEARCH_PASS />")"
+
+echo "--- PASS takes priority over FAIL ---"
+
+assert_eq "PASS before FAIL returns pass" "pass" "$(check_sentinel "<AUTORESEARCH_PASS/>\n<AUTORESEARCH_FAIL/>")"
 
 # ==================== Tests: check_score_passed() ====================
 

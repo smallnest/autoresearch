@@ -1,0 +1,27 @@
+实现完成。以下是改动总结：
+
+### 改动内容
+
+**`run.sh`**:
+1. 新增 `check_sentinel()` 函数（`run.sh:1662-1677`），检测审核输出中的 `<AUTORESEARCH_PASS/>` 和 `<AUTORESEARCH_FAIL/>` 标记
+   - 返回 `"pass"` / `"fail"` / `"none"`
+   - 使用 `grep -qF` 做精确字符串匹配，避免正则误判
+2. 修改 `run_opencode_review()`、`run_claude_review()`、`run_codex_review()` 三个函数：
+   - 在 `extract_score()` 之前先调用 `check_sentinel()`
+   - 检测到 `PASS` sentinel → 直接设分数为 100 并记录日志
+   - 检测到 `FAIL` sentinel → 直接设分数为 0 并记录日志
+   - 未检测到 → 走原有 `extract_score` 逻辑，行为不变
+
+**`tests/test_extract_score.sh`**:
+1. 新增 `check_sentinel()` 函数副本（测试需要独立运行）
+2. 新增 12 个单元测试覆盖：
+   - PASS sentinel 检测（末尾、中间、纯标记）
+   - FAIL sentinel 检测（末尾、中间、纯标记）
+   - 无 sentinel 返回 none（正常文本、空字符串、不完整标记、大小写错误、多余空格）
+   - PASS 优先于 FAIL
+
+## Learnings
+
+- **模式**: `grep -qF` 使用固定字符串匹配而非正则，适合检测精确的 sentinel 标记，避免正则特殊字符误判
+- **经验**: Bash 中三个 review 函数结构高度相似，修改时需保持一致性。可将 sentinel 逻辑提取为公共函数减少重复，但当前改动保持与原有风格一致
+- **踩坑**: sentinel 格式选择 `<AUTORESEARCH_PASS/>`（自闭合 XML 风格）而非 `<AUTORESEARCH_PASS>` 是为了避免与 Agent 输出中的 HTML/XML 标签混淆
