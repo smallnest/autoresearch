@@ -133,6 +133,143 @@ check_score_passed() {
     awk -v score="$score" -v passing="$passing" 'BEGIN { exit (score >= passing) ? 0 : 1 }'
 }
 
+# ==================== progress.md functions ====================
+
+# These functions depend on WORK_DIR and ISSUE_NUMBER being set.
+
+init_progress() {
+    local progress_file="$WORK_DIR/progress.md"
+    cat > "$progress_file" << EOF
+# Issue #$ISSUE_NUMBER 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+EOF
+}
+
+extract_learnings_from_log() {
+    local log_file="$1"
+
+    if [ ! -f "$log_file" ]; then
+        echo ""
+        return
+    fi
+
+    if grep -q "^## Learnings" "$log_file" 2>/dev/null; then
+        sed -n '/^## Learnings/,/^## [^L]/{ /^## [^L]/!p; }' "$log_file" 2>/dev/null | head -50
+        return
+    fi
+
+    grep -vE '^\s*$' "$log_file" 2>/dev/null | head -30
+}
+
+append_to_progress() {
+    local iteration="$1"
+    local agent_name="$2"
+    local log_file="$3"
+    local score="${4:-N/A}"
+    local entry_type="$5"
+    local review_summary="$6"
+
+    local progress_file="$WORK_DIR/progress.md"
+    if [ ! -f "$progress_file" ]; then
+        init_progress
+    fi
+
+    local date_str
+    date_str=$(date '+%Y-%m-%d')
+
+    local learnings
+    learnings=$(extract_learnings_from_log "$log_file")
+
+    local learnings_truncated
+    learnings_truncated=$(echo "$learnings" | head -c 1500)
+    if [ ${#learnings} -gt 1500 ]; then
+        learnings_truncated="${learnings_truncated}
+
+... (内容过长，已截断)"
+    fi
+
+    local entry="
+## Iteration $iteration - $date_str
+
+- **Agent**: $agent_name
+- **类型**: $entry_type
+- **评分**: $score/100
+"
+
+    if [ -n "$review_summary" ]; then
+        local review_brief
+        review_brief=$(echo "$review_summary" | head -c 800)
+        entry="$entry
+- **审核要点**:
+
+${review_brief}
+"
+    fi
+
+    if [ -n "$learnings_truncated" ]; then
+        entry="$entry
+- **经验与发现**:
+
+${learnings_truncated}
+"
+    fi
+
+    echo "$entry" >> "$progress_file"
+}
+
+get_progress_content() {
+    local progress_file="$WORK_DIR/progress.md"
+    if [ ! -f "$progress_file" ]; then
+        echo ""
+        return
+    fi
+
+    local content
+    content=$(cat "$progress_file")
+
+    local max_chars=5000
+    local content_len
+    content_len=$(echo "$content" | wc -c | tr -d ' ')
+
+    if [ "$content_len" -le "$max_chars" ]; then
+        echo "$content"
+        return
+    fi
+
+    local patterns_section
+    patterns_section=$(awk '/^## Codebase Patterns/,/^## [^C]/{ if (/^## [^C]/) next; print }' "$progress_file")
+
+    local recent_entries
+    recent_entries=$(tail -c 3000 "$progress_file")
+
+    echo "$patterns_section
+
+... (中间迭代记录已省略)
+
+$recent_entries"
+}
+
+get_progress_section() {
+    local content
+    content=$(get_progress_content)
+    if [ -z "$content" ]; then
+        echo ""
+        return
+    fi
+    cat << EOF
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+$content
+EOF
+}
+
 annealing_delay() {
     local retry=$1
     local delay=$((RETRY_BASE_DELAY * (1 << (retry - 1))))
@@ -472,6 +609,142 @@ INNEREOF
 assert_false "normal error discussion not fatal" "has_fatal_error $TMPDIR_TESTS/normal_error_discussion.log"
 assert_false "normal error discussion not API failure" "has_api_failure $TMPDIR_TESTS/normal_error_discussion.log"
 assert_true "normal discussion has enough lines" "[ $(grep -vE '^\s*$' $TMPDIR_TESTS/normal_error_discussion.log | wc -l) -ge 5 ]"
+
+# ==================== Tests: progress.md functions ====================
+
+echo ""
+echo "=== progress.md functions Tests ==="
+echo ""
+
+# Setup: create a temporary WORK_DIR for progress tests
+WORK_DIR="$TMPDIR_TESTS/progress_test_workdir"
+mkdir -p "$WORK_DIR"
+
+# --- init_progress() ---
+echo "--- init_progress() ---"
+
+ISSUE_NUMBER=99
+init_progress
+
+assert_true "progress.md created" "[ -f '$WORK_DIR/progress.md' ]"
+assert_true "has Codebase Patterns header" "grep -q '## Codebase Patterns' '$WORK_DIR/progress.md'"
+
+# --- extract_learnings_from_log() ---
+echo "--- extract_learnings_from_log() ---"
+
+# Create a log file with ## Learnings section
+cat > "$TMPDIR_TESTS/learnings_log.txt" << 'INNEREOF'
+I implemented the feature.
+## Learnings
+
+- **模式**: The project uses dependency injection
+- **踩坑**: Config must be loaded before init
+- **经验**: Always check nil before accessing map
+
+## Other Section
+This should not be included.
+INNEREOF
+
+learnings_result=$(extract_learnings_from_log "$TMPDIR_TESTS/learnings_log.txt")
+assert_true "extracts Learnings section" "echo '$learnings_result' | grep -q 'dependency injection'"
+assert_true "Learnings includes 踩坑" "echo '$learnings_result' | grep -q '踩坑'"
+# The "## Other Section" heading should not be included (it's the next ## section)
+assert_false "excludes non-Learnings section" "echo '$learnings_result' | grep -q 'Other Section'"
+
+# Create a log file WITHOUT ## Learnings section (fallback)
+cat > "$TMPDIR_TESTS/no_learnings_log.txt" << 'INNEREOF'
+Line 1 of output
+Line 2 of output
+Line 3 of output
+INNEREOF
+
+fallback_result=$(extract_learnings_from_log "$TMPDIR_TESTS/no_learnings_log.txt")
+assert_true "fallback returns content" "[ -n '$fallback_result' ]"
+assert_true "fallback includes line 1" "echo '$fallback_result' | grep -q 'Line 1'"
+
+# Non-existent log file
+empty_result=$(extract_learnings_from_log "/tmp/nonexistent_log_$$_test.txt")
+assert_eq "nonexistent file returns empty" "" "$empty_result"
+
+# --- append_to_progress() ---
+echo "--- append_to_progress() ---"
+
+# Re-init for clean state
+rm -f "$WORK_DIR/progress.md"
+init_progress
+
+# Append an iteration entry
+cat > "$TMPDIR_TESTS/iter1_log.txt" << 'INNEREOF'
+## Learnings
+
+- **模式**: Project uses factory pattern
+- **踩坑**: Avoid global state
+INNEREOF
+
+append_to_progress 1 "claude" "$TMPDIR_TESTS/iter1_log.txt" "N/A" "初始实现" ""
+
+assert_true "progress.md has Iteration 1" "grep -q '## Iteration 1' '$WORK_DIR/progress.md'"
+assert_true "progress.md has agent name" "grep -q 'claude' '$WORK_DIR/progress.md'"
+assert_true "progress.md has learnings content" "grep -q 'factory pattern' '$WORK_DIR/progress.md'"
+
+# Append a second iteration with review feedback
+append_to_progress 2 "codex" "$TMPDIR_TESTS/iter1_log.txt" "65" "审核+修复" "Hardcoded secret found in auth.go"
+
+assert_true "progress.md has Iteration 2" "grep -q '## Iteration 2' '$WORK_DIR/progress.md'"
+assert_true "progress.md has review score" "grep -q '65/100' '$WORK_DIR/progress.md'"
+assert_true "progress.md has review feedback" "grep -q 'Hardcoded secret' '$WORK_DIR/progress.md'"
+
+# Codebase Patterns section should still be at top
+assert_true "Codebase Patterns still at top after appends" "head -5 '$WORK_DIR/progress.md' | grep -q '## Codebase Patterns'"
+
+# --- get_progress_content() ---
+echo "--- get_progress_content() ---"
+
+content=$(get_progress_content)
+assert_true "returns non-empty content" "[ -n '$content' ]"
+assert_true "includes Codebase Patterns" "echo '$content' | grep -q '## Codebase Patterns'"
+assert_true "includes iteration entries" "echo '$content' | grep -q '## Iteration 1'"
+
+# Test with no progress.md
+rm -f "$WORK_DIR/progress.md"
+empty_content=$(get_progress_content)
+assert_eq "no progress.md returns empty" "" "$empty_content"
+
+# --- get_progress_section() ---
+echo "--- get_progress_section() ---"
+
+# Re-create progress.md
+init_progress
+append_to_progress 1 "claude" "$TMPDIR_TESTS/iter1_log.txt" "N/A" "初始实现" ""
+
+section=$(get_progress_section)
+assert_true "section has 跨迭代经验 header" "echo '$section' | grep -q '跨迭代经验'"
+assert_true "section includes Codebase Patterns" "echo '$section' | grep -q '## Codebase Patterns'"
+assert_true "section includes iteration data" "echo '$section' | grep -q '## Iteration 1'"
+
+# Test with no progress.md
+rm -f "$WORK_DIR/progress.md"
+empty_section=$(get_progress_section)
+assert_eq "no progress.md returns empty section" "" "$empty_section"
+
+# --- Truncation test ---
+echo "--- Truncation test ---"
+
+rm -f "$WORK_DIR/progress.md"
+init_progress
+
+# Append many iterations to exceed 5000 char limit
+for i in $(seq 1 20); do
+    echo "Pattern $i: $(printf 'A%.0s' {1..100})" >> "$WORK_DIR/progress.md"
+    echo "" >> "$WORK_DIR/progress.md"
+    echo "## Iteration $i - 2024-01-15" >> "$WORK_DIR/progress.md"
+    echo "Content for iteration $i with enough text to fill space." >> "$WORK_DIR/progress.md"
+    echo "" >> "$WORK_DIR/progress.md"
+done
+
+truncated_content=$(get_progress_content)
+content_len=$(echo "$truncated_content" | wc -c | tr -d ' ')
+assert_true "truncated content stays within limit" "[ $content_len -le 8000 ]"
 
 # ==================== Summary ====================
 

@@ -1,0 +1,29 @@
+所有任务完成。以下是已实现的更改摘要：
+
+## 更改摘要
+
+### `run.sh` - 核心变更
+
+1.  **新增 4 个函数** (位于 `## 跨迭代经验日志 (progress.md)` 部分下):
+    -   `init_progress()` - 创建 `progress.md` 文件，包含 `## Codebase Patterns` 头部
+    -   `extract_learnings_from_log()` - 从 agent 日志中提取 `## Learnings` 部分；若无则回退到前 30 行非空内容
+    -   `append_to_progress()` - 追加结构化的迭代条目（agent、分数、审核摘要、学习内容）
+    -   `get_progress_content()` / `get_progress_section()` - 读取 `progress.md` 用于 prompt 注入，5000 字符安全限制
+
+2.  **Prompt 注入** - 所有 6 个 agent 函数现在都注入 `progress.md` 内容：
+    -   `run_codex()`, `run_claude()`, `run_opencode()` - 实现和修复 prompt
+    -   `run_codex_review()`, `run_claude_review()`, `run_opencode_review()` - 审核 prompt
+
+3.  **新增“第三步：总结经验”** - 实现/修复 prompt 现在指示 agent 输出 `## Learnings` 部分
+
+4.  **迭代循环** - 在迭代 1 之后和 `run_review_and_fix()` 之后调用 `append_to_progress()`
+
+5.  **`setup_work_directory()`** - 现在为新运行调用 `init_progress()`；`continue mode` 自然地工作，因为 `progress.md` 已持久化在工作目录中
+
+### `agents/*.md` - Prompt 模板
+
+所有 3 个 agent 模板现在都包含一个 `## 跨迭代经验` 部分，指示它们输出 `## Learnings` 并建议更新 `## Codebase Patterns`。
+
+### `tests/test_extract_score.sh` - 测试
+
+新增 24 个测试，涵盖 `init_progress()`、`extract_learnings_from_log()`、`append_to_progress()`、`get_progress_content()`、`get_progress_section()` 和截断行为。所有 120 个测试通过。

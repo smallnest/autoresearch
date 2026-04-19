@@ -408,6 +408,9 @@ setup_work_directory() {
 ## 迭代记录
 
 EOF
+
+    # 初始化跨迭代经验日志
+    init_progress
 }
 
 # 获取 agent 指令文件路径
@@ -464,6 +467,160 @@ create_branch() {
     fi
 }
 
+# ==================== 跨迭代经验日志 (progress.md) ====================
+
+# 初始化 progress.md
+init_progress() {
+    local progress_file="$WORK_DIR/progress.md"
+    cat > "$progress_file" << EOF
+# Issue #$ISSUE_NUMBER 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+EOF
+    log "初始化经验日志: $progress_file"
+}
+
+# 从 Agent 输出日志中提取 Learnings 部分
+# 优先查找 ## Learnings 区块，否则截取前 30 行非空内容作为摘要
+extract_learnings_from_log() {
+    local log_file="$1"
+
+    if [ ! -f "$log_file" ]; then
+        echo ""
+        return
+    fi
+
+    # 优先提取 ## Learnings 区块
+    if grep -q "^## Learnings" "$log_file" 2>/dev/null; then
+        sed -n '/^## Learnings/,/^## [^L]/{ /^## [^L]/!p; }' "$log_file" 2>/dev/null | head -50
+        return
+    fi
+
+    # 回退：截取前 30 行非空内容作为摘要
+    grep -vE '^\s*$' "$log_file" 2>/dev/null | head -30
+}
+
+# 追加迭代经验到 progress.md
+append_to_progress() {
+    local iteration="$1"
+    local agent_name="$2"
+    local log_file="$3"
+    local score="${4:-N/A}"
+    local entry_type="$5"  # "实现" 或 "审核+修复"
+    local review_summary="$6"
+
+    local progress_file="$WORK_DIR/progress.md"
+    if [ ! -f "$progress_file" ]; then
+        init_progress
+    fi
+
+    local date_str
+    date_str=$(date '+%Y-%m-%d')
+
+    # 从日志中提取 learnings
+    local learnings
+    learnings=$(extract_learnings_from_log "$log_file")
+
+    # 限制 learnings 大小（约 1500 字符）
+    local learnings_truncated
+    learnings_truncated=$(echo "$learnings" | head -c 1500)
+    if [ ${#learnings} -gt 1500 ]; then
+        learnings_truncated="${learnings_truncated}
+
+... (内容过长，已截断)"
+    fi
+
+    # 构建经验条目
+    local entry="
+## Iteration $iteration - $date_str
+
+- **Agent**: $agent_name
+- **类型**: $entry_type
+- **评分**: $score/100
+"
+
+    # 如果有审核反馈摘要，追加
+    if [ -n "$review_summary" ]; then
+        # 截取审核反馈的前 800 字符
+        local review_brief
+        review_brief=$(echo "$review_summary" | head -c 800)
+        entry="$entry
+- **审核要点**:
+
+${review_brief}
+"
+    fi
+
+    # 追加 learnings
+    if [ -n "$learnings_truncated" ]; then
+        entry="$entry
+- **经验与发现**:
+
+${learnings_truncated}
+"
+    fi
+
+    echo "$entry" >> "$progress_file"
+    log "已追加迭代 $iteration 经验到 progress.md"
+}
+
+# 获取 progress.md 内容用于 prompt 注入
+# 返回 ## Codebase Patterns 区 + 最近的迭代记录
+get_progress_content() {
+    local progress_file="$WORK_DIR/progress.md"
+    if [ ! -f "$progress_file" ]; then
+        echo ""
+        return
+    fi
+
+    local content
+    content=$(cat "$progress_file")
+
+    # 安全限制：最大 5000 字符，避免过多 token 消耗
+    local max_chars=5000
+    local content_len
+    content_len=$(echo "$content" | wc -c | tr -d ' ')
+
+    if [ "$content_len" -le "$max_chars" ]; then
+        echo "$content"
+        return
+    fi
+
+    # 超长时：保留 ## Codebase Patterns 区 + 最后 3000 字符
+    local patterns_section
+    patterns_section=$(awk '/^## Codebase Patterns/,/^## [^C]/{ if (/^## [^C]/) next; print }' "$progress_file")
+
+    local recent_entries
+    recent_entries=$(tail -c 3000 "$progress_file")
+
+    echo "$patterns_section
+
+... (中间迭代记录已省略)
+
+$recent_entries"
+}
+
+# 获取格式化的经验注入文本（用于 prompt）
+get_progress_section() {
+    local content
+    content=$(get_progress_content)
+    if [ -z "$content" ]; then
+        echo ""
+        return
+    fi
+    cat << EOF
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+$content
+EOF
+}
+
 # ==================== Agent 实现/修复函数 ====================
 
 run_codex() {
@@ -485,6 +642,9 @@ run_codex() {
     local program_instructions
     program_instructions=$(get_program_instructions)
 
+    local progress_section
+    progress_section=$(get_progress_section)
+
     local prompt
     if [ -z "$previous_feedback" ]; then
         prompt="实现 GitHub Issue #$issue_number
@@ -495,6 +655,7 @@ Issue 标题: $ISSUE_TITLE
 Issue 内容: $ISSUE_BODY
 
 迭代次数: $iteration
+$progress_section
 
 ---
 请按以下步骤执行:
@@ -504,6 +665,9 @@ Issue 内容: $ISSUE_BODY
 
 ## 第二步：逐步实现
 按照任务清单逐步实现，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
 
 ---
 $program_instructions
@@ -519,6 +683,7 @@ Issue 标题: $ISSUE_TITLE
 
 审核反馈:
 $previous_feedback
+$progress_section
 
 ---
 请按以下步骤执行:
@@ -528,6 +693,9 @@ $previous_feedback
 
 ## 第二步：逐步实现
 按照任务清单逐步修复，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
 
 ---
 $codex_instructions
@@ -567,6 +735,9 @@ run_claude() {
     local program_instructions
     program_instructions=$(get_program_instructions)
 
+    local progress_section
+    progress_section=$(get_progress_section)
+
     local prompt
     if [ -z "$previous_feedback" ]; then
         prompt="实现 GitHub Issue #$issue_number
@@ -577,6 +748,7 @@ Issue 标题: $ISSUE_TITLE
 Issue 内容: $ISSUE_BODY
 
 迭代次数: $iteration
+$progress_section
 
 ---
 请按以下步骤执行:
@@ -586,6 +758,9 @@ Issue 内容: $ISSUE_BODY
 
 ## 第二步：逐步实现
 按照任务清单逐步实现，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
 
 ---
 $program_instructions
@@ -601,6 +776,7 @@ Issue 标题: $ISSUE_TITLE
 
 审核反馈:
 $previous_feedback
+$progress_section
 
 ---
 请按以下步骤执行:
@@ -610,6 +786,9 @@ $previous_feedback
 
 ## 第二步：逐步实现
 按照任务清单逐步修复，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
 
 ---
 $claude_instructions
@@ -649,6 +828,9 @@ run_opencode() {
     local program_instructions
     program_instructions=$(get_program_instructions)
 
+    local progress_section
+    progress_section=$(get_progress_section)
+
     local prompt
     if [ -z "$previous_feedback" ]; then
         prompt="实现 GitHub Issue #$issue_number
@@ -659,6 +841,7 @@ Issue 标题: $ISSUE_TITLE
 Issue 内容: $ISSUE_BODY
 
 迭代次数: $iteration
+$progress_section
 
 ---
 请按以下步骤执行:
@@ -668,6 +851,9 @@ Issue 内容: $ISSUE_BODY
 
 ## 第二步：逐步实现
 按照任务清单逐步实现，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
 
 ---
 $program_instructions
@@ -683,6 +869,7 @@ Issue 标题: $ISSUE_TITLE
 
 审核反馈:
 $previous_feedback
+$progress_section
 
 ---
 请按以下步骤执行:
@@ -692,6 +879,9 @@ $previous_feedback
 
 ## 第二步：逐步实现
 按照任务清单逐步修复，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
 
 ---
 $opencode_instructions
@@ -749,7 +939,7 @@ Issue 标题: $ISSUE_TITLE
 
 评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
 注意: 评分 ≥ 85 才算达标。
-
+$(get_progress_section)
 $opencode_instructions
 "
 
@@ -845,7 +1035,7 @@ Issue 标题: $ISSUE_TITLE
 
 评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
 注意: 评分 ≥ 85 才算达标。
-
+$(get_progress_section)
 $claude_instructions
 "
 
@@ -912,7 +1102,7 @@ Issue 标题: $ISSUE_TITLE
 
 评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
 注意: 评分 ≥ 85 才算达标。
-
+$(get_progress_section)
 $codex_instructions
 "
 
@@ -1321,6 +1511,10 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
         fi
 
+        # 追加经验到 progress.md
+        local impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+        append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现" ""
+
         if [ $ITERATION_FAILED -eq 1 ]; then
             CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
         else
@@ -1331,7 +1525,16 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 
     # ---- 迭代 >=2: agent 轮流审核 + 修复 ----
     agent_idx=$(get_review_agent $ITERATION)
+    local agent_name="${AGENT_NAMES[$agent_idx]}"
     run_review_and_fix $agent_idx
+
+    # 追加经验到 progress.md
+    local review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
+    local review_feedback_brief=""
+    if [ -f "$review_log" ]; then
+        review_feedback_brief=$(cat "$review_log" | head -c 800)
+    fi
+    append_to_progress "$ITERATION" "$agent_name" "$review_log" "$SCORE" "审核+修复" "$review_feedback_brief"
 
     if [ $PASSED -eq 1 ]; then
         break
