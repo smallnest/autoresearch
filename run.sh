@@ -108,6 +108,131 @@ get_build_command() {
     esac
 }
 
+# 检测 lint 命令
+get_lint_command() {
+    local lang=$(detect_language)
+    case "$lang" in
+        go)     echo "go vet ./..." ;;
+        node)   echo "npm run lint" ;;
+        python) echo "ruff check ." ;;
+        rust)   echo "cargo clippy -- -D warnings" ;;
+        java)   echo "mvn checkstyle:check" ;;
+        *)      echo "" ;;
+    esac
+}
+
+# 硬门禁检查：依次执行 build → lint → test
+# 参数: $1 = 迭代号
+# 返回: 0 = 全部通过, 1 = 有阶段失败
+# 日志: $WORK_DIR/hard-gate-$iteration.log
+run_hard_gate_checks() {
+    local iteration=$1
+    local log_file="$WORK_DIR/hard-gate-$iteration.log"
+    local errors=""
+    local failed=0
+
+    cd "$PROJECT_ROOT"
+
+    : > "$log_file"
+    echo "=== 硬门禁检查 (迭代 $iteration) ===" >> "$log_file"
+    echo "时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$log_file"
+    echo "" >> "$log_file"
+
+    # --- 构建检查 ---
+    local build_cmd
+    build_cmd=$(get_build_command)
+    echo "--- 构建 ---" >> "$log_file"
+    if [ -n "$build_cmd" ]; then
+        log "硬门禁: 构建检查 ($build_cmd)..."
+        echo "命令: $build_cmd" >> "$log_file"
+        local build_out build_rc
+        build_out=$($build_cmd 2>&1) ; build_rc=$?
+        echo "$build_out" >> "$log_file"
+        if [ $build_rc -eq 0 ]; then
+            echo "结果: 通过" >> "$log_file"
+            log "硬门禁: 构建通过"
+        else
+            echo "结果: 失败 (exit code: $build_rc)" >> "$log_file"
+            local build_tail
+            build_tail=$(echo "$build_out" | tail -20)
+            errors="${errors}## 构建失败 ($build_cmd)\n\n\`\`\`\n${build_tail}\n\`\`\`\n\n"
+            failed=1
+            log "硬门禁: 构建失败"
+        fi
+    else
+        echo "结果: 跳过 (无构建命令)" >> "$log_file"
+        log "硬门禁: 无构建命令，跳过"
+    fi
+    echo "" >> "$log_file"
+
+    # --- Lint 检查 ---
+    local lint_cmd
+    lint_cmd=$(get_lint_command)
+    echo "--- Lint ---" >> "$log_file"
+    if [ -n "$lint_cmd" ]; then
+        log "硬门禁: Lint 检查 ($lint_cmd)..."
+        echo "命令: $lint_cmd" >> "$log_file"
+        local lint_out lint_rc
+        lint_out=$($lint_cmd 2>&1) ; lint_rc=$?
+        echo "$lint_out" >> "$log_file"
+        if [ $lint_rc -eq 0 ]; then
+            echo "结果: 通过" >> "$log_file"
+            log "硬门禁: Lint 通过"
+        else
+            echo "结果: 失败 (exit code: $lint_rc)" >> "$log_file"
+            local lint_tail
+            lint_tail=$(echo "$lint_out" | tail -20)
+            errors="${errors}## Lint 失败 ($lint_cmd)\n\n\`\`\`\n${lint_tail}\n\`\`\`\n\n"
+            failed=1
+            log "硬门禁: Lint 失败"
+        fi
+    else
+        echo "结果: 跳过 (无 lint 命令)" >> "$log_file"
+        log "硬门禁: 无 lint 命令，跳过"
+    fi
+    echo "" >> "$log_file"
+
+    # --- 测试 ---
+    local test_cmd
+    test_cmd=$(get_test_command)
+    echo "--- 测试 ---" >> "$log_file"
+    if [ -n "$test_cmd" ]; then
+        log "硬门禁: 测试 ($test_cmd)..."
+        echo "命令: $test_cmd" >> "$log_file"
+        local test_out test_rc
+        test_out=$($test_cmd 2>&1) ; test_rc=$?
+        echo "$test_out" >> "$log_file"
+        if [ $test_rc -eq 0 ]; then
+            echo "结果: 通过" >> "$log_file"
+            log "硬门禁: 测试通过"
+        else
+            echo "结果: 失败 (exit code: $test_rc)" >> "$log_file"
+            local test_tail
+            test_tail=$(echo "$test_out" | tail -20)
+            errors="${errors}## 测试失败 ($test_cmd)\n\n\`\`\`\n${test_tail}\n\`\`\`\n\n"
+            failed=1
+            log "硬门禁: 测试失败"
+        fi
+    else
+        echo "结果: 跳过 (无测试命令)" >> "$log_file"
+        log "硬门禁: 无测试命令，跳过"
+    fi
+    echo "" >> "$log_file"
+
+    # --- 汇总 ---
+    echo "=== 汇总 ===" >> "$log_file"
+    if [ $failed -eq 0 ]; then
+        echo "状态: 全部通过" >> "$log_file"
+        log "硬门禁: 全部通过"
+    else
+        echo "状态: 失败" >> "$log_file"
+        log "硬门禁: 未通过"
+        echo -e "$errors" >> "$log_file"
+    fi
+
+    return $failed
+}
+
 # 检测项目语言用于依赖检查
 get_required_tools() {
     local lang=$(detect_language)
@@ -1859,11 +1984,17 @@ run_review_and_fix() {
         return
     fi
 
-    if ! run_tests "$ITERATION"; then
-        PREVIOUS_FEEDBACK="测试失败，请检查测试输出并修复问题。"
-    else
-        PREVIOUS_FEEDBACK=""
+    # 硬门禁检查：修复后先跑 build → lint → test
+    if ! run_hard_gate_checks "$ITERATION"; then
+        log "硬门禁检查未通过，跳过本轮审核"
+        HARD_GATE_FAILED=1
+        local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+        PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
+        ITERATION_FAILED=1
+        return
     fi
+    log "硬门禁检查通过"
+    PREVIOUS_FEEDBACK=""
 }
 
 # 有子任务时的循环逻辑
@@ -1874,6 +2005,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     PASSED=0
     ITERATION_FAILED=0
     SUBTASK_ADVANCED=0
+    HARD_GATE_FAILED=0
 
     log ""
     log "=========================================="
@@ -1892,26 +2024,33 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 
     # ---- 无子任务模式：迭代 1 第一个 agent 初始实现 ----
     if [ $ITERATION -eq 1 ] && ! has_subtasks; then
+        HARD_GATE_FAILED=0
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
             log "$first_agent 初始实现失败，跳到下一次迭代"
             ITERATION_FAILED=1
         else
-            if ! run_tests "$ITERATION"; then
-                log "初始实现测试失败，继续下一轮审核修复"
-                PREVIOUS_FEEDBACK="测试失败，请检查测试输出并修复问题。"
+            # 硬门禁检查：build → lint → test
+            if ! run_hard_gate_checks "$ITERATION"; then
+                log "硬门禁检查未通过，跳过本轮审核"
+                HARD_GATE_FAILED=1
+                local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+                PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
+                ITERATION_FAILED=1
+            else
+                log "硬门禁检查通过"
+                PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
             fi
-            PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
         fi
 
         # 追加经验到 progress.md
         impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
         append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现" ""
 
-        if [ $ITERATION_FAILED -eq 1 ]; then
+        if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
             CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-        else
+        elif [ $HARD_GATE_FAILED -eq 0 ]; then
             CONSECUTIVE_ITERATION_FAILURES=0
         fi
         continue
@@ -1919,17 +2058,24 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 
     # ---- 有子任务模式：迭代 1 第一个 agent 实现当前子任务 ----
     if [ $ITERATION -eq 1 ] && has_subtasks; then
+        HARD_GATE_FAILED=0
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
             log "$first_agent 初始实现失败，跳到下一次迭代"
             ITERATION_FAILED=1
         else
-            if ! run_tests "$ITERATION"; then
-                log "初始实现测试失败，继续下一轮审核修复"
-                PREVIOUS_FEEDBACK="测试失败，请检查测试输出并修复问题。"
+            # 硬门禁检查：build → lint → test
+            if ! run_hard_gate_checks "$ITERATION"; then
+                log "硬门禁检查未通过，跳过本轮审核"
+                HARD_GATE_FAILED=1
+                local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+                PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
+                ITERATION_FAILED=1
+            else
+                log "硬门禁检查通过"
+                PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
             fi
-            PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
         fi
 
         # 追加经验到 progress.md
@@ -1938,9 +2084,9 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         subtask_title=$(get_current_subtask_title)
         append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现 - $subtask_title" ""
 
-        if [ $ITERATION_FAILED -eq 1 ]; then
+        if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
             CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-        else
+        elif [ $HARD_GATE_FAILED -eq 0 ]; then
             CONSECUTIVE_ITERATION_FAILURES=0
         fi
         continue
@@ -1977,9 +2123,9 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         break
     fi
 
-    if [ $ITERATION_FAILED -eq 1 ]; then
+    if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
         CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-    else
+    elif [ $HARD_GATE_FAILED -eq 0 ]; then
         CONSECUTIVE_ITERATION_FAILURES=0
     fi
 
