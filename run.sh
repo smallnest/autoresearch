@@ -1472,10 +1472,10 @@ $opencode_instructions
     local sentinel
     sentinel=$(check_sentinel "$review_result")
     if [ "$sentinel" = "pass" ]; then
-        log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>，直接判定通过"
+        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
         score=100
     elif [ "$sentinel" = "fail" ]; then
-        log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>，直接判定不通过"
+        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
         score=0
     else
         score=$(extract_score "$review_result")
@@ -1583,10 +1583,10 @@ $claude_instructions
     local sentinel
     sentinel=$(check_sentinel "$review_result")
     if [ "$sentinel" = "pass" ]; then
-        log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>，直接判定通过"
+        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
         score=100
     elif [ "$sentinel" = "fail" ]; then
-        log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>，直接判定不通过"
+        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
         score=0
     else
         score=$(extract_score "$review_result")
@@ -1665,10 +1665,10 @@ $codex_instructions
     local sentinel
     sentinel=$(check_sentinel "$review_result")
     if [ "$sentinel" = "pass" ]; then
-        log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>，直接判定通过"
+        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
         score=100
     elif [ "$sentinel" = "fail" ]; then
-        log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>，直接判定不通过"
+        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
         score=0
     else
         score=$(extract_score "$review_result")
@@ -1691,16 +1691,21 @@ $codex_instructions
 # ==================== 评分相关 ====================
 
 # 检测审核输出中的 sentinel 标记
-# 返回: "pass" 表示检测到 <AUTORESEARCH_PASS/>
-#       "fail" 表示检测到 <AUTORESEARCH_FAIL/>
+# 三重保护：1) 独特格式 AUTORESEARCH_RESULT:PASS/FAIL 不会巧合出现在普通文本中
+#           2) 只检测最后 5 个非空行（trim 后整行精确匹配）
+#           3) grep -x 要求整行完全等于 sentinel
+# 返回: "pass" 表示检测到 AUTORESEARCH_RESULT:PASS
+#       "fail" 表示检测到 AUTORESEARCH_RESULT:FAIL
 #       "none" 表示未检测到 sentinel
 check_sentinel() {
     local review_result="$1"
-    if echo "$review_result" | grep -qF '<AUTORESEARCH_PASS/>'; then
+    local last_lines
+    last_lines=$(printf '%s' "$review_result" | grep -vE '^\s*$' | tail -5 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if printf '%s' "$last_lines" | grep -qxF 'AUTORESEARCH_RESULT:PASS'; then
         echo "pass"
         return
     fi
-    if echo "$review_result" | grep -qF '<AUTORESEARCH_FAIL/>'; then
+    if printf '%s' "$last_lines" | grep -qxF 'AUTORESEARCH_RESULT:FAIL'; then
         echo "fail"
         return
     fi
