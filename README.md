@@ -169,36 +169,48 @@ Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 P
 
 | 维度 | **autoresearch** | **ralph** |
 |------|-----------------|-----------|
-| **核心理念** | GitHub Issue → 多 Agent 轮转审核 → PR/合并/关闭 | PRD → 单 Agent 迭代实现 → 完成 |
+| **核心理念** | GitHub Issue → 规划拆子任务 → 多 Agent 轮转审核 → PR/合并/关闭 | PRD → 单 Agent 迭代实现用户故事 → 完成 |
 | **输入** | GitHub Issue 编号 | PRD（`prd.json`，结构化用户故事） |
+| **任务分解** | 规划阶段自动拆 `tasks.json`（含优先级、验收条件、类型标记），失败回退一次性实现 | PRD 预拆分为多个用户故事，每迭代完成一个 |
 | **Agent 模型** | 多 Agent 轮转（Claude/Codex/OpenCode），迭代间换人审核 | 单 Agent 反复启动新实例（Amp 或 Claude Code），每次干净上下文 |
-| **质量门禁** | LLM 评分 ≥ 85/100，6 种正则提取分数 | 类型检查 + Lint + 测试，必须全部通过才更新状态 |
-| **审核机制** | Agent 自审自修（同一迭代内审核和修复是同一 Agent） | 无独立审核，靠自动化测试和 lint 守关 |
-| **状态持久化** | 日志文件（`workflows/issue-N/`）、`.last_score` | `prd.json`（故事完成状态）+ `progress.txt`（经验日志）+ `AGENTS.md`（目录级知识）+ Git 历史 |
-| **记忆模型** | 无跨迭代记忆，仅传递上一轮 review 反馈 | 四通道持久化：Git / `progress.txt` / `prd.json` / `AGENTS.md` |
+| **硬门禁** | Build → Lint → Test 三重自动化检查，不过则反馈给 Agent 修复 | 类型检查 + Lint + 测试，必须全部通过才更新状态 |
+| **软门禁** | LLM 多维度评分 ≥ 85/100（正确性 35% / 测试 25% / 代码质量 20% / 安全 10% / 性能 10%） | 无 LLM 评分，完全依赖自动化工具链 |
+| **审核机制** | 不同 Agent 交叉审核 + 修复（Agent 轮转公式），兼顾 LLM 评分和工具检查 | 无独立审核，靠自动化测试和 lint 守关 |
+| **记忆模型** | `progress.md` 跨迭代经验积累 + `tasks.json` 任务状态 + 日志文件 | `progress.txt`（经验日志）+ `prd.json`（故事状态）+ `AGENTS.md`（目录级知识）+ Git 历史 |
+| **上下文溢出** | 自动检测 → 保存进度到 `progress.md` → 交接给下一 Agent（最多 3 次） | 右尺寸故事策略预防溢出；Amp 用户实验性 `autoHandoff`（90% 上下文容量时触发） |
+| **UI 验证** | 浏览器截图 + LLM 视觉验证（Playwright/Chrome DevTools MCP，最多 3 次重试） | `dev-browser` skill 浏览器验证，作为质量门禁一部分 |
 | **PR/合并** | 自动创建 PR → 合并 → 评论 Issue → 关闭 Issue | 完成后发 `COMPLETE` 信号，未内置 PR 创建 |
-| **任务粒度** | 一个 Issue 一次性实现 | PRD 拆分为多个用户故事，每迭代完成一个 |
-| **配置** | 两层覆盖：默认 `program.md` + 项目级 `.autoresearch/` | `prompt.md`(Amp) / `CLAUDE.md`(Claude Code) 指导行为 |
-| **实现语言** | 单个 Bash 脚本 `run.sh` | 单个 Bash 脚本 `ralph.sh` |
-| **重试/容错** | 指数退避重试（5 次）+ 连续失败硬停止 + Continue 模式 | 质量检查不过则不更新状态，下次重试同一故事 |
+| **归档机制** | 自动检测并归档旧 workflow 到 `archive/YYYY-MM-DD-issue-N/`，支持后缀去重 | 检测 `prd.json` 分支名变更时自动归档旧文件到日期目录 |
+| **Continue 模式** | `-c` 从中断处恢复（迭代数、分数、连续失败数、子任务状态全部恢复） | 无内置继续模式，需手动重启 |
+| **配置体系** | 两层覆盖：默认 `program.md` + 项目级 `.autoresearch/`；支持 `-a` 指定 Agent 顺序 | `prompt.md`(Amp) / `CLAUDE.md`(Claude Code) 指导行为 |
+| **插件系统** | 无 | Skills 系统（`/prd` 生成 PRD、`/ralph` 转换 JSON），支持本地/全局/市场安装 |
+| **实现语言** | Bash 脚本 `run.sh` + `lib/agent_logic.sh` | 单个 Bash 脚本 `ralph.sh` + React 流程图可视化 |
+| **重试/容错** | 指数退避重试（5 次）+ 连续失败硬停止（3 次）+ 上下文溢出自动交接 + Continue 模式 | 质量检查不过则不更新状态，下次重试同一故事 |
 | **沙箱/安全** | `--dangerously-skip-permissions` / `--full-auto`，无沙箱 | 同样无沙箱，全权委托 |
 
 #### 各自优势
 
 **autoresearch 优势：**
-- 多 Agent 轮转提供了一定程度的交叉审核（虽然同一迭代内仍是自审）
-- GitHub 原生集成完整：Issue → PR → 合并 → 关闭，端到端自动化
-- 分数制质量门禁比单纯测试通过更严格（但也更脆弱）
+- **双轨质量门禁**：硬门禁（Build/Lint/Test）+ 软门禁（LLM 多维度评分），比单一策略覆盖面更广
+- **多 Agent 交叉审核**：不同 Agent 轮转审核，提供真正的"第二双眼睛"视角
+- **GitHub 端到端自动化**：Issue → 规划 → 实现 → 审核 → PR → 合并 → 关闭，全自动闭环
+- **上下文溢出自动交接**：检测到溢出立即保存进度并交接给下一 Agent，不丢失工作成果
+- **Continue 模式**：中断后可恢复全部状态继续执行
+- **UI 验证**：浏览器截图 + LLM 视觉校验，前端任务质量更有保障
+- **灵活 Agent 编排**：`-a` 参数自由选择启用哪些 Agent 及顺序
 
 **ralph 优势：**
-- PRD 驱动拆分任务，粒度更细，失败范围更小
-- 四通道记忆模型让每次迭代都能积累经验，避免重复踩坑
-- 质量门禁基于确定性工具（测试/lint），不依赖 LLM 输出解析
-- `AGENTS.md` 实现了目录级知识积累，类似自进化能力
+- **PRD 驱动**：从产品需求文档出发，语义更丰富，适合从零开始的功能开发
+- **四通道记忆**：`progress.txt` + `AGENTS.md` + `prd.json` + Git 形成完整知识体系，`AGENTS.md` 的目录级知识积累实现自进化
+- **确定性质量门禁**：完全基于工具链，不依赖 LLM 输出解析，更稳定可预测
+- **Skills 插件系统**：`/prd` 和 `/ralph` 技能辅助 PRD 生成与转换，可扩展
+- **流程序可视化**：内置 React 交互式流程图，直观理解工作流
+- **故事右尺寸设计**：从源头控制任务粒度，减少上下文溢出风险
 
 #### 关键差异总结
 
-1. **质量门禁哲学不同**：autoresearch 信任 LLM 判断（评分制），ralph 信任工具链（测试/lint 制）。前者更灵活但脆弱（正则提取分数可能失败），后者更可靠但覆盖面窄（测试无法覆盖所有质量问题）。
-2. **记忆 vs 无记忆**：ralph 的 `progress.txt` + `AGENTS.md` 让 Agent 在后续迭代中避免重复错误；autoresearch 仅传递上一轮反馈，历史经验丢失。
-3. **任务分解**：ralph 先拆 PRD 再逐个实现，更可控；autoresearch 一次性实现整个 Issue，复杂需求容易失控。
-4. **端到端程度**：autoresearch 真正做到了 Issue → 合并的全自动；ralph 止步于代码完成，需人工创建 PR。
+1. **驱动方式**：autoresearch 由 GitHub Issue 驱动，新项目建好 Issue 即可从零开发，现有项目则用于迭代；ralph 由 PRD 驱动，从产品需求文档出发规划功能。
+2. **质量门禁哲学**：autoresearch 采用硬门禁（工具链）+ 软门禁（LLM 评分）双轨制，既保证确定性又兼顾灵活性；ralph 纯粹依赖工具链，更稳健但覆盖面窄。
+3. **Agent 协作**：autoresearch 多 Agent 轮转交叉审核，ralph 单 Agent 反复迭代——前者获得不同视角，后者上下文更一致。
+4. **端到端程度**：autoresearch 真正做到 Issue → 合并的全自动闭环（含 Continue 恢复）；ralph 止步于代码完成，需人工创建 PR。
+5. **知识积累**：ralph 的 `AGENTS.md` 目录级知识系统更成熟；autoresearch 的 `progress.md` 提供跨迭代经验传递但粒度较粗。
