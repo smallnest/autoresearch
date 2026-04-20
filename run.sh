@@ -3155,7 +3155,7 @@ EOF
 
         # 添加评论到 Issue（仅包含总结信息）
         log "添加评论到 Issue #$ISSUE_NUMBER..."
-        local log_summary=""
+        log_summary=""
         if [ -f "$WORK_DIR/log.md" ]; then
             log_summary=$(cat "$WORK_DIR/log.md")
         fi
