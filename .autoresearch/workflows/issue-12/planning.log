@@ -1,0 +1,94 @@
+现在我对代码库有了全面的了解。让我来分析 Issue #12，并将其分解为子任务。
+
+Issue 要求实现 UI 问题的浏览器验证。主要挑战包括：
+
+1.  **在规划阶段检测 UI 类型任务** - 为子任务添加 `"type": "ui"` 支持
+2.  **浏览器验证流程** - 启动开发服务器、截图、LLM 判断
+3.  **集成到迭代循环中** - 质量门检查 + UI 验证步骤
+4.  **代理提示更新** - 添加 UI 验证指令
+
+由于这是一个 shell 脚本项目（`run.sh`），单元测试不适用——集成测试是唯一可行的方式。变更范围集中在 `run.sh` 和代理提示文件中。
+
+以下是我的子任务分解：
+
+```json
+{
+  "issueNumber": 12,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "扩展 tasks.json schema 支持 UI 类型标注和 UI 验证配置",
+      "description": "在规划阶段识别 UI 类任务并标注 type:ui。具体改动：\n1. 在 run_planning_phase() 的规划 prompt 中增加 UI 类型识别指引，要求 Agent 分析 Issue 内容，对涉及 UI 变更的子任务标注 \"type\": \"ui\"\n2. 在 tasks.json schema 中支持可选的 type 字段（\"ui\" 或默认 \"code\"）\n3. 新增辅助函数 is_ui_subtask() 检测当前子任务是否为 UI 类型\n4. 新增辅助函数 get_ui_subtasks_count() 统计 UI 子任务数量\n5. 在 get_subtask_section() 中注入 type 信息\n6. 在 get_subtask_review_section() 中注入 UI 验证标准（当子任务为 UI 类型时）\n7. 确保 jq 解析兼容新字段（向后兼容，无 type 字段时默认为 code）",
+      "acceptanceCriteria": [
+        "规划 prompt 中包含 UI 类型识别指引",
+        "tasks.json 支持 \"type\": \"ui\" 可选字段，无 type 时默认 code",
+        "is_ui_subtask() 函数正确检测当前子任务是否为 UI 类型",
+        "get_subtask_section() 在子任务为 UI 类型时注入额外提示",
+        "get_subtask_review_section() 在 UI 子任务时注入 UI 验证标准",
+        "向后兼容：旧格式 tasks.json（无 type 字段）正常工作",
+        "bash -n run.sh 语法检查通过",
+        "shellcheck run.sh 无新增错误"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现浏览器截图验证核心流程（dev server 检测、截图、LLM 判断）",
+      "description": "新增 run.sh 中的 UI 验证核心函数和流程。具体改动：\n1. 新增 run_ui_verification() 函数，流程如下：\n   a. 调用 detect_dev_server_command() 获取 dev server 启动命令\n   b. 后台启动 dev server，等待就绪（检测端口监听）\n   c. 调用 capture_screenshot() 截图（使用 MCP chrome-devtools 或 playwright CLI）\n   d. 调用 verify_ui_with_llm() 将截图发送给 LLM（Claude）判断 UI 是否正确渲染\n   e. 清理 dev server 进程\n   f. 返回验证结果（pass/fail + 反馈文本）\n2. 新增 detect_dev_server_command() 从项目的 package.json / Makefile 等推断 dev server 启动命令\n3. 新增 wait_for_dev_server() 等待 dev server 就绪（最多 60 秒，检测 HTTP 端口）\n4. 新增 capture_screenshot() 使用可用工具截图保存到 $WORK_DIR/ui-screenshot.png\n5. 新增 verify_ui_with_llm() 构造 prompt 让 Claude 判断截图是否符合预期\n6. UI 验证判断标准：页面无空白/崩溃、关键元素可见、交互元素可点击、无 console 错误\n7. 新增配置变量：UI_VERIFY_ENABLED（默认开启）、UI_VERIFY_TIMEOUT（默认 60 秒）、UI_DEV_PORT（默认 3000 或自动检测）",
+      "acceptanceCriteria": [
+        "run_ui_verification() 函数实现完整的 dev server → 截图 → LLM 判断流程",
+        "detect_dev_server_command() 能从项目配置推断 dev server 启动命令",
+        "wait_for_dev_server() 能等待 dev server 就绪并设置超时",
+        "capture_screenshot() 能保存截图到 $WORK_DIR/",
+        "verify_ui_with_llm() 构造合适的 prompt 让 LLM 判断 UI 质量",
+        "dev server 进程在验证结束后正确清理（包括异常情况）",
+        "UI 验证判断标准包含：无空白/崩溃、关键元素可见、交互元素可点击、无 console 错误",
+        "配置变量（UI_VERIFY_ENABLED, UI_VERIFY_TIMEOUT 等）定义完整",
+        "bash -n run.sh 语法检查通过",
+        "shellcheck run.sh 无新增错误"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "将 UI 验证步骤集成到主迭代循环和 Agent prompt 中",
+      "description": "在 run.sh 的主迭代循环中集成 UI 验证，并更新 Agent prompt 模板。具体改动：\n1. 在 run_review_and_fix() 中，当子任务通过审核（score >= PASSING_SCORE）且为 UI 类型时：\n   a. 调用 run_ui_verification() 执行浏览器验证\n   b. 验证通过 → 正常标记子任务 passed\n   c. 验证不通过 → 将 UI 验证反馈设置为下一次迭代的 review feedback，不标记 passed\n   d. 记录 UI 验证结果到日志\n2. UI 验证失败不计入 CONSECUTIVE_ITERATION_FAILURES（与 hard gate 失败同等待遇）\n3. 更新 run_claude() / run_codex() / run_opencode() 的 prompt 模板：\n   a. 在实现 prompt 中增加 UI 验证说明（当子任务为 UI 类型时提示 Agent 需考虑浏览器验证）\n   b. 在 review prompt 中增加 UI 验证维度提示\n4. 更新 agents/claude.md、agents/codex.md、agents/opencode.md 增加 UI 验证相关指引\n5. 在 log.md 中记录 UI 验证结果\n6. 在最终 PR 描述中包含 UI 验证结果摘要（如有）",
+      "acceptanceCriteria": [
+        "主迭代循环中 UI 子任务通过审核后自动触发 UI 验证",
+        "UI 验证通过 → 子任务正常标记 passed",
+        "UI 验证不通过 → 反馈传递给下一迭代，不标记 passed",
+        "UI 验证失败不计入 CONSECUTIVE_ITERATION_FAILURES",
+        "Agent 实现 prompt 中包含 UI 验证说明（仅 UI 类型子任务）",
+        "Agent review prompt 中包含 UI 验证维度",
+        "agents/*.md 增加 UI 验证相关指引",
+        "log.md 记录 UI 验证结果",
+        "非 UI 类子任务不受影响（向后兼容）",
+        "bash -n run.sh 语法检查通过",
+        "shellcheck run.sh 无新增错误"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "依赖检测、错误处理和配置文档完善",
+      "description": "完善 UI 验证功能的依赖检测、错误处理和文档。具体改动：\n1. 在 check_dependencies() 中增加浏览器工具依赖检测：\n   a. 检测 playwright CLI 或 chrome-devtools MCP 是否可用\n   b. 如果不可用，输出警告但不阻止运行（仅禁用 UI 验证）\n2. 错误处理完善：\n   a. dev server 启动失败时的处理（超时、端口占用等）\n   b. 截图工具不可用时的降级处理（跳过 UI 验证，记录警告）\n   c. LLM 判断 API 失败时的重试逻辑\n   d. 所有错误情况记录到日志，不影响主流程\n3. 在 run.sh 顶部注释中增加 UI 验证相关环境变量说明：\n   - UI_VERIFY_ENABLED: 是否启用 UI 验证（默认 yes）\n   - UI_VERIFY_TIMEOUT: dev server 等待超时秒数（默认 60）\n   - UI_DEV_PORT: dev server 端口（默认自动检测或 3000）\n4. 更新 CLAUDE.md 项目说明，补充 UI 验证机制说明",
+      "acceptanceCriteria": [
+        "check_dependencies() 检测浏览器工具依赖，不可用时输出警告",
+        "浏览器工具不可用时自动禁用 UI 验证，不阻塞主流程",
+        "dev server 启动失败有明确的错误处理和日志",
+        "截图工具不可用时有降级处理",
+        "所有错误情况记录到日志文件",
+        "run.sh 顶部注释包含 UI 验证相关环境变量说明",
+        "CLAUDE.md 更新包含 UI 验证机制说明",
+        "bash -n run.sh 语法检查通过",
+        "shellcheck run.sh 无新增错误"
+      ],
+      "priority": 4,
+      "passes": false
+    }
+  ]
+}
+```

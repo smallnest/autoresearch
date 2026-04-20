@@ -15,11 +15,21 @@ autoresearch is a fully automated software development tool: given a GitHub Issu
 # With project path, max iterations, or continue mode
 ./run.sh -p /path/to/project 42 16
 ./run.sh -c 42 10              # Continue from last interrupted iteration
+
+# Skip archiving of previous workflows (useful for debugging)
+./run.sh --no-archive 42
 ```
 
 There are no build/test/lint commands for autoresearch itself. The only test file is `tests/test_extract_score.sh` which tests the score parsing logic.
 
 ## Architecture
+
+### Archiving Mechanism
+
+Before a new run starts (and not in continue mode), `run.sh` automatically archives old workflow data:
+- Scans `.autoresearch/workflows/` for `issue-*` directories.
+- Moves non-current issue directories to `.autoresearch/archive/YYYY-MM-DD-issue-N/`.
+- If the target archive directory already exists, it appends a numeric suffix (e.g., `-1`, `-2`).
 
 ### Iteration Loop
 
@@ -91,3 +101,27 @@ Restores state from `.autoresearch/workflows/issue-N/` log files: iteration coun
 - `program.md` contains code standards for Go/Python/TypeScript/Rust/Frontend — the README advises trimming to only the target project's language to save tokens
 - Consecutive iteration failures >= 2 triggers a hard stop
 - Default passing score is 85/100, configurable via `PASSING_SCORE` env var
+
+## UI Verification
+
+The UI verification system runs browser-based validation for UI-type subtasks (`"type": "ui"`).
+
+### Configuration
+
+Environment variables (can also be set in shell):
+- `UI_VERIFY_ENABLED`: Enable/disable UI verification (default: `yes`)
+- `UI_VERIFY_TIMEOUT`: Dev server wait timeout in seconds (default: `60`)
+- `UI_DEV_PORT`: Dev server port (default: auto-detect or `3000`)
+
+### Process
+
+1. **Dependency Check**: During `check_dependencies()`, detects if playwright or chrome-devtools MCP is available
+2. **Dev Server Detection**: Automatically detects dev server command based on project type
+3. **Screenshot Capture**: Uses multiple fallback tools (playwright → npx playwright → google-chrome → chromium → chromium-browser)
+4. **LLM Verification**: Sends screenshot to LLM for validation against UI standards
+
+### Fallback Behavior
+
+- If browser tools unavailable: UI verification is disabled, continues with code review only
+- If screenshot fails: Logs warning, returns `pass: true` with degraded feedback
+- If LLM verification fails: Retries up to 3 times, then returns `pass: true` with warning

@@ -1,0 +1,103 @@
+所有 159 个测试都通过了。现在，我将系统地根据每个验收标准来审查实现。
+
+## 审核报告
+
+### Issue
+- 编号: #10
+- 标题: feat: 完成信号 (COMPLETE sentinel)
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+T-001 子任务的实现干净、一致且正确。`check_sentinel()` 函数结构良好，所有三个 review 函数都已正确修改，测试覆盖了关键场景。不存在严重问题。
+
+---
+
+### 验收标准逐条检查
+
+**1. `check_sentinel()` 函数能正确检测 `<AUTORESEARCH_PASS/>` 和 `<AUTORESEARCH_FAIL/>`**
+
+通过。`run.sh:1697-1708` — 函数使用 `grep -qF` 进行固定字符串匹配，避免正则误判。PASS 优先于 FAIL 检测（先检查 PASS）。测试文件 `tests/test_extract_score.sh:96-107` 中的定义与 `run.sh` 完全一致。
+
+**2. 三个 review 函数中 sentinel 检测优先于 `extract_score()`**
+
+通过。三个函数均采用相同模式：
+- `run_opencode_review()` — `run.sh:1472-1487`
+- `run_claude_review()` — `run.sh:1583-1598`
+- `run_codex_review()` — `run.sh:1665-1680`
+
+每个函数都先调用 `check_sentinel()`，只有返回 "none" 时才走 `extract_score()` 逻辑。
+
+**3. sentinel 检测到时日志中记录 sentinel 通道信息**
+
+通过。三个 review 函数均使用 `log "Sentinel 通道: 检测到 <AUTORESEARCH_PASS/>, 直接判定通过"` 和 `log "Sentinel 通道: 检测到 <AUTORESEARCH_FAIL/>, 直接判定不通过"`。
+
+**4. 未检测到 sentinel 时走原有 `extract_score` 逻辑，行为不变**
+
+通过。`else` 分支与原有逻辑完全一致。
+
+**5. `test_extract_score.sh` 新增 `check_sentinel` 的单元测试且全部通过**
+
+通过。159/159 测试全部通过。`check_sentinel` 测试覆盖了：
+- PASS sentinel 在末尾、中间、单独出现
+- FAIL sentinel 在末尾、中间、单独出现
+- 无 sentinel（正常文本、空字符串）
+- 边界情况：部分匹配、大小写错误、多余空格
+- PASS 优先于 FAIL
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: `check_sentinel` 函数在两处定义，存在同步风险
+
+**位置**: `run.sh:1697-1708` 和 `tests/test_extract_score.sh:96-107`
+
+**问题描述**:
+`check_sentinel()` 在 `run.sh` 和测试文件中各有一份副本。虽然当前代码完全一致，但未来修改时可能只更新一处导致不一致。不过这个模式在项目中已存在（`extract_score` 等函数都是如此），属于既有架构决策。
+
+**建议修复**: 长期可考虑将纯函数提取到 `lib/` 目录共享。当前不阻塞，因为项目已统一采用此模式。
+
+---
+
+### 建议改进 (可选)
+
+- **日志一致性**：`run_opencode_review` 中的变量名 `sentinel` 和条件判断模式与其它两个完全一致，代码质量好。
+- **测试中的 `echo -e` 行为**：测试使用 `"Review output\n\n<AUTORESEARCH_PASS/>"` 传入字符串，但 `echo "$review_result"` 在某些 `shell` 中不会解释 `\n`。不过 `check_sentinel` 使用 `grep -qF` 对整个多行字符串做全文匹配，只要 `sentinel` 标记存在就会命中，所以测试在 `bash` 环境下行为正确。
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 95 | 功能完全符合需求，边界处理完善 |
+| 测试质量 (25%) | 90 | 覆盖了主要场景和边界，测试全部通过 |
+| 代码质量 (20%) | 85 | 代码清晰，与项目风格一致，三处修改保持统一 |
+| 安全性 (10%) | 100 | 使用 `grep -qF` 固定字符串匹配，无注入风险 |
+| 性能 (10%) | 95 | `grep -qF` 高效，sentinel 检测提前短路避免不必要的分数提取 |
+
+**总分 = 95×0.35 + 90×0.25 + 85×0.20 + 100×0.10 + 95×0.10 = 33.25 + 22.5 + 17 + 10 + 9.5 = 92.25 → 92**
+
+（修正：更准确评估后）实际代码中三个 review 函数有重复代码块（sentinel 检测逻辑完全相同），扣减后：
+
+**评分: 88/100**
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入下一子任务
+
+**下一步行动**:
+T-001 实现达标，可以标记为通过并继续 T-002（agents/*.md 增加 sentinel 输出格式要求）。
+
+## Learnings
+
+- **模式**: `grep -qF` 固定字符串匹配是检测 sentinel 标记的最佳方式，避免正则特殊字符误判，且性能最优
+- **经验**: Bash 中三个 review 函数结构高度相似，sentinel 检测逻辑在每个函数中完整重复。虽然可以提取为公共函数，但保持与原有风格一致（extract_score 等也是内联的）是合理的
+- **踩坑**: sentinel 格式 `<AUTORESEARCH_PASS/>` 自闭合 XML 风格是刻意选择，避免与 HTML/XML 标签混淆。测试中专门验证了大小写、空格等变体不会误判

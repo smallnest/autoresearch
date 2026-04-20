@@ -165,21 +165,155 @@
 
 ## 质量检查点
 
-### 提交前检查
+> **借鉴 [ralph](https://github.com/snarktank/ralph) 的质量自检设计：ALL commits must pass quality checks. Do NOT commit broken code.**
 
-Agent 在每次提交前必须确保代码编译通过且测试通过。
-
-### 质量标准
+### 硬性规则
 
 ```
-必须满足:
-- [ ] 所有测试通过
-- [ ] 无编译错误
-- [ ] 无 lint 错误
+⚠️ MUST: Agent 在认为实现完成之前，MUST 运行项目的 typecheck/lint/test，全部通过后才能提交审核。
+⚠️ MUST: 如果检查不通过，MUST 先修复再提交。不得带着已知错误提交审核。
+⚠️ MUST: 每次提交前必须逐项确认自检 checklist。
+```
 
-建议满足:
+### 提交前自检 Checklist
+
+在标记实现完成或提交审核之前，Agent MUST 逐项确认以下清单：
+
+```
+MUST 级别（全部通过才能提交）:
+- [ ] ✅ 代码可以编译/类型检查通过
+- [ ] ✅ Lint 无新增错误
+- [ ] ✅ 相关测试通过
+
+SHOULD 级别（尽力满足，未满足时在报告中说明原因）:
+- [ ] 新代码有对应的测试覆盖
 - [ ] 测试覆盖率 ≥ 80%
 - [ ] 所有公共 API 有文档注释
+```
+
+### 自检失败处理流程
+
+```
+自检失败时 MUST 遵循以下流程：
+
+1. 运行检查 → 发现失败
+2. 分析失败原因
+3. 修复问题
+4. 重新运行检查（回到步骤 1）
+5. 全部通过 → 提交审核
+
+禁止行为:
+✗ 跳过自检直接提交
+✗ 带着已知编译错误提交
+✗ 带着已知测试失败提交
+✗ 注释掉失败的测试来"通过"自检
+✗ 标记 TODO/FIXME 推迟已知问题而不在报告中说明
+```
+
+### 各语言自检命令参考
+
+Agent 应根据项目语言运行对应的检查命令。如果项目已有 Makefile 或 scripts 中的检查命令，优先使用项目自带的。
+
+#### Go
+
+```bash
+# 编译检查
+go build ./...
+
+# 类型检查（比 go build 更严格）
+go vet ./...
+
+# Lint
+golangci-lint run ./...   # 推荐工具
+# 或
+go vet ./...
+
+# 测试
+go test ./...
+
+# 测试覆盖率
+go test -cover ./...
+```
+
+#### Python
+
+```bash
+# 类型检查
+mypy .                    # 或 mypy src/
+pyright .                 # 替代方案
+
+# Lint
+ruff check .              # 推荐
+# 或
+flake8 .
+pylint src/
+
+# 测试
+pytest
+pytest --cov              # 带覆盖率
+
+# 格式检查
+black --check .
+```
+
+#### TypeScript/JavaScript
+
+```bash
+# 类型检查
+npx tsc --noEmit          # TypeScript 项目
+# 或查看 package.json 中的 typecheck script
+
+# Lint
+npx eslint .
+npx prettier --check .
+
+# 测试
+npm test                  # 或 pnpm test / yarn test
+npx vitest run            # 或 npx jest
+
+# 构建（验证编译）
+npm run build             # 验证产物能正确生成
+```
+
+#### Rust
+
+```bash
+# 编译检查
+cargo build
+cargo check               # 更快的编译检查
+
+# Lint
+cargo clippy              # MUST 通过 clippy 检查
+cargo fmt --check         # 格式检查
+
+# 测试
+cargo test
+
+# 完整检查（CI 级别）
+cargo clippy -- -D warnings && cargo test
+```
+
+#### Shell 脚本
+
+```bash
+# 语法检查
+bash -n script.sh         # 语法检查
+shellcheck script.sh       # Lint
+
+# 无标准测试框架，确认脚本可执行且 exit code 为 0
+```
+
+#### 项目自带命令优先
+
+```bash
+# 检查项目是否有标准化的检查命令
+cat Makefile              # make lint, make test, make check
+cat package.json          # npm scripts
+cat Cargo.toml            # cargo commands
+cat tox.ini / pyproject.toml  # Python 项目配置
+
+# 如果项目有 CI 配置，参考 CI 中运行的检查命令
+cat .github/workflows/*.yml
 ```
 
 ---
@@ -240,7 +374,10 @@ Agent 在每次提交前必须确保代码编译通过且测试通过。
 1. [步骤] → 验证: [检查方式]
 2. [步骤] → 验证: [检查方式]
 3. [步骤] → 验证: [检查方式]
+4. 最终验证: 运行完整自检 checklist（编译/lint/测试全部通过）
 ```
+
+**关键要求**：最后一步 MUST 是运行完整的自检 checklist。只有自检全部通过，才算实现完成。
 
 强的成功标准让你能独立循环。弱的标准（"让它能跑"）需要不断澄清。
 

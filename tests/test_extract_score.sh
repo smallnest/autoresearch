@@ -93,6 +93,21 @@ extract_score() {
     echo "0"
 }
 
+check_sentinel() {
+    local review_result="$1"
+    local last_lines
+    last_lines=$(printf '%s' "$review_result" | grep -vE '^\s*$' | tail -5 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if printf '%s' "$last_lines" | grep -qxF 'AUTORESEARCH_RESULT:PASS'; then
+        echo "pass"
+        return
+    fi
+    if printf '%s' "$last_lines" | grep -qxF 'AUTORESEARCH_RESULT:FAIL'; then
+        echo "fail"
+        return
+    fi
+    echo "none"
+}
+
 has_fatal_error() {
     local log_file="$1"
     local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
@@ -641,6 +656,48 @@ assert_false "normal output" "has_api_failure $(make_log 'api_ok1.log' 'Implemen
 assert_false "status discussion" "has_api_failure $(make_log 'api_ok2.log' 'Check the HTTP status codes for error handling')"
 assert_false "empty file" "has_api_failure $(make_log 'api_ok3.log' '')"
 assert_false "nonexistent file" "has_api_failure /tmp/nonexistent_file_$$_test2.log"
+
+# ==================== Tests: check_sentinel() ====================
+
+echo ""
+echo "=== check_sentinel() Tests ==="
+echo ""
+
+echo "--- PASS sentinel detection ---"
+
+assert_eq "PASS sentinel at end" "pass" "$(check_sentinel "$(printf "Review output\n\nAUTORESEARCH_RESULT:PASS")")"
+assert_eq "PASS sentinel in middle ignored" "none" "$(check_sentinel "$(printf "Some review\nAUTORESEARCH_RESULT:PASS\nLine 3\nLine 4\nLine 5\nLine 6\nMore text")")"
+assert_eq "PASS sentinel only" "pass" "$(check_sentinel "AUTORESEARCH_RESULT:PASS")"
+
+echo "--- FAIL sentinel detection ---"
+
+assert_eq "FAIL sentinel at end" "fail" "$(check_sentinel "$(printf "Review output\n\nAUTORESEARCH_RESULT:FAIL")")"
+assert_eq "FAIL sentinel in middle ignored" "none" "$(check_sentinel "$(printf "Some review\nAUTORESEARCH_RESULT:FAIL\nLine 3\nLine 4\nLine 5\nLine 6\nMore text")")"
+assert_eq "FAIL sentinel only" "fail" "$(check_sentinel "AUTORESEARCH_RESULT:FAIL")"
+
+echo "--- No sentinel ---"
+
+assert_eq "no sentinel returns none" "none" "$(check_sentinel "Just a normal review output")"
+assert_eq "empty string returns none" "none" "$(check_sentinel "")"
+assert_eq "partial sentinel returns none" "none" "$(check_sentinel "AUTORESEARCH_RESULT:pas")"
+assert_eq "wrong case returns none" "none" "$(check_sentinel "autoresearch_result:pass")"
+assert_eq "extra space returns none" "none" "$(check_sentinel "AUTORESEARCH_RESULT: PASS")"
+assert_eq "old format not detected" "none" "$(check_sentinel "$(printf "Review output\n\n<AUTORESEARCH_PASS/>")")"
+
+echo "--- PASS takes priority over FAIL ---"
+
+assert_eq "PASS before FAIL returns pass" "pass" "$(check_sentinel "$(printf "AUTORESEARCH_RESULT:PASS\nAUTORESEARCH_RESULT:FAIL")")"
+
+echo "--- False positive prevention (issue #10 regression) ---"
+
+assert_eq "sentinel in quoted text not detected" "none" "$(check_sentinel "$(printf "审核报告\n\n请使用 AUTORESEARCH_RESULT:PASS 标记\n\n审核结论：不通过")")"
+assert_eq "sentinel in code block not detected" "none" "$(check_sentinel "$(printf "代码示例：\n\`\`\`bash\necho hello\nAUTORESEARCH_RESULT:PASS\nexit 0\n\`\`\`\n审核结论：不通过\n审核人: codex\n日期: 2024-01-15")")"
+assert_eq "sentinel in description within last 5 lines not detected" "none" "$(check_sentinel "$(printf "审核结论：不通过\n说明：使用 AUTORESEARCH_RESULT:PASS 表示通过")")"
+assert_eq "real PASS at very end detected" "pass" "$(check_sentinel "$(printf "审核报告\n评分 88/100\n通过\n\nAUTORESEARCH_RESULT:PASS")")"
+assert_eq "trailing whitespace on sentinel still detected" "pass" "$(check_sentinel "$(printf "审核报告\n   AUTORESEARCH_RESULT:PASS   \n")")"
+assert_eq "PASS within line text not detected" "none" "$(check_sentinel "The marker AUTORESEARCH_RESULT:PASS should be on its own line")"
+assert_eq "PASS within line text not detected" "none" "$(check_sentinel "The marker AUTORESEARCH_RESULT:PASS should be on its own line")"
+assert_eq "PASS within line text not detected" "none" "$(check_sentinel "The marker AUTORESEARCH_RESULT:PASS should be on its own line")"
 
 # ==================== Tests: check_score_passed() ====================
 
