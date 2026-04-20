@@ -81,7 +81,132 @@ which opencode          # OpenCode CLI, https://opencode.ai/download
 
 项目需有对应语言的构建工具（Go/Node/Python/Rust/Java）。
 
-## 工作流程
+## 推荐工作流：从 PRD 到自动实现
+
+本节介绍一个完整的端到端工作流，从产品需求文档 (PRD) 开始，到自动创建 GitHub Issues，再到使用 autoresearch 逐一实现。
+
+### 步骤概览
+
+```
+PRD 生成 → Issue 拆分与创建 → 选择 Issue → autoresearch 实现 → 选择下一个 Issue → ...
+```
+
+### Step 1: 生成 PRD
+
+使用 `/prd` skill 生成交付需求文档：
+
+```
+/prd 为本项目创建一个桌面 app
+```
+
+Skill 会：
+1. 调研项目代码库，理解上下文
+2. 提出澄清问题（如：目标用户、技术栈偏好、核心功能）
+3. 生成结构化 PRD，保存到 `tasks/prd-[feature-name].md`
+
+PRD 包含：
+- **Introduction**: 项目背景、代码位置、技术栈
+- **Goals**: 核心目标列表
+- **User Stories**: 用户故事（US-001 ~ US-NNN），每个含验收标准
+- **Functional Requirements**: 功能需求编号（FR-1 ~ FR-N）
+- **Non-Goals**: 明确排除项
+- **Technical Considerations**: 架构、依赖、技术选型
+
+### Step 2: 拆分为 GitHub Issues
+
+基于 PRD 中的 User Stories 拆分为细粒度 Issue：
+
+**拆分原则**：
+- 每个 Issue 可在单次开发会话中完成
+- 有明确的验收标准（checkbox）
+- 标注依赖关系
+- Issue 标题加统一前缀（如 `[desktop-app]`）
+
+**Issue 结构**：
+```markdown
+## Description
+简要描述该 Issue 要完成的工作。
+
+## Acceptance Criteria
+- [ ] 具体可验证的验收标准
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser（涉及 UI 的 Issue）
+
+## Dependencies
+依赖的前置 Issue 编号
+
+## Technical Notes
+实现提示和技术选型建议
+```
+
+**创建 Issue**：
+```bash
+# 创建标签
+gh label create "desktop-app" --color "#0E8A16"
+
+# 批量创建 Issues
+gh issue create --title "[desktop-app] 项目脚手架搭建" \n  --body "$(cat issue-22.md)" \n  --label "desktop-app,enhancement"
+```
+
+### Step 3: 选择 Issue 并自动实现
+
+选择一个无依赖或依赖已完成的 Issue：
+
+```bash
+# 实现 Issue #22
+./run.sh 22
+
+# 或指定项目路径
+./run.sh -p /path/to/project 22
+```
+
+autoresearch 会：
+1. 规划阶段：拆分 subtasks（如需要）
+2. 迭代实现：首个 agent 实现 → 轮转审核 → 修复 → 评分
+3. 质量门禁：Build/Lint/Test + LLM 评分 ≥ 85
+4. 自动收尾：创建 PR → 合并 → 评论 Issue → 关闭 Issue
+
+### Step 4: 继续下一个 Issue
+
+上一个 Issue 完成后，选择下一个：
+
+```bash
+# 实现 Issue #23（依赖 #22，现已满足）
+./run.sh 23
+```
+
+重复直到所有 Issue 完成。
+
+### 完整示例：Desktop App
+
+以本项目的 Desktop App 为例，完整流程如下：
+
+| 阶段 | 操作 | 产出 |
+|------|------|------|
+| PRD 生成 | `/prd 为本项目创建一个桌面 app` | `tasks/prd-desktop-app.md` |
+| Issue 拆分 | 基于 10 个 User Stories 拆分 | 19 个 Issues (#22 ~ #40) |
+| 首个 Issue | `./run.sh 22` | 脚手架搭建完成，PR #42 合并 |
+| 后续 Issues | `./run.sh 23`, `./run.sh 24`, ... | 逐一实现各功能模块 |
+
+详细过程记录见 [docs/desktop-app-prd-to-issues.md](docs/desktop-app-prd-to-issues.md)。
+
+### 依赖关系图示例
+
+```
+#22 (脚手架)
+ ├── #23 (布局)
+ ├── #24 (目录选择) ── #26 (Issue 列表)
+ ├── #25 (Agent 选择器) ── #28 (进程管理)
+ └── #39 (系统托盘)
+```
+
+按依赖顺序实现：先 `#22`，再并行 `#23/#24/#25/#39`，最后 `#26/#28`。
+
+---
+
+## 单 Issue 工作流程
+
+单个 Issue 的内部处理流程：
 
 ```
 Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 PR -> 自动合并 -> 自动关闭 Issue
