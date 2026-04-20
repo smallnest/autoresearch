@@ -91,7 +91,11 @@ which opencode          # OpenCode CLI, https://opencode.ai/download
 PRD 生成 → Issue 拆分与创建 → 选择 Issue → autoresearch 实现 → 选择下一个 Issue → ...
 ```
 
+![](docs/workflow.png)
+
 ### Step 1: 生成 PRD
+
+> 首先在你的智能体(claudecode/codex/opencode/openclaw/hermes等)中安装技能`https://github.com/snarktank/ralph/tree/main/skills/prd`。
 
 使用 `/prd` skill 生成交付需求文档：
 
@@ -146,6 +150,16 @@ gh label create "desktop-app" --color "#0E8A16"
 
 # 批量创建 Issues
 gh issue create --title "[desktop-app] 项目脚手架搭建" \n  --body "$(cat issue-22.md)" \n  --label "desktop-app,enhancement"
+```
+
+实际上不必这么复杂，你可以简单的使用智能体去做这个事情，你只需告诉智能体下面的文字：
+```text
+基于 PRD 中的 User Stories 拆分为细粒度 Issue,并在github上创建这些issue。
+
+**拆分原则**：
+- 每个 Issue 可在单次开发会话中完成
+- 有明确的验收标准（checkbox）
+- 标注依赖关系
 ```
 
 ### Step 3: 选择 Issue 并自动实现
