@@ -1,0 +1,58 @@
+## 审核报告
+
+### Issue
+- 编号: #23
+- 标题: [desktop-app] App 壳布局与导航
+- 子任务: T-001 - 实现三栏 App Shell 布局与左侧导航栏
+- 迭代次数: 1
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+Issue #22 (项目脚手架) 已完成的所有 T-001 验收标准。该实现简洁、结构良好，并正确使用了 React Router、Tailwind CSS v4 和暗色主题样式。
+
+---
+
+### 验收标准检查清单
+
+| 标准 | 状态 | 说明 |
+|----------|--------|------|
+| 三栏布局（左侧 240px，中间 flex-1，右侧 300px 可折叠） | 通过 | `Sidebar` 使用 `w-60`（240px），`main` 使用 `flex-1`，`RightPanel` 使用 `w-[300px]`/`w-10` |
+| 导航包含 Dashboard、Issues、History、Settings 四个入口 | 通过 | 带有 `NavLink` 活跃状态高亮显示的四个 `NavLink` 条目 |
+| SVG 图标用于每个导航入口 | 通过 | 每个条目都有手写的 SVG 图标 |
+| `react-router-dom` 路由 | 通过 | `BrowserRouter`、嵌套路由与 `Outlet`、`NavLink` 实现活跃状态 |
+| 暗色主题样式 | 通过 | `bg-gray-900`/`bg-gray-800` 背景，`text-gray-100`/`text-gray-400` 文本 |
+| 窗口可缩放，布局自适应 | 通过 | `Flexbox` 与 `shrink-0` 在固定面板上，`flex-1` 在主区域上 |
+| 右侧面板折叠/展开按钮 | 通过 | 切换按钮带有 V 形图标，200ms 平滑过渡 |
+| Typecheck 通过 | 通过 | `tsc --noEmit` 无错误 |
+| Lint 通过 | 通过 | `eslint .` 无错误 |
+| 构建通过 | 通过 | `vite build` 成功生成 bundle |
+
+---
+
+### 代码质量亮点
+
+- **简洁组件模式**：每个组件都是一个独立的、单一职责的函数，带有默认导出
+- **内联 SVG 图标**：无额外依赖，图标整洁且一致
+- **平滑过渡**：`RightPanel` 使用 `transition-[width] duration-200` 实现平滑的折叠/展开动画
+- **无障碍性**：折叠切换具有 `aria-label`
+- **路由器集成**：`end` 属性正确用于根路由，以防止其匹配所有路径
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+---
+
+## Learnings
+
+- **模式**: Tailwind CSS v4 无需 `tailwind.config.js` - 它通过 `@tailwindcss/vite` 插件和 CSS `@import "tailwindcss"` 指令工作。像 `@apply` 这样的任意值和指令可以在 `index.css` 中使用。
+- **模式**: `react-router-dom` v7 嵌套路由使用 `<Route element={<Layout />}>` 模式和 `<Outlet />` 来渲染子路由。这通过将布局代码保留在一个包装器中，保持了页面组件的整洁。
+- **模式**: 布局中的 `shrink-0` 对于固定宽度面板（侧边栏、右侧面板）至关重要，可防止它们在窗口缩小时被 `flex` 容器压缩。
+- **模式**: 使用 `NavLink` 上的 `end` 属性用于根路径（`/`）可以防止它意外地与所有路由匹配。
+- **经验**: 当脚手架 Issue (`#22`) 已经搭建好结构时，后续的布局 Issue (`#23`) 可能只需要验证和少量改进，而不是从头开始编写代码。在实现前务必检查现有代码。

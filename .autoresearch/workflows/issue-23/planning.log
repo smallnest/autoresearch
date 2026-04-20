@@ -1,0 +1,57 @@
+我现在对项目有了清晰的了解。让我来分析一下这个 Issue 并规划子任务。
+
+**分析：**
+
+Issue #23 要求：
+1. 三栏布局（左侧导航栏 240px，中间内容 flex，右侧面板 300px 可折叠）
+2. 包含 Dashboard、Issues、History、Settings 的导航项
+3. 使用 react-router-dom 进行路由
+4. 暗色主题（已部分设置）
+5. 响应式窗口大小调整
+6. 类型检查/lint 通过
+7. 浏览器验证
+
+这相对比较简单 — 这是一个 shell/布局问题。最佳拆分方式为：
+
+- **T-001**：App shell 布局结构 + 左侧导航栏组件（核心骨架）
+- **T-002**：使用 react-router-dom 进行路由 + 页面占位符 + 右侧可折叠面板
+
+```json
+{
+  "issueNumber": 23,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现三栏 App Shell 布局与左侧导航栏",
+      "description": "创建 App Shell 的三栏布局结构：左侧固定宽度导航栏（240px）、中间弹性内容区、右侧信息面板（300px 可折叠）。实现左侧导航栏组件，包含 Dashboard、Issues、History、Settings 四个入口，使用 SVG 图标。整体采用暗色主题样式（深色背景 + 浅色文字），确保窗口缩放时布局自适应。",
+      "acceptanceCriteria": [
+        "三栏布局：左侧导航（固定 240px）、中间内容区（flex-1）、右侧面板（300px 可折叠）",
+        "导航栏包含 Dashboard、Issues、History、Settings 四个入口，带 SVG 图标",
+        "暗色主题样式（深色背景 + 浅色文字）",
+        "窗口缩放时布局自适应，不出现滚动条或溢出",
+        "右侧面板有折叠/展开按钮",
+        "Typecheck/lint passes"
+      ],
+      "priority": 1,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "配置路由系统与页面占位组件",
+      "description": "使用 react-router-dom 实现路由切换，为 Dashboard、Issues、History、Settings 创建占位页面组件。配置路由映射，点击导航栏项时切换对应页面内容。在 main.tsx 中引入 BrowserRouter，App.tsx 中使用 Routes/Route 配置路由表。确保导航栏当前选中项高亮显示。",
+      "acceptanceCriteria": [
+        "使用 react-router-dom（已在 package.json 中）实现路由切换",
+        "创建 Dashboard、Issues、History、Settings 四个占位页面组件",
+        "点击导航栏项时正确切换页面内容",
+        "当前选中导航项高亮显示",
+        "右侧面板在不同路由下保持显示",
+        "Typecheck/lint passes"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

@@ -2192,7 +2192,7 @@ verify_ui_with_llm() {
  local work_dir
  work_dir=$(dirname "$screenshot_file")
 
- log "使用 LLM 验证 UI 截图..."
+ log "使用 LLM 验证 UI 截图..." >&2
 
  # 检查 claude CLI 是否可用
  if ! command -v claude > /dev/null 2>&1; then
@@ -2251,7 +2251,7 @@ $subtask_desc"
  retry=$((retry + 1))
 
  if [ $retry -gt 1 ]; then
- log "LLM 验证重试 $retry/$max_llm_retries..."
+ log "LLM 验证重试 $retry/$max_llm_retries..." >&2
  sleep $((retry * 2))
  fi
 
@@ -2285,16 +2285,16 @@ $subtask_desc"
  local pass
  pass=$(echo "$json_result" | jq -r '.pass // "true"')
  if [ "$pass" = "true" ]; then
- log "UI 验证通过"
+ log "UI 验证通过" >&2
  else
  local feedback
  feedback=$(echo "$json_result" | jq -r '.feedback // "UI 验证未通过"')
- log "UI 验证未通过: $feedback"
+ log "UI 验证未通过: $feedback" >&2
  fi
  echo "$json_result"
  else
  # JSON 解析失败，默认通过并记录警告
- log "警告: 无法解析 LLM 验证结果，默认通过"
+ log "警告: 无法解析 LLM 验证结果，默认通过" >&2
  echo '{"pass": true, "feedback": "无法解析验证结果，默认通过"}'
  fi
 }
@@ -2323,11 +2323,11 @@ run_ui_verification() {
   local result_file="$work_dir/ui-verify-result.json"
   local screenshot_file="$work_dir/ui-screenshot.png"
 
-  log "========== UI 验证开始 =========="
+  log "========== UI 验证开始 ==========" >&2
 
   # 检查 UI 验证是否启用
   if [ "$UI_VERIFY_ENABLED" != "yes" ] && [ "$UI_VERIFY_ENABLED" != "true" ]; then
-    log "UI 验证已禁用"
+    log "UI 验证已禁用" >&2
     echo '{"pass": true, "feedback": "UI 验证已禁用"}'
     return 0
   fi
@@ -2336,19 +2336,19 @@ run_ui_verification() {
   local dev_cmd
   dev_cmd=$(detect_dev_server_command "$PROJECT_ROOT")
   if [ -z "$dev_cmd" ]; then
-    log "警告: 无法检测 dev server 启动命令，跳过 UI 验证"
+    log "警告: 无法检测 dev server 启动命令，跳过 UI 验证" >&2
     echo '{"pass": true, "feedback": "无法检测 dev server 命令，跳过 UI 验证"}'
     return 0
   fi
-  log "检测到 dev server 命令: $dev_cmd"
+  log "检测到 dev server 命令: $dev_cmd" >&2
 
   # 步骤 2: 检测端口号
   local port
   port=$(detect_dev_server_port "$PROJECT_ROOT")
-  log "检测到的 dev server 端口: $port"
+  log "检测到的 dev server 端口: $port" >&2
 
   # 步骤 3: 启动 dev server
-  log "启动 dev server..."
+  log "启动 dev server..." >&2
   cd "$PROJECT_ROOT"
 
   # 保存原 trap 并设置清理 trap
@@ -2361,7 +2361,7 @@ run_ui_verification() {
   # 后台启动 dev server
   bash -c "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
   _UI_DEV_SERVER_PID=$!
-  log "dev server 已启动 (PID: $_UI_DEV_SERVER_PID)"
+  log "dev server 已启动 (PID: $_UI_DEV_SERVER_PID)" >&2
 
   # 步骤 4: 等待 dev server 就绪
   if ! wait_for_dev_server "$port" "$UI_VERIFY_TIMEOUT"; then
@@ -2381,7 +2381,7 @@ run_ui_verification() {
  screenshot_success=1
  else
  # 截图失败：记录警告但继续，尝试降级处理
- log "截图失败，尝试降级处理..."
+ log "截图失败，尝试降级处理..." >&2
  echo "截图失败时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$work_dir/ui-screenshot-error.log" 2>/dev/null || true
  fi
 
@@ -2391,7 +2391,7 @@ run_ui_verification() {
  verify_result=$(verify_ui_with_llm "$screenshot_file" "$subtask_desc")
  else
  # 截图失败时的降级处理：记录警告但标记为通过，不阻塞主流程
- log "截图不可用，UI 验证降级为通过"
+ log "截图不可用，UI 验证降级为通过" >&2
  verify_result='{"pass": true, "feedback": "截图工具不可用，跳过 UI 验证（降级处理）"}'
  fi
 
@@ -2411,14 +2411,14 @@ run_ui_verification() {
   local feedback
   feedback=$(echo "$verify_result" | jq -r '.feedback // ""')
 
-  log "========== UI 验证结果 =========="
+  log "========== UI 验证结果 ==========" >&2
   if [ "$pass" = "true" ]; then
-    log "结果: 通过"
+    log "结果: 通过" >&2
   else
-    log "结果: 未通过"
+    log "结果: 未通过" >&2
   fi
-  log "反馈: $feedback"
-  log "=================================="
+  log "反馈: $feedback" >&2
+  log "==================================" >&2
 
   echo "$verify_result"
 
@@ -2825,11 +2825,11 @@ run_review_and_fix() {
                     local ui_result
                     ui_result=$(run_ui_verification "$WORK_DIR" "$subtask_title") || true
                     local ui_pass
-                    ui_pass=$(echo "$ui_result" | jq -r '.pass // "true"')
+                    ui_pass=$(echo "$ui_result" | jq -r '.pass // "true"' 2>/dev/null) || ui_pass="true"
 
                     # 记录 UI 验证结果到日志
                     local ui_feedback
-                    ui_feedback=$(echo "$ui_result" | jq -r '.feedback // ""')
+                    ui_feedback=$(echo "$ui_result" | jq -r '.feedback // ""' 2>/dev/null) || ui_feedback=""
                     echo "- UI 验证: $ui_pass - $ui_feedback" >> "$WORK_DIR/log.md"
 
                     if [ "$ui_pass" != "true" ]; then
