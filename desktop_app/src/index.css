@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/* Dark theme as default */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-gray-900 text-gray-100;
+}
