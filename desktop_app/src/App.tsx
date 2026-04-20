@@ -1,9 +1,20 @@
+import { Routes, Route } from "react-router-dom";
+import AppShell from "./components/AppShell";
+import DashboardPage from "./pages/DashboardPage";
+import IssuesPage from "./pages/IssuesPage";
+import HistoryPage from "./pages/HistoryPage";
+import SettingsPage from "./pages/SettingsPage";
+
 function App() {
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center">
-      <h1 className="text-3x font-bold">Autoresearch Desktop</h1>
-      <p className="text-gray-400">Automated Software Development Tool</p>
-    </div>
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/issues" element={<IssuesPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
+    </Routes>
   );
 }
 
