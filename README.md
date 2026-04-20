@@ -173,7 +173,7 @@ Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 P
 | **输入** | GitHub Issue 编号 | PRD（`prd.json`，结构化用户故事） |
 | **任务分解** | 规划阶段自动拆 `tasks.json`（含优先级、验收条件、类型标记），失败回退一次性实现 | PRD 预拆分为多个用户故事，每迭代完成一个 |
 | **Agent 模型** | 多 Agent 轮转（Claude/Codex/OpenCode），迭代间换人审核 | 单 Agent 反复启动新实例（Amp 或 Claude Code），每次干净上下文 |
-| **硬门禁** | Build → Lint → Test 三重自动化检查，不过则反馈给 Agent 修复 | 类型检查 + Lint + 测试，必须全部通过才更新状态 |
+| **硬门禁** | Build → Lint → Test 三重自动化检查，不通过则反馈给 Agent 修复 | 类型检查 + Lint + 测试，必须全部通过才更新状态 |
 | **软门禁** | LLM 多维度评分 ≥ 85/100（正确性 35% / 测试 25% / 代码质量 20% / 安全 10% / 性能 10%） | 无 LLM 评分，完全依赖自动化工具链 |
 | **审核机制** | 不同 Agent 交叉审核 + 修复（Agent 轮转公式），兼顾 LLM 评分和工具检查 | 无独立审核，靠自动化测试和 lint 守关 |
 | **记忆模型** | `progress.md` 跨迭代经验积累 + `tasks.json` 任务状态 + 日志文件 | `progress.txt`（经验日志）+ `prd.json`（故事状态）+ `AGENTS.md`（目录级知识）+ Git 历史 |
@@ -183,7 +183,7 @@ Issue -> 首个 Agent 实现 -> [按指定顺序轮流审核+修复] -> 自动 P
 | **归档机制** | 自动检测并归档旧 workflow 到 `archive/YYYY-MM-DD-issue-N/`，支持后缀去重 | 检测 `prd.json` 分支名变更时自动归档旧文件到日期目录 |
 | **Continue 模式** | `-c` 从中断处恢复（迭代数、分数、连续失败数、子任务状态全部恢复） | 无内置继续模式，需手动重启 |
 | **配置体系** | 两层覆盖：默认 `program.md` + 项目级 `.autoresearch/`；支持 `-a` 指定 Agent 顺序 | `prompt.md`(Amp) / `CLAUDE.md`(Claude Code) 指导行为 |
-| **插件系统** | 无 | Skills 系统（`/prd` 生成 PRD、`/ralph` 转换 JSON），支持本地/全局/市场安装 |
+| **插件系统** | ClaudeCode/Codex/OpenCode自带的Skills 系统 | Skills 系统（`/prd` 生成 PRD、`/ralph` 转换 JSON），支持本地/全局/市场安装 |
 | **实现语言** | Bash 脚本 `run.sh` + `lib/agent_logic.sh` | 单个 Bash 脚本 `ralph.sh` + React 流程图可视化 |
 | **重试/容错** | 指数退避重试（5 次）+ 连续失败硬停止（3 次）+ 上下文溢出自动交接 + Continue 模式 | 质量检查不过则不更新状态，下次重试同一故事 |
 | **沙箱/安全** | `--dangerously-skip-permissions` / `--full-auto`，无沙箱 | 同样无沙箱，全权委托 |
