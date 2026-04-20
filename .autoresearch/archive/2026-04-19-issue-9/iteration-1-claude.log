@@ -1,0 +1,34 @@
+## 实现总结
+
+`archive_old_workflows()` 已添加到 `run.sh` 中，包含以下内容：
+
+### 更改
+
+1. **`archive_old_workflows()` 函数** (在 `setup_work_directory()` 之前)：
+   - 扫描 `.autoresearch/workflows/issue-*` 目录
+   - 跳过当前 issue 的目录
+   - 将其他目录移动到 `.autoresearch/archive/YYYY-MM-DD-issue-N/`
+   - 如果目标目录已存在，则追加数字后缀（`-1`、`-2` 等）
+   - 如果没有其他 issue 目录，则优雅地不执行任何操作
+   - 记录归档操作以供审计
+
+2. **集成到 `setup_work_directory()`** 中：在创建新的工作目录之前调用 `archive_old_workflows()` （仅在非继续模式且未禁用归档时）
+
+3. **`--no-archive` 标志**：用于调试的新 CLI 标志，用于跳过归档
+
+### 验收标准验证
+
+| 标准 | 状态 |
+|---|---|
+| `archive_old_workflows()` 函数存在且可调用 | 完成 |
+| 正确扫描 `workflows/` 下的 `issue-*` 目录 | 已测试 |
+| 当前 issue 的目录被排除 | 已测试 |
+| 目标路径格式为 `.autoresearch/archive/YYYY-MM-DD-issue-N/` | 已测试 |
+| 当目标目录已存在时追加后缀 | 已测试 (添加 `-1`、`-2` 等) |
+| 没有其他 issue 数据时，不报错正常退出 | 已测试 |
+
+## 经验总结
+
+- **模式**：`run.sh` 使用一种模式，即实用函数放在靠近顶部，`setup_work_directory()` 作为在 `main flow` 中调用的协调器。`archive` 函数遵循相同的模式。
+- **陷阱**：`bash` 中的 `getopts` 不直接支持长选项——使用 `getopts "p:a:c-:"` 和 `OPTARG` 上的 `case` 语句来处理 `--no-archive`。
+- **经验**：`run.sh` 中的 `workflows` 目录使用 `issue-N` 命名约定；`archive` 函数复用此约定以保持一致性。

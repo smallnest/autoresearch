@@ -1,0 +1,47 @@
+完成。以下是已实现内容的总结：
+
+## 变更总结
+
+### `run.sh` - 核心实现
+
+**新的 `tasks.json` 函数** (约 130 行)：
+- `has_subtasks()` - 检查 `tasks.json` 是否存在且包含子任务
+- `get_current_subtask()` - 获取第一个 `passes: false` 的子任务
+- `mark_subtask_passed()` - 在质量门通过后将子任务标记为 `passes: true`
+- `all_subtasks_passed()` - 检查所有子任务是否完成
+- `get_subtask_section()` - 为实现提示词生成子任务上下文
+- `get_subtask_review_section()` - 为评审提示词生成子任务上下文
+- `get_subtask_progress_summary()` - 生成进度字符串（例如，"1/3 完成"）
+
+**规划阶段** (`run_planning_phase()`):
+- 在迭代 1 之前，第一个 Agent 将 Issue 拆分为子任务
+- 从 Agent 输出中提取 ```` ```json ``` ```` 代码块
+- 用 `jq` 验证 JSON，保存到 `tasks.json`
+- 如果规划失败，则回退到原始模式（无子任务）
+
+**修改后的迭代循环**：
+- 当子任务存在时：迭代 1 实现当前子任务，迭代 2+ 审查并修复当前子任务
+- 审查通过 → `mark_subtask_passed()`，前进到下一个子任务
+- 所有子任务完成 → 中断循环并进入 PR/合并流程
+- 当子任务不存在时：保持原始行为不变
+
+**提示词注入**：
+- 所有 3 个实现函数（`run_codex`、`run_claude`、`run_opencode`）通过 `get_subtask_section()` 注入子任务上下文
+- 所有 3 个审查函数通过 `get_subtask_review_section()` 注入子任务上下文
+- PR 正文包含子任务完成清单
+
+**继续模式**：恢复时报告子任务状态
+
+### `tests/test_extract_score.sh` - 29 个新测试
+
+覆盖了 `tasks.json` 函数：文件路径、存在性、当前子任务提取、通过标记、进度摘要、章节生成、边缘情况（空数组、所有通过、无文件）。
+
+### `CLAUDE.md` - 文档已更新
+
+架构部分更新了子任务系统和新的提示词组装流程。
+
+## 学习要点
+
+- **模式**：`jq` 是从 Bash 操作 `tasks.json` 的正确选择——它处理 JSON 读写，而无需脆弱的 `sed`/`awk` 处理
+- **问题**：`tasks.json` 函数必须在测试文件中复制，因为 `run.sh` 具有破坏性的副作用（`set -e`、全局变量）——遵循 `extract_score()` 测试使用的相同模式
+- **经验**：向后兼容性至关重要——`all_subtasks_passed()` 在 `tasks.json` 不存在时返回 `true`，因此没有规划阶段的现有流程将继续工作

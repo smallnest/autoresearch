@@ -1,0 +1,76 @@
+[96m[1m| [0m[90m Read     [0mrun.sh
+I will now review the implementation of **Issue #7 (T-001)** in `run.sh`.
+
+First, I'll read the `run.sh` file to examine the new functions.
+[94m[1m| [0m[90m Glob     [0m{"pattern":"tests/**/*.sh"}
+I've reviewed the implementation in `run.sh` and compared it against the requirements.
+
+### Code Analysis Summary
+
+1.  **`get_lint_command()`**:
+    *   Correctly implements mappings for `go`, `node`, `python`, `rust`, and `java`.
+    *   Returns an empty string for `unknown` or unsupported languages.
+    *   Uses `ruff check .` for Python as requested.
+    *   Follows the existing `case` pattern in the script.
+
+2.  **`run_hard_gate_checks()`**:
+    *   Accepts `iteration` as the first argument.
+    *   Properly constructs the log path using `$WORK_DIR/hard-gate-$iteration.log`.
+    *   Executes **Build → Lint → Test** in sequence.
+    *   Uses a robust pattern to capture both output and exit code: `out=$($cmd 2>&1) ; rc=$?`.
+    *   Correctly handles cases where a command is empty (skips the stage).
+    *   Collects failures into an `errors` variable and appends a summary (including the last 20 lines of failed output) to the log file.
+    *   Returns `1` if any stage fails, `0` otherwise.
+
+### Verification of Tests
+
+The implementation claims to have passed 147 tests. I will check the `tests/` directory to see if there are any new tests added for these functions.
+[94m[1m| [0m[90m Grep     [0m{"pattern":"run_hard_gate_checks|get_lint_command"}
+I'll search for any calls to `run_hard_gate_checks` or `get_lint_command` in `run.sh` to see if they've been integrated into the main workflow.
+[96m[1m| [0m[90m Read     [0mrun.sh
+I'll check the usage of `run_hard_gate_checks` in `run.sh` more carefully. I'll read the file starting from line 1770 (where the previous read was truncated) to find the main loop.
+I've examined the code and the subtasks.
+
+### Implementation Status of T-001
+
+The two requested functions, `get_lint_command()` and `run_hard_gate_checks()`, have been added to `run.sh` with the correct logic.
+
+*   **`get_lint_command()`**: Correctly implemented for all specified languages and handles the `unknown` case.
+*   **`run_hard_gate_checks()`**: Correctly implemented to run **Build → Lint → Test**, capture logs, handle failures, and write to a specific log file per iteration.
+
+### Review Report
+
+## 审核报告
+
+### Issue
+- 编号: #7
+- 迭代次数: 1
+
+### 总体评价
+**评分: 95/100**
+
+### 严重问题 (必须修复)
+无。
+
+### 一般问题 (建议修复)
+无。
+
+### 建议改进 (可选)
+- **日志输出优化**: 在 `run_hard_gate_checks()` 中，使用 `echo -e "$errors"` 依赖于 `echo` 的具体实现（在某些 shell 或系统上 `echo` 可能默认不支持 `-e`）。考虑到 `run.sh` 已经使用了 `bash` (line 1: `#!/bin/bash`)，且在 `bash` 中 `echo -e` 是可靠的，这不算是一个大问题。
+- **集成调用**: 目前这两个函数仅被定义，尚未在主循环中被调用。预计这将在子任务 T-002 中完成。
+
+### 审核结论
+- [x] 通过
+
+---
+
+## Learnings
+
+- **模式**: 遵循项目已有的 `get_build_command` / `get_test_command` 模式来添加 `get_lint_command`，保持了代码风格的一致性。
+- **模式**: 在 `run_hard_gate_checks` 中使用 `local out=$($cmd 2>&1) ; local rc=$?` 模式，既能捕获所有输出，又能正确获取退出状态码，同时避免了 `set -e` 导致脚本意外中断。
+- **踩坑**: 在 `bash` 脚本中捕获命令输出时，如果直接使用 `rc=$?` 而不使用分号隔开，可能会因为 `local` 声明的返回值覆盖了命令的退出码（虽然在某些 bash 版本中 `local var=$(cmd)` 会保留 `cmd` 的退出码，但 `local var; var=$(cmd)` 加上 `rc=$?` 更加稳健）。当前的实现 `local build_out build_rc; build_out=$($build_cmd 2>&1) ; build_rc=$?` 是非常安全的写法。
+- **经验**: 对于 Shell 脚本这类缺乏标准单元测试的项目，通过增加类似的 "硬门禁" (Hard Gate) 检查函数，可以极大提高自动化实现的鲁棒性，减少对 LLM 评分的依赖。
+
+---
+
+I have completed the review for T-001. The implementation is high-quality and meets all acceptance criteria.

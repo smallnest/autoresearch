@@ -1,0 +1,2760 @@
+OpenAI Codex v0.121.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019da019-f0a8-7533-ac61-68d6ed001082
+--------
+user
+审核 Issue #1 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: feat: 完善多 Agent 迭代流程与继续模式
+
+---
+请审核代码并给出评分和改进建议:
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码
+3. 确保测试覆盖核心逻辑
+4. 运行测试验证实现
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+
+codex
+我会先定位 Issue #1 的需求和对应实现提交，然后逐文件审查逻辑、边界条件和测试覆盖，最后给出分数与可执行改进建议。先从仓库里的 issue 描述和最近改动开始。
+exec
+/bin/zsh -lc 'pwd; ls -la; rg -n "Issue #1|feat: 完善多 Agent 迭代流程与继续模式|多 Agent|继续模式|迭代流程" -S .' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch
+total 152
+drwxr-xr-x@ 14 chaoyuepan  staff    448 Apr 18 18:06 .
+drwxr-xr-x  66 chaoyuepan  staff   2112 Apr 18 15:01 ..
+drwxr-xr-x@  3 chaoyuepan  staff     96 Apr 18 17:15 .autoresearch
+drwxr-xr-x@ 15 chaoyuepan  staff    480 Apr 18 18:02 .git
+-rw-r--r--@  1 chaoyuepan  staff     23 Apr 18 17:29 .gitignore
+-rw-r--r--@  1 chaoyuepan  staff   3043 Apr 18 17:33 CLAUDE.md
+-rw-r--r--@  1 chaoyuepan  staff   1066 Apr 18 15:01 LICENSE
+-rw-r--r--@  1 chaoyuepan  staff   3745 Apr 18 17:20 README.md
+drwxr-xr-x@  5 chaoyuepan  staff    160 Apr 18 15:04 agents
+drwxr-xr-x@  2 chaoyuepan  staff     64 Apr 18 15:25 docs
+-rw-r--r--@  1 chaoyuepan  staff   7256 Apr 18 17:32 issue-selector.md
+-rw-r--r--@  1 chaoyuepan  staff   7123 Apr 18 15:18 program.md
+-rwxr-xr-x@  1 chaoyuepan  staff  41972 Apr 18 18:06 run.sh
+drwxr-xr-x@  3 chaoyuepan  staff     96 Apr 18 18:08 tests
+./README.md:111:| `-c` | 关闭 | 继续模式，从上次中断的迭代继续 |
+./run.sh:247:    echo "  -c               继续模式，从上次中断的迭代继续"
+./run.sh:383:        log "继续模式: 追加到已有日志"
+./run.sh:1068:# ==================== 继续模式：恢复状态 ====================
+./run.sh:1209:# ==================== 继续模式：恢复状态 ====================
+
+exec
+/bin/zsh -lc 'git status --short; git branch --show-current; git log --oneline --decorate -n 30' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M README.md
+ M run.sh
+ M tests/test_extract_score.sh
+?? .autoresearch/
+?? CLAUDE.md
+?? issue-selector.md
+feature/issue-1
+2f6800f (HEAD -> feature/issue-1) feat: 完善多 Agent 迭代流程 - 四项待改进修复
+764f1b2 feat: 完善多 Agent 迭代流程 - 四项改进
+f4e01b5 (origin/master, origin/HEAD, master) feat: 完善多 Agent 迭代流程与继续模式
+ff4a801 Initial commit
+
+codex
+我已经定位到相关实现在 `f4e01b5`（并且当前分支还有两次后续修复提交）。接下来我会基于 `master..feature/issue-1` 的完整变更做代码审查，重点看状态恢复、迭代控制和测试可靠性。
+exec
+/bin/zsh -lc 'git diff --name-only master..HEAD' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'git log --reverse --oneline master..HEAD' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+.gitignore
+run.sh
+tests/test_extract_score.sh
+
+ succeeded in 0ms:
+764f1b2 feat: 完善多 Agent 迭代流程 - 四项改进
+2f6800f feat: 完善多 Agent 迭代流程 - 四项待改进修复
+
+codex
+我看到当前分支相对 `master` 只改了 `run.sh`、`.gitignore` 和一组测试。我会先读 `run.sh` 的差异与关键函数，再核对测试是否覆盖了这些行为。
+exec
+/bin/zsh -lc "nl -ba run.sh | sed -n '1,260p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	#!/bin/bash
+     2	# autoresearch/run.sh - 自动化处理 GitHub Issue
+     3	#
+     4	# 通用版本 - 可处理任意 Git + GitHub 项目
+     5	#
+     6	# 用法:
+     7	#   ./run.sh [-p project_path] <issue_number> [max_iterations]
+     8	#
+     9	# 示例:
+    10	#   ./run.sh 42                              # 处理当前目录项目的 Issue #42
+    11	#   ./run.sh -p /path/to/project 42         # 处理指定项目的 Issue #42
+    12	#   ./run.sh -p /path/to/project 42 10      # 最多迭代 10 次
+    13	#
+    14	# 要求:
+    15	#   - 项目目录必须是 git 仓库
+    16	#   - 项目目录必须有 GitHub remote (origin)
+    17	#
+    18	# 配置文件 (可选):
+    19	#   在项目根目录创建 .autoresearch/ 目录，可以放置:
+    20	#   - .autoresearch/agents/codex.md     自定义 Codex 指令
+    21	#   - .autoresearch/agents/claude.md    自定义 Claude 指令
+    22	#   - .autoresearch/agents/opencode.md  自定义 OpenCode 指令
+    23	#   - .autoresearch/program.md          自定义实现规则与约束
+    24	
+    25	set -e
+    26	set -o pipefail
+    27	
+    28	# ==================== 环境变量处理 ====================
+    29	if [ -f "$HOME/.zshrc" ]; then
+    30	    eval "$(grep -E '^export (OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY)=' "$HOME/.zshrc" 2>/dev/null)" || true
+    31	fi
+    32	
+    33	# ==================== 配置 ====================
+    34	DEFAULT_MAX_ITERATIONS=42
+    35	PASSING_SCORE=85
+    36	MAX_CONSECUTIVE_FAILURES=3
+    37	MAX_RETRIES=5
+    38	RETRY_BASE_DELAY=2
+    39	RETRY_MAX_DELAY=60
+    40	
+    41	# 脚本所在目录（用于查找默认 agents 配置和 program.md）
+    42	SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    43	
+    44	# 默认项目根目录 = 当前工作目录 (可通过 -p 参数覆盖)
+    45	PROJECT_ROOT="$(pwd)"
+    46	
+    47	# ==================== 函数 ====================
+    48	
+    49	log() {
+    50	    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    51	}
+    52	
+    53	error() {
+    54	    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+    55	}
+    56	
+    57	# 检测项目使用的编程语言
+    58	detect_language() {
+    59	    if [ -f "$PROJECT_ROOT/go.mod" ]; then
+    60	        echo "go"
+    61	    elif [ -f "$PROJECT_ROOT/package.json" ]; then
+    62	        echo "node"
+    63	    elif [ -f "$PROJECT_ROOT/requirements.txt" ] || [ -f "$PROJECT_ROOT/pyproject.toml" ] || [ -f "$PROJECT_ROOT/setup.py" ]; then
+    64	        echo "python"
+    65	    elif [ -f "$PROJECT_ROOT/Cargo.toml" ]; then
+    66	        echo "rust"
+    67	    elif [ -f "$PROJECT_ROOT/pom.xml" ] || [ -f "$PROJECT_ROOT/build.gradle" ]; then
+    68	        echo "java"
+    69	    else
+    70	        echo "unknown"
+    71	    fi
+    72	}
+    73	
+    74	# 检测测试命令
+    75	get_test_command() {
+    76	    local lang=$(detect_language)
+    77	    case "$lang" in
+    78	        go)     echo "go test ./... -v" ;;
+    79	        node)   echo "npm test" ;;
+    80	        python) echo "pytest" ;;
+    81	        rust)   echo "cargo test" ;;
+    82	        java)   echo "mvn test" ;;
+    83	        *)      echo "" ;;
+    84	    esac
+    85	}
+    86	
+    87	# 检测构建命令
+    88	get_build_command() {
+    89	    local lang=$(detect_language)
+    90	    case "$lang" in
+    91	        go)     echo "go build ./..." ;;
+    92	        node)   echo "npm run build" ;;
+    93	        rust)   echo "cargo build" ;;
+    94	        java)   echo "mvn compile" ;;
+    95	        *)      echo "" ;;
+    96	    esac
+    97	}
+    98	
+    99	# 检测项目语言用于依赖检查
+   100	get_required_tools() {
+   101	    local lang=$(detect_language)
+   102	    case "$lang" in
+   103	        go)     echo "go" ;;
+   104	        node)   echo "node" ;;
+   105	        python) echo "python3" ;;
+   106	        rust)   echo "cargo" ;;
+   107	        java)   echo "mvn" ;;
+   108	        *)      echo "" ;;
+   109	    esac
+   110	}
+   111	
+   112	annealing_delay() {
+   113	    local retry=$1
+   114	    local delay=$((RETRY_BASE_DELAY * (1 << (retry - 1))))
+   115	    local jitter=$((delay / 4))
+   116	    if [ $jitter -gt 0 ]; then
+   117	        jitter=$((RANDOM % jitter))
+   118	    fi
+   119	    delay=$((delay + jitter))
+   120	    if [ $delay -gt $RETRY_MAX_DELAY ]; then
+   121	        delay=$RETRY_MAX_DELAY
+   122	    fi
+   123	    echo $delay
+   124	}
+   125	
+   126	# 检测 Agent 输出是否包含致命错误（区分代码讨论中的 "error" 与真正的运行时错误）
+   127	has_fatal_error() {
+   128	    local log_file="$1"
+   129	    # 仅匹配行首的错误模式，避免误判代码中讨论 "error handling" 等正常内容
+   130	    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
+   131	    pattern+='|^(timeout|rate.limit|authentication|unauthorized|API.key).*error'
+   132	    pattern+='|context.length.exceeded'
+   133	    pattern+='|maximum.context.length'
+   134	    pattern+='|token.limit.exceeded'
+   135	    pattern+='|model.is.overloaded'
+   136	    pattern+='|server.error'
+   137	    pattern+='|service.unavailable'
+   138	    pattern+='|internal.server.error'
+   139	    pattern+='|too.many.requests'
+   140	    pattern+='|quota.exceeded'
+   141	    pattern+='|billing.hard.limit'
+   142	    pattern+='|connection.refused'
+   143	    pattern+='|network.error'
+   144	    pattern+='|DNS.resolution'
+   145	    grep -qE "$pattern" "$log_file" 2>/dev/null
+   146	}
+   147	
+   148	# 检测 Agent 输出是否包含 API/网络级别的失败（区分于可恢复的内容错误）
+   149	has_api_failure() {
+   150	    local log_file="$1"
+   151	    # 这些模式表示 API 调用本身失败，而非代码内容问题
+   152	    local pattern='status.4[0-9][0-9]'
+   153	    pattern+='|status.5[0-9][0-9]'
+   154	    pattern+='|HTTP.4[0-9][0-9]'
+   155	    pattern+='|HTTP.5[0-9][0-9]'
+   156	    pattern+='|curl.*error'
+   157	    pattern+='|fetch.failed'
+   158	    pattern+='|request.failed'
+   159	    pattern+='|response.is.empty'
+   160	    pattern+='|no.response.received'
+   161	    grep -qE "$pattern" "$log_file" 2>/dev/null
+   162	}
+   163	
+   164	run_with_retry() {
+   165	    local agent=$1
+   166	    local prompt="$2"
+   167	    local log_file="$3"
+   168	    local retry=0
+   169	    local success=0
+   170	
+   171	    while [ $retry -lt $MAX_RETRIES ]; do
+   172	        retry=$((retry + 1))
+   173	
+   174	        if [ $retry -gt 1 ]; then
+   175	            local delay
+   176	            delay=$(annealing_delay $retry)
+   177	            log "第 $retry/$MAX_RETRIES 次重试，等待 ${delay} 秒..."
+   178	            sleep $delay
+   179	        fi
+   180	
+   181	        log "调用 $agent (尝试 $retry/$MAX_RETRIES)..."
+   182	
+   183	        # Truncate log file before each attempt so we only capture this attempt's output
+   184	        : > "$log_file"
+   185	
+   186	        local exit_code=1
+   187	        if [ "$agent" = "codex" ]; then
+   188	            codex exec --full-auto "$prompt" 2>&1 | tee "$log_file" || true
+   189	            exit_code=${PIPESTATUS[0]}
+   190	        elif [ "$agent" = "opencode" ]; then
+   191	            opencode run "$prompt" 2>&1 | tee "$log_file" || true
+   192	            exit_code=${PIPESTATUS[0]}
+   193	        else
+   194	            claude -p "$prompt" --dangerously-skip-permissions 2>&1 | tee "$log_file" || true
+   195	            exit_code=${PIPESTATUS[0]}
+   196	        fi
+   197	
+   198	        # Check for non-zero exit code from the agent
+   199	        if [ $exit_code -ne 0 ]; then
+   200	            log "Agent $agent 以非零退出码退出: $exit_code"
+   201	            log "$agent 第 $retry 次调用失败"
+   202	            continue
+   203	        fi
+   204	
+   205	        # Check for fatal errors in output
+   206	        if has_fatal_error "$log_file"; then
+   207	            log "检测到致命错误，将重试"
+   208	            log "$agent 第 $retry 次调用失败"
+   209	            continue
+   210	        fi
+   211	
+   212	        # Check for API failures in output
+   213	        if has_api_failure "$log_file"; then
+   214	            log "检测到 API 失败，将重试"
+   215	            log "$agent 第 $retry 次调用失败"
+   216	            continue
+   217	        fi
+   218	
+   219	        # Check output quality: must have meaningful content
+   220	        local content_lines
+   221	        content_lines=$(grep -vE '^\s*$' "$log_file" | wc -l)
+   222	        if [ "$content_lines" -lt 5 ]; then
+   223	            log "警告: 输出内容过少 ($content_lines 行)，将重试"
+   224	            log "$agent 第 $retry 次调用失败"
+   225	            continue
+   226	        fi
+   227	
+   228	        success=1
+   229	        break
+   230	    done
+   231	
+   232	    if [ $success -eq 1 ]; then
+   233	        return 0
+   234	    else
+   235	        error "$agent 调用失败，已重试 $MAX_RETRIES 次"
+   236	        return 1
+   237	    fi
+   238	}
+   239	
+   240	usage() {
+   241	    echo "用法: $0 [-p project_path] [-c] <issue_number> [max_iterations]"
+   242	    echo ""
+   243	    echo "通用自动化 Issue 处理工具，支持任意 Git + GitHub 项目。"
+   244	    echo ""
+   245	    echo "参数:"
+   246	    echo "  -p <path>        项目路径 (默认: 当前目录)"
+   247	    echo "  -c               继续模式，从上次中断的迭代继续"
+   248	    echo "  issue_number     GitHub Issue 编号"
+   249	    echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
+   250	    echo ""
+   251	    echo "配置 (环境变量):"
+   252	    echo "  PASSING_SCORE=85              达标评分线 (百分制)"
+   253	    echo "  MAX_CONSECUTIVE_FAILURES=3    连续失败最大次数"
+   254	    echo ""
+   255	    echo "自定义配置文件 (放在项目目录 .autoresearch/ 下):"
+   256	    echo "  agents/codex.md              Codex 指令"
+   257	    echo "  agents/claude.md             Claude 指令"
+   258	    echo "  agents/opencode.md           OpenCode 指令"
+   259	    echo "  program.md                   实现规则与约束"
+   260	    echo ""
+
+exec
+/bin/zsh -lc "git diff --stat master..HEAD; git diff -- .gitignore run.sh tests/test_extract_score.sh | sed -n '1,260p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ .gitignore                  |   2 +
+ run.sh                      | 110 +++++++++++-
+ tests/test_extract_score.sh | 419 ++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 526 insertions(+), 5 deletions(-)
+diff --git a/run.sh b/run.sh
+index 715896f..96b6a63 100755
+--- a/run.sh
++++ b/run.sh
+@@ -23,6 +23,7 @@
+ #   - .autoresearch/program.md          自定义实现规则与约束
+ 
+ set -e
++set -o pipefail
+ 
+ # ==================== 环境变量处理 ====================
+ if [ -f "$HOME/.zshrc" ]; then
+@@ -179,31 +180,53 @@ run_with_retry() {
+ 
+         log "调用 $agent (尝试 $retry/$MAX_RETRIES)..."
+ 
++        # Truncate log file before each attempt so we only capture this attempt's output
++        : > "$log_file"
++
+         local exit_code=1
+         if [ "$agent" = "codex" ]; then
+-            codex exec --full-auto "$prompt" 2>&1 | tee "$log_file" && exit_code=0
++            codex exec --full-auto "$prompt" 2>&1 | tee "$log_file" || true
++            exit_code=${PIPESTATUS[0]}
+         elif [ "$agent" = "opencode" ]; then
+-            opencode run "$prompt" 2>&1 | tee "$log_file" && exit_code=0
++            opencode run "$prompt" 2>&1 | tee "$log_file" || true
++            exit_code=${PIPESTATUS[0]}
+         else
+-            claude -p "$prompt" --dangerously-skip-permissions 2>&1 | tee "$log_file" && exit_code=0
++            claude -p "$prompt" --dangerously-skip-permissions 2>&1 | tee "$log_file" || true
++            exit_code=${PIPESTATUS[0]}
+         fi
+ 
+-        if [ $exit_code -eq 0 ]; then
+-            if ! has_fatal_error "$log_file" && ! has_api_failure "$log_file"; then
+-                local content_lines
+-                content_lines=$(grep -v "^$" "$log_file" | wc -l)
+-                if [ "$content_lines" -ge 5 ]; then
+-                    success=1
+-                    break
+-                else
+-                    log "警告: 输出内容过少 ($content_lines 行)"
+-                fi
+-            else
+-                log "检测到致命错误或 API 失败，将重试"
+-            fi
++        # Check for non-zero exit code from the agent
++        if [ $exit_code -ne 0 ]; then
++            log "Agent $agent 以非零退出码退出: $exit_code"
++            log "$agent 第 $retry 次调用失败"
++            continue
++        fi
++
++        # Check for fatal errors in output
++        if has_fatal_error "$log_file"; then
++            log "检测到致命错误，将重试"
++            log "$agent 第 $retry 次调用失败"
++            continue
+         fi
+ 
+-        log "$agent 第 $retry 次调用失败"
++        # Check for API failures in output
++        if has_api_failure "$log_file"; then
++            log "检测到 API 失败，将重试"
++            log "$agent 第 $retry 次调用失败"
++            continue
++        fi
++
++        # Check output quality: must have meaningful content
++        local content_lines
++        content_lines=$(grep -vE '^\s*$' "$log_file" | wc -l)
++        if [ "$content_lines" -lt 5 ]; then
++            log "警告: 输出内容过少 ($content_lines 行)，将重试"
++            log "$agent 第 $retry 次调用失败"
++            continue
++        fi
++
++        success=1
++        break
+     done
+ 
+     if [ $success -eq 1 ]; then
+diff --git a/tests/test_extract_score.sh b/tests/test_extract_score.sh
+index 92e0800..41863c8 100644
+--- a/tests/test_extract_score.sh
++++ b/tests/test_extract_score.sh
+@@ -405,6 +405,74 @@ echo "--- Exponential growth ---"
+ assert_true "delay increases retry 1<2" "[ $delay2 -ge $delay1 ]"
+ assert_true "delay increases retry 2<3" "[ $delay3 -ge $delay2 ]"
+ 
++# ==================== Tests: PIPESTATUS exit code capture ====================
++
++echo ""
++echo "=== PIPESTATUS exit code capture Tests ==="
++echo ""
++
++echo "--- pipefail preserves exit codes ---"
++
++# With set -o pipefail, a failing first command should cause the pipeline to fail
++assert_true "pipefail: failing command in pipe" "echo hello | false 2>/dev/null; [ ${PIPESTATUS[0]} -ne 0 ] || [ \$? -ne 0 ] || true"
++
++echo "--- PIPESTATUS captures first command exit ---"
++
++# Successful pipeline: both commands succeed, PIPESTATUS[0] should be 0
++result=$(bash -c 'set -o pipefail; echo "test" | cat; echo ${PIPESTATUS[0]}')
++assert_eq "PIPESTATUS: successful pipeline" "0" "$(bash -c 'set -o pipefail; echo "test" | cat>/dev/null; echo ${PIPESTATUS[0]}')"
++
++# Failing first command: PIPESTATUS[0] should reflect the failure
++assert_true "PIPESTATUS: failing first command" "bash -c 'set -o pipefail; false | cat>/dev/null; exit \${PIPESTATUS[0]}' 2>/dev/null; [ \$? -ne 0 ]"
++
++# ==================== Tests: Output quality detection ====================
++
++echo ""
++echo "=== Output quality detection Tests ==="
++echo ""
++
++echo "--- Meaningful output detection ---"
++
++# Count non-empty, non-whitespace lines
++assert_eq "5 non-empty lines >= 5" "5" "$(echo -e "line1\nline2\nline3\nline4\nline5" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
++
++# Whitespace-only lines should be filtered
++assert_eq "whitespace-only lines filtered" "2" "$(echo -e "line1\n   \n\nline2\n\t\n" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
++
++# Empty output
++assert_eq "empty output has 0 lines" "0" "$(echo "" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
++
++# Only whitespace
++assert_eq "whitespace-only output has 0 lines" "0" "$(echo -e "   \n\t\n  " | grep -vE '^\s*$' | wc -l | tr -d ' ')"
++
++echo "--- Combined error detection scenarios ---"
++
++# A log file with fatal error should be detected even if exit code is 0
++cat > "$TMPDIR_TESTS/exit0_with_error.log" << 'INNEREOF'
++Error: API rate limit exceeded
++The implementation is complete.
++INNEREOF
++assert_true "exit 0 + fatal error in log" "has_fatal_error $TMPDIR_TESTS/exit0_with_error.log"
++
++# A log file with API failure should be detected
++cat > "$TMPDIR_TESTS/exit0_with_api_failure.log" << 'INNEREOF'
++status 429 Too Many Requests
++The code looks good.
++INNEREOF
++assert_true "exit 0 + API failure in log" "has_api_failure $TMPDIR_TESTS/exit0_with_api_failure.log"
++
++# A normal log file with "error" discussion should NOT be flagged
++cat > "$TMPDIR_TESTS/normal_error_discussion.log" << 'INNEREOF'
++Consider adding error handling for edge cases.
++The error path should return a proper message.
++Overall this is a solid implementation.
++Score: 85/100
++All tests pass successfully.
++INNEREOF
++assert_false "normal error discussion not fatal" "has_fatal_error $TMPDIR_TESTS/normal_error_discussion.log"
++assert_false "normal error discussion not API failure" "has_api_failure $TMPDIR_TESTS/normal_error_discussion.log"
++assert_true "normal discussion has enough lines" "[ $(grep -vE '^\s*$' $TMPDIR_TESTS/normal_error_discussion.log | wc -l) -ge 5 ]"
++
+ # ==================== Summary ====================
+ 
+ echo ""
+
+exec
+/bin/zsh -lc "nl -ba run.sh | sed -n '260,620p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba run.sh | sed -n '620,980p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   260	    echo ""
+   261	    echo "示例:"
+   262	    echo "  $0 42                                  # 处理当前项目的 Issue #42"
+   263	    echo "  $0 -p /path/to/project 42             # 处理指定项目的 Issue #42"
+   264	    echo "  $0 -p /path/to/project 42 10          # 最多迭代 10 次"
+   265	    echo "  $0 -c 42                              # 继续处理 Issue #42"
+   266	    echo "  $0 -c 42 10                           # 继续处理，追加 10 次迭代"
+   267	    echo "  PASSING_SCORE=90 $0 42                # 提高达标线到 90"
+   268	    exit 1
+   269	}
+   270	
+   271	check_project() {
+   272	    log "检查项目环境..."
+   273	
+   274	    if [ ! -d "$PROJECT_ROOT" ]; then
+   275	        error "项目目录不存在: $PROJECT_ROOT"
+   276	        exit 1
+   277	    fi
+   278	
+   279	    cd "$PROJECT_ROOT"
+   280	
+   281	    if ! git rev-parse --is-inside-work-tree &> /dev/null; then
+   282	        error "不是 git 仓库: $PROJECT_ROOT"
+   283	        exit 1
+   284	    fi
+   285	
+   286	    local remote_url
+   287	    remote_url=$(git remote get-url origin 2>/dev/null || true)
+   288	
+   289	    if [ -z "$remote_url" ]; then
+   290	        error "未找到 git remote origin"
+   291	        exit 1
+   292	    fi
+   293	
+   294	    if ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com'; then
+   295	        error "origin 不是 GitHub 仓库: $remote_url"
+   296	        exit 1
+   297	    fi
+   298	
+   299	    local lang=$(detect_language)
+   300	    log "项目目录: $PROJECT_ROOT"
+   301	    log "Git remote: $remote_url"
+   302	    log "项目语言: $lang"
+   303	}
+   304	
+   305	check_dependencies() {
+   306	    log "检查依赖..."
+   307	
+   308	    local missing=0
+   309	
+   310	    if ! command -v gh &> /dev/null; then
+   311	        error "gh (GitHub CLI) 未安装"
+   312	        missing=1
+   313	    fi
+   314	
+   315	    if ! command -v claude &> /dev/null; then
+   316	        error "claude (Claude Code CLI) 未安装"
+   317	        missing=1
+   318	    fi
+   319	
+   320	    if ! command -v codex &> /dev/null; then
+   321	        error "codex (OpenAI Codex CLI) 未安装"
+   322	        missing=1
+   323	    fi
+   324	
+   325	    if ! command -v opencode &> /dev/null; then
+   326	        error "opencode CLI 未安装"
+   327	        missing=1
+   328	    fi
+   329	
+   330	    # 检查语言特定工具
+   331	    local required=$(get_required_tools)
+   332	    if [ -n "$required" ] && ! command -v "$required" &> /dev/null; then
+   333	        error "$required 未安装 (项目语言: $(detect_language))"
+   334	        missing=1
+   335	    fi
+   336	
+   337	    if [ $missing -eq 1 ]; then
+   338	        exit 1
+   339	    fi
+   340	
+   341	    log "依赖检查通过"
+   342	}
+   343	
+   344	get_issue_info() {
+   345	    local issue_number=$1
+   346	
+   347	    log "获取 Issue #$issue_number 信息..."
+   348	
+   349	    ISSUE_INFO=$(gh issue view $issue_number --json number,title,body,state,labels 2>&1)
+   350	
+   351	    if [ $? -ne 0 ]; then
+   352	        error "无法获取 Issue #$issue_number: $ISSUE_INFO"
+   353	        exit 1
+   354	    fi
+   355	
+   356	    ISSUE_TITLE=$(echo "$ISSUE_INFO" | jq -r '.title')
+   357	    ISSUE_BODY=$(echo "$ISSUE_INFO" | jq -r '.body')
+   358	    ISSUE_STATE=$(echo "$ISSUE_INFO" | jq -r '.state')
+   359	    ISSUE_LABELS=$(echo "$ISSUE_INFO" | jq -r '.labels[].name' | tr '\n' ',' | sed 's/,$//')
+   360	
+   361	    if [ "$ISSUE_STATE" != "OPEN" ]; then
+   362	        error "Issue #$issue_number 状态为 $ISSUE_STATE，不是 OPEN"
+   363	        exit 1
+   364	    fi
+   365	
+   366	    log "Issue 标题: $ISSUE_TITLE"
+   367	    log "Issue 标签: $ISSUE_LABELS"
+   368	}
+   369	
+   370	setup_work_directory() {
+   371	    local issue_number=$1
+   372	
+   373	    WORK_DIR="$PROJECT_ROOT/.autoresearch/workflows/issue-$issue_number"
+   374	    mkdir -p "$WORK_DIR"
+   375	
+   376	    log "工作目录: $WORK_DIR"
+   377	
+   378	    if [ $CONTINUE_MODE -eq 1 ]; then
+   379	        if [ ! -f "$WORK_DIR/log.md" ]; then
+   380	            error "未找到 Issue #$issue_number 的工作日志，无法继续"
+   381	            exit 1
+   382	        fi
+   383	        log "继续模式: 追加到已有日志"
+   384	        return
+   385	    fi
+   386	
+   387	    cat > "$WORK_DIR/log.md" << EOF
+   388	# Issue #$issue_number 实现日志
+   389	
+   390	## 基本信息
+   391	- Issue: #$issue_number - $ISSUE_TITLE
+   392	- 项目: $PROJECT_ROOT
+   393	- 语言: $(detect_language)
+   394	- 开始时间: $(date '+%Y-%m-%d %H:%M:%S')
+   395	- 标签: $ISSUE_LABELS
+   396	
+   397	## 迭代记录
+   398	
+   399	EOF
+   400	}
+   401	
+   402	# 获取 agent 指令文件路径
+   403	# 优先级: 项目 .autoresearch/ > 脚本目录 agents/
+   404	get_agent_instructions() {
+   405	    local agent_name=$1
+   406	
+   407	    local project_agent="$PROJECT_ROOT/.autoresearch/agents/$agent_name.md"
+   408	    if [ -f "$project_agent" ]; then
+   409	        echo "$project_agent"
+   410	        return
+   411	    fi
+   412	
+   413	    local default_agent="$SCRIPT_DIR/agents/$agent_name.md"
+   414	    if [ -f "$default_agent" ]; then
+   415	        echo "$default_agent"
+   416	        return
+   417	    fi
+   418	
+   419	    echo ""
+   420	}
+   421	
+   422	# 获取 program.md 内容
+   423	get_program_instructions() {
+   424	    local project_program="$PROJECT_ROOT/.autoresearch/program.md"
+   425	    if [ -f "$project_program" ]; then
+   426	        cat "$project_program"
+   427	        return
+   428	    fi
+   429	
+   430	    local default_program="$SCRIPT_DIR/program.md"
+   431	    if [ -f "$default_program" ]; then
+   432	        cat "$default_program"
+   433	        return
+   434	    fi
+   435	
+   436	    echo ""
+   437	}
+   438	
+   439	create_branch() {
+   440	    local issue_number=$1
+   441	
+   442	    BRANCH_NAME="feature/issue-$issue_number"
+   443	
+   444	    log "创建分支: $BRANCH_NAME"
+   445	
+   446	    cd "$PROJECT_ROOT"
+   447	
+   448	    if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+   449	        log "分支已存在，切换到: $BRANCH_NAME"
+   450	        git checkout "$BRANCH_NAME"
+   451	    else
+   452	        git checkout -b "$BRANCH_NAME"
+   453	    fi
+   454	}
+   455	
+   456	# ==================== Agent 实现/修复函数 ====================
+   457	
+   458	run_codex() {
+   459	    local issue_number=$1
+   460	    local iteration=$2
+   461	    local previous_feedback=$3
+   462	
+   463	    log "迭代 $iteration: Codex 实现..."
+   464	
+   465	    local codex_instructions_file
+   466	    codex_instructions_file=$(get_agent_instructions "codex")
+   467	
+   468	    local codex_instructions=""
+   469	    if [ -n "$codex_instructions_file" ]; then
+   470	        codex_instructions=$(cat "$codex_instructions_file")
+   471	        log "使用指令文件: $codex_instructions_file"
+   472	    fi
+   473	
+   474	    local program_instructions
+   475	    program_instructions=$(get_program_instructions)
+   476	
+   477	    local prompt
+   478	    if [ -z "$previous_feedback" ]; then
+   479	        prompt="实现 GitHub Issue #$issue_number
+   480	
+   481	项目路径: $PROJECT_ROOT
+   482	项目语言: $(detect_language)
+   483	Issue 标题: $ISSUE_TITLE
+   484	Issue 内容: $ISSUE_BODY
+   485	
+   486	迭代次数: $iteration
+   487	
+   488	---
+   489	请按以下步骤执行:
+   490	
+   491	## 第一步：制定计划
+   492	分析 Issue 需求，制定实现计划，拆解为具体的 tasks/todos，输出任务清单。
+   493	
+   494	## 第二步：逐步实现
+   495	按照任务清单逐步实现，每完成一个任务标记为已完成。
+   496	
+   497	---
+   498	$program_instructions
+   499	
+   500	$codex_instructions
+   501	"
+   502	    else
+   503	        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+   504	
+   505	项目路径: $PROJECT_ROOT
+   506	项目语言: $(detect_language)
+   507	Issue 标题: $ISSUE_TITLE
+   508	
+   509	审核反馈:
+   510	$previous_feedback
+   511	
+   512	---
+   513	请按以下步骤执行:
+   514	
+   515	## 第一步：制定计划
+   516	分析审核反馈，制定修复计划，拆解为具体的 tasks/todos，输出任务清单。
+   517	
+   518	## 第二步：逐步实现
+   519	按照任务清单逐步修复，每完成一个任务标记为已完成。
+   520	
+   521	---
+   522	$codex_instructions
+   523	"
+   524	    fi
+   525	
+   526	    local log_file="$WORK_DIR/iteration-$iteration-codex.log"
+   527	
+   528	    cd "$PROJECT_ROOT"
+   529	    if ! run_with_retry codex "$prompt" "$log_file"; then
+   530	        return 1
+   531	    fi
+   532	
+   533	    echo "" >> "$WORK_DIR/log.md"
+   534	    echo "### 迭代 $iteration - Codex (实现)" >> "$WORK_DIR/log.md"
+   535	    echo "" >> "$WORK_DIR/log.md"
+   536	    echo "详见: [iteration-$iteration-codex.log](./iteration-$iteration-codex.log)" >> "$WORK_DIR/log.md"
+   537	    return 0
+   538	}
+   539	
+   540	run_claude() {
+   541	    local issue_number=$1
+   542	    local iteration=$2
+   543	    local previous_feedback=$3
+   544	
+   545	    log "迭代 $iteration: Claude 实现..."
+   546	
+   547	    local claude_instructions_file
+   548	    claude_instructions_file=$(get_agent_instructions "claude")
+   549	
+   550	    local claude_instructions=""
+   551	    if [ -n "$claude_instructions_file" ]; then
+   552	        claude_instructions=$(cat "$claude_instructions_file")
+   553	        log "使用指令文件: $claude_instructions_file"
+   554	    fi
+   555	
+   556	    local program_instructions
+   557	    program_instructions=$(get_program_instructions)
+   558	
+   559	    local prompt
+   560	    if [ -z "$previous_feedback" ]; then
+   561	        prompt="实现 GitHub Issue #$issue_number
+   562	
+   563	项目路径: $PROJECT_ROOT
+   564	项目语言: $(detect_language)
+   565	Issue 标题: $ISSUE_TITLE
+   566	Issue 内容: $ISSUE_BODY
+   567	
+   568	迭代次数: $iteration
+   569	
+   570	---
+   571	请按以下步骤执行:
+   572	
+   573	## 第一步：制定计划
+   574	分析 Issue 需求，制定实现计划，拆解为具体的 tasks/todos，输出任务清单。
+   575	
+   576	## 第二步：逐步实现
+   577	按照任务清单逐步实现，每完成一个任务标记为已完成。
+   578	
+   579	---
+   580	$program_instructions
+   581	
+   582	$claude_instructions
+   583	"
+   584	    else
+   585	        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+   586	
+   587	项目路径: $PROJECT_ROOT
+   588	项目语言: $(detect_language)
+   589	Issue 标题: $ISSUE_TITLE
+   590	
+   591	审核反馈:
+   592	$previous_feedback
+   593	
+   594	---
+   595	请按以下步骤执行:
+   596	
+   597	## 第一步：制定计划
+   598	分析审核反馈，制定修复计划，拆解为具体的 tasks/todos，输出任务清单。
+   599	
+   600	## 第二步：逐步实现
+   601	按照任务清单逐步修复，每完成一个任务标记为已完成。
+   602	
+   603	---
+   604	$claude_instructions
+   605	"
+   606	    fi
+   607	
+   608	    local log_file="$WORK_DIR/iteration-$iteration-claude.log"
+   609	
+   610	    cd "$PROJECT_ROOT"
+   611	    if ! run_with_retry claude "$prompt" "$log_file"; then
+   612	        return 1
+   613	    fi
+   614	
+   615	    echo "" >> "$WORK_DIR/log.md"
+   616	    echo "### 迭代 $iteration - Claude (实现)" >> "$WORK_DIR/log.md"
+   617	    echo "" >> "$WORK_DIR/log.md"
+   618	    echo "详见: [iteration-$iteration-claude.log](./iteration-$iteration-claude.log)" >> "$WORK_DIR/log.md"
+   619	    return 0
+   620	}
+
+ succeeded in 0ms:
+   620	}
+   621	
+   622	run_opencode() {
+   623	    local issue_number=$1
+   624	    local iteration=$2
+   625	    local previous_feedback=$3
+   626	
+   627	    log "迭代 $iteration: OpenCode 实现..."
+   628	
+   629	    local opencode_instructions_file
+   630	    opencode_instructions_file=$(get_agent_instructions "opencode")
+   631	
+   632	    local opencode_instructions=""
+   633	    if [ -n "$opencode_instructions_file" ]; then
+   634	        opencode_instructions=$(cat "$opencode_instructions_file")
+   635	        log "使用指令文件: $opencode_instructions_file"
+   636	    fi
+   637	
+   638	    local program_instructions
+   639	    program_instructions=$(get_program_instructions)
+   640	
+   641	    local prompt
+   642	    if [ -z "$previous_feedback" ]; then
+   643	        prompt="实现 GitHub Issue #$issue_number
+   644	
+   645	项目路径: $PROJECT_ROOT
+   646	项目语言: $(detect_language)
+   647	Issue 标题: $ISSUE_TITLE
+   648	Issue 内容: $ISSUE_BODY
+   649	
+   650	迭代次数: $iteration
+   651	
+   652	---
+   653	请按以下步骤执行:
+   654	
+   655	## 第一步：制定计划
+   656	分析 Issue 需求，制定实现计划，拆解为具体的 tasks/todos，输出任务清单。
+   657	
+   658	## 第二步：逐步实现
+   659	按照任务清单逐步实现，每完成一个任务标记为已完成。
+   660	
+   661	---
+   662	$program_instructions
+   663	
+   664	$opencode_instructions
+   665	"
+   666	    else
+   667	        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+   668	
+   669	项目路径: $PROJECT_ROOT
+   670	项目语言: $(detect_language)
+   671	Issue 标题: $ISSUE_TITLE
+   672	
+   673	审核反馈:
+   674	$previous_feedback
+   675	
+   676	---
+   677	请按以下步骤执行:
+   678	
+   679	## 第一步：制定计划
+   680	分析审核反馈，制定修复计划，拆解为具体的 tasks/todos，输出任务清单。
+   681	
+   682	## 第二步：逐步实现
+   683	按照任务清单逐步修复，每完成一个任务标记为已完成。
+   684	
+   685	---
+   686	$opencode_instructions
+   687	"
+   688	    fi
+   689	
+   690	    local log_file="$WORK_DIR/iteration-$iteration-opencode.log"
+   691	
+   692	    cd "$PROJECT_ROOT"
+   693	    if ! run_with_retry opencode "$prompt" "$log_file"; then
+   694	        return 1
+   695	    fi
+   696	
+   697	    echo "" >> "$WORK_DIR/log.md"
+   698	    echo "### 迭代 $iteration - OpenCode (实现)" >> "$WORK_DIR/log.md"
+   699	    echo "" >> "$WORK_DIR/log.md"
+   700	    echo "详见: [iteration-$iteration-opencode.log](./iteration-$iteration-opencode.log)" >> "$WORK_DIR/log.md"
+   701	    return 0
+   702	}
+   703	
+   704	# ==================== Agent 审核函数 ====================
+   705	
+   706	run_opencode_review() {
+   707	    local issue_number=$1
+   708	    local iteration=$2
+   709	
+   710	    log "迭代 $iteration: OpenCode 审核..."
+   711	
+   712	    local opencode_instructions_file
+   713	    opencode_instructions_file=$(get_agent_instructions "opencode")
+   714	
+   715	    local opencode_instructions=""
+   716	    if [ -n "$opencode_instructions_file" ]; then
+   717	        opencode_instructions=$(cat "$opencode_instructions_file")
+   718	        log "使用指令文件: $opencode_instructions_file"
+   719	    fi
+   720	
+   721	    local prompt="审核 Issue #$issue_number 的实现
+   722	
+   723	项目路径: $PROJECT_ROOT
+   724	项目语言: $(detect_language)
+   725	Issue 标题: $ISSUE_TITLE
+   726	
+   727	---
+   728	请按照以下指令执行审核。
+   729	
+   730	评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+   731	
+   732	评分维度与权重:
+   733	- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+   734	- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+   735	- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+   736	- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+   737	- 性能 (10%): 无明显性能问题、无不必要的内存分配
+   738	
+   739	评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+   740	注意: 评分 ≥ 85 才算达标。
+   741	
+   742	$opencode_instructions
+   743	"
+   744	
+   745	    local log_file="$WORK_DIR/iteration-$iteration-opencode-review.log"
+   746	
+   747	    cd "$PROJECT_ROOT"
+   748	    if ! run_with_retry opencode "$prompt" "$log_file"; then
+   749	        echo "0" > "$WORK_DIR/.last_score"
+   750	        return 1
+   751	    fi
+   752	
+   753	    local score=0
+   754	    local review_result
+   755	    review_result=$(cat "$log_file")
+   756	
+   757	    score=$(extract_score "$review_result")
+   758	
+   759	    if [ -z "$score" ] || [ "$score" = "0" ]; then
+   760	        log "警告: 无法从审核结果中提取评分，默认为 50"
+   761	        score=50
+   762	    fi
+   763	
+   764	    echo "- 审核评分 (OpenCode): $score/100" >> "$WORK_DIR/log.md"
+   765	
+   766	    log "审核评分: $score/100"
+   767	
+   768	    echo "$review_result"
+   769	    echo "$score" > "$WORK_DIR/.last_score"
+   770	    return 0
+   771	}
+   772	
+   773	run_tests() {
+   774	    local iteration=$1
+   775	
+   776	    log "迭代 $iteration: 运行测试..."
+   777	
+   778	    cd "$PROJECT_ROOT"
+   779	
+   780	    local log_file="$WORK_DIR/test-$iteration.log"
+   781	    local test_cmd
+   782	    test_cmd=$(get_test_command)
+   783	
+   784	    if [ -n "$test_cmd" ]; then
+   785	        log "测试命令: $test_cmd"
+   786	        if $test_cmd 2>&1 | tee "$log_file"; then
+   787	            log "测试通过"
+   788	            echo "- 测试: ✅ 通过" >> "$WORK_DIR/log.md"
+   789	            return 0
+   790	        else
+   791	            log "测试失败"
+   792	            echo "- 测试: ❌ 失败" >> "$WORK_DIR/log.md"
+   793	            return 1
+   794	        fi
+   795	    else
+   796	        log "未检测到测试命令，跳过测试"
+   797	        echo "- 测试: ⏭️ 跳过 (未检测到测试框架)" >> "$WORK_DIR/log.md"
+   798	        return 0
+   799	    fi
+   800	}
+   801	
+   802	run_claude_review() {
+   803	    local issue_number=$1
+   804	    local iteration=$2
+   805	
+   806	    log "迭代 $iteration: Claude 审核..."
+   807	
+   808	    local claude_instructions_file
+   809	    claude_instructions_file=$(get_agent_instructions "claude")
+   810	
+   811	    local claude_instructions=""
+   812	    if [ -n "$claude_instructions_file" ]; then
+   813	        claude_instructions=$(cat "$claude_instructions_file")
+   814	        log "使用指令文件: $claude_instructions_file"
+   815	    fi
+   816	
+   817	    local prompt="审核 Issue #$issue_number 的实现
+   818	
+   819	项目路径: $PROJECT_ROOT
+   820	项目语言: $(detect_language)
+   821	Issue 标题: $ISSUE_TITLE
+   822	
+   823	---
+   824	请按照以下指令执行审核。
+   825	
+   826	评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+   827	
+   828	评分维度与权重:
+   829	- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+   830	- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+   831	- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+   832	- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+   833	- 性能 (10%): 无明显性能问题、无不必要的内存分配
+   834	
+   835	评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+   836	注意: 评分 ≥ 85 才算达标。
+   837	
+   838	$claude_instructions
+   839	"
+   840	
+   841	    local log_file="$WORK_DIR/iteration-$iteration-claude-review.log"
+   842	
+   843	    cd "$PROJECT_ROOT"
+   844	    if ! run_with_retry claude "$prompt" "$log_file"; then
+   845	        echo "0" > "$WORK_DIR/.last_score"
+   846	        return 1
+   847	    fi
+   848	
+   849	    local score=0
+   850	    local review_result
+   851	    review_result=$(cat "$log_file")
+   852	
+   853	    score=$(extract_score "$review_result")
+   854	
+   855	    if [ -z "$score" ] || [ "$score" = "0" ]; then
+   856	        log "警告: 无法从审核结果中提取评分，默认为 50"
+   857	        score=50
+   858	    fi
+   859	
+   860	    echo "- 审核评分 (Claude): $score/100" >> "$WORK_DIR/log.md"
+   861	
+   862	    log "审核评分: $score/100"
+   863	
+   864	    echo "$review_result"
+   865	    echo "$score" > "$WORK_DIR/.last_score"
+   866	    return 0
+   867	}
+   868	
+   869	run_codex_review() {
+   870	    local issue_number=$1
+   871	    local iteration=$2
+   872	
+   873	    log "迭代 $iteration: Codex 审核..."
+   874	
+   875	    local codex_instructions_file
+   876	    codex_instructions_file=$(get_agent_instructions "codex")
+   877	
+   878	    local codex_instructions=""
+   879	    if [ -n "$codex_instructions_file" ]; then
+   880	        codex_instructions=$(cat "$codex_instructions_file")
+   881	        log "使用指令文件: $codex_instructions_file"
+   882	    fi
+   883	
+   884	    local prompt="审核 Issue #$issue_number 的实现
+   885	
+   886	项目路径: $PROJECT_ROOT
+   887	项目语言: $(detect_language)
+   888	Issue 标题: $ISSUE_TITLE
+   889	
+   890	---
+   891	请按照以下指令执行审核。
+   892	
+   893	评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+   894	
+   895	评分维度与权重:
+   896	- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+   897	- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+   898	- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+   899	- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+   900	- 性能 (10%): 无明显性能问题、无不必要的内存分配
+   901	
+   902	评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+   903	注意: 评分 ≥ 85 才算达标。
+   904	
+   905	$codex_instructions
+   906	"
+   907	
+   908	    local log_file="$WORK_DIR/iteration-$iteration-codex-review.log"
+   909	
+   910	    cd "$PROJECT_ROOT"
+   911	    if ! run_with_retry codex "$prompt" "$log_file"; then
+   912	        echo "0" > "$WORK_DIR/.last_score"
+   913	        return 1
+   914	    fi
+   915	
+   916	    local score=0
+   917	    local review_result
+   918	    review_result=$(cat "$log_file")
+   919	
+   920	    score=$(extract_score "$review_result")
+   921	
+   922	    if [ -z "$score" ] || [ "$score" = "0" ]; then
+   923	        log "警告: 无法从审核结果中提取评分，默认为 50"
+   924	        score=50
+   925	    fi
+   926	
+   927	    echo "- 审核评分 (Codex): $score/100" >> "$WORK_DIR/log.md"
+   928	
+   929	    log "审核评分: $score/100"
+   930	
+   931	    echo "$review_result"
+   932	    echo "$score" > "$WORK_DIR/.last_score"
+   933	    return 0
+   934	}
+   935	
+   936	# ==================== 评分相关 ====================
+   937	
+   938	extract_score() {
+   939	    local review_result="$1"
+   940	    local score=0
+   941	    local score_line
+   942	
+   943	    # 格式1: 明确的百分制 X/100
+   944	    score_line=$(echo "$review_result" | grep -Eo '[0-9]+\.?[0-9]*(\s*/\s*100)' | head -1)
+   945	    if [ -n "$score_line" ]; then
+   946	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+   947	        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
+   948	        echo "$score"
+   949	        return
+   950	    fi
+   951	
+   952	    # 格式2: **评分: X/100** 或 **Score: X/100**
+   953	    score_line=$(echo "$review_result" | grep -E '\*\*(评分|Score)[^*]*100' | head -1)
+   954	    if [ -n "$score_line" ]; then
+   955	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+   956	        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
+   957	        echo "$score"
+   958	        return
+   959	    fi
+   960	
+   961	    # 格式3: 总分行
+   962	    score_line=$(echo "$review_result" | grep -E '(\*\*)?总分(\*\*)?\s*\|.*\*\*[0-9]' | head -1)
+   963	    if [ -z "$score_line" ]; then
+   964	        score_line=$(echo "$review_result" | grep -E '总分.*→' | head -1)
+   965	    fi
+   966	    if [ -n "$score_line" ]; then
+   967	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | tail -1)
+   968	        if [ -n "$score" ]; then
+   969	            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+   970	            echo "$score"
+   971	            return
+   972	        fi
+   973	    fi
+   974	
+   975	    # 格式4: X/10
+   976	    score_line=$(echo "$review_result" | grep -Eo '[0-9]+\.?[0-9]*(\s*/\s*10)' | head -1)
+   977	    if [ -n "$score_line" ]; then
+   978	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+   979	        if [ -n "$score" ]; then
+   980	            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+
+exec
+/bin/zsh -lc "nl -ba run.sh | sed -n '980,1320p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   980	            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+   981	            echo "$score"
+   982	            return
+   983	        fi
+   984	    fi
+   985	
+   986	    # 格式5: **评分: X** 或 **Score: X**
+   987	    score_line=$(echo "$review_result" | grep -E '\*\*(评分|Score)' | head -1)
+   988	    if [ -n "$score_line" ]; then
+   989	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+   990	        if [ -n "$score" ]; then
+   991	            if awk -v s="$score" 'BEGIN { exit (s <= 10) ? 0 : 1 }'; then
+   992	                score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+   993	            fi
+   994	            echo "$score"
+   995	            return
+   996	        fi
+   997	    fi
+   998	
+   999	    # 格式6: "评分: X" 或 "Score: X"
+  1000	    score_line=$(echo "$review_result" | grep -E '(评分|Score)\s*:' | grep -v '各维度\|维度' | head -1)
+  1001	    if [ -n "$score_line" ]; then
+  1002	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+  1003	        if [ -n "$score" ]; then
+  1004	            if awk -v s="$score" 'BEGIN { exit (s <= 10) ? 0 : 1 }'; then
+  1005	                score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+  1006	            fi
+  1007	            echo "$score"
+  1008	            return
+  1009	        fi
+  1010	    fi
+  1011	
+  1012	    echo "0"
+  1013	}
+  1014	
+  1015	check_score_passed() {
+  1016	    local score=$1
+  1017	    local passing=$PASSING_SCORE
+  1018	    awk -v score="$score" -v passing="$passing" 'BEGIN { exit (score >= passing) ? 0 : 1 }'
+  1019	}
+  1020	
+  1021	get_last_score() {
+  1022	    if [ -f "$WORK_DIR/.last_score" ]; then
+  1023	        cat "$WORK_DIR/.last_score"
+  1024	    else
+  1025	        echo "0"
+  1026	    fi
+  1027	}
+  1028	
+  1029	record_final_result() {
+  1030	    local issue_number=$1
+  1031	    local status=$2
+  1032	    local iterations=$3
+  1033	    local final_score=$4
+  1034	
+  1035	    cd "$PROJECT_ROOT"
+  1036	
+  1037	    local tests_passed="false"
+  1038	    local test_cmd
+  1039	    test_cmd=$(get_test_command)
+  1040	    if [ -n "$test_cmd" ] && $test_cmd &> /dev/null; then
+  1041	        tests_passed="true"
+  1042	    fi
+  1043	
+  1044	    local results_file="$PROJECT_ROOT/.autoresearch/results.tsv"
+  1045	    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+  1046	        "$(date -Iseconds)" \
+  1047	        "$issue_number" \
+  1048	        "$ISSUE_TITLE" \
+  1049	        "$status" \
+  1050	        "$iterations" \
+  1051	        "$tests_passed" \
+  1052	        "$final_score" \
+  1053	        "$final_score" \
+  1054	        "$BRANCH_NAME" \
+  1055	        "" >> "$results_file"
+  1056	
+  1057	    cat >> "$WORK_DIR/log.md" << EOF
+  1058	
+  1059	## 最终结果
+  1060	- 总迭代次数: $iterations
+  1061	- 最终评分: $final_score/100
+  1062	- 状态: $status
+  1063	- 分支: $BRANCH_NAME
+  1064	- 结束时间: $(date '+%Y-%m-%d %H:%M:%S')
+  1065	EOF
+  1066	}
+  1067	
+  1068	# ==================== 继续模式：恢复状态 ====================
+  1069	
+  1070	find_last_iteration() {
+  1071	    local last=0
+  1072	    for f in "$WORK_DIR"/iteration-*.log; do
+  1073	        [ -f "$f" ] || continue
+  1074	        local num
+  1075	        num=$(basename "$f" | grep -oE 'iteration-[0-9]+' | grep -oE '[0-9]+')
+  1076	        if [ -n "$num" ] && [ "$num" -gt "$last" ]; then
+  1077	            last=$num
+  1078	        fi
+  1079	    done
+  1080	    echo $last
+  1081	}
+  1082	
+  1083	restore_continue_state() {
+  1084	    local last_iter
+  1085	    last_iter=$(find_last_iteration)
+  1086	
+  1087	    if [ "$last_iter" -eq 0 ]; then
+  1088	        error "未找到任何迭代记录，无法继续"
+  1089	        exit 1
+  1090	    fi
+  1091	
+  1092	    log "上次运行到迭代 $last_iter，从迭代 $((last_iter + 1)) 继续"
+  1093	
+  1094	    # 恢复迭代计数
+  1095	    ITERATION=$last_iter
+  1096	
+  1097	    # 恢复最终评分
+  1098	    if [ -f "$WORK_DIR/.last_score" ]; then
+  1099	        FINAL_SCORE=$(cat "$WORK_DIR/.last_score")
+  1100	        log "上次评分: $FINAL_SCORE/100"
+  1101	    fi
+  1102	
+  1103	    # 恢复连续失败计数：从日志中统计最近连续失败的迭代数
+  1104	    if [ -f "$WORK_DIR/log.md" ]; then
+  1105	        CONSECUTIVE_ITERATION_FAILURES=0
+  1106	        # 从最近的迭代往回数，直到遇到非失败的迭代
+  1107	        local iter=$last_iter
+  1108	        while [ $iter -gt 0 ]; do
+  1109	            local iter_log_header
+  1110	            iter_log_header=$(grep -A1 "### 迭代 $iter " "$WORK_DIR/log.md" 2>/dev/null | head -2)
+  1111	            # 检查该迭代是否有失败标记（测试失败或审核失败）
+  1112	            if echo "$iter_log_header" | grep -qiE '失败|failed|❌'; then
+  1113	                CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+  1114	            else
+  1115	                break
+  1116	            fi
+  1117	            iter=$((iter - 1))
+  1118	        done
+  1119	        log "恢复连续失败计数: $CONSECUTIVE_ITERATION_FAILURES"
+  1120	    fi
+  1121	
+  1122	    # 恢复上次的审核反馈：从最后一个 review log 中提取
+  1123	    local last_review_log=""
+  1124	    for agent_name in "${AGENT_NAMES[@]}"; do
+  1125	        local f="$WORK_DIR/iteration-${last_iter}-${agent_name}-review.log"
+  1126	        if [ -f "$f" ]; then
+  1127	            last_review_log="$f"
+  1128	        fi
+  1129	    done
+  1130	
+  1131	    if [ -n "$last_review_log" ] && [ -f "$last_review_log" ]; then
+  1132	        PREVIOUS_FEEDBACK=$(cat "$last_review_log")
+  1133	        log "已恢复上次审核反馈"
+  1134	    else
+  1135	        # 没有审核反馈，可能是迭代 1 就中断了
+  1136	        PREVIOUS_FEEDBACK="初始实现已完成，请审核代码质量并给出评分。如果有问题请直接修复。"
+  1137	        log "未找到审核反馈，使用默认反馈"
+  1138	    fi
+  1139	
+  1140	    # 确保在正确的分支上
+  1141	    cd "$PROJECT_ROOT"
+  1142	    local branch="feature/issue-$ISSUE_NUMBER"
+  1143	    if git show-ref --verify --quiet "refs/heads/$branch"; then
+  1144	        git checkout "$branch"
+  1145	        BRANCH_NAME="$branch"
+  1146	        log "已切换到分支: $branch"
+  1147	    else
+  1148	        error "未找到分支 $branch，无法继续"
+  1149	        exit 1
+  1150	    fi
+  1151	
+  1152	    # 追加继续标记到日志
+  1153	    echo "" >> "$WORK_DIR/log.md"
+  1154	    echo "---" >> "$WORK_DIR/log.md"
+  1155	    echo "" >> "$WORK_DIR/log.md"
+  1156	    echo "## 继续运行 (从迭代 $((last_iter + 1)) 继续)" >> "$WORK_DIR/log.md"
+  1157	    echo "- 继续时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$WORK_DIR/log.md"
+  1158	    echo "- 上次评分: $FINAL_SCORE/100" >> "$WORK_DIR/log.md"
+  1159	    echo "" >> "$WORK_DIR/log.md"
+  1160	}
+  1161	
+  1162	# ==================== 参数解析 ====================
+  1163	
+  1164	CONTINUE_MODE=0
+  1165	
+  1166	while getopts "p:c" opt; do
+  1167	    case $opt in
+  1168	        p) PROJECT_ROOT="$(cd "$OPTARG" && pwd)" ;;
+  1169	        c) CONTINUE_MODE=1 ;;
+  1170	        *) usage ;;
+  1171	    esac
+  1172	done
+  1173	shift $((OPTIND - 1))
+  1174	
+  1175	if [ -z "$1" ]; then
+  1176	    usage
+  1177	fi
+  1178	
+  1179	ISSUE_NUMBER=$1
+  1180	MAX_ITERATIONS=${2:-$DEFAULT_MAX_ITERATIONS}
+  1181	
+  1182	log "=========================================="
+  1183	log "autoresearch - 自动化 Issue 处理"
+  1184	log "=========================================="
+  1185	log "Issue: #$ISSUE_NUMBER"
+  1186	log "项目: $PROJECT_ROOT"
+  1187	if [ $CONTINUE_MODE -eq 1 ]; then
+  1188	    log "模式: 继续上次运行"
+  1189	else
+  1190	    log "模式: 全新运行"
+  1191	fi
+  1192	log "最大迭代次数: $MAX_ITERATIONS"
+  1193	
+  1194	# 检查项目环境
+  1195	check_project
+  1196	
+  1197	# 检查依赖
+  1198	check_dependencies
+  1199	
+  1200	# 获取 Issue 信息
+  1201	get_issue_info "$ISSUE_NUMBER"
+  1202	
+  1203	# 设置工作目录
+  1204	setup_work_directory "$ISSUE_NUMBER"
+  1205	
+  1206	# 创建分支
+  1207	create_branch "$ISSUE_NUMBER"
+  1208	
+  1209	# ==================== 继续模式：恢复状态 ====================
+  1210	
+  1211	AGENT_NAMES=("claude" "codex" "opencode")
+  1212	ITERATION=0
+  1213	PREVIOUS_FEEDBACK=""
+  1214	FINAL_SCORE=0
+  1215	CONSECUTIVE_ITERATION_FAILURES=0
+  1216	
+  1217	if [ $CONTINUE_MODE -eq 1 ]; then
+  1218	    ADDITIONAL_ITERATIONS=${2:-$DEFAULT_MAX_ITERATIONS}
+  1219	    restore_continue_state
+  1220	
+  1221	    # 追加迭代次数 = 上次迭代数 + 新指定的次数
+  1222	    MAX_ITERATIONS=$((ITERATION + ADDITIONAL_ITERATIONS))
+  1223	    log "最大迭代次数更新为: $MAX_ITERATIONS (已有 $ITERATION + 新增 $ADDITIONAL_ITERATIONS)"
+  1224	fi
+  1225	
+  1226	# ==================== 迭代循环 ====================
+  1227	
+  1228	# Agent 列表: 0=claude, 1=codex, 2=opencode
+  1229	# 迭代 1:  Claude 初始实现
+  1230	# 迭代 2+: 三 agent 轮流审核 + 修复
+  1231	
+  1232	get_review_agent() {
+  1233	    local iter=$1
+  1234	    echo $(( (iter - 1) % 3 ))  # iter=2 → 1=codex, iter=3 → 2=opencode, iter=4 → 0=claude
+  1235	}
+  1236	
+  1237	run_review_and_fix() {
+  1238	    local agent_idx=$1
+  1239	    local agent_name="${AGENT_NAMES[$agent_idx]}"
+  1240	    local review_func="run_${agent_name}_review"
+  1241	    local impl_func="run_${agent_name}"
+  1242	
+  1243	    # 审核
+  1244	    if ! $review_func "$ISSUE_NUMBER" "$ITERATION"; then
+  1245	        log "$agent_name 审核失败，跳到下一次迭代"
+  1246	        ITERATION_FAILED=1
+  1247	        return
+  1248	    fi
+  1249	
+  1250	    REVIEW_LOG_FILE="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
+  1251	    SCORE=$(get_last_score)
+  1252	    FINAL_SCORE=$SCORE
+  1253	
+  1254	    if check_score_passed "$SCORE"; then
+  1255	        log "审核通过！评分: $SCORE/100 (达标线: $PASSING_SCORE)"
+  1256	        CONSECUTIVE_ITERATION_FAILURES=0
+  1257	        PASSED=1
+  1258	        FINAL_REVIEW_REPORT=$(cat "$REVIEW_LOG_FILE" 2>/dev/null || echo "")
+  1259	        return
+  1260	    fi
+  1261	
+  1262	    log "评分未达标 ($SCORE/$PASSING_SCORE)，$agent_name 根据反馈修复..."
+  1263	
+  1264	    REVIEW_FEEDBACK=$(cat "$REVIEW_LOG_FILE")
+  1265	    if ! $impl_func "$ISSUE_NUMBER" "$ITERATION" "$REVIEW_FEEDBACK"; then
+  1266	        log "$agent_name 修复失败，跳到下一次迭代"
+  1267	        PREVIOUS_FEEDBACK="$REVIEW_FEEDBACK"
+  1268	        ITERATION_FAILED=1
+  1269	        return
+  1270	    fi
+  1271	
+  1272	    if ! run_tests "$ITERATION"; then
+  1273	        PREVIOUS_FEEDBACK="测试失败，请检查测试输出并修复问题。"
+  1274	    else
+  1275	        PREVIOUS_FEEDBACK=""
+  1276	    fi
+  1277	}
+  1278	
+  1279	while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+  1280	    ITERATION=$((ITERATION + 1))
+  1281	    PASSED=0
+  1282	    ITERATION_FAILED=0
+  1283	
+  1284	    log ""
+  1285	    log "=========================================="
+  1286	    log "迭代 $ITERATION/$MAX_ITERATIONS"
+  1287	    if [ $ITERATION -eq 1 ]; then
+  1288	        log "本轮: Claude 初始实现"
+  1289	    else
+  1290	        agent_idx=$(get_review_agent $ITERATION)
+  1291	        log "本轮: ${AGENT_NAMES[$agent_idx]} 审核 + 修复"
+  1292	    fi
+  1293	    log "=========================================="
+  1294	
+  1295	    # ---- 迭代 1: Claude 初始实现 ----
+  1296	    if [ $ITERATION -eq 1 ]; then
+  1297	        if ! run_claude "$ISSUE_NUMBER" "$ITERATION" ""; then
+  1298	            log "Claude 初始实现失败，跳到下一次迭代"
+  1299	            ITERATION_FAILED=1
+  1300	        else
+  1301	            if ! run_tests "$ITERATION"; then
+  1302	                log "初始实现测试失败，继续下一轮审核修复"
+  1303	                PREVIOUS_FEEDBACK="测试失败，请检查测试输出并修复问题。"
+  1304	            fi
+  1305	            PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
+  1306	        fi
+  1307	
+  1308	        if [ $ITERATION_FAILED -eq 1 ]; then
+  1309	            CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+  1310	        else
+  1311	            CONSECUTIVE_ITERATION_FAILURES=0
+  1312	        fi
+  1313	        continue
+  1314	    fi
+  1315	
+  1316	    # ---- 迭代 >=2: 三 agent 轮流审核 + 修复 ----
+  1317	    agent_idx=$(get_review_agent $ITERATION)
+  1318	    run_review_and_fix $agent_idx
+  1319	
+  1320	    if [ $PASSED -eq 1 ]; then
+
+exec
+/bin/zsh -lc "nl -ba run.sh | sed -n '1320,1500p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+  1320	    if [ $PASSED -eq 1 ]; then
+  1321	        break
+  1322	    fi
+  1323	
+  1324	    if [ $ITERATION_FAILED -eq 1 ]; then
+  1325	        CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+  1326	    else
+  1327	        CONSECUTIVE_ITERATION_FAILURES=0
+  1328	    fi
+  1329	
+  1330	    if [ $CONSECUTIVE_ITERATION_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]; then
+  1331	        error "连续 $CONSECUTIVE_ITERATION_FAILURES 次迭代失败，停止运行"
+  1332	        record_final_result "$ISSUE_NUMBER" "agent_failed" "$ITERATION" "$FINAL_SCORE"
+  1333	        exit 1
+  1334	    fi
+  1335	done
+  1336	
+  1337	# ==================== 最终处理 ====================
+  1338	
+  1339	if check_score_passed "$FINAL_SCORE"; then
+  1340	    record_final_result "$ISSUE_NUMBER" "completed" "$ITERATION" "$FINAL_SCORE"
+  1341	
+  1342	    echo ""
+  1343	    log "=========================================="
+  1344	    log "处理完成！"
+  1345	    log "=========================================="
+  1346	    log "分支: $BRANCH_NAME"
+  1347	    log "评分: $FINAL_SCORE/100"
+  1348	    log "迭代次数: $ITERATION"
+  1349	
+  1350	    # 自动提交 PR 并合并
+  1351	    log ""
+  1352	    log "=========================================="
+  1353	    log "自动提交 PR 并合并..."
+  1354	    log "=========================================="
+  1355	
+  1356	    cd "$PROJECT_ROOT"
+  1357	
+  1358	    # 提交所有更改
+  1359	    log "提交更改..."
+  1360	    git add -A
+  1361	    git commit -m "feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
+  1362	
+  1363	Implemented by autoresearch with score $FINAL_SCORE/100 after $ITERATION iterations.
+  1364	
+  1365	Closes #$ISSUE_NUMBER" 2>/dev/null || log "没有需要提交的更改"
+  1366	
+  1367	    # 推送分支
+  1368	    log "推送分支 $BRANCH_NAME..."
+  1369	    git push -u origin "$BRANCH_NAME"
+  1370	
+  1371	    # 创建 PR
+  1372	    log "创建 Pull Request..."
+  1373	    PR_URL=$(gh pr create --title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" --body "$(cat <<EOF
+  1374	## Summary
+  1375	- Implements #$ISSUE_NUMBER
+  1376	- Score: $FINAL_SCORE/100
+  1377	- Iterations: $ITERATION
+  1378	
+  1379	## Test plan
+  1380	- [x] All tests pass
+  1381	- [x] Code review completed with score >= $PASSING_SCORE
+  1382	
+  1383	Closes #$ISSUE_NUMBER
+  1384	EOF
+  1385	)" 2>&1)
+  1386	
+  1387	    if echo "$PR_URL" | grep -q "https://github.com"; then
+  1388	        PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+  1389	        log "PR 已创建: $PR_URL"
+  1390	
+  1391	        # 合并 PR
+  1392	        log "合并 PR #$PR_NUMBER..."
+  1393	        gh pr merge "$PR_NUMBER" --merge --delete-branch
+  1394	
+  1395	        # 添加评论到 Issue（包含最终审核报告）
+  1396	        log "添加评论到 Issue #$ISSUE_NUMBER..."
+  1397	        FINAL_REVIEW_SECTION=""
+  1398	        if [ -n "$FINAL_REVIEW_REPORT" ]; then
+  1399	            FINAL_REVIEW_SECTION="
+  1400	---
+  1401	
+  1402	$FINAL_REVIEW_REPORT
+  1403	"
+  1404	        fi
+  1405	        gh issue comment "$ISSUE_NUMBER" --body "$(cat <<EOF
+  1406	## 自动处理完成
+  1407	
+  1408	- **PR**: $PR_URL (已合并)
+  1409	- **评分**: $FINAL_SCORE/100
+  1410	- **迭代次数**: $ITERATION
+  1411	- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[@]})
+  1412	${FINAL_REVIEW_SECTION}
+  1413	该 Issue 已由 autoresearch 自动实现、审核并合并。
+  1414	EOF
+  1415	)" 2>/dev/null || log "警告: 添加评论失败"
+  1416	
+  1417	        # 关闭 Issue
+  1418	        log "关闭 Issue #$ISSUE_NUMBER..."
+  1419	        gh issue close "$ISSUE_NUMBER" --reason completed 2>/dev/null || log "警告: 关闭 Issue 失败 (可能已通过 PR 自动关闭)"
+  1420	
+  1421	        log ""
+  1422	        log "=========================================="
+  1423	        log "完成！Issue #$ISSUE_NUMBER 已自动处理"
+  1424	        log "=========================================="
+  1425	        log "PR: $PR_URL"
+  1426	        log "状态: 已合并并关闭"
+  1427	    else
+  1428	        log "警告: PR 创建失败或已存在"
+  1429	        log "$PR_URL"
+  1430	    fi
+  1431	
+  1432	    exit 0
+  1433	fi
+  1434	
+  1435	# 达到最大迭代次数
+  1436	log ""
+  1437	log "=========================================="
+  1438	log "达到最大迭代次数，仍未通过审核"
+  1439	log "=========================================="
+  1440	log "最终评分: $FINAL_SCORE/100"
+  1441	log "请人工介入处理"
+  1442	
+  1443	record_final_result "$ISSUE_NUMBER" "blocked" "$ITERATION" "$FINAL_SCORE"
+  1444	
+  1445	exit 1
+
+codex
+我正在核对测试文件是否真正验证了本次改动，而不是只验证 shell 基础行为；这一步会决定评分里“测试质量”的分数。
+exec
+/bin/zsh -lc "nl -ba tests/test_extract_score.sh | sed -n '1,280p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	#!/bin/bash
+     2	# tests/test_extract_score.sh - Unit tests for extract_score()
+     3	#
+     4	# Usage: bash tests/test_extract_score.sh
+     5	
+     6	set -e
+     7	
+     8	SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+     9	PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+    10	
+    11	# ==================== Extract functions from run.sh ====================
+    12	# run.sh has set -e and side effects, so we extract just the pure functions.
+    13	
+    14	# Configuration constants (needed by the functions)
+    15	RETRY_BASE_DELAY=2
+    16	RETRY_MAX_DELAY=60
+    17	PASSING_SCORE=85
+    18	
+    19	extract_score() {
+    20	    local review_result="$1"
+    21	    local score=0
+    22	    local score_line
+    23	
+    24	    # 格式1: 明确的百分制 X/100
+    25	    score_line=$(echo "$review_result" | grep -Eo '[0-9]+\.?[0-9]*(\s*/\s*100)' | head -1)
+    26	    if [ -n "$score_line" ]; then
+    27	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+    28	        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
+    29	        echo "$score"
+    30	        return
+    31	    fi
+    32	
+    33	    # 格式2: **评分: X/100** 或 **Score: X/100**
+    34	    score_line=$(echo "$review_result" | grep -E '\*\*(评分|Score)[^*]*100' | head -1)
+    35	    if [ -n "$score_line" ]; then
+    36	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+    37	        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
+    38	        echo "$score"
+    39	        return
+    40	    fi
+    41	
+    42	    # 格式3: 总分行
+    43	    score_line=$(echo "$review_result" | grep -E '(\*\*)?总分(\*\*)?\s*\|.*\*\*[0-9]' | head -1)
+    44	    if [ -z "$score_line" ]; then
+    45	        score_line=$(echo "$review_result" | grep -E '总分.*→' | head -1)
+    46	    fi
+    47	    if [ -n "$score_line" ]; then
+    48	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | tail -1)
+    49	        if [ -n "$score" ]; then
+    50	            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+    51	            echo "$score"
+    52	            return
+    53	        fi
+    54	    fi
+    55	
+    56	    # 格式4: X/10
+    57	    score_line=$(echo "$review_result" | grep -Eo '[0-9]+\.?[0-9]*(\s*/\s*10)' | head -1)
+    58	    if [ -n "$score_line" ]; then
+    59	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+    60	        if [ -n "$score" ]; then
+    61	            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+    62	            echo "$score"
+    63	            return
+    64	        fi
+    65	    fi
+    66	
+    67	    # 格式5: **评分: X** 或 **Score: X**
+    68	    score_line=$(echo "$review_result" | grep -E '\*\*(评分|Score)' | head -1)
+    69	    if [ -n "$score_line" ]; then
+    70	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+    71	        if [ -n "$score" ]; then
+    72	            if awk -v s="$score" 'BEGIN { exit (s <= 10) ? 0 : 1 }'; then
+    73	                score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+    74	            fi
+    75	            echo "$score"
+    76	            return
+    77	        fi
+    78	    fi
+    79	
+    80	    # 格式6: "评分: X" 或 "Score: X"
+    81	    score_line=$(echo "$review_result" | grep -E '(评分|Score)\s*:' | grep -v '各维度\|维度' | head -1)
+    82	    if [ -n "$score_line" ]; then
+    83	        score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
+    84	        if [ -n "$score" ]; then
+    85	            if awk -v s="$score" 'BEGIN { exit (s <= 10) ? 0 : 1 }'; then
+    86	                score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+    87	            fi
+    88	            echo "$score"
+    89	            return
+    90	        fi
+    91	    fi
+    92	
+    93	    echo "0"
+    94	}
+    95	
+    96	has_fatal_error() {
+    97	    local log_file="$1"
+    98	    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
+    99	    pattern+='|^(timeout|rate.limit|authentication|unauthorized|API.key).*error'
+   100	    pattern+='|context.length.exceeded'
+   101	    pattern+='|maximum.context.length'
+   102	    pattern+='|token.limit.exceeded'
+   103	    pattern+='|model.is.overloaded'
+   104	    pattern+='|server.error'
+   105	    pattern+='|service.unavailable'
+   106	    pattern+='|internal.server.error'
+   107	    pattern+='|too.many.requests'
+   108	    pattern+='|quota.exceeded'
+   109	    pattern+='|billing.hard.limit'
+   110	    pattern+='|connection.refused'
+   111	    pattern+='|network.error'
+   112	    pattern+='|DNS.resolution'
+   113	    grep -qE "$pattern" "$log_file" 2>/dev/null
+   114	}
+   115	
+   116	has_api_failure() {
+   117	    local log_file="$1"
+   118	    local pattern='status.4[0-9][0-9]'
+   119	    pattern+='|status.5[0-9][0-9]'
+   120	    pattern+='|HTTP.4[0-9][0-9]'
+   121	    pattern+='|HTTP.5[0-9][0-9]'
+   122	    pattern+='|curl.*error'
+   123	    pattern+='|fetch.failed'
+   124	    pattern+='|request.failed'
+   125	    pattern+='|response.is.empty'
+   126	    pattern+='|no.response.received'
+   127	    grep -qE "$pattern" "$log_file" 2>/dev/null
+   128	}
+   129	
+   130	check_score_passed() {
+   131	    local score=$1
+   132	    local passing=$PASSING_SCORE
+   133	    awk -v score="$score" -v passing="$passing" 'BEGIN { exit (score >= passing) ? 0 : 1 }'
+   134	}
+   135	
+   136	annealing_delay() {
+   137	    local retry=$1
+   138	    local delay=$((RETRY_BASE_DELAY * (1 << (retry - 1))))
+   139	    local jitter=$((delay / 4))
+   140	    if [ $jitter -gt 0 ]; then
+   141	        jitter=$((RANDOM % jitter))
+   142	    fi
+   143	    delay=$((delay + jitter))
+   144	    if [ $delay -gt $RETRY_MAX_DELAY ]; then
+   145	        delay=$RETRY_MAX_DELAY
+   146	    fi
+   147	    echo $delay
+   148	}
+   149	
+   150	# ==================== Test Framework ====================
+   151	
+   152	PASS=0
+   153	FAIL=0
+   154	TOTAL=0
+   155	
+   156	assert_eq() {
+   157	    local test_name="$1"
+   158	    local expected="$2"
+   159	    local actual="$3"
+   160	    TOTAL=$((TOTAL + 1))
+   161	    if [ "$expected" = "$actual" ]; then
+   162	        PASS=$((PASS + 1))
+   163	        echo "  PASS: $test_name (expected=$expected, actual=$actual)"
+   164	    else
+   165	        FAIL=$((FAIL + 1))
+   166	        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+   167	    fi
+   168	}
+   169	
+   170	assert_true() {
+   171	    local test_name="$1"
+   172	    local cmd="$2"
+   173	    TOTAL=$((TOTAL + 1))
+   174	    if eval "$cmd"; then
+   175	        PASS=$((PASS + 1))
+   176	        echo "  PASS: $test_name"
+   177	    else
+   178	        FAIL=$((FAIL + 1))
+   179	        echo "  FAIL: $test_name (expected true, got false)"
+   180	    fi
+   181	}
+   182	
+   183	assert_false() {
+   184	    local test_name="$1"
+   185	    local cmd="$2"
+   186	    TOTAL=$((TOTAL + 1))
+   187	    if eval "$cmd"; then
+   188	        FAIL=$((FAIL + 1))
+   189	        echo "  FAIL: $test_name (expected false, got true)"
+   190	    else
+   191	        PASS=$((PASS + 1))
+   192	        echo "  PASS: $test_name"
+   193	    fi
+   194	}
+   195	
+   196	TMPDIR_TESTS=""
+   197	cleanup() {
+   198	    if [ -n "$TMPDIR_TESTS" ] && [ -d "$TMPDIR_TESTS" ]; then
+   199	        rm -rf "$TMPDIR_TESTS"
+   200	    fi
+   201	}
+   202	trap cleanup EXIT
+   203	
+   204	# ==================== Tests: extract_score() ====================
+   205	
+   206	echo "=== extract_score() Tests ==="
+   207	echo ""
+   208	
+   209	# --- Format 1: X/100 ---
+   210	echo "--- Format 1: X/100 ---"
+   211	
+   212	assert_eq "plain 85/100" "85" "$(extract_score "总体评分 85/100")"
+   213	assert_eq "plain 92/100" "92" "$(extract_score "Score: 92/100")"
+   214	assert_eq "plain 0/100" "0" "$(extract_score "得分 0/100")"
+   215	assert_eq "plain 100/100" "100" "$(extract_score "满分 100/100")"
+   216	
+   217	# --- Format 2: **评分: X/100** ---
+   218	echo "--- Format 2: **评分: X/100** ---"
+   219	
+   220	assert_eq "bold 评分 85/100" "85" "$(extract_score "**评分: 85/100**")"
+   221	assert_eq "bold Score 78/100" "78" "$(extract_score "**Score: 78/100**")"
+   222	assert_eq "bold 评分 in context" "90" "$(extract_score "一些文字\n\n**评分: 90/100**\n\n更多文字")"
+   223	
+   224	# --- Format 3: 总分 table row ---
+   225	echo "--- Format 3: 总分 table ---"
+   226	
+   227	assert_eq "总分 table format" "70" "$(extract_score "| 总分 | 7.0 |\n|**总分**|**7.0**|")"
+   228	assert_eq "总分 arrow format" "80" "$(extract_score "总分 → 8.0")"
+   229	
+   230	# --- Format 4: X/10 ---
+   231	echo "--- Format 4: X/10 ---"
+   232	
+   233	assert_eq "8/10 scale" "80" "$(extract_score "评分 8/10")"
+   234	assert_eq "7/10 scale" "70" "$(extract_score "Score: 7/10")"
+   235	assert_eq "9.5/10 scale" "95" "$(extract_score "9.5/10")"
+   236	
+   237	# --- Format 5: **评分: X** ---
+   238	echo "--- Format 5: **评分: X** (no /100) ---"
+   239	
+   240	assert_eq "bold 评分 small number" "80" "$(extract_score "**评分: 8**")"
+   241	assert_eq "bold Score small number" "70" "$(extract_score "**Score: 7**")"
+   242	assert_eq "bold 评分 large number" "85" "$(extract_score "**评分: 85**")"
+   243	assert_eq "bold Score large number" "92" "$(extract_score "**Score: 92**")"
+   244	
+   245	# --- Format 6: 评分: X ---
+   246	echo "--- Format 6: 评分: X (plain) ---"
+   247	
+   248	assert_eq "plain 评分 small" "90" "$(extract_score "评分: 9")"
+   249	assert_eq "plain Score small" "60" "$(extract_score "Score: 6")"
+   250	assert_eq "plain 评分 large" "75" "$(extract_score "评分: 75")"
+   251	assert_eq "plain Score large" "88" "$(extract_score "Score: 88")"
+   252	
+   253	# --- No score found ---
+   254	echo "--- No score ---"
+   255	
+   256	assert_eq "no score returns 0" "0" "$(extract_score "这段文字没有评分信息")"
+   257	assert_eq "empty string returns 0" "0" "$(extract_score "")"
+   258	
+   259	# --- Priority: Format 1 should win over others ---
+   260	echo "--- Priority tests ---"
+   261	
+   262	assert_eq "format 1 takes priority" "85" "$(extract_score "总体评分 85/100\n评分: 7")"
+   263	
+   264	# --- Edge cases ---
+   265	echo "--- Edge cases ---"
+   266	
+   267	assert_eq "score with decimal" "86" "$(extract_score "85.5/100")"
+   268	assert_eq "score in multiline" "75" "$(extract_score "Line 1\n评分 75/100\nLine 3")"
+   269	
+   270	# ==================== Tests: has_fatal_error() ====================
+   271	
+   272	echo ""
+   273	echo "=== has_fatal_error() Tests ==="
+   274	echo ""
+   275	
+   276	TMPDIR_TESTS=$(mktemp -d)
+   277	
+   278	# Helper: create temp log file with content
+   279	make_log() {
+   280	    local name="$1"
+
+exec
+/bin/zsh -lc "nl -ba tests/test_extract_score.sh | sed -n '280,560p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   280	    local name="$1"
+   281	    local content="$2"
+   282	    local path="$TMPDIR_TESTS/$name"
+   283	    echo -e "$content" > "$path"
+   284	    echo "$path"
+   285	}
+   286	
+   287	echo "--- Fatal errors (should detect) ---"
+   288	
+   289	assert_true "Error: prefix" "has_fatal_error $(make_log 'err1.log' 'Error: something went wrong')"
+   290	assert_true "ERROR: prefix" "has_fatal_error $(make_log 'err2.log' 'ERROR: connection failed')"
+   291	assert_true "Fatal: prefix" "has_fatal_error $(make_log 'err3.log' 'Fatal: out of memory')"
+   292	assert_true "Panic: prefix" "has_fatal_error $(make_log 'err4.log' 'Panic: runtime error')"
+   293	assert_true "timeout error" "has_fatal_error $(make_log 'err5.log' 'timeout error during API call')"
+   294	assert_true "rate limit error" "has_fatal_error $(make_log 'err6.log' 'rate limit error exceeded')"
+   295	assert_true "authentication error" "has_fatal_error $(make_log 'err7.log' 'authentication error: invalid token')"
+   296	assert_true "API key error" "has_fatal_error $(make_log 'err8.log' 'API key error: key not found')"
+   297	assert_true "Exception prefix" "has_fatal_error $(make_log 'err9.log' 'Exception: null pointer reference')"
+   298	assert_true "context length exceeded" "has_fatal_error $(make_log 'err10.log' 'context length exceeded')"
+   299	assert_true "token limit exceeded" "has_fatal_error $(make_log 'err11.log' 'token limit exceeded')"
+   300	assert_true "model is overloaded" "has_fatal_error $(make_log 'err12.log' 'model is overloaded')"
+   301	assert_true "server error" "has_fatal_error $(make_log 'err13.log' 'server error: 500')"
+   302	assert_true "service unavailable" "has_fatal_error $(make_log 'err14.log' 'service unavailable')"
+   303	assert_true "internal server error" "has_fatal_error $(make_log 'err15.log' 'internal server error')"
+   304	assert_true "too many requests" "has_fatal_error $(make_log 'err16.log' 'too many requests')"
+   305	assert_true "quota exceeded" "has_fatal_error $(make_log 'err17.log' 'quota exceeded')"
+   306	assert_true "billing hard limit" "has_fatal_error $(make_log 'err18.log' 'billing hard limit reached')"
+   307	assert_true "connection refused" "has_fatal_error $(make_log 'err19.log' 'connection refused')"
+   308	assert_true "network error" "has_fatal_error $(make_log 'err20.log' 'network error')"
+   309	assert_true "DNS resolution" "has_fatal_error $(make_log 'err21.log' 'DNS resolution failed')"
+   310	
+   311	echo "--- Non-fatal content (should not detect) ---"
+   312	
+   313	assert_false "normal output" "has_fatal_error $(make_log 'ok1.log' 'The implementation looks good\nTests passed successfully')"
+   314	assert_false "error handling discussion" "has_fatal_error $(make_log 'ok2.log' 'Consider adding error handling for edge cases')"
+   315	assert_false "error in middle of line" "has_fatal_error $(make_log 'ok3.log' 'This fix resolves the error that occurred previously')"
+   316	assert_false "empty file" "has_fatal_error $(make_log 'ok4.log' '')"
+   317	assert_false "nonexistent file" "has_fatal_error /tmp/nonexistent_file_$$_test.log"
+   318	
+   319	# ==================== Tests: has_api_failure() ====================
+   320	
+   321	echo ""
+   322	echo "=== has_api_failure() Tests ==="
+   323	echo ""
+   324	
+   325	echo "--- API failures (should detect) ---"
+   326	
+   327	assert_true "status 401" "has_api_failure $(make_log 'api1.log' 'status 401 Unauthorized')"
+   328	assert_true "status 429" "has_api_failure $(make_log 'api2.log' 'status 429 Too Many Requests')"
+   329	assert_true "status 500" "has_api_failure $(make_log 'api3.log' 'status 500 Internal Server Error')"
+   330	assert_true "status 503" "has_api_failure $(make_log 'api4.log' 'status 503 Service Unavailable')"
+   331	assert_true "HTTP 500" "has_api_failure $(make_log 'api5.log' 'HTTP 500 error')"
+   332	assert_true "curl error" "has_api_failure $(make_log 'api6.log' 'curl error: connection timed out')"
+   333	assert_true "fetch failed" "has_api_failure $(make_log 'api7.log' 'fetch failed: network unreachable')"
+   334	assert_true "request failed" "has_api_failure $(make_log 'api8.log' 'request failed: timeout')"
+   335	assert_true "response is empty" "has_api_failure $(make_log 'api9.log' 'response is empty')"
+   336	assert_true "no response received" "has_api_failure $(make_log 'api10.log' 'no response received from server')"
+   337	
+   338	echo "--- Normal API responses (should not detect) ---"
+   339	
+   340	assert_false "normal output" "has_api_failure $(make_log 'api_ok1.log' 'Implementation completed successfully')"
+   341	assert_false "status discussion" "has_api_failure $(make_log 'api_ok2.log' 'Check the HTTP status codes for error handling')"
+   342	assert_false "empty file" "has_api_failure $(make_log 'api_ok3.log' '')"
+   343	assert_false "nonexistent file" "has_api_failure /tmp/nonexistent_file_$$_test2.log"
+   344	
+   345	# ==================== Tests: check_score_passed() ====================
+   346	
+   347	echo ""
+   348	echo "=== check_score_passed() Tests ==="
+   349	echo ""
+   350	
+   351	echo "--- Scores at threshold (85) ---"
+   352	
+   353	assert_true "score 85 passes" "check_score_passed 85"
+   354	assert_true "score 100 passes" "check_score_passed 100"
+   355	assert_true "score 90 passes" "check_score_passed 90"
+   356	
+   357	echo "--- Scores below threshold ---"
+   358	
+   359	assert_false "score 84 fails" "check_score_passed 84"
+   360	assert_false "score 0 fails" "check_score_passed 0"
+   361	assert_false "score 50 fails" "check_score_passed 50"
+   362	
+   363	# ==================== Tests: annealing_delay() ====================
+   364	
+   365	echo ""
+   366	echo "=== annealing_delay() Tests ==="
+   367	echo ""
+   368	
+   369	echo "--- Base delay calculation (without jitter randomness) ---"
+   370	
+   371	# retry=1: base=2*1=2, max_jitter=0 (2/4=0 rounded down)
+   372	delay1=$(annealing_delay 1)
+   373	assert_true "retry 1 delay >= 2" "[ $delay1 -ge 2 ]"
+   374	assert_true "retry 1 delay <= 2" "[ $delay1 -le 2 ]"
+   375	
+   376	# retry=2: base=2*2=4, max_jitter=1 (4/4=1)
+   377	delay2=$(annealing_delay 2)
+   378	assert_true "retry 2 delay >= 4" "[ $delay2 -ge 4 ]"
+   379	assert_true "retry 2 delay <= 5" "[ $delay2 -le 5 ]"
+   380	
+   381	# retry=3: base=2*4=8, max_jitter=2 (8/4=2)
+   382	delay3=$(annealing_delay 3)
+   383	assert_true "retry 3 delay >= 8" "[ $delay3 -ge 8 ]"
+   384	assert_true "retry 3 delay <= 10" "[ $delay3 -le 10 ]"
+   385	
+   386	# retry=4: base=2*8=16, max_jitter=4 (16/4=4)
+   387	delay4=$(annealing_delay 4)
+   388	assert_true "retry 4 delay >= 16" "[ $delay4 -ge 16 ]"
+   389	assert_true "retry 4 delay <= 20" "[ $delay4 -le 20 ]"
+   390	
+   391	# retry=5: base=2*16=32, max_jitter=8 (32/4=8)
+   392	delay5=$(annealing_delay 5)
+   393	assert_true "retry 5 delay >= 32" "[ $delay5 -ge 32 ]"
+   394	assert_true "retry 5 delay <= 40" "[ $delay5 -le 40 ]"
+   395	
+   396	echo "--- Capped at max delay ---"
+   397	
+   398	# retry=10: base=2*512=1024, but should be capped at 60
+   399	delay10=$(annealing_delay 10)
+   400	assert_true "retry 10 capped at 60" "[ $delay10 -le 60 ]"
+   401	
+   402	echo "--- Exponential growth ---"
+   403	
+   404	# Verify delay generally increases with retries
+   405	assert_true "delay increases retry 1<2" "[ $delay2 -ge $delay1 ]"
+   406	assert_true "delay increases retry 2<3" "[ $delay3 -ge $delay2 ]"
+   407	
+   408	# ==================== Tests: PIPESTATUS exit code capture ====================
+   409	
+   410	echo ""
+   411	echo "=== PIPESTATUS exit code capture Tests ==="
+   412	echo ""
+   413	
+   414	echo "--- pipefail preserves exit codes ---"
+   415	
+   416	# With set -o pipefail, a failing first command should cause the pipeline to fail
+   417	assert_true "pipefail: failing command in pipe" "echo hello | false 2>/dev/null; [ ${PIPESTATUS[0]} -ne 0 ] || [ \$? -ne 0 ] || true"
+   418	
+   419	echo "--- PIPESTATUS captures first command exit ---"
+   420	
+   421	# Successful pipeline: both commands succeed, PIPESTATUS[0] should be 0
+   422	result=$(bash -c 'set -o pipefail; echo "test" | cat; echo ${PIPESTATUS[0]}')
+   423	assert_eq "PIPESTATUS: successful pipeline" "0" "$(bash -c 'set -o pipefail; echo "test" | cat>/dev/null; echo ${PIPESTATUS[0]}')"
+   424	
+   425	# Failing first command: PIPESTATUS[0] should reflect the failure
+   426	assert_true "PIPESTATUS: failing first command" "bash -c 'set -o pipefail; false | cat>/dev/null; exit \${PIPESTATUS[0]}' 2>/dev/null; [ \$? -ne 0 ]"
+   427	
+   428	# ==================== Tests: Output quality detection ====================
+   429	
+   430	echo ""
+   431	echo "=== Output quality detection Tests ==="
+   432	echo ""
+   433	
+   434	echo "--- Meaningful output detection ---"
+   435	
+   436	# Count non-empty, non-whitespace lines
+   437	assert_eq "5 non-empty lines >= 5" "5" "$(echo -e "line1\nline2\nline3\nline4\nline5" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+   438	
+   439	# Whitespace-only lines should be filtered
+   440	assert_eq "whitespace-only lines filtered" "2" "$(echo -e "line1\n   \n\nline2\n\t\n" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+   441	
+   442	# Empty output
+   443	assert_eq "empty output has 0 lines" "0" "$(echo "" | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+   444	
+   445	# Only whitespace
+   446	assert_eq "whitespace-only output has 0 lines" "0" "$(echo -e "   \n\t\n  " | grep -vE '^\s*$' | wc -l | tr -d ' ')"
+   447	
+   448	echo "--- Combined error detection scenarios ---"
+   449	
+   450	# A log file with fatal error should be detected even if exit code is 0
+   451	cat > "$TMPDIR_TESTS/exit0_with_error.log" << 'INNEREOF'
+   452	Error: API rate limit exceeded
+   453	The implementation is complete.
+   454	INNEREOF
+   455	assert_true "exit 0 + fatal error in log" "has_fatal_error $TMPDIR_TESTS/exit0_with_error.log"
+   456	
+   457	# A log file with API failure should be detected
+   458	cat > "$TMPDIR_TESTS/exit0_with_api_failure.log" << 'INNEREOF'
+   459	status 429 Too Many Requests
+   460	The code looks good.
+   461	INNEREOF
+   462	assert_true "exit 0 + API failure in log" "has_api_failure $TMPDIR_TESTS/exit0_with_api_failure.log"
+   463	
+   464	# A normal log file with "error" discussion should NOT be flagged
+   465	cat > "$TMPDIR_TESTS/normal_error_discussion.log" << 'INNEREOF'
+   466	Consider adding error handling for edge cases.
+   467	The error path should return a proper message.
+   468	Overall this is a solid implementation.
+   469	Score: 85/100
+   470	All tests pass successfully.
+   471	INNEREOF
+   472	assert_false "normal error discussion not fatal" "has_fatal_error $TMPDIR_TESTS/normal_error_discussion.log"
+   473	assert_false "normal error discussion not API failure" "has_api_failure $TMPDIR_TESTS/normal_error_discussion.log"
+   474	assert_true "normal discussion has enough lines" "[ $(grep -vE '^\s*$' $TMPDIR_TESTS/normal_error_discussion.log | wc -l) -ge 5 ]"
+   475	
+   476	# ==================== Summary ====================
+   477	
+   478	echo ""
+   479	echo "=========================================="
+   480	echo "Total: $TOTAL  Passed: $PASS  Failed: $FAIL"
+   481	echo "=========================================="
+   482	
+   483	if [ $FAIL -gt 0 ]; then
+   484	    exit 1
+   485	fi
+   486	
+   487	exit 0
+
+codex
+我已经完成静态阅读，下一步会跑现有测试并做一轮脚本级检查（含关键路径的行为推断），确认审查结论是否可复现。
+exec
+/bin/zsh -lc "command -v shellcheck >/dev/null 2>&1 && shellcheck run.sh tests/test_extract_score.sh || echo 'shellcheck not installed'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+shellcheck not installed
+
+exec
+/bin/zsh -lc 'bash tests/test_extract_score.sh' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 401ms:
+  PASS: bold 评分 small number (expected=80, actual=80)
+  PASS: bold Score small number (expected=70, actual=70)
+  PASS: bold 评分 large number (expected=85, actual=85)
+  PASS: bold Score large number (expected=92, actual=92)
+--- Format 6: 评分: X (plain) ---
+  PASS: plain 评分 small (expected=90, actual=90)
+  PASS: plain Score small (expected=60, actual=60)
+  PASS: plain 评分 large (expected=75, actual=75)
+  PASS: plain Score large (expected=88, actual=88)
+--- No score ---
+  PASS: no score returns 0 (expected=0, actual=0)
+  PASS: empty string returns 0 (expected=0, actual=0)
+--- Priority tests ---
+  PASS: format 1 takes priority (expected=85, actual=85)
+--- Edge cases ---
+  PASS: score with decimal (expected=86, actual=86)
+  PASS: score in multiline (expected=75, actual=75)
+
+=== has_fatal_error() Tests ===
+
+--- Fatal errors (should detect) ---
+  PASS: Error: prefix
+  PASS: ERROR: prefix
+  PASS: Fatal: prefix
+  PASS: Panic: prefix
+  PASS: timeout error
+  PASS: rate limit error
+  PASS: authentication error
+  PASS: API key error
+  PASS: Exception prefix
+  PASS: context length exceeded
+  PASS: token limit exceeded
+  PASS: model is overloaded
+  PASS: server error
+  PASS: service unavailable
+  PASS: internal server error
+  PASS: too many requests
+  PASS: quota exceeded
+  PASS: billing hard limit
+  PASS: connection refused
+  PASS: network error
+  PASS: DNS resolution
+--- Non-fatal content (should not detect) ---
+  PASS: normal output
+  PASS: error handling discussion
+  PASS: error in middle of line
+  PASS: empty file
+  PASS: nonexistent file
+
+=== has_api_failure() Tests ===
+
+--- API failures (should detect) ---
+  PASS: status 401
+  PASS: status 429
+  PASS: status 500
+  PASS: status 503
+  PASS: HTTP 500
+  PASS: curl error
+  PASS: fetch failed
+  PASS: request failed
+  PASS: response is empty
+  PASS: no response received
+--- Normal API responses (should not detect) ---
+  PASS: normal output
+  PASS: status discussion
+  PASS: empty file
+  PASS: nonexistent file
+
+=== check_score_passed() Tests ===
+
+--- Scores at threshold (85) ---
+  PASS: score 85 passes
+  PASS: score 100 passes
+  PASS: score 90 passes
+--- Scores below threshold ---
+  PASS: score 84 fails
+  PASS: score 0 fails
+  PASS: score 50 fails
+
+=== annealing_delay() Tests ===
+
+--- Base delay calculation (without jitter randomness) ---
+  PASS: retry 1 delay >= 2
+  PASS: retry 1 delay <= 2
+  PASS: retry 2 delay >= 4
+  PASS: retry 2 delay <= 5
+  PASS: retry 3 delay >= 8
+  PASS: retry 3 delay <= 10
+  PASS: retry 4 delay >= 16
+  PASS: retry 4 delay <= 20
+  PASS: retry 5 delay >= 32
+  PASS: retry 5 delay <= 40
+--- Capped at max delay ---
+  PASS: retry 10 capped at 60
+--- Exponential growth ---
+  PASS: delay increases retry 1<2
+  PASS: delay increases retry 2<3
+
+=== PIPESTATUS exit code capture Tests ===
+
+--- pipefail preserves exit codes ---
+  PASS: pipefail: failing command in pipe
+--- PIPESTATUS captures first command exit ---
+  PASS: PIPESTATUS: successful pipeline (expected=0, actual=0)
+  PASS: PIPESTATUS: failing first command
+
+=== Output quality detection Tests ===
+
+--- Meaningful output detection ---
+  PASS: 5 non-empty lines >= 5 (expected=5, actual=5)
+  PASS: whitespace-only lines filtered (expected=2, actual=2)
+  PASS: empty output has 0 lines (expected=0, actual=0)
+  PASS: whitespace-only output has 0 lines (expected=0, actual=0)
+--- Combined error detection scenarios ---
+  PASS: exit 0 + fatal error in log
+  PASS: exit 0 + API failure in log
+  PASS: normal error discussion not fatal
+  PASS: normal error discussion not API failure
+  PASS: normal discussion has enough lines
+
+==========================================
+Total: 96  Passed: 96  Failed: 0
+==========================================
+
+exec
+/bin/zsh -lc "bash -c 'set -e -o pipefail; x="'$(echo "" | grep -vE "''^'"\\s*"'$" | wc -l); echo ok:$x'"'" in /Users/chaoyuepan/ai/autoresearch
+ exited 1 in 0ms:
+codex
+我发现了一个潜在高风险点：`set -e -o pipefail` 下统计非空行的写法可能在空输出时直接让脚本退出。我会做两个最小复现实验确认，并继续定位其他逻辑缺陷。
+exec
+/bin/zsh -lc "bash -c 'set -o pipefail; false | tee /tmp/t.log || true; echo PIPE0:"'${PIPESTATUS[0]} PIPE1:${PIPESTATUS[1]} status:$?'"'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "bash -c 'set -e -o pipefail; f=/tmp/emptytest.log; : > \""'$f"; c=$(grep -vE "''^'"\\\\s*"'$" "$f" | wc -l); echo count:$c; echo survived'"' || echo exited_with_nonzero" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+PIPE0:0 PIPE1: status:0
+
+ succeeded in 0ms:
+exited_with_nonzero
+
+exec
+/bin/zsh -lc "bash -c 'set -o pipefail; (exit 7) | tee /tmp/t.log || true; echo after_or_PIPE0:"'${PIPESTATUS[0]} ; set -o pipefail; (exit 7) | tee /tmp/t.log; echo direct_PIPE0:${PIPESTATUS[0]}'"'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+after_or_PIPE0:0
+direct_PIPE0:7
+
+exec
+/bin/zsh -lc 'nl -ba .gitignore' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	tests/*.log
+     2	tests/*.tmp
+codex
+**审查结论（先给问题）**
+1. `严重` 重试退出码捕获逻辑失效，可能把失败当成功。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L188), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L189), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L191), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L192), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L194), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L195)  
+   问题: `cmd | tee ... || true` 后再读 `PIPESTATUS[0]`，拿到的是 `true` 的状态，不是 agent 进程状态。实测会变成 `0`。  
+   影响: agent 实际失败时重试条件被绕过，流程继续走下去，可靠性大幅下降。
+
+2. `严重` 在 `set -e -o pipefail` 下，空/纯空白输出会直接退出脚本，而不是进入“输出过少重试”。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L221)  
+   问题: `grep -vE ... | wc -l` 在无匹配时 `grep` 返回 1，`pipefail` 使整条 pipeline 非零，`set -e` 直接终止脚本。  
+   影响: `run_with_retry` 失去容错，出现空输出时流程硬退出。
+
+3. `高` 初始迭代测试失败反馈被覆盖。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1301), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1303), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1305)  
+   问题: 先设置“测试失败请修复”，随后无条件覆盖为“初始实现完成请审核”。  
+   影响: 下一轮 agent 缺失关键失败上下文，降低迭代修复效率。
+
+4. `中` 继续模式会先 `create_branch`，分支不存在时会新建，掩盖“无法继续”的真实错误。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1207), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1219), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1143)  
+   影响: 可能在错误分支上“继续”，与历史日志状态不一致。
+
+5. `中` 测试文件复制了 `run.sh` 函数实现，而不是调用真实脚本函数，且未覆盖关键回归场景。  
+   位置: [tests/test_extract_score.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh#L19), [tests/test_extract_score.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh#L96), [tests/test_extract_score.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh#L116)  
+   影响: 生产代码与测试代码可能漂移；本次 `PIPESTATUS` 回归就被漏检。
+
+**评分**
+- 总分: **64/100**
+- 正确性: 22/35
+- 测试质量: 12/25
+- 代码质量: 15/20
+- 安全性: 8/10
+- 性能: 7/10
+
+**改进建议（按优先级）**
+1. 修复退出码采集: 去掉 `|| true`，或先临时 `set +e` 执行 pipeline，再立即读取 `PIPESTATUS[0]`，再 `set -e`。  
+2. 修复空输出计数: 用不会因空匹配失败的写法，例如 `awk 'NF{c++} END{print c+0}' "$log_file"`。  
+3. 修复初始反馈覆盖: 仅在测试通过时设置“初始实现完成”，失败时保留失败反馈。  
+4. 调整继续模式顺序: `-c` 时先校验工作目录与目标分支存在，再决定是否切分支；禁止隐式新建。  
+5. 强化测试: 增加 `run_with_retry` 集成测试（mock agent 成功/失败/空输出），并加一个专门用例覆盖 `pipeline || true` 后 `PIPESTATUS` 的错误场景。  
+
+已执行现有测试 `bash tests/test_extract_score.sh`，结果 96/96 通过；但这些测试不足以证明上述关键路径正确。
+tokens used
+58,863
+**审查结论（先给问题）**
+1. `严重` 重试退出码捕获逻辑失效，可能把失败当成功。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L188), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L189), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L191), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L192), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L194), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L195)  
+   问题: `cmd | tee ... || true` 后再读 `PIPESTATUS[0]`，拿到的是 `true` 的状态，不是 agent 进程状态。实测会变成 `0`。  
+   影响: agent 实际失败时重试条件被绕过，流程继续走下去，可靠性大幅下降。
+
+2. `严重` 在 `set -e -o pipefail` 下，空/纯空白输出会直接退出脚本，而不是进入“输出过少重试”。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L221)  
+   问题: `grep -vE ... | wc -l` 在无匹配时 `grep` 返回 1，`pipefail` 使整条 pipeline 非零，`set -e` 直接终止脚本。  
+   影响: `run_with_retry` 失去容错，出现空输出时流程硬退出。
+
+3. `高` 初始迭代测试失败反馈被覆盖。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1301), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1303), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1305)  
+   问题: 先设置“测试失败请修复”，随后无条件覆盖为“初始实现完成请审核”。  
+   影响: 下一轮 agent 缺失关键失败上下文，降低迭代修复效率。
+
+4. `中` 继续模式会先 `create_branch`，分支不存在时会新建，掩盖“无法继续”的真实错误。  
+   位置: [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1207), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1219), [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L1143)  
+   影响: 可能在错误分支上“继续”，与历史日志状态不一致。
+
+5. `中` 测试文件复制了 `run.sh` 函数实现，而不是调用真实脚本函数，且未覆盖关键回归场景。  
+   位置: [tests/test_extract_score.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh#L19), [tests/test_extract_score.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh#L96), [tests/test_extract_score.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh#L116)  
+   影响: 生产代码与测试代码可能漂移；本次 `PIPESTATUS` 回归就被漏检。
+
+**评分**
+- 总分: **64/100**
+- 正确性: 22/35
+- 测试质量: 12/25
+- 代码质量: 15/20
+- 安全性: 8/10
+- 性能: 7/10
+
+**改进建议（按优先级）**
+1. 修复退出码采集: 去掉 `|| true`，或先临时 `set +e` 执行 pipeline，再立即读取 `PIPESTATUS[0]`，再 `set -e`。  
+2. 修复空输出计数: 用不会因空匹配失败的写法，例如 `awk 'NF{c++} END{print c+0}' "$log_file"`。  
+3. 修复初始反馈覆盖: 仅在测试通过时设置“初始实现完成”，失败时保留失败反馈。  
+4. 调整继续模式顺序: `-c` 时先校验工作目录与目标分支存在，再决定是否切分支；禁止隐式新建。  
+5. 强化测试: 增加 `run_with_retry` 集成测试（mock agent 成功/失败/空输出），并加一个专门用例覆盖 `pipeline || true` 后 `PIPESTATUS` 的错误场景。  
+
+已执行现有测试 `bash tests/test_extract_score.sh`，结果 96/96 通过；但这些测试不足以证明上述关键路径正确。

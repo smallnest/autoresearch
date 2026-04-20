@@ -40,6 +40,7 @@ MAX_CONSECUTIVE_FAILURES=3
 MAX_RETRIES=5
 RETRY_BASE_DELAY=2
 RETRY_MAX_DELAY=60
+MAX_CONTEXT_RETRIES=${MAX_CONTEXT_RETRIES:-3}
 
 # 脚本所在目录（用于查找默认 agents 配置和 program.md）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -298,6 +299,65 @@ has_api_failure() {
     grep -qE "$pattern" "$log_file" 2>/dev/null
 }
 
+# 检测 Agent 输出是否包含上下文溢出信号
+detect_context_overflow() {
+    local log_file="$1"
+
+    if [ ! -f "$log_file" ]; then
+        return 1
+    fi
+
+    local pattern='context.length.exceeded'
+    pattern+='|context.window.exceeded'
+    pattern+='|maximum.context.length'
+    pattern+='|maximum.context.window'
+    pattern+='|token.limit.exceeded'
+    pattern+='|token.limit.reached'
+    pattern+='|too.many.tokens'
+    pattern+='|exceeds.the.maximum'
+    pattern+='|exceeded.the.maximum.number.of.tokens'
+    pattern+='|input.is.too.long'
+
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+
+# 处理上下文溢出：保存进度并自动交接
+# 返回 0 表示溢出已处理（调用者应 continue），1 表示非溢出
+handle_context_overflow() {
+    local iteration="$1"
+    local agent_name="$2"
+    local log_file="$3"
+
+    if ! detect_context_overflow "$log_file"; then
+        return 1
+    fi
+
+    CONTEXT_RETRIES=$((CONTEXT_RETRIES + 1))
+
+    if [ $CONTEXT_RETRIES -gt $MAX_CONTEXT_RETRIES ]; then
+        log "上下文溢出已达最大重试次数 ($MAX_CONTEXT_RETRIES)，计为正常失败"
+        return 1
+    fi
+
+    log "检测到上下文溢出，自动交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)"
+
+    # 保存进度到 progress.md
+    append_to_progress "$iteration" "$agent_name" "$log_file" "N/A" "上下文溢出交接" ""
+
+    # 设置下一次迭代的反馈
+    PREVIOUS_FEEDBACK="上一次迭代因上下文溢出中断。请继续当前子任务的实现，参考 progress.md 中的进度记录。"
+
+    # 不计入连续失败（这不是实现失败，是资源限制）
+    CONSECUTIVE_ITERATION_FAILURES=0
+
+    # 记录到日志
+    echo "- 上下文溢出: 自动交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)" >> "$WORK_DIR/log.md"
+
+    CONTEXT_OVERFLOW=1
+
+    return 0
+}
+
 run_with_retry() {
     local agent=$1
     local prompt="$2"
@@ -330,6 +390,12 @@ run_with_retry() {
         else
             claude -p "$prompt" --dangerously-skip-permissions 2>&1 | tee "$log_file" || true
             exit_code=${PIPESTATUS[0]}
+        fi
+
+        # Check for context overflow first (non-retryable)
+        if detect_context_overflow "$log_file"; then
+            log "检测到上下文溢出，停止重试"
+            break
         fi
 
         # Check for non-zero exit code from the agent
@@ -390,6 +456,7 @@ usage() {
     echo "配置 (环境变量):"
     echo "  PASSING_SCORE=85              达标评分线 (百分制)"
     echo "  MAX_CONSECUTIVE_FAILURES=3    连续失败最大次数"
+    echo "  MAX_CONTEXT_RETRIES=3         上下文溢出自动交接最大次数"
     echo ""
     echo "自定义配置文件 (放在项目目录 .autoresearch/ 下):"
     echo "  agents/codex.md              Codex 指令"
@@ -1882,6 +1949,7 @@ ITERATION=0
 PREVIOUS_FEEDBACK=""
 FINAL_SCORE=0
 CONSECUTIVE_ITERATION_FAILURES=0
+CONTEXT_RETRIES=0
 
 if [ $CONTINUE_MODE -eq 1 ]; then
     restore_continue_state
@@ -1931,6 +1999,10 @@ run_review_and_fix() {
 
     # 审核
     if ! $review_func "$ISSUE_NUMBER" "$ITERATION"; then
+        local review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
+        if handle_context_overflow "$ITERATION" "$agent_name" "$review_log"; then
+            return
+        fi
         log "$agent_name 审核失败，跳到下一次迭代"
         ITERATION_FAILED=1
         return
@@ -1967,6 +2039,7 @@ run_review_and_fix() {
                     PASSED=0
                     PREVIOUS_FEEDBACK=""
                     SUBTASK_ADVANCED=1
+                    CONTEXT_RETRIES=0
                 fi
             fi
         fi
@@ -1978,6 +2051,10 @@ run_review_and_fix() {
 
     REVIEW_FEEDBACK=$(cat "$REVIEW_LOG_FILE")
     if ! $impl_func "$ISSUE_NUMBER" "$ITERATION" "$REVIEW_FEEDBACK"; then
+        local impl_log="$WORK_DIR/iteration-$ITERATION-${agent_name}.log"
+        if handle_context_overflow "$ITERATION" "$agent_name" "$impl_log"; then
+            return
+        fi
         log "$agent_name 修复失败，跳到下一次迭代"
         PREVIOUS_FEEDBACK="$REVIEW_FEEDBACK"
         ITERATION_FAILED=1
@@ -2006,6 +2083,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     ITERATION_FAILED=0
     SUBTASK_ADVANCED=0
     HARD_GATE_FAILED=0
+    CONTEXT_OVERFLOW=0
 
     log ""
     log "=========================================="
@@ -2028,8 +2106,13 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
-            log "$first_agent 初始实现失败，跳到下一次迭代"
-            ITERATION_FAILED=1
+            impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+            if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
+                : # 上下文溢出已自动交接
+            else
+                log "$first_agent 初始实现失败，跳到下一次迭代"
+                ITERATION_FAILED=1
+            fi
         else
             # 硬门禁检查：build → lint → test
             if ! run_hard_gate_checks "$ITERATION"; then
@@ -2044,14 +2127,18 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             fi
         fi
 
-        # 追加经验到 progress.md
-        impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
-        append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现" ""
+        # 追加经验到 progress.md（溢出时已由 handle_context_overflow 追加）
+        if [ $CONTEXT_OVERFLOW -eq 0 ]; then
+            impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+            append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现" ""
+        fi
 
-        if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
-            CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-        elif [ $HARD_GATE_FAILED -eq 0 ]; then
-            CONSECUTIVE_ITERATION_FAILURES=0
+        if [ $CONTEXT_OVERFLOW -eq 0 ]; then
+            if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
+                CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+            elif [ $HARD_GATE_FAILED -eq 0 ]; then
+                CONSECUTIVE_ITERATION_FAILURES=0
+            fi
         fi
         continue
     fi
@@ -2062,8 +2149,13 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
-            log "$first_agent 初始实现失败，跳到下一次迭代"
-            ITERATION_FAILED=1
+            impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+            if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
+                : # 上下文溢出已自动交接
+            else
+                log "$first_agent 初始实现失败，跳到下一次迭代"
+                ITERATION_FAILED=1
+            fi
         else
             # 硬门禁检查：build → lint → test
             if ! run_hard_gate_checks "$ITERATION"; then
@@ -2078,16 +2170,20 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             fi
         fi
 
-        # 追加经验到 progress.md
-        impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
-        subtask_title=
-        subtask_title=$(get_current_subtask_title)
-        append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现 - $subtask_title" ""
+        # 追加经验到 progress.md（溢出时已由 handle_context_overflow 追加）
+        if [ $CONTEXT_OVERFLOW -eq 0 ]; then
+            impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+            subtask_title=
+            subtask_title=$(get_current_subtask_title)
+            append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现 - $subtask_title" ""
+        fi
 
-        if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
-            CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-        elif [ $HARD_GATE_FAILED -eq 0 ]; then
-            CONSECUTIVE_ITERATION_FAILURES=0
+        if [ $CONTEXT_OVERFLOW -eq 0 ]; then
+            if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
+                CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+            elif [ $HARD_GATE_FAILED -eq 0 ]; then
+                CONSECUTIVE_ITERATION_FAILURES=0
+            fi
         fi
         continue
     fi
@@ -2096,6 +2192,11 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     agent_idx=$(get_review_agent $ITERATION)
     agent_name="${AGENT_NAMES[$agent_idx]}"
     run_review_and_fix $agent_idx
+
+    # 上下文溢出时跳过正常处理（进度已由 handle_context_overflow 保存）
+    if [ $CONTEXT_OVERFLOW -eq 1 ]; then
+        continue
+    fi
 
     # 追加经验到 progress.md
     review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
@@ -2123,10 +2224,12 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         break
     fi
 
-    if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
-        CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-    elif [ $HARD_GATE_FAILED -eq 0 ]; then
-        CONSECUTIVE_ITERATION_FAILURES=0
+    if [ $CONTEXT_OVERFLOW -eq 0 ]; then
+        if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ]; then
+            CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
+        elif [ $HARD_GATE_FAILED -eq 0 ]; then
+            CONSECUTIVE_ITERATION_FAILURES=0
+        fi
     fi
 
     if [ $CONSECUTIVE_ITERATION_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]; then
