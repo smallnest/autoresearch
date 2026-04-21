@@ -1090,14 +1090,21 @@ extract_learnings_from_log() {
         return
     fi
 
+    # 先清理日志中的无效 UTF-8 字符到临时文件
+    local cleaned_file
+    cleaned_file=$(mktemp)
+    iconv -f UTF-8 -t UTF-8 -c "$log_file" > "$cleaned_file" 2>/dev/null || cp "$log_file" "$cleaned_file"
+
     # 优先提取 ## Learnings 区块
-    if grep -q "^## Learnings" "$log_file" 2>/dev/null; then
-        sed -n '/^## Learnings/,/^## [^L]/{ /^## [^L]/!p; }' "$log_file" 2>/dev/null | head -50
+    if grep -q "^## Learnings" "$cleaned_file" 2>/dev/null; then
+        sed -n '/^## Learnings/,/^## [^L]/{ /^## [^L]/!p; }' "$cleaned_file" 2>/dev/null | head -50
+        rm -f "$cleaned_file"
         return
     fi
 
     # 回退：截取前 30 行非空内容作为摘要
-    grep -vE '^\s*$' "$log_file" 2>/dev/null | head -30
+    grep -vE '^\s*$' "$cleaned_file" 2>/dev/null | head -30
+    rm -f "$cleaned_file"
 }
 
 # 追加迭代经验到 progress.md
@@ -1121,6 +1128,9 @@ append_to_progress() {
     local learnings
     learnings=$(extract_learnings_from_log "$log_file")
 
+    # 清理无效 UTF-8 字符
+    learnings=$(printf '%s' "$learnings" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || echo "$learnings")
+
     # 限制 learnings 大小（约 1500 字符）
     local learnings_truncated
     learnings_truncated=$(echo "$learnings" | head -c 1500)
@@ -1141,9 +1151,9 @@ append_to_progress() {
 
     # 如果有审核反馈摘要，追加
     if [ -n "$review_summary" ]; then
-        # 截取审核反馈的前 800 字符
+        # 清理并截取审核反馈的前 800 字符
         local review_brief
-        review_brief=$(echo "$review_summary" | head -c 800)
+        review_brief=$(printf '%s' "$review_summary" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null | head -c 800 || echo "$review_summary" | head -c 800)
         entry="$entry
 - **审核要点**:
 
@@ -1173,8 +1183,13 @@ get_progress_content() {
         return
     fi
 
+    # 先清理文件中的无效 UTF-8 字符
+    local cleaned_file
+    cleaned_file=$(mktemp)
+    iconv -f UTF-8 -t UTF-8 -c "$progress_file" > "$cleaned_file" 2>/dev/null || cp "$progress_file" "$cleaned_file"
+
     local content
-    content=$(cat "$progress_file")
+    content=$(cat "$cleaned_file")
 
     # 安全限制：最大 5000 字符，避免过多 token 消耗
     local max_chars=5000
@@ -1182,16 +1197,19 @@ get_progress_content() {
     content_len=$(echo "$content" | wc -c | tr -d ' ')
 
     if [ "$content_len" -le "$max_chars" ]; then
+        rm -f "$cleaned_file"
         echo "$content"
         return
     fi
 
     # 超长时：保留 ## Codebase Patterns 区 + 最后 3000 字符
     local patterns_section
-    patterns_section=$(awk '/^## Codebase Patterns/,/^## [^C]/{ if (/^## [^C]/) next; print }' "$progress_file")
+    patterns_section=$(awk '/^## Codebase Patterns/,/^## [^C]/{ if (/^## [^C]/) next; print }' "$cleaned_file" 2>/dev/null || echo "")
 
     local recent_entries
-    recent_entries=$(tail -c 3000 "$progress_file")
+    recent_entries=$(tail -c 3000 "$cleaned_file")
+
+    rm -f "$cleaned_file"
 
     echo "$patterns_section
 
