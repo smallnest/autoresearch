@@ -328,6 +328,24 @@ has_api_failure() {
     grep -qE "$pattern" "$log_file" 2>/dev/null
 }
 
+# 检测 Codex 是否因无效 tool call 参数导致 400 错误（不可通过相同 prompt 重试）
+has_invalid_tool_call() {
+    local log_file="$1"
+    grep -qE 'invalid.function.arguments|invalid params.*tool_call' "$log_file" 2>/dev/null
+}
+
+# 裁剪 prompt 以避免 Codex 生成相同的 malformed tool call
+# 策略：截断 prompt 到最后 4000 字符，并加上禁止 tool call 的前缀
+trim_prompt_for_codex_retry() {
+    local prompt="$1"
+    local trimmed="${prompt: -4000}"
+    echo "IMPORTANT: Do NOT use any tool/function calls. Output plain text only. If you need to reference files, describe them in text instead of reading them.
+
+---
+
+$trimmed"
+}
+
 # 检测 Agent 输出是否包含上下文溢出信号
 detect_context_overflow() {
     local log_file="$1"
@@ -478,6 +496,14 @@ run_with_retry() {
         if [ $exit_code -ne 0 ]; then
             local error_tail
             error_tail=$(tail -10 "$log_file" 2>/dev/null)
+
+            # Special handling for Codex invalid tool call: trim prompt and retry
+            if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
+                log_console "⚠️ Codex 生成无效 tool call 参数，裁剪 prompt 重试"
+                prompt=$(trim_prompt_for_codex_retry "$prompt")
+                continue
+            fi
+
             log_console "❌ $agent 调用失败 (退出码: $exit_code)"
             if [ -n "$error_tail" ]; then
                 log_console "错误信息:"
@@ -490,6 +516,14 @@ run_with_retry() {
         if has_fatal_error "$log_file"; then
             local error_tail
             error_tail=$(tail -10 "$log_file" 2>/dev/null)
+
+            # Special handling for Codex invalid tool call: trim prompt and retry once
+            if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
+                log_console "⚠️ Codex 生成无效 tool call 参数，裁剪 prompt 重试"
+                prompt=$(trim_prompt_for_codex_retry "$prompt")
+                continue
+            fi
+
             log_console "❌ $agent 调用失败 (检测到致命错误)"
             if [ -n "$error_tail" ]; then
                 log_console "错误信息:"
@@ -502,6 +536,14 @@ run_with_retry() {
         if has_api_failure "$log_file"; then
             local error_tail
             error_tail=$(tail -10 "$log_file" 2>/dev/null)
+
+            # Special handling for Codex invalid tool call in API failure path
+            if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
+                log_console "⚠️ Codex 生成无效 tool call 参数，裁剪 prompt 重试"
+                prompt=$(trim_prompt_for_codex_retry "$prompt")
+                continue
+            fi
+
             log_console "❌ $agent 调用失败 (API 错误)"
             if [ -n "$error_tail" ]; then
                 log_console "错误信息:"

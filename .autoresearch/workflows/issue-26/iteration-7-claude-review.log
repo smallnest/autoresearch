@@ -1,0 +1,123 @@
+ESLint 警告只存在于 Zustand 接口类型定义中（`no-unused-vars` 用于接口方法参数——这是正常的，没有实际影响）。没有错误。
+
+现在我将进行一次全面审核。
+
+## 审核报告
+
+### Issue
+- 编号: #26
+- 标题: [desktop-app] GitHub Issue 列表展示
+- 迭代次数: 7
+- 子任务: T-002 - 前端: Issues 列表页面完整实现
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+实现完整且质量高，所有验收条件均已满足。issueStore.ts 和 IssuesPage.tsx 功能齐全，代码结构清晰，与项目现有风格一致。
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| Issues 页面展示 Issue 编号、标题、标签（彩色 tag）、创建时间 | 通过 | `IssueListItem` 完整实现，含编号、标题、彩色标签、创建时间 |
+| 支持关键词搜索（标题实时过滤） | 通过 | 搜索栏支持标题+编号过滤，case-insensitive |
+| 支持按标签过滤（点击标签 tag 切换过滤） | 通过 | `LabelBadge` 可点击，`toggleLabelFilter` 切换 |
+| 已处理过的 Issue 显示状态标记 | 通过 | 绿色"已处理"徽章 + ProcessedIcon |
+| 列表支持点击选中高亮 | 通过 | 选中态 `bg-blue-900/30 border-blue-600`，含 CheckIcon |
+| TypeScript 编译无错误 | 通过 | `npx tsc --noEmit` 零错误 |
+| ESLint 无新增错误 | 通过 | 仅有 4 个接口参数的 `no-unused-vars` 警告（Zustand 接口定义中正常现象），零错误 |
+| 浏览器 fallback 模式正常工作 | 通过 | 5 个 mock issues + 2 个已处理编号 |
+
+---
+
+### 优点
+
+1.  **前后端契约对齐**: `issueStore.ts` 的 `GhIssue`/`GhLabel`/`IssuesResult` 接口与 Rust 端的 `GhIssue`/`GhLabel`/`IssuesResult` struct 完全匹配（字段名、类型、`createdAt` rename）
+2.  **浏览器 fallback 模式**: 复用了 `projectStore.ts` 中 `isTauri` + lazy import 模式，mock 数据丰富（5 个 issues，含多种标签和状态）
+3.  **组件拆分合理**: `LabelBadge`、`IssueListItem`、`EmptyState`、各种 Icon 组件职责单一
+4.  **样式一致性**: 暗色主题、`gray-800/50` 面板、`blue-600` 选中态，与 DashboardPage 风格统一
+5.  **搜索/过滤**: 使用 `useMemo` 缓存过滤结果，性能合理
+6.  **错误处理完整**: 加载状态、错误提示、刷新按钮、空状态均有处理
+7.  **标签颜色智能**: `getTextColor()` 根据 label 背景亮度自动选择黑/白文字
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: 标签在列表项和过滤器中的渲染方式不一致
+
+**位置**: `IssuesPage.tsx:199-213` vs `IssuesPage.tsx:126-141`
+
+**问题描述**:
+- `LabelBadge`（过滤器）: 使用 `#label.color` 作为实色背景
+- 列表项中的标签: 使用 `#label.color33`（20% 透明度）作为背景，`#label.color` 作为文字色
+
+两种渲染方式视觉差异明显，用户可能困惑。
+
+**建议**: 保持两种场景的视觉一致性。列表项中的半透明方案在暗色主题下更和谐，建议过滤器也采用类似风格。
+
+#### 问题 2: `processedNumbers.includes()` 是线性查找
+
+**位置**: `IssuesPage.tsx:302-304`
+
+**问题描述**:
+```typescript
+const isProcessed = (issueNumber: number): boolean => {
+  return processedNumbers.includes(issueNumber);
+};
+```
+每次调用都遍历数组。当 issues 数量较多时（如 100+），每次渲染 `filteredIssues.map()` 中都会调用。
+
+**建议**: 对于当前规模（100 issues）影响可忽略，但更优做法是用 `Set`:
+```typescript
+const processedSet = useMemo(() => new Set(processedNumbers), [processedNumbers]);
+const isProcessed = (n: number) => processedSet.has(n);
+```
+
+---
+
+### 建议改进 (可选)
+
+- `issueStore.ts:161` 导出了 `isTauri`，但没有外部使用，可考虑移除
+- `loadIssues` 在 `useEffect` 中通过 `loadIssues` 引用作依赖，如果 store 使用 `useCallback` 或 zustand 的 `temporal` middleware 会更稳定（当前实现可接受）
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 权重 | 加权分 |
+|------|------|------|--------|
+| 正确性 | 95 | 35% | 33.25 |
+| 测试质量 | 85 | 25% | 21.25 |
+| 代码质量 | 92 | 20% | 18.40 |
+| 安全性 | 90 | 10% | 9.00 |
+| 性能 | 88 | 10% | 8.80 |
+| **总分** | | | **90.70 ≈ 90** |
+
+- **正确性 (95)**: 所有功能完整实现，前后端对齐，浏览器 fallback 完善。扣 5 分因标签渲染风格不一致
+- **测试质量 (85)**: 本项目无前端测试框架，TypeScript 编译 + ESLint 通过验证了基本正确性。手动 mock 数据验证了 fallback 路径
+- **代码质量 (92)**: 组件拆分合理，命名清晰，与项目风格一致。扣分因 `isTauri` 导出未使用
+- **安全性 (90)**: 无 XSS 风险（React JSX 自动转义），标签颜色通过 `style` 内联设置安全
+- **性能 (88)**: `useMemo` 缓存过滤结果，`includes` 线性查找在小数据量下可接受
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入 UI 截图验证
+
+**下一步行动**:
+代码审核已通过（评分 90/100 ≥ 85），可进行浏览器截图验证确认 UI 渲染正确。
+
+---
+
+## Learnings
+
+- **模式**: Zustand store + Tauri invoke + browser fallback 三件套模式已在 `projectStore.ts` 和 `issueStore.ts` 中复用，后续新增 store 可直接参照
+- **经验**: `IssueListItem` 中的标签用半透明背景（`#color33`）在暗色主题下视觉效果好于实色背景，值得在其他 badge/tag 组件中推广
+- **踩坑**: ESLint 对 Zustand 接口定义中的参数会报 `no-unused-vars` 警告，这是误报，不影响质量

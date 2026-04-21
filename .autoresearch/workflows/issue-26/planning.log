@@ -1,0 +1,59 @@
+我现在已经对项目有了全面的了解。接下来我将规划子任务。
+
+## 分析
+
+**Issue #26**: GitHub Issue 列表展示 — 涉及 Rust 后端（Tauri command）+ React 前端（Issues 列表页）
+
+**关键发现**:
+- Rust 后端：需新增 `list_issues` Tauri command，通过 `std::process::Command` 调用 `gh issue list`
+- 前端：`IssuesPage.tsx` 当前是 9 行占位符，需完整实现
+- 状态管理：需新建 `issueStore.ts`（Zustand）
+- 需要检查 `.autoresearch/workflows/` 判断已处理状态
+
+**子任务拆分**:
+
+| ID | 标题 | 类型 | 说明 |
+|---|---|---|---|
+| T-001 | Rust 后端: `list_issues` Tauri command | code | 调用 `gh issue list`，解析 JSON，返回结构化数据 |
+| T-002 | 前端 Issue 列表页面 + 搜索/过滤交互 | ui | IssuesPage 完整 UI，含搜索、标签过滤、选中高亮、已处理标记 |
+
+```json
+{
+  "issueNumber": 26,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端: 实现 list_issues Tauri command",
+      "description": "在 src-tauri/src/lib.rs 中新增 `list_issues` Tauri command。该命令接收 project_path 参数，在该目录下执行 `gh issue list --json number,title,labels,createdAt,state`，解析 JSON 输出并返回结构化数据（Issue 编号、标题、标签、创建时间、状态）。同时新增 `check_processed_issues` command，读取 .autoresearch/workflows/ 目录判断哪些 Issue 已处理过。定义合适的 Rust struct（如 GhIssue、Label），derive serde::Serialize。使用 std::process::Command 执行 gh CLI 并处理错误（gh 未安装、无权限、非 Git 仓库等）。在 generate_handler! 中注册新命令。",
+      "acceptanceCriteria": [
+        "list_issues 命令能正确调用 gh issue list 并解析返回的 JSON",
+        "返回结构包含 number、title、labels（含 name 和 color）、createdAt、state 字段",
+        "check_processed_issues 命令能扫描 .autoresearch/workflows/issue-* 目录并返回已处理的 Issue 编号列表",
+        "命令在 generate_handler! 中注册",
+        "cargo check 和 cargo clippy 无错误",
+        "正确处理 gh 未安装、非 Git 仓库等错误情况"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "前端: Issues 列表页面完整实现",
+      "description": "完整实现 IssuesPage.tsx，包括：1) 新建 src/stores/issueStore.ts（Zustand store），管理 issues 列表、搜索关键词、标签过滤、选中项、加载/错误状态，调用 Tauri invoke 获取数据；2) 实现 IssuesPage 组件：展示 Issue 编号、标题、标签（彩色 tag，使用 label 的 color 字段）、创建时间、状态；3) 顶部搜索栏支持关键词搜索（标题过滤）；4) 标签过滤：点击标签 tag 切换过滤；5) 已处理过的 Issue 显示状态标记（通过 check_processed_issues 返回的数据判断）；6) 列表支持点击选中高亮。遵循项目现有暗色主题和 Tailwind CSS 样式约定，保持与 DashboardPage 一致的视觉风格。含浏览器 fallback 模式（mock 数据）。",
+      "acceptanceCriteria": [
+        "Issues 页面展示 Issue 编号、标题、标签（彩色 tag）、创建时间",
+        "支持关键词搜索（标题实时过滤）",
+        "支持按标签过滤（点击标签 tag 切换过滤）",
+        "已处理过的 Issue 显示状态标记",
+        "列表支持点击选中高亮",
+        "TypeScript 编译无错误（npx tsc --noEmit）",
+        "ESLint 无新增错误",
+        "浏览器 fallback 模式正常工作"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

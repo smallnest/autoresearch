@@ -20,3 +20,18 @@
 - `detect_project_config` checks for `.autoresearch/`, `.autoresearch/program.md`, `.autoresearch/agents/`
 - `select_project_dir` returns `Option<String>` (None if user cancels)
 - The lib name is `desktop_app_lib` (not `desktop_app`) to avoid Windows naming conflict
+- `list_issues` calls `gh issue list --json` and also scans `.autoresearch/workflows/issue-*` for processed status
+- `check_processed_issues` is a standalone command that only scans processed Issue numbers
+- `gh` CLI errors (not installed, no repo, no auth) are surfaced as `Result::Err` strings
+- `GhIssue` and `GhLabel` structs use `serde::Deserialize` to parse `gh` JSON output; `createdAt` is renamed via `#[serde(rename)]`
+
+## Error Handling Patterns
+- Tauri commands consistently use `Result<T, String>` for error handling
+- All errors are surfaced as descriptive strings via `map_err(|e| format!("...", e))`
+- External command errors (gh CLI) are checked via `output.status.success()` before parsing stdout
+- File system errors include context about which path failed (e.g., "Failed to read workflows dir")
+
+## JSON Parsing Patterns
+- External command JSON output uses `serde_json::from_str()` with explicit error messages
+- Include the raw output in parse error messages for easier debugging
+- Use `#[serde(rename = "camelCase")]` for fields that differ from Rust naming conventions
