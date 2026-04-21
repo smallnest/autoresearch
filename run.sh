@@ -65,12 +65,31 @@ PROJECT_ROOT="$(pwd)"
 
 # ==================== 函数 ====================
 
+# 日志只写入文件，不输出到终端
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "$msg" >> "$WORK_DIR/terminal.log"
+    fi
+}
+
+# 关键信息输出到终端并写入文件
+log_console() {
+    local msg="$1"
+    local timestamp
+    timestamp=$(date '+%H:%M:%S')
+    echo "[$timestamp] $msg"
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$WORK_DIR/terminal.log"
+    fi
 }
 
 error() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1"
+    echo "$msg" >&2
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "$msg" >> "$WORK_DIR/terminal.log"
+    fi
 }
 
 # 检测项目使用的编程语言
@@ -150,79 +169,80 @@ run_hard_gate_checks() {
     build_cmd=$(get_build_command)
     echo "--- 构建 ---" >> "$log_file"
     if [ -n "$build_cmd" ]; then
-        log "硬门禁: 构建检查 ($build_cmd)..."
+        start_spinner "构建中..."
         echo "命令: $build_cmd" >> "$log_file"
         local build_out build_rc
         build_out=$($build_cmd 2>&1) ; build_rc=$?
         echo "$build_out" >> "$log_file"
+        stop_spinner
         if [ $build_rc -eq 0 ]; then
             echo "结果: 通过" >> "$log_file"
-            log "硬门禁: 构建通过"
         else
             echo "结果: 失败 (exit code: $build_rc)" >> "$log_file"
             local build_tail
             build_tail=$(echo "$build_out" | tail -20)
             errors="${errors}## 构建失败 ($build_cmd)\n\n\`\`\`\n${build_tail}\n\`\`\`\n\n"
             failed=1
-            log "硬门禁: 构建失败"
+            log_console "❌ 构建失败"
         fi
     else
         echo "结果: 跳过 (无构建命令)" >> "$log_file"
-        log "硬门禁: 无构建命令，跳过"
     fi
     echo "" >> "$log_file"
 
     # --- Lint 检查 ---
-    local lint_cmd
-    lint_cmd=$(get_lint_command)
-    echo "--- Lint ---" >> "$log_file"
-    if [ -n "$lint_cmd" ]; then
-        log "硬门禁: Lint 检查 ($lint_cmd)..."
-        echo "命令: $lint_cmd" >> "$log_file"
-        local lint_out lint_rc
-        lint_out=$($lint_cmd 2>&1) ; lint_rc=$?
-        echo "$lint_out" >> "$log_file"
-        if [ $lint_rc -eq 0 ]; then
-            echo "结果: 通过" >> "$log_file"
-            log "硬门禁: Lint 通过"
+    if [ $failed -eq 0 ]; then
+        local lint_cmd
+        lint_cmd=$(get_lint_command)
+        echo "--- Lint ---" >> "$log_file"
+        if [ -n "$lint_cmd" ]; then
+            start_spinner "Lint 检查中..."
+            echo "命令: $lint_cmd" >> "$log_file"
+            local lint_out lint_rc
+            lint_out=$($lint_cmd 2>&1) ; lint_rc=$?
+            echo "$lint_out" >> "$log_file"
+            stop_spinner
+            if [ $lint_rc -eq 0 ]; then
+                echo "结果: 通过" >> "$log_file"
+            else
+                echo "结果: 失败 (exit code: $lint_rc)" >> "$log_file"
+                local lint_tail
+                lint_tail=$(echo "$lint_out" | tail -20)
+                errors="${errors}## Lint 失败 ($lint_cmd)\n\n\`\`\`\n${lint_tail}\n\`\`\`\n\n"
+                failed=1
+                log_console "❌ Lint 失败"
+            fi
         else
-            echo "结果: 失败 (exit code: $lint_rc)" >> "$log_file"
-            local lint_tail
-            lint_tail=$(echo "$lint_out" | tail -20)
-            errors="${errors}## Lint 失败 ($lint_cmd)\n\n\`\`\`\n${lint_tail}\n\`\`\`\n\n"
-            failed=1
-            log "硬门禁: Lint 失败"
+            echo "结果: 跳过 (无 lint 命令)" >> "$log_file"
         fi
-    else
-        echo "结果: 跳过 (无 lint 命令)" >> "$log_file"
-        log "硬门禁: 无 lint 命令，跳过"
     fi
     echo "" >> "$log_file"
 
     # --- 测试 ---
-    local test_cmd
-    test_cmd=$(get_test_command)
-    echo "--- 测试 ---" >> "$log_file"
-    if [ -n "$test_cmd" ]; then
-        log "硬门禁: 测试 ($test_cmd)..."
-        echo "命令: $test_cmd" >> "$log_file"
-        local test_out test_rc
-        test_out=$($test_cmd 2>&1) ; test_rc=$?
-        echo "$test_out" >> "$log_file"
-        if [ $test_rc -eq 0 ]; then
-            echo "结果: 通过" >> "$log_file"
-            log "硬门禁: 测试通过"
+    if [ $failed -eq 0 ]; then
+        local test_cmd
+        test_cmd=$(get_test_command)
+        echo "--- 测试 ---" >> "$log_file"
+        if [ -n "$test_cmd" ]; then
+            start_spinner "运行测试中..."
+            echo "命令: $test_cmd" >> "$log_file"
+            local test_out test_rc
+            test_out=$($test_cmd 2>&1) ; test_rc=$?
+            echo "$test_out" >> "$log_file"
+            stop_spinner
+            if [ $test_rc -eq 0 ]; then
+                echo "结果: 通过" >> "$log_file"
+            else
+                echo "结果: 失败 (exit code: $test_rc)" >> "$log_file"
+                local test_tail
+                test_tail=$(echo "$test_out" | tail -20)
+                errors="${errors}## 测试失败 ($test_cmd)\n\n\`\`\`\n${test_tail}\n\`\`\`\n\n"
+                failed=1
+                log_console "❌ 测试失败"
+            fi
         else
-            echo "结果: 失败 (exit code: $test_rc)" >> "$log_file"
-            local test_tail
-            test_tail=$(echo "$test_out" | tail -20)
-            errors="${errors}## 测试失败 ($test_cmd)\n\n\`\`\`\n${test_tail}\n\`\`\`\n\n"
-            failed=1
-            log "硬门禁: 测试失败"
+            echo "结果: 跳过 (无测试命令)" >> "$log_file"
         fi
-    else
-        echo "结果: 跳过 (无测试命令)" >> "$log_file"
-        log "硬门禁: 无测试命令，跳过"
     fi
     echo "" >> "$log_file"
 
@@ -230,10 +250,8 @@ run_hard_gate_checks() {
     echo "=== 汇总 ===" >> "$log_file"
     if [ $failed -eq 0 ]; then
         echo "状态: 全部通过" >> "$log_file"
-        log "硬门禁: 全部通过"
     else
         echo "状态: 失败" >> "$log_file"
-        log "硬门禁: 未通过"
         echo -e "$errors" >> "$log_file"
     fi
 
@@ -341,11 +359,11 @@ handle_context_overflow() {
     CONTEXT_RETRIES=$((CONTEXT_RETRIES + 1))
 
     if [ $CONTEXT_RETRIES -gt $MAX_CONTEXT_RETRIES ]; then
-        log "上下文溢出已达最大重试次数 ($MAX_CONTEXT_RETRIES)，计为正常失败"
+        log_console "上下文溢出已达最大重试次数 ($MAX_CONTEXT_RETRIES)，计为正常失败"
         return 1
     fi
 
-    log "检测到上下文溢出，自动交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)"
+    log_console "⚠️ 上下文溢出，自动交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)"
 
     # 保存进度到 progress.md
     append_to_progress "$iteration" "$agent_name" "$log_file" "N/A" "上下文溢出交接" ""
@@ -364,6 +382,46 @@ handle_context_overflow() {
     return 0
 }
 
+# 等待动画帧 - 火箭发射动画
+SPINNER_ROCKET=(
+    "🚀     "
+    " 🚀    "
+    "  🚀   "
+    "   🚀  "
+    "    🚀 "
+    "     🚀"
+    "    ✨  "
+    "   ✨   "
+)
+SPINNER_PID=""
+
+# 启动等待动画
+start_spinner() {
+    local msg="$1"
+    (
+        i=0
+        while true; do
+            local frame=$((i % 8))
+            local rocket="${SPINNER_ROCKET[$frame]}"
+            printf "\r  %s %s  " "$rocket" "$msg"
+            sleep 0.12
+            i=$((i + 1))
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+# 停止等待动画
+stop_spinner() {
+    if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+        kill "$SPINNER_PID" 2>/dev/null
+        wait "$SPINNER_PID" 2>/dev/null
+    fi
+    SPINNER_PID=""
+    # 清除当前行并换行，避免残留
+    printf "\r                                                          \r"
+}
+
 run_with_retry() {
     local agent=$1
     local prompt="$2"
@@ -377,51 +435,58 @@ run_with_retry() {
         if [ $retry -gt 1 ]; then
             local delay
             delay=$(annealing_delay $retry)
-            log "第 $retry/$MAX_RETRIES 次重试，等待 ${delay} 秒..."
+            log_console "重试 $retry/$MAX_RETRIES，等待 ${delay} 秒..."
             sleep $delay
         fi
 
-        log "调用 $agent (尝试 $retry/$MAX_RETRIES)..."
+        log_console "调用 $agent (尝试 $retry/$MAX_RETRIES)..."
 
         # Truncate log file before each attempt so we only capture this attempt's output
         : > "$log_file"
 
         local exit_code=1
+
+        # 启动等待动画
+        start_spinner "$agent 正在工作中..."
+
         if [ "$agent" = "codex" ]; then
-            codex exec --full-auto "$prompt" 2>&1 | tee "$log_file" || true
-            exit_code=${PIPESTATUS[0]}
+            codex exec --full-auto "$prompt" > "$log_file" 2>&1 || true
+            exit_code=$?
         elif [ "$agent" = "opencode" ]; then
-            opencode run "$prompt" 2>&1 | tee "$log_file" || true
-            exit_code=${PIPESTATUS[0]}
+            opencode run "$prompt" > "$log_file" 2>&1 || true
+            exit_code=$?
         else
-            claude -p "$prompt" --dangerously-skip-permissions 2>&1 | tee "$log_file" || true
-            exit_code=${PIPESTATUS[0]}
+            claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 || true
+            exit_code=$?
         fi
+
+        # 停止等待动画
+        stop_spinner
 
         # Check for context overflow first (non-retryable)
         if detect_context_overflow "$log_file"; then
-            log "检测到上下文溢出，停止重试"
+            log_console "检测到上下文溢出，停止重试"
             break
         fi
 
         # Check for non-zero exit code from the agent
         if [ $exit_code -ne 0 ]; then
             log "Agent $agent 以非零退出码退出: $exit_code"
-            log "$agent 第 $retry 次调用失败"
+            log_console "❌ $agent 调用失败"
             continue
         fi
 
         # Check for fatal errors in output
         if has_fatal_error "$log_file"; then
             log "检测到致命错误，将重试"
-            log "$agent 第 $retry 次调用失败"
+            log_console "❌ $agent 调用失败"
             continue
         fi
 
         # Check for API failures in output
         if has_api_failure "$log_file"; then
             log "检测到 API 失败，将重试"
-            log "$agent 第 $retry 次调用失败"
+            log_console "❌ $agent 调用失败"
             continue
         fi
 
@@ -430,7 +495,7 @@ run_with_retry() {
         content_lines=$(grep -vE '^\s*$' "$log_file" | wc -l)
         if [ "$content_lines" -lt 5 ]; then
             log "警告: 输出内容过少 ($content_lines 行)，将重试"
-            log "$agent 第 $retry 次调用失败"
+            log_console "❌ $agent 调用失败"
             continue
         fi
 
@@ -1266,7 +1331,7 @@ $agent_instructions
         if jq '.' "$tasks_file" > /dev/null 2>&1; then
             local count
             count=$(jq '.subtasks | length' "$tasks_file")
-            log "成功拆分为 $count 个子任务"
+            log_console "✅ 成功拆分为 $count 个子任务"
 
             # 记录到日志
             echo "" >> "$WORK_DIR/log.md"
@@ -1275,20 +1340,20 @@ $agent_instructions
             echo "已拆分为 $count 个子任务，详见: [tasks.json](./tasks.json)" >> "$WORK_DIR/log.md"
 
             # 打印子任务列表
-            log "子任务列表:"
-            jq -r '.subtasks[] | "  \(.id): \(.title) (priority: \(.priority))"' "$tasks_file" | while read -r line; do
-                log "$line"
+            log_console "子任务列表:"
+            jq -r '.subtasks[] | "  \(.id): \(.title)"' "$tasks_file" | while read -r line; do
+                log_console "$line"
             done
 
             return 0
         else
-            log "提取的 JSON 格式无效，回退到原有模式"
+            log_console "⚠️ 提取的 JSON 格式无效，回退到原有模式"
             rm -f "$tasks_file"
             return 1
         fi
     fi
 
-    log "未能从规划输出中提取 tasks.json，回退到原有模式"
+    log_console "⚠️ 未能从规划输出中提取 tasks.json，回退到原有模式"
     return 1
 }
 
@@ -1649,10 +1714,10 @@ $opencode_instructions
     local sentinel
     sentinel=$(check_sentinel "$review_result")
     if [ "$sentinel" = "pass" ]; then
-        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
         score=100
     elif [ "$sentinel" = "fail" ]; then
-        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
         score=0
     else
         score=$(extract_score "$review_result")
@@ -1665,7 +1730,7 @@ $opencode_instructions
 
     echo "- 审核评分 (OpenCode): $score/100" >> "$WORK_DIR/log.md"
 
-    log "审核评分: $score/100"
+    log_console "审核评分: $score/100"
 
     echo "$review_result"
     echo "$score" > "$WORK_DIR/.last_score"
@@ -1684,13 +1749,12 @@ run_tests() {
     test_cmd=$(get_test_command)
 
     if [ -n "$test_cmd" ]; then
-        log "测试命令: $test_cmd"
-        if $test_cmd 2>&1 | tee "$log_file"; then
-            log "测试通过"
+        if $test_cmd > "$log_file" 2>&1; then
+            log_console "✅ 测试通过"
             echo "- 测试: ✅ 通过" >> "$WORK_DIR/log.md"
             return 0
         else
-            log "测试失败"
+            log_console "❌ 测试失败"
             echo "- 测试: ❌ 失败" >> "$WORK_DIR/log.md"
             return 1
         fi
@@ -1760,10 +1824,10 @@ $claude_instructions
     local sentinel
     sentinel=$(check_sentinel "$review_result")
     if [ "$sentinel" = "pass" ]; then
-        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
         score=100
     elif [ "$sentinel" = "fail" ]; then
-        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
         score=0
     else
         score=$(extract_score "$review_result")
@@ -1776,7 +1840,7 @@ $claude_instructions
 
     echo "- 审核评分 (Claude): $score/100" >> "$WORK_DIR/log.md"
 
-    log "审核评分: $score/100"
+    log_console "审核评分: $score/100"
 
     echo "$review_result"
     echo "$score" > "$WORK_DIR/.last_score"
@@ -1842,10 +1906,10 @@ $codex_instructions
     local sentinel
     sentinel=$(check_sentinel "$review_result")
     if [ "$sentinel" = "pass" ]; then
-        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
         score=100
     elif [ "$sentinel" = "fail" ]; then
-        log "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
         score=0
     else
         score=$(extract_score "$review_result")
@@ -1858,7 +1922,7 @@ $codex_instructions
 
     echo "- 审核评分 (Codex): $score/100" >> "$WORK_DIR/log.md"
 
-    log "审核评分: $score/100"
+    log_console "审核评分: $score/100"
 
     echo "$review_result"
     echo "$score" > "$WORK_DIR/.last_score"
@@ -2721,7 +2785,7 @@ extract_score() {
     score_line=$(echo "$review_result" | grep -Eo '[0-9]+\.?[0-9]*(\s*/\s*100)' | head -1)
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
-        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
+        score=$(printf '%s' "$score" | tr -cd '0-9.' | awk '{ printf "%.0f", 0+$0 }' 2>/dev/null || echo "0")
         echo "$score"
         return
     fi
@@ -2730,7 +2794,7 @@ extract_score() {
     score_line=$(echo "$review_result" | grep -E '\*\*(评分|Score)[^*]*100' | head -1)
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
-        score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s }')
+        score=$(printf '%s' "$score" | tr -cd '0-9.' | awk '{ printf "%.0f", 0+$0 }' 2>/dev/null || echo "0")
         echo "$score"
         return
     fi
@@ -2743,7 +2807,7 @@ extract_score() {
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | tail -1)
         if [ -n "$score" ]; then
-            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+            score=$(printf '%s' "$score" | tr -cd '0-9.' | awk '{ printf "%.0f", 0+$0 * 10 }' 2>/dev/null || echo "0")
             echo "$score"
             return
         fi
@@ -2754,7 +2818,7 @@ extract_score() {
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
         if [ -n "$score" ]; then
-            score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+            score=$(printf '%s' "$score" | tr -cd '0-9.' | awk '{ printf "%.0f", 0+$0 * 10 }' 2>/dev/null || echo "0")
             echo "$score"
             return
         fi
@@ -2765,8 +2829,14 @@ extract_score() {
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
         if [ -n "$score" ]; then
-            if awk -v s="$score" 'BEGIN { exit (s <= 10) ? 0 : 1 }'; then
-                score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+            score=$(printf '%s' "$score" | tr -cd '0-9.' | awk '{ printf "%.0f", 0+$0 }' 2>/dev/null || echo "0")
+            local num_score="$score"
+            if [ "$num_score" = "0" ]; then
+                echo "0"
+                return
+            fi
+            if [ "$num_score" -le 10 ] 2>/dev/null; then
+                score=$((num_score * 10))
             fi
             echo "$score"
             return
@@ -2778,8 +2848,14 @@ extract_score() {
     if [ -n "$score_line" ]; then
         score=$(echo "$score_line" | grep -oE '[0-9]+\.?[0-9]*' | head -1)
         if [ -n "$score" ]; then
-            if awk -v s="$score" 'BEGIN { exit (s <= 10) ? 0 : 1 }'; then
-                score=$(awk -v s="$score" 'BEGIN { printf "%.0f", s * 10 }')
+            score=$(printf '%s' "$score" | tr -cd '0-9.' | awk '{ printf "%.0f", 0+$0 }' 2>/dev/null || echo "0")
+            local num_score="$score"
+            if [ "$num_score" = "0" ]; then
+                echo "0"
+                return
+            fi
+            if [ "$num_score" -le 10 ] 2>/dev/null; then
+                score=$((num_score * 10))
             fi
             echo "$score"
             return
@@ -2873,7 +2949,7 @@ restore_continue_state() {
         exit 1
     fi
 
-    log "上次运行到迭代 ${last_iter}，从迭代 $((last_iter + 1)) 继续"
+    log_console "上次运行到迭代 ${last_iter}，从迭代 $((last_iter + 1)) 继续"
 
     # 恢复迭代计数
     ITERATION=$last_iter
@@ -2882,7 +2958,7 @@ restore_continue_state() {
     if [ -f "$WORK_DIR/.last_score" ]; then
         FINAL_SCORE=$(cat "$WORK_DIR/.last_score" | tr -cd '0-9')
         [ -z "$FINAL_SCORE" ] && FINAL_SCORE=0
-        log "上次评分: $FINAL_SCORE/100"
+        log_console "上次评分: $FINAL_SCORE/100"
     fi
 
     # 继续模式重置连续失败计数
@@ -2908,7 +2984,7 @@ restore_continue_state() {
     if git show-ref --verify --quiet "refs/heads/$branch"; then
         git checkout "$branch"
         BRANCH_NAME="$branch"
-        log "已切换到分支: $branch"
+        log_console "已切换到分支: $branch"
     else
         error "未找到分支 ${branch}，无法继续"
         exit 1
@@ -2927,7 +3003,7 @@ restore_continue_state() {
         local progress
         progress=$(get_subtask_progress_summary)
         echo "- 子任务: $progress" >> "$WORK_DIR/log.md"
-        log "$progress"
+        log_console "$progress"
     fi
 
     echo "" >> "$WORK_DIR/log.md"
@@ -2962,17 +3038,19 @@ fi
 ISSUE_NUMBER=$1
 MAX_ITERATIONS=${2:-$DEFAULT_MAX_ITERATIONS}
 
-log "=========================================="
-log "autoresearch - 自动化 Issue 处理"
-log "=========================================="
-log "Issue: #$ISSUE_NUMBER"
-log "项目: $PROJECT_ROOT"
+log_console ""
+log_console "  ╔══════════════════════════════════════╗"
+log_console "  ║  autoresearch - 自动化开发工具      ║"
+log_console "  ╚══════════════════════════════════════╝"
+log_console ""
+log_console "🤖 Issue: #$ISSUE_NUMBER"
+log_console "📁 项目: $PROJECT_ROOT"
 if [ $CONTINUE_MODE -eq 1 ]; then
-    log "模式: 继续上次运行"
+    log_console "🔄 模式: 继续上次运行"
 else
-    log "模式: 全新运行"
+    log_console "🚀 模式: 全新运行"
 fi
-log "最大迭代次数: $MAX_ITERATIONS"
+log_console "🔢 最大迭代次数: $MAX_ITERATIONS"
 
 # 构建 AGENT_NAMES 数组（必须在 check_dependencies 和日志输出之前）
 if ! parse_agent_list "$AGENT_LIST"; then
@@ -2980,7 +3058,7 @@ if ! parse_agent_list "$AGENT_LIST"; then
     exit 1
 fi
 
-log "Agent 列表: ${AGENT_NAMES[*]} (初始实现: ${AGENT_NAMES[0]})"
+log_console "Agent 列表: ${AGENT_NAMES[*]} (初始实现: ${AGENT_NAMES[0]})"
 
 # 检查项目环境
 check_project
@@ -3018,10 +3096,10 @@ if [ $CONTINUE_MODE -eq 1 ]; then
     if [ -z "$2" ]; then
         MAX_ITERATIONS=$DEFAULT_MAX_ITERATIONS
         remaining=$((MAX_ITERATIONS - ITERATION))
-        log "继续运行: 已完成 $ITERATION 轮，再跑 $remaining 轮 (总计 $MAX_ITERATIONS)"
+        log_console "继续运行: 已完成 $ITERATION 轮，再跑 $remaining 轮 (总计 $MAX_ITERATIONS)"
     else
         MAX_ITERATIONS=$((ITERATION + $2))
-        log "继续运行: 已完成 $ITERATION 轮，再跑 $2 轮 (总计 $MAX_ITERATIONS)"
+        log_console "继续运行: 已完成 $ITERATION 轮，再跑 $2 轮 (总计 $MAX_ITERATIONS)"
     fi
 fi
 
@@ -3029,13 +3107,12 @@ fi
 
 # 非继续模式时执行规划阶段
 if [ $CONTINUE_MODE -eq 0 ]; then
-    log ""
-    log "=========================================="
-    log "规划阶段: 拆分子任务"
-    log "=========================================="
+    log_console ""
+    log_console "📋 规划阶段: 拆分子任务..."
+    log_console ""
 
     if ! run_planning_phase "$ISSUE_NUMBER"; then
-        log "规划阶段未生成子任务，将使用原有模式（一次性实现整个 Issue）"
+        log_console "⚠️ 规划阶段未生成子任务，使用原有模式"
     fi
 fi
 
@@ -3067,7 +3144,7 @@ run_review_and_fix() {
     FINAL_SCORE=$SCORE
 
     if check_score_passed "$SCORE"; then
-        log "审核通过！评分: $SCORE/100 (达标线: $PASSING_SCORE)"
+        log_console "✅ 审核通过！评分: $SCORE/100 (达标线: $PASSING_SCORE)"
         CONSECUTIVE_ITERATION_FAILURES=0
         PASSED=1
         FINAL_REVIEW_REPORT=$(cat "$REVIEW_LOG_FILE" 2>/dev/null || echo "")
@@ -3093,27 +3170,27 @@ run_review_and_fix() {
 
                     if [ "$ui_pass" != "true" ]; then
                         # UI 验证失败：不标记 passed，反馈传递给下一迭代
-                        log "UI 验证未通过，反馈传递给下一迭代"
+                        log_console "❌ UI 验证未通过"
                         UI_VERIFY_FAILED=1
                         PREVIOUS_FEEDBACK="代码审核通过，但 UI 验证未通过：$ui_feedback"
                         PASSED=0
                         return
                     fi
-                    log "UI 验证通过"
+                    log_console "✅ UI 验证通过"
                 fi
 
                 mark_subtask_passed "$current_subtask_id"
-                log "子任务 $current_subtask_id 审核通过"
+                log_console "✅ 子任务 $current_subtask_id 审核通过"
 
                 # 检查是否还有未通过的子任务
                 if all_subtasks_passed; then
-                    log "所有子任务已通过！"
+                    log_console "🎉 所有子任务已通过！"
                     ALL_SUBTASKS_DONE=1
                 else
                     # 还有子任务，重置状态准备下一个
                     local progress
                     progress=$(get_subtask_progress_summary)
-                    log "$progress"
+                    log_console "$progress"
                     # 重置审核状态，下一个子任务需要新的审核
                     PASSED=0
                     PREVIOUS_FEEDBACK=""
@@ -3126,7 +3203,7 @@ run_review_and_fix() {
         return
     fi
 
-    log "评分未达标 ($SCORE/$PASSING_SCORE)，$agent_name 根据反馈修复..."
+    log_console "评分未达标 ($SCORE/$PASSING_SCORE)，$agent_name 根据反馈修复..."
 
     REVIEW_FEEDBACK=$(cat "$REVIEW_LOG_FILE")
     if ! $impl_func "$ISSUE_NUMBER" "$ITERATION" "$REVIEW_FEEDBACK"; then
@@ -3134,7 +3211,7 @@ run_review_and_fix() {
         if handle_context_overflow "$ITERATION" "$agent_name" "$impl_log"; then
             return
         fi
-        log "$agent_name 修复失败，跳到下一次迭代"
+        log_console "$agent_name 修复失败，跳到下一次迭代"
         PREVIOUS_FEEDBACK="$REVIEW_FEEDBACK"
         ITERATION_FAILED=1
         return
@@ -3142,14 +3219,14 @@ run_review_and_fix() {
 
     # 硬门禁检查：修复后先跑 build → lint → test
     if ! run_hard_gate_checks "$ITERATION"; then
-        log "硬门禁检查未通过，跳过本轮审核"
+        log_console "❌ 硬门禁检查未通过"
         HARD_GATE_FAILED=1
         local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
         PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
         ITERATION_FAILED=1
         return
     fi
-    log "硬门禁检查通过"
+    log_console "✅ 硬门禁检查通过"
     PREVIOUS_FEEDBACK=""
 }
 
@@ -3165,20 +3242,20 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     CONTEXT_OVERFLOW=0
     UI_VERIFY_FAILED=0
 
-    log ""
-    log "=========================================="
-    log "迭代 $ITERATION/$MAX_ITERATIONS"
+    log_console ""
+    log_console "──────────────────────────────────────────"
+    log_console "🔄 迭代 $ITERATION/$MAX_ITERATIONS"
     if has_subtasks; then
         subtask_progress=$(get_subtask_progress_summary)
-        log "$subtask_progress"
+        log_console "$subtask_progress"
     fi
     if [ $ITERATION -eq 1 ] && ! has_subtasks; then
-        log "本轮: ${AGENT_NAMES[0]} 初始实现"
+        log_console "👤 ${AGENT_NAMES[0]} 开始实现..."
     else
         agent_idx=$(get_review_agent $ITERATION)
-        log "本轮: ${AGENT_NAMES[$agent_idx]} 审核 + 修复"
+        log_console "🔍 ${AGENT_NAMES[$agent_idx]} 开始审核..."
     fi
-    log "=========================================="
+    log_console "──────────────────────────────────────────"
 
     # ---- 无子任务模式：迭代 1 第一个 agent 初始实现 ----
     if [ $ITERATION -eq 1 ] && ! has_subtasks; then
@@ -3190,19 +3267,19 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
                 : # 上下文溢出已自动交接
             else
-                log "$first_agent 初始实现失败，跳到下一次迭代"
+                log_console "❌ $first_agent 初始实现失败"
                 ITERATION_FAILED=1
             fi
         else
             # 硬门禁检查：build → lint → test
             if ! run_hard_gate_checks "$ITERATION"; then
-                log "硬门禁检查未通过，跳过本轮审核"
+                log_console "❌ 硬门禁检查未通过"
                 HARD_GATE_FAILED=1
                 local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
                 PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
                 ITERATION_FAILED=1
             else
-                log "硬门禁检查通过"
+                log_console "✅ 硬门禁检查通过"
                 PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
             fi
         fi
@@ -3233,19 +3310,19 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
                 : # 上下文溢出已自动交接
             else
-                log "$first_agent 初始实现失败，跳到下一次迭代"
+                log_console "❌ $first_agent 初始实现失败"
                 ITERATION_FAILED=1
             fi
         else
             # 硬门禁检查：build → lint → test
             if ! run_hard_gate_checks "$ITERATION"; then
-                log "硬门禁检查未通过，跳过本轮审核"
+                log_console "❌ 硬门禁检查未通过"
                 HARD_GATE_FAILED=1
                 local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
                 PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
                 ITERATION_FAILED=1
             else
-                log "硬门禁检查通过"
+                log_console "✅ 硬门禁检查通过"
                 PREVIOUS_FEEDBACK="初始实现完成，请审核代码质量并给出评分。如果有问题请直接修复。"
             fi
         fi
@@ -3309,7 +3386,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     if [ $CONTEXT_OVERFLOW -eq 0 ]; then
         if [ $ITERATION_FAILED -eq 1 ] && [ $HARD_GATE_FAILED -eq 0 ] && [ $UI_VERIFY_FAILED -eq 0 ]; then
             CONSECUTIVE_ITERATION_FAILURES=$((CONSECUTIVE_ITERATION_FAILURES + 1))
-            log "连续迭代失败次数: $CONSECUTIVE_ITERATION_FAILURES/$MAX_CONSECUTIVE_FAILURES"
+            log_console "⚠️ 连续迭代失败次数: $CONSECUTIVE_ITERATION_FAILURES/$MAX_CONSECUTIVE_FAILURES"
         elif [ $HARD_GATE_FAILED -eq 0 ] && [ $UI_VERIFY_FAILED -eq 0 ]; then
             # 只有非 hard gate 失败且非 UI 验证失败时才重置
             CONSECUTIVE_ITERATION_FAILURES=0
@@ -3329,23 +3406,23 @@ if check_score_passed "$FINAL_SCORE"; then
     record_final_result "$ISSUE_NUMBER" "completed" "$ITERATION" "$FINAL_SCORE"
 
     echo ""
-    log "=========================================="
-    log "处理完成！"
-    log "=========================================="
-    log "分支: $BRANCH_NAME"
-    log "评分: $FINAL_SCORE/100"
-    log "迭代次数: $ITERATION"
+    log_console "  ╔══════════════════════════════════════╗"
+    log_console "  ║          处理完成！                  ║"
+    log_console "  ╚══════════════════════════════════════╝"
+    log_console ""
+    log_console "🎉 分支: $BRANCH_NAME"
+    log_console "📊 评分: $FINAL_SCORE/100"
+    log_console "🔄 迭代次数: $ITERATION"
 
     # 自动提交 PR 并合并
-    log ""
-    log "=========================================="
-    log "自动提交 PR 并合并..."
-    log "=========================================="
+    log_console ""
+    log_console "📦 自动提交 PR 并合并..."
+    log_console ""
 
     cd "$PROJECT_ROOT"
 
     # 提交所有更改
-    log "提交更改..."
+    log_console "提交更改..."
     git add -A
 
     # 构建 commit message：包含审核报告
@@ -3355,14 +3432,14 @@ $FINAL_REVIEW_REPORT
 
 Closes #$ISSUE_NUMBER"
 
-    git commit -m "$COMMIT_MSG" 2>/dev/null || log "没有需要提交的更改"
+    git commit -m "$COMMIT_MSG" 2>/dev/null || log_console "没有需要提交的更改"
 
     # 推送分支
-    log "推送分支 $BRANCH_NAME..."
+    log_console "推送分支 $BRANCH_NAME..."
     git push -u origin "$BRANCH_NAME"
 
     # 创建 PR
-    log "创建 Pull Request..."
+    log_console "创建 Pull Request..."
 
     # 构建子任务摘要（如有）
     subtask_summary=""
@@ -3406,14 +3483,14 @@ EOF
 
     if echo "$PR_URL" | grep -q "https://github.com"; then
         PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-        log "PR 已创建: $PR_URL"
+        log_console "✅ PR 已创建: $PR_URL"
 
         # 合并 PR
-        log "合并 PR #$PR_NUMBER..."
+        log_console "合并 PR #$PR_NUMBER..."
         gh pr merge "$PR_NUMBER" --merge --delete-branch
 
         # 添加评论到 Issue（仅包含总结信息）
-        log "添加评论到 Issue #$ISSUE_NUMBER..."
+        log_console "添加评论到 Issue #$ISSUE_NUMBER..."
         log_summary=""
         if [ -f "$WORK_DIR/log.md" ]; then
             log_summary=$(cat "$WORK_DIR/log.md")
@@ -3433,30 +3510,32 @@ EOF
 )" 2>/dev/null || log "警告: 添加评论失败"
 
         # 关闭 Issue
-        log "关闭 Issue #$ISSUE_NUMBER..."
-        gh issue close "$ISSUE_NUMBER" --reason completed 2>/dev/null || log "警告: 关闭 Issue 失败 (可能已通过 PR 自动关闭)"
+        log_console "关闭 Issue #$ISSUE_NUMBER..."
+        gh issue close "$ISSUE_NUMBER" --reason completed 2>/dev/null || log_console "⚠️ 关闭 Issue 失败 (可能已通过 PR 自动关闭)"
 
-        log ""
-        log "=========================================="
-        log "完成！Issue #$ISSUE_NUMBER 已自动处理"
-        log "=========================================="
-        log "PR: $PR_URL"
-        log "状态: 已合并并关闭"
+        log_console ""
+        log_console "  ╔══════════════════════════════════════╗"
+        log_console "  ║      全部完成！Issue 已自动处理     ║"
+        log_console "  ╚══════════════════════════════════════╝"
+        log_console ""
+        log_console "✅ PR: $PR_URL"
+        log_console "🔗 状态: 已合并并关闭"
     else
-        log "警告: PR 创建失败或已存在"
-        log "$PR_URL"
+        log_console "⚠️ PR 创建失败或已存在"
+        log_console "$PR_URL"
     fi
 
     exit 0
 fi
 
 # 达到最大迭代次数
-log ""
-log "=========================================="
-log "达到最大迭代次数，仍未通过审核"
-log "=========================================="
-log "最终评分: $FINAL_SCORE/100"
-log "请人工介入处理"
+log_console ""
+log_console "  ╔══════════════════════════════════════╗"
+log_console "  ║  达到最大迭代次数，需要人工介入     ║"
+log_console "  ╚══════════════════════════════════════╝"
+log_console ""
+log_console "⚠️ 最终评分: $FINAL_SCORE/100"
+log_console "📂 工作目录: $WORK_DIR"
 
 record_final_result "$ISSUE_NUMBER" "blocked" "$ITERATION" "$FINAL_SCORE"
 

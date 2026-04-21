@@ -1,0 +1,95 @@
+## 审核报告
+
+### Issue
+- 编号: #25
+- 标题: [desktop-app] Agent 选择器（拖拽排序）
+- 子任务: T-002 - 实现 Agent 选择器 UI 组件
+- 迭代次数: 4
+
+---
+
+### 总体评价
+
+**评分: 10/100**
+
+T-002 子任务的核心内容**完全未实现**。依赖未安装，组件未创建，无法进行功能验证。
+
+---
+
+### 验收条件对照
+
+| 验收条件 | 状态 | 说明 |
+|----------|------|------|
+| 成功安装 @dnd-kit/core 和 @dnd-kit/sortable | ❌ | 未安装 |
+| AgentSelector 组件位于 src/components/AgentSelector.tsx | ❌ | 文件不存在 |
+| 显示 claude/codex/opencode 三个 agent 作为可勾选标签 | ❌ | 组件未实现 |
+| 勾选的 agent 按顺序排列，支持拖拽调整顺序 | ❌ | 组件未实现 |
+| 未勾选的 agent 灰色展示在下方备选区 | ❌ | 组件未实现 |
+| 全选和清空按钮功能正常 | ❌ | 组件未实现 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 依赖未安装
+
+**位置**: `desktop_app/package.json`
+
+**问题描述**:
+`@dnd-kit/core` 和 `@dnd-kit/sortable` 未安装，这是拖拽功能的核心依赖。
+
+**建议修复**:
+```bash
+cd desktop_app && npm install @dnd-kit/core @dnd-kit/sortable
+```
+
+---
+
+#### 问题 2: AgentSelector 组件未创建
+
+**位置**: `desktop_app/src/components/AgentSelector.tsx`
+
+**问题描述**:
+AgentSelector 组件文件完全不存在，T-002 的核心实现缺失。
+
+**建议修复**:
+创建 `AgentSelector.tsx` 组件，需包含：
+1. 使用 `useAgentStore` 获取状态和操作
+2. 使用 `@dnd-kit/sortable` 实现拖拽排序
+3. 已选区显示选中 agents，支持拖拽
+4. 备选区显示未选中 agents（灰色）
+5. 全选和清空按钮
+
+**参考结构**:
+```tsx
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useAgentStore } from '../stores/agentStore';
+
+export function AgentSelector() {
+  const { selectedAgents, toggleAgent, reorderAgents, selectAll, clearAll } = useAgentStore();
+  // ... 实现拖拽和选择逻辑
+}
+```
+
+---
+
+### 审核结论
+
+- [ ] 通过
+- [ ] 需要修改
+- [x] 阻塞 - 核心实现完全缺失
+
+**下一步行动**:
+需要实现 T-002 子任务：
+1. 安装 `@dnd-kit/core` 和 `@dnd-kit/sortable` 依赖
+2. 创建 `AgentSelector.tsx` 组件
+3. 实现拖拽排序和选择功能
+
+---
+
+## Learnings
+
+- **模式**: 子任务依赖链 - T-002 依赖 T-001 的 store，T-003 依赖 T-002 的组件
+- **踩坑**: 上一个迭代 (iteration 3) 审核的是 T-001，但任务已标记为 `passes: true`，应进入 T-002 实现
+- **经验**: 每次迭代应检查 `tasks.json` 确认当前子任务状态，避免审核已完成任务

@@ -1,0 +1,93 @@
+## 审核报告
+
+### Issue
+- 编号: #25
+- 标题: [desktop-app] Agent 选择器（拖拽排序）
+- 迭代次数: 7
+- 子任务: T-002 - 实现 Agent 选择器 UI 组件
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+实现完整，符合所有验收条件。代码结构清晰，组件拆分合理，TypeScript 类型定义完整。
+
+---
+
+### 验收条件检查
+
+| 条件 | 状态 |
+|------|------|
+| 安装 @dnd-kit/core 和 @dnd-kit/sortable | ✅ 已安装 (^6.3.1 和 ^10.0.0) |
+| AgentSelector 组件位于 src/components/AgentSelector.tsx | ✅ 已创建 |
+| 显示 claude/codex/opencode 三个 agent 作为可勾选标签 | ✅ 实现 |
+| 勾选的 agent 按顺序排列，支持拖拽调整顺序 | ✅ 使用 DndContext + SortableContext |
+| 未勾选的 agent 灰色展示在下方备选区 | ✅ 使用 bg-gray-700 样式 |
+| 全选和清空按钮功能正常 | ✅ 已实现 |
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: ESLint 警告 - 未使用变量
+
+**位置**: `src/stores/agentStore.ts:56,64,91`
+
+**问题描述**:
+接口定义中的参数名与实现中使用的下划线前缀参数名不一致，导致 ESLint 警告。
+
+**代码片段**:
+```typescript
+interface AgentState {
+  isSelected: (agentId: AgentId) => boolean;  // 接口中使用 agentId
+  reorderAgents: (fromIndex: number, toIndex: number) => void;
+  // ...
+}
+
+// 实现中使用 _agentId
+isSelected: (_agentId: AgentId) => {
+  return get().selectedAgents.includes(_agentId);
+},
+```
+
+**建议修复**:
+在接口定义中也使用下划线前缀，保持一致性：
+
+```typescript
+interface AgentState {
+  isSelected: (_agentId: AgentId) => boolean;
+  reorderAgents: (_fromIndex: number, _toIndex: number) => void;
+  toggleAgent: (_agentId: AgentId) => void;
+  // ...
+}
+```
+
+**原因**: 消除 ESLint 警告，提高代码一致性
+
+---
+
+### 代码亮点
+
+1. **状态管理**: 使用 Zustand + persist middleware 实现状态持久化
+2. **类型安全**: 完整的 TypeScript 类型定义，使用 `as const` 创建联合类型
+3. **组件拆分**: 合理拆分 SortableTag 和 AgentTag 子组件
+4. **用户体验**: 支持键盘导航和鼠标拖拽两种交互方式
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入 UI 验证阶段
+
+**下一步行动**:
+代码审核通过，建议进行浏览器截图验证以确认 UI 渲染正确。
+
+---
+
+## Learnings
+
+- **模式**: @dnd-kit 使用 DndContext + SortableContext + useSortable 组合实现拖拽排序
+- **模式**: Zustand stores 使用 `create<State>()` 带 actions 和 getters 在同一对象中
+- **经验**: UI 组件实现需同时创建组件文件并集成到页面中，不能仅安装依赖

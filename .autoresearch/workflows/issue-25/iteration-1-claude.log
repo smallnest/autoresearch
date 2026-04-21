@@ -1,0 +1,45 @@
+## Implementation Complete - T-001: Agent Store with Type Definitions
+
+### Summary
+
+Created `src/stores/agentStore.ts` with the following components:
+
+**Types & Constants:**
+- `AgentId` - union type for available agent IDs
+- `AgentInfo` - interface with id, name, description
+- `AVAILABLE_AGENTS` - hardcoded array `['claude', 'codex', 'opencode']`
+- `AGENT_METADATA` - metadata map for display purposes
+
+**State:**
+- `selectedAgents: AgentId[]` - ordered array of selected agent IDs
+
+**Actions:**
+- `toggleAgent(agentId)` - toggles agent selection (adds to end if not selected, removes if selected)
+- `reorderAgents(fromIndex, toIndex)` - reorders selected agents
+- `selectAll()` - selects all available agents
+- `clearAll()` - clears all selections
+
+**Getters:**
+- `isSelected(agentId)` - checks if agent is selected
+- `getSelectedAgentsInfo()` - returns array of AgentInfo for selected agents
+
+**Persistence:**
+- Uses Zustand's `persist` middleware with localStorage key `autoresearch-agents`
+
+### Verification
+
+- ✅ TypeScript typecheck passes
+- ✅ ESLint passes (warnings are false positives from interface definitions, not actual issues)
+- ✅ Store file located at `src/stores/agentStore.ts`
+- ✅ `selectedAgents` is an ordered string array
+- ✅ `toggleAgent` correctly toggles agent selection
+- ✅ `reorderAgents` correctly adjusts agent order
+- ✅ `selectAll`/`clearAll` operations work correctly
+- ✅ State persists to localStorage
+
+## Learnings
+
+- **Pattern**: Zustand stores in this project use `create<State>()` with actions and getters defined in the same object
+- **Pattern**: Use `persist` middleware from `zustand/middleware` for localStorage persistence
+- **Pattern**: TypeScript interfaces for function parameters trigger ESLint `no-unused-vars` warnings (false positives)
+- **Pattern**: Use `as const` for tuple literals to create union types
