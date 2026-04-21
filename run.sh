@@ -16,6 +16,7 @@
 # ./run.sh --no-archive 42 # 跳过归档（调试用）
 #
 # 环境变量配置:
+# AGENT_TIMEOUT: agent 调用超时秒数 (默认: 600)
 # UI_VERIFY_ENABLED: 是否启用 UI 验证 (默认: yes)
 # UI_VERIFY_TIMEOUT: dev server 等待超时秒数 (默认: 60)
 # UI_DEV_PORT: dev server 端口 (默认自动检测或使用 3000)
@@ -51,6 +52,7 @@ MAX_RETRIES=5
 RETRY_BASE_DELAY=2
 RETRY_MAX_DELAY=60
 MAX_CONTEXT_RETRIES=${MAX_CONTEXT_RETRIES:-3}
+AGENT_TIMEOUT=${AGENT_TIMEOUT:-600}
 
 # 脚本所在目录（用于查找默认 agents 配置和 program.md）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -309,6 +311,8 @@ has_fatal_error() {
     pattern+='|connection.refused'
     pattern+='|network.error'
     pattern+='|DNS.resolution'
+    pattern+='|Timed.out'
+    pattern+='|Command.timed.out'
     grep -qE "$pattern" "$log_file" 2>/dev/null
 }
 
@@ -326,6 +330,40 @@ has_api_failure() {
     pattern+='|response.is.empty'
     pattern+='|no.response.received'
     grep -qE "$pattern" "$log_file" 2>/dev/null
+}
+
+# 超时包裹器：优先使用 GNU timeout/gtimeout，回退到 shell 原生方案
+# 用法: timeout_wrapper <seconds> <command> [args...]
+# 返回值: 命令退出码，超时时返回 124
+timeout_wrapper() {
+    local timeout_sec=$1
+    shift
+
+    if command -v timeout &>/dev/null; then
+        timeout "$timeout_sec" "$@"
+    elif command -v gtimeout &>/dev/null; then
+        gtimeout "$timeout_sec" "$@"
+    else
+        # Shell 原生方案：后台进程 + sleep + kill
+        "$@" &
+        local cmd_pid=$!
+        (
+            sleep "$timeout_sec"
+            kill "$cmd_pid" 2>/dev/null
+        ) &
+        local watchdog_pid=$!
+
+        wait "$cmd_pid" 2>/dev/null
+        local cmd_exit=$?
+        kill "$watchdog_pid" 2>/dev/null
+        wait "$watchdog_pid" 2>/dev/null
+
+        # 如果命令被 SIGTERM (143) 或 SIGKILL (137) 终止，视为超时
+        if [ $cmd_exit -eq 143 ] || [ $cmd_exit -eq 137 ]; then
+            return 124
+        fi
+        return $cmd_exit
+    fi
 }
 
 # 检测 Codex 是否因无效 tool call 参数导致 400 错误（不可通过相同 prompt 重试）
@@ -473,13 +511,13 @@ run_with_retry() {
         start_spinner "$agent 正在工作中..."
 
         if [ "$agent" = "codex" ]; then
-            codex exec --full-auto "$prompt" > "$log_file" 2>&1 || true
+            timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 || true
             exit_code=$?
         elif [ "$agent" = "opencode" ]; then
-            opencode run "$prompt" > "$log_file" 2>&1 || true
+            timeout_wrapper "$AGENT_TIMEOUT" opencode run "$prompt" > "$log_file" 2>&1 || true
             exit_code=$?
         else
-            claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 || true
+            timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 || true
             exit_code=$?
         fi
 
@@ -496,6 +534,12 @@ run_with_retry() {
         if [ $exit_code -ne 0 ]; then
             local error_tail
             error_tail=$(tail -10 "$log_file" 2>/dev/null)
+
+            # Timeout exit code 124 is retryable
+            if [ $exit_code -eq 124 ]; then
+                log_console "⏱️ $agent 调用超时 (超时限制: ${AGENT_TIMEOUT}s)，将重试"
+                continue
+            fi
 
             # Special handling for Codex invalid tool call: trim prompt and retry
             if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
@@ -588,6 +632,7 @@ usage() {
     echo ""
     echo "配置 (环境变量):"
     echo "  PASSING_SCORE=85              达标评分线 (百分制)"
+    echo "  AGENT_TIMEOUT=600             agent 调用超时秒数"
     echo "  MAX_CONSECUTIVE_FAILURES=3    连续失败最大次数"
     echo "  MAX_CONTEXT_RETRIES=3         上下文溢出自动交接最大次数"
     echo ""
@@ -3570,7 +3615,6 @@ EOF
 
         # 切换回主分支前，先处理未提交的更改
         cd "$PROJECT_ROOT"
-        local main_branch
         main_branch=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
         [ -z "$main_branch" ] && main_branch="master"
 

@@ -1,0 +1,45 @@
+我现在对当前代码有了透彻的理解。让我来规划子任务。
+
+## Issue #48 分析
+
+**核心问题**: `run_with_retry` 中的 agent 调用（`claude`/`codex`/`opencode`）没有超时保护，进程挂死会导致整个脚本永久阻塞。
+
+**改动范围**: 仅涉及 `run.sh` 中的 `run_with_retry` 函数（约 125 行），核心改动约 10-20 行。
+
+**关键点**:
+- macOS 没有 GNU `timeout`，需要兼容处理（`gtimeout` via coreutils 或 shell 原生实现）
+- 退出码 124（GNU timeout）需被识别为可重试错误
+- 需要新增 `AGENT_TIMEOUT` 环境变量
+- Shell 脚本项目，单元测试豁免
+
+```json
+{
+  "issueNumber": 48,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现 agent 调用超时机制",
+      "description": "在 run.sh 中实现 agent 调用的超时保护：1) 新增 AGENT_TIMEOUT 环境变量（默认 600 秒）；2) 编写 timeout_wrapper 辅助函数，优先使用 GNU timeout/gtimeout，回退到 shell 原生后台进程+sleep+kill 方案，确保 macOS/Linux 兼容；3) 在 run_with_retry 的三个 agent 调用处（codex/opencode/claude）用 timeout_wrapper 包裹；4) 在退出码检测逻辑中识别超时退出码 124 并作为可重试错误处理；5) 在 has_fatal_error 中增加超时输出模式检测",
+      "acceptanceCriteria": [
+        "run.sh 新增 AGENT_TIMEOUT 变量，默认值 600，可通过环境变量覆盖",
+        "timeout_wrapper 函数兼容 macOS（gtimeout 或 shell 原生方案）和 Linux（timeout）",
+        "codex/opencode/claude 三个 agent 调用均被 timeout 机制包裹",
+        "超时退出码 124 在 run_with_retry 中被识别为可重试错误，触发重试而非直接失败",
+        "has_fatal_error 中能检测到 timeout 相关的输出文本",
+        "run.sh 通过 bash -n 语法检查",
+        "不破坏现有 agent 调用、重试、评分提取等功能"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    }
+  ]
+}
+```
+
+这个 Issue 改动集中且边界清晰，一个子任务即可覆盖所有需求。核心改动点：
+1. **`timeout_wrapper` 函数** (~30 行) — 兼容 macOS/Linux 的超时包装
+2. **`AGENT_TIMEOUT` 变量** — 1 行配置
+3. **`run_with_retry` 中 3 处调用** — 各加一行 wrapper
+4. **退出码 124 处理** — 在已有非零退出码检测分支中增加条件
+5. **`has_fatal_error` 增加模式** — 新增 timeout 相关正则

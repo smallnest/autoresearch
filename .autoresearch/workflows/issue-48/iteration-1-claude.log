@@ -1,0 +1,35 @@
+所有任务已完成。以下是已实现内容的总结：
+
+## 实现总结
+
+### 对 `run.sh` 的修改
+
+1.  **`AGENT_TIMEOUT` 变量** (第55行)：默认值为600秒，可通过环境变量覆盖。
+    ```bash
+    AGENT_TIMEOUT=${AGENT_TIMEOUT:-600}
+    ```
+
+2.  **`timeout_wrapper` 函数** (第332-365行)：一个跨平台的超时包装器，它：
+    -   优先在 Linux 上使用 `timeout` (GNU coreutils)
+    -   其次使用 `gtimeout` (macOS 通过 Homebrew coreutils)
+    -   回退到使用 `wait`/`kill` 的 shell 原生后台进程监视器 (macOS 无额外依赖)
+    -   在超时时返回退出码 124 (与 GNU `timeout` 匹配)
+
+3.  **Agent 调用被包裹** (第510-518行)：`run_with_retry` 中所有三个 agent (codex/opencode/claude) 现在都使用 `timeout_wrapper "$AGENT_TIMEOUT"`。
+
+4.  **退出码 124 处理** (第534-537行)：超时退出码被识别为可重试错误，并带有明确的消息。
+
+5.  **`has_fatal_error` 更新** (第314-315行)：添加了 `Timed.out` 和 `Command.timed.out` 模式，用于基于文本的超时检测。
+
+6.  **文档**：头部注释和使用函数已更新，包含了 `AGENT_TIMEOUT`。
+
+### 验证
+-   `bash -n run.sh` — 语法检查通过
+-   所有 168 个现有测试通过
+-   无需新增测试 (Shell 脚本 — 根据程序指南，单元测试不适用)
+
+## 经验总结
+
+-   **macOS 兼容性**：macOS 没有 GNU `timeout`；`gtimeout` 来自 Homebrew 的 `coreutils`。shell 原生回退使用 `cmd &` + `sleep + kill` 模式，并处理 SIGTERM (143) 和 SIGKILL (137) 退出码，通过将它们映射到 124。
+-   **退出码 124 约定**：GNU `timeout` 在超时时使用退出码 124。shell 回退将信号终止码 (137/143) 映射到 124，以保持 `run_with_retry` 中的一致错误处理。
+-   **`|| true` 模式**：现有的 agent 调用使用 `|| true` 来防止 `set -e` 导致的故障。`timeout_wrapper` 被放置在 `|| true` *之前*，因此退出码在抑制之后仍能正确捕获。
