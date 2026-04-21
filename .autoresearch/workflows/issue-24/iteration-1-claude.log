@@ -1,0 +1,38 @@
+## 实现报告 - T-001
+
+### 子任务状态：已完成
+
+所有验收标准均已满足：
+
+| 标准 | 状态 |
+|----------|--------|
+| `tauri-plugin-dialog` 和 `tauri-plugin-store` 在 `Cargo.toml` 中 | 通过 |
+| `lib.rs` 中有 3 个命令 (`select_project_dir`、`detect_project_config`、`get_recent_project`) | 通过 |
+| `select_project_dir` 调用文件夹对话框并返回路径 | 通过 |
+| `detect_project_config` 返回 `.autoresearch/`、`program.md`、`agents/` 的存在状态 | 通过 |
+| `get_recent_project` 从 `Tauri store` 读取最近的项目 | 通过 |
+| `capabilities/default.json` 具有 `dialog` 和 `store` 权限 | 通过 |
+| `cargo check` 通过 | 通过 |
+| `cargo clippy` 通过（无警告） | 通过 |
+
+### 自检清单
+- [x] 代码编译 (`cargo check`)
+- [x] Lint 通过 (`cargo clippy`)
+- [x] 依赖项在 `Cargo.lock` 中正确锁定
+- [x] 功能实现正确
+
+### 实现概要
+
+`lib.rs` 中的代码结构良好且简洁：
+- `select_project_dir`：使用 `DialogExt` 的异步命令，带 `blocking_pick_folder()`，返回 `Option<String>`
+- `detect_project_config`：同步命令，返回一个 `ProjectConfig` 结构体，包含三个布尔标志
+- `get_recent_project`：异步命令，使用 `StoreExt` 读取 `app.json` 中的 `"recent_project"` 键
+
+所有插件都在 `tauri::Builder` 链中注册，并且所有命令都在 `invoke_handler` 中注册。
+
+## Learnings
+
+- **模式**: Tauri v2 插件使用扩展 traits (`DialogExt`, `StoreExt`)，通过 `app` 句柄访问，而不是直接构造函数
+- **模式**: `Tauri store` 以 JSON 格式持久化数据；键只是像 `"recent_project"` 这样的字符串
+- **观察**: 此子任务的代码在此次迭代中已经存在（很可能来自之前的实现）——无需更改
+- **注意**: `blocking_pick_folder()` 在异步命令中使用，这是 `Tauri` 对话框的常见模式，但如果对话框成为性能问题，可以使用非阻塞替代方案

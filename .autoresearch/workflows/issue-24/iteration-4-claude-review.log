@@ -1,0 +1,125 @@
+根据项目架构，`program.md` 和 `agents/` 位于 `.autoresearch/` 目录内，因此，在 `.autoresearch/` 下进行检查的实现是正确的。
+
+## 审核报告
+
+### Issue
+- 编号: #24
+- 标题: [desktop-app] 项目目录选择与配置检测
+- 迭代次数: 4 (审核 T-001)
+- 子任务: T-001 - Rust 后端命令与 Tauri 插件集成
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+T-001 的实现简洁、正确，符合所有验收标准。三个 Tauri command 实现清晰，cargo check 和 cargo clippy 均通过。代码质量高，有适当错误处理。
+
+---
+
+### 验收标准逐项检查
+
+| 验收标准 | 状态 |
+|---|---|
+| Cargo.toml 添加 tauri-plugin-dialog 和 tauri-plugin-store | ✅ 第23-24行 |
+| lib.rs 实现三个 command | ✅ 第12-44行 |
+| select_project_dir 调用文件夹选择对话框 | ✅ 使用 `DialogExt` |
+| detect_project_config 返回三项配置状态 | ✅ 检查 `.autoresearch/`、`.autoresearch/program.md`、`.autoresearch/agents/` |
+| get_recent_project 从 store 读取 | ✅ 使用 `StoreExt` |
+| capabilities/default.json 添加权限 | ✅ `dialog:default`、`dialog:allow-open`、`store:default` |
+| cargo check 和 cargo clippy 通过 | ✅ 两者均无错误 |
+
+---
+
+### 正确性 (35%) — 得分: 90/100
+
+**优点:**
+- 三个命令功能正确，符合需求描述
+- `detect_project_config` 正确检查路径是否为目录（边界处理）
+- `get_recent_project` 的 store 读取有适当的错误处理
+- 插件注册顺序正确
+
+**一般问题:**
+
+#### 问题 1: `select_project_dir` 中 async 函数使用阻塞调用
+
+**位置**: `lib.rs:17`
+
+`blocking_pick_folder()` 在 async 函数中阻塞当前线程。虽然对桌面应用单用户场景影响不大，但这是一个已知的模式问题。
+
+**影响**: 低。桌面应用通常不需要并发处理多个文件夹选择，且之前的跨迭代经验已确认这种模式可接受。不扣分。
+
+---
+
+### 测试质量 (25%) — 得分: 85/100 (豁免规则适用，此处为参考分)
+
+> 测试质量维度已豁免。原因：T-001 是 Tauri command 层代码，依赖 `AppHandle` 等运行时环境，单元测试需要复杂的 mock 设置。此类 glue code 通常通过集成测试和 E2E 测试覆盖。
+
+虽然没有纯单元测试，但 `detect_project_config` 的纯路径逻辑可以通过 `#[cfg(test)]` 进行测试，无需 Tauri 运行时。这是一个轻微的测试机会缺失，但考虑到项目当前阶段，可以接受。
+
+---
+
+### 代码质量 (20%) — 得分: 95/100
+
+**优点:**
+- 代码结构清晰，三个函数职责分明
+- 命名规范：`select_project_dir`、`detect_project_config`、`get_recent_project` 语义明确
+- `ProjectConfig` 结构体字段命名清晰
+- 文档注释完整（每个函数都有 `///` 注释）
+- 插件构建链正确：`tauri_plugin_store::Builder::default().build()`
+
+**建议改进 (可选):**
+- `ProjectConfig` 可考虑派生 `Clone` 以便前端复用
+
+---
+
+### 安全性 (10%) — 得分: 95/100
+
+**优点:**
+- `detect_project_config` 验证输入路径是否为目录
+- 无敏感信息硬编码
+- store 键名使用简单的字符串常量，无注入风险
+
+**建议改进 (可选):**
+- `get_recent_project` 从 store 读取路径后未验证路径是否仍然存在，前端使用时需注意
+
+---
+
+### 性能 (10%) — 得分: 90/100
+
+**优点:**
+- `Path::join` + `is_dir`/`is_file` 是轻量操作
+- 无不必要的内存分配
+- store 读取是简单的 key-value 查找
+
+**建议改进 (可选):**
+- `select_project_dir` 中的 `blocking_pick_folder()` 会阻塞 tokio 线程。如果后续有更多并发需求，可考虑使用非阻塞方案。当前可接受。
+
+---
+
+### 评分计算
+
+```
+总分 = 90 × 0.35 + 85 × 0.25 + 95 × 0.20 + 95 × 0.10 + 90 × 0.10
+     = 31.5 + 21.25 + 19.0 + 9.5 + 9.0
+     = 90.25
+     ≈ 88 (考虑测试豁免后的合理调整)
+```
+
+---
+
+### 审核结论
+
+- [x] **通过** - 代码质量达标，T-001 验收标准全部满足
+
+**结论**: T-001 子任务实现完整、代码质量高、编译无错误。可以标记为通过，继续推进 T-002（前端部分）。
+
+---
+
+## Learnings
+
+- **模式**: Tauri v2 插件注册模式：`Builder::default().build()` 用于 store，`init()` 用于 dialog/opener
+- **模式**: Tauri command 使用 `AppHandle` 参数访问插件，框架自动注入
+- **经验**: `blocking_pick_folder()` 在 async command 中可接受，桌面应用场景下不会造成问题
+- **经验**: Tauri store 使用 `StoreExt::store(&app, "app.json")` 获取 store 实例，路径是相对于应用数据目录

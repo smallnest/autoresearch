@@ -1,0 +1,56 @@
+{
+  "issueNumber": 24,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端命令与 Tauri 插件集成",
+      "description": "添加 tauri-plugin-dialog 和 tauri-plugin-store 依赖，实现三个 Tauri command：select_project_dir（调用系统文件夹选择对话框）、detect_project_config（检测目录下 .autoresearch/、program.md、agents/ 是否存在）、get_recent_project（从 store 读取最近项目路径）。同时更新 capabilities/default.json 添加必要的权限。",
+      "acceptanceCriteria": [
+        "Cargo.toml 中添加 tauri-plugin-dialog 和 tauri-plugin-store 依赖",
+        "lib.rs 中实现 select_project_dir、detect_project_config、get_recent_project 三个 command",
+        "select_project_dir 调用系统文件夹选择对话框并返回路径",
+        "detect_project_config 返回 .autoresearch/、program.md、agents/ 的存在状态",
+        "get_recent_project 从 Tauri store 读取并返回最近打开的项目路径",
+        "capabilities/default.json 添加 dialog 和 store 权限",
+        "cargo check 和 cargo clippy 通过"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "前端项目管理状态与欢迎引导页",
+      "description": "使用 zustand 创建项目管理 store（存储当前项目路径、配置检测结果、最近项目列表）。当无项目选中时，DashboardPage 显示欢迎引导页（包含选择项目目录按钮和最近项目列表）。实现项目选择后自动调用 detect_project_config 的流程。",
+      "acceptanceCriteria": [
+        "创建 zustand store 管理项目状态（路径、配置检测、最近列表）",
+        "无项目时 DashboardPage 显示欢迎引导页，包含'选择项目目录'按钮",
+        "欢迎页展示最近打开的项目列表（从 get_recent_project 获取）",
+        "点击'选择项目目录'调用 select_project_dir 并自动触发配置检测",
+        "选择项目后页面从欢迎引导切换到项目信息展示",
+        "项目路径保存到 Tauri store，下次启动自动加载",
+        "npx tsc --noEmit 通过"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "配置检测结果可视化与缺失配置提示",
+      "description": "在 DashboardPage 中实现配置检测结果的可视化展示：用绿色勾/红色叉图标标识 .autoresearch/、program.md、agents/ 的存在状态。当缺少配置时，显示提示 UI '是否从模板初始化'（仅做提示，不做实际初始化操作）。",
+      "acceptanceCriteria": [
+        "配置检测结果用绿色勾（存在）/ 红色叉（缺失）图标清晰展示",
+        "分别显示 .autoresearch/、program.md、agents/ 三项配置状态",
+        "缺少任意配置项时，显示'是否从模板初始化'提示 UI（仅提示，不实际初始化）",
+        "提示 UI 有'稍后'和'了解'两个操作按钮",
+        "所有配置项齐全时显示'配置完整'成功提示",
+        "样式与现有 dark theme 一致",
+        "npx tsc --noEmit 通过"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": true
+    }
+  ]
+}

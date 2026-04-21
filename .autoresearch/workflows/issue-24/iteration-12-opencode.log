@@ -1,0 +1,140 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-24/tasks.json
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+我来根据审核反馈改进 Issue #24 的实现。首先，让我阅读当前代码文件和子任务
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m
+[0m# [0mTodos
+[ ] 添加 CheckIcon 和 XIcon 图标组件
+[ ] 修改 ConfigBadge 组件使用勾/叉图标替代圆点
+[ ] 添加"从模板初始化"提示 UI（当配置缺失时显示）
+[ ] 添加"稍后"和"了解"操作按钮
+[ ] 添加"配置完整"成功提示
+[ ] 修复 map key 使用 recentPath 替代 index
+[ ] 运行类型检查确保通过
+[0m
+根据审核反馈，我需要改进 Issue #24 T-003 子任务的实现。让我先制定计划：
+
+## 第一步：制定
+[0m# [0mTodos
+[ ] 添加 CheckIcon 和 XIcon 图标组件
+[ ] 修改 ConfigBadge 组件使用勾/叉图标替代圆点
+[ ] 添加"从模板初始化"提示 UI（当配置缺失时显示）
+[ ] 添加"稍后"和"了解"操作按钮
+[ ] 添加"配置完整"成功提示
+[ ] 修复 map key 使用 recentPath 替代 index
+[ ] 运行类型检查确保通过
+[0m
+好的，现在让我逐步完成这些修复。首先修改
+现在让我>\n  );\n}\n\n//                  <path\n                    strokeLinecap=\"round
+[0m← [0mWrite desktop_app/src/pages/DashboardPage.tsx
+Wrote file successfully.
+[0m
+[0m# [0mTodos
+[x] 添加 CheckIcon 和 XIcon 图标组件
+[x] 修改 ConfigBadge 组件使用勾/叉图标替代圆点
+[x] 添加"从模板初始化"提示 UI（当配置缺失时显示）
+[x] 添加"稍后"和"了解"操作按钮
+[x] 添加"配置完整"成功提示
+[x] 修复 map key 使用 recentPath 替代 index
+[ ] 运行类型检查确保通过
+[0m
+现在让我运行类型
+[0m$ [0mcd /Users/smallnest/ai/autoresearch/desktop_app && npx tsc --noEmit 2>&1
+(no output)
+[0m
+[0m# [0mTodos
+[x] 添加 CheckIcon 和 XIcon 图标组件
+[x] 修改 ConfigBadge 组件使用勾/叉图标替代圆点
+[x] 添加"从模板初始化"提示 UI（当配置缺失时显示）
+[x] 添加"稍后"和"了解"操作按钮
+[x] 添加"配置完整"成功提示
+[x] 修复 map key 使用 recentPath 替代 index
+[x] 运行类型检查确保通过
+[0m
+类型检查通过！让我完成 todo 列表并更新 CLAUDE.md：
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m
+[0m← [0mEdit desktop_app/src/CLAUDE.md
+Index: /Users/smallnest/ai/autoresearch/desktop_app/src/CLAUDE.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/desktop_app/src/CLAUDE.md
++++ /Users/smallnest/ai/autoresearch/desktop_app/src/CLAUDE.md
+@@ -43,4 +43,30 @@
+ - When adding store actions that load a specific project by path, always call `detect_project_config` + `save_recent_project` + update state in one action — don't split across multiple calls.
+ - In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+ - `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+ - Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
++
++## DashboardPage 约定
++
++### 配置状态显示
++
++- 使用 `ConfigBadge` 组件显示 `.autoresearch/`、`program.md`、`agents/` 状态
++- `ConfigBadge` 使用勾/叉图标（`CheckIcon`/`XIcon`）替代圆点，符合验收条件要求
++- 配置完整时显示"配置完整"成功提示（绿色背景卡片）
++- 配置缺失时显示"是否从模板初始化"提示 UI（黄色背景卡片，仅 UI，不实际初始化）
++- 提示 UI 包含"稍后"和"了解"两个操作按钮
++
++### 组件结构
++
++- `WelcomeScreen`: 未选择项目时显示的欢迎页面
++- `ProjectInfoScreen`: 已选择项目时显示的项目信息页面
++- `ConfigBadge`: 配置状态徽章（用于显示单个配置项）
++- `InitTemplatePrompt`: 初始化模板提示（配置缺失时显示）
++- `ConfigCompleteNotification`: 配置完整提示（配置齐全时显示）
++- `CheckIcon`/`XIcon`: 状态图标组件
++
++### 样式约定
++
++- 配置存在：绿色主题（`bg-green-900/50`, `text-green-400`, `border-green-700`）
++- 配置缺失：红色主题（`bg-red-900/50`, `text-red-400`, `border-red-700`）
++- 初始化提示：黄色主题（`bg-yellow-900/30`, `text-yellow-200`）
++- 配置卡片边框：缺失配置时边框变为黄色（`border-yellow-700/50`）
+
+[0m
+[0m# [0mTodos
+[x] 添加 CheckIcon 和 XIcon 图标组件
+[x] 修改 ConfigBadge 组件使用勾/叉图标替代圆点
+[x] 添加"从模板初始化"提示 UI（当配置缺失时显示）
+[x] 添加"稍后"和"了解"操作按钮
+[x] 添加"配置完整"成功提示
+[x] 修复 map key 使用 recentPath 替代 index
+[x] 运行类型检查确保通过
+[0m
+## 修复完成
+
+根据审核反馈，我已经完成了 Issue #24 T-003 子任务的所有修复：
+
+### 修复内容
+
+| 问题 | 修复状态 |
+|------|---------|
+| **添加"从模板初始化"提示 UI** | ✅ 添加了 `InitTemplatePrompt` 组件，当配置缺失时显示 |
+| **添加"稍后"和"了解"操作按钮** | ✅ 两个按钮已添加，支持点击交互 |
+| **添加"配置完整"成功提示** | ✅ 添加了 `ConfigCompleteNotification` 组件，配置齐全时显示 |
+| **勾/叉图标替代圆点** | ✅ 添加了 `CheckIcon` 和 `XIcon` 组件，用于 `ConfigBadge` 和项目状态 |
+| **修复 map key 使用 recentPath** | ✅ 从 `key={index}` 改为 `key={recentPath}` |
+| **配置卡片视觉突出** | ✅ 配置缺失时，配置检测卡片边框变为黄色（`border-yellow-700/50`） |
+| **类型检查** | ✅ `npx tsc --noEmit` 通过 |
+
+### 新增组件
+
+1. **CheckIcon** - 绿色勾选图标
+2. **XIcon** - 红色叉号图标  
+3. **InitTemplatePrompt** - 初始化模板提示（黄色主题，含"稍后"/"了解"按钮）
+4. **ConfigCompleteNotification** - 配置完整成功提示（绿色主题）
+
+### 更新的文件
+
+- `desktop_app/src/pages/DashboardPage.tsx` - 完整重构，添加所有缺失功能
+- `desktop_app/src/CLAUDE.md` - 添加 DashboardPage 约定和组件结构文档
+
+## Learnings
+
+- **模式**: DashboardPage 使用两个子组件（WelcomeScreen/ProjectInfoScreen）根据 projectPath 状态条件渲染，新添加的配置状态组件（InitTemplatePrompt/ConfigCompleteNotification）也遵循类似的模式，将 UI 逻辑封装为独立组件
+- **踩坑**: React key 应使用唯一标识符（如路径字符串），避免使用数组索引，以防止重新渲染问题和性能问题
+- **经验**: 审核反馈中的 UI 改进（勾/叉图标、成功提示等）通过添加小型专用组件实现，保持代码可维护性和复用性
+- **样式**: 使用一致的 Tailwind CSS 模式：`bg-{color}-900/50` + `text-{color}-400` + `border-{color}-700` 用于状态徽章

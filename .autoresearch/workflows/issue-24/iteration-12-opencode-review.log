@@ -1,0 +1,94 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m✱ [0mGlob "**/*.{ts,tsx,js,jsx}"[90m in . · 15 matches[0m
+我将审核 Issue #24 的子任务 T-003 的实现。首先让我
+[0m→ [0mRead .autoresearch/workflows/issue-24/tasks.json
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m✱ [0mGlob "desktop_app/src-tauri/**/*.rs"[90m in . · 3 matches[0m
+[0m
+[0m$ [0mcd /Users/smallnest/ai/autoresearch/desktop_app && npx tsc --noEmit 2>&1
+(no output)
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+## 审核报告
+
+### Issue
+- 编号: #24
+- 子任务: T-003
+- 迭代次数: 11
+
+### 总体评价
+
+**评分: 65/100**
+
+### 严重问题 (必须修复)
+
+1. **缺少"从模板初始化"提示 UI**
+   - 问题：当缺少任意配置项时，应当显示"是否从模板初始化"提示 UI
+   - 当前：仅显示配置状态，无任何初始化提示
+   - 验收条件要求：缺少配置时显示提示 UI（仅提示，不实际初始化）
+
+2. **缺少操作按钮（稍后/了解）**
+   - 问题：提示 UI 应当有"稍后"和"了解"两个操作按钮
+   - 当前：完全未实现
+
+3. **缺少"配置完整"成功提示**
+   - 问题：所有配置项齐全时应显示"配置完整"成功提示
+   - 当前：仅有"已配置"状态标签，没有明确的完整配置提示
+
+### 一般问题 (建议修复)
+
+4. **使用 index 作为 map key**
+   - 位置：`DashboardPage.tsx:158` - `recentProjects.map((recentPath, index) => (<li key={index}...`
+   - 建议：使用 `recentPath` 作为 key，路径是唯一的
+
+5. **ConfigBadge 使用圆点而非勾/叉图标**
+   - 验收条件要求用"绿色勾/红色叉图标"，当前实现是"绿色圆点/灰色圆点"
+   - 建议：使用 SVG CheckIcon 和 XIcon 替代圆点
+
+### 建议改进 (可选)
+
+6. **缺少配置缺失时的视觉突出**
+   - 当配置不完整时，建议增加更明显的视觉提示（如卡片边框变色）
+
+### 自检验证
+
+**实现者自检确认**
+- [x] 实现者已执行编译/类型检查 - `npx tsc --noEmit` 通过
+- [ ] 实现者已确认功能完整 - **未通过**：3项核心功能缺失
+
+### 审核结论
+
+- [ ] 通过 / 需要修改 / **阻塞**
+
+**必须修复后才能通过**：
+1. 添加"是否从模板初始化"提示 UI（当 has_autoresearch_dir || has_program_md || has_agents_dir 任一缺失时显示）
+2. 添加"稍后"和"了解"两个按钮（仅UI，不实现功能）
+3. 添加"配置完整"成功提示（当三项配置都存在时显示）
+4. （可选）将圆点改为勾/叉图标以符合验收条件字面要求
+
+---
+
+## Learnings
+
+- **模式**: DashboardPage 使用两个子组件（WelcomeScreen/ProjectInfoScreen）根据 projectPath 状态条件渲染
+- **踩坑**: store 中 recentProjects 目前是单条记录（后端限制），但前端按数组处理以保持扩展性
+- **经验**: T-003 的三大 UI 功能（初始化提示、操作按钮、完整配置提示）均未实现，需要补充
+
+### 建议更新 CLAUDE.md
+
+**desktop_app/src/pages/CLAUDE.md** 应添加：
+
+```markdown
+## DashboardPage 约定
+
+### 配置状态显示
+- 使用 ConfigBadge 组件显示 .autoresearch/、program.md、agents/ 状态
+- 配置完整时显示"配置完整"成功提示
+- 配置缺失时显示"是否从模板初始化"提示（仅UI，不实际初始化）
+
+### 待实现功能
+- T-003 中的"从模板初始化"提示 UI 尚未完成
+```

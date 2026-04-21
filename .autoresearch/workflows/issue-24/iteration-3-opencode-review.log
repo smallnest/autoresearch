@@ -1,0 +1,42 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m✱ [0mGlob "**/Cargo.toml"[90m 1 match[0m
+[0m✱ [0mGlob "**/*.rs"[90m 3 matches[0m
+我需要先探索项目结构，找到相关的 Rust/Tauri 代码进行审核
+[0m✱ [0mGlob "**/capabilities/*.json"[90m 1 match[0m
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m✗ [0mbash failed
+[91m[1mError: [0mThe bash tool was called with invalid arguments: [
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [
+      "description"
+    ],
+    "message": "Invalid input: expected string, received undefined"
+  }
+].
+Please rewrite the input so it satisfies the expected schema.
+[0m✗ [0mbash failed
+[91m[1mError: [0mThe bash tool was called with invalid arguments: [
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [
+      "description"
+    ],
+    "message": "Invalid input: expected string, received undefined"
+  }
+].
+Please rewrite the input so it satisfies the expected schema.
+[0m
+[0m$ [0mcargo check 2>&1
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.00s
+[0m
+[0m$ [0mcargo clippy 2>&1
+Compiling desktop_app v0.1.0 (/Users/smallnest/ai/autoresearch/desktop_app/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.62s
+[0m

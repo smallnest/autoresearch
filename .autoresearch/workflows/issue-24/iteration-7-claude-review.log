@@ -1,0 +1,151 @@
+现在我已经掌握了进行全面审查所需的所有信息。这是我的审查报告：
+
+---
+
+## 审查报告
+
+### Issue
+- 编号: #24
+- 标题: [desktop-app] 项目目录选择与配置检测
+- 子任务: T-002 - 前端项目管理状态与欢迎引导页
+- 迭代次数: 7
+
+---
+
+### 总体评价
+
+**评分: 72/100**
+
+T-002 子任务基本实现了需求：`zustand store` 管理项目状态、欢迎引导页、项目选择后自动调用配置检测、从 `Tauri store` 持久化加载。但存在几个功能性问题需要修复。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 点击最近项目列表项未正确加载对应项目
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx:166-169`
+
+**问题描述**:
+点击最近项目列表中的某个项目时，调用的是 `useProjectStore.getState().loadRecentProjects()`，这只是重新从后端读取最近项目列表，并不会加载用户点击的那个特定项目路径。用户点击任何最近项目，效果都一样——只会重新读取 `app.json` 中存储的单个 `recent_project`。
+
+**代码片段**:
+```tsx
+onClick={() => {
+  // Load this project
+  useProjectStore.getState().loadRecentProjects();
+}}
+```
+
+**建议修复**:
+`Store` 中需要新增一个 `loadProject(path: string)` `action`，直接对指定路径调用 `detect_project_config` 并更新状态。同时 `onClick` 应该调用这个 `action` 而非 `loadRecentProjects()`。
+
+**原因**: 这是一个核心交互功能，点击最近项目无法加载该项目的配置，违反验收条件"点击选择项目目录调用 `select_project_dir` 并自动触发配置检测"。
+
+---
+
+#### 问题 2: 最近项目列表实际上只保存/显示一个项目
+
+**位置**: `desktop_app/src/stores/projectStore.ts:49-66` + `desktop_app/src-tauri/src/lib.rs:36-53`
+
+**问题描述**:
+后端 `get_recent_project` 和 `save_recent_project` 只存取单个键 `"recent_project"`，不是项目列表。前端 `loadRecentProjects` 每次调用都把同一个路径推入数组，导致 `recentProjects` 列表只有一个路径去重后也只有一条。
+
+验收条件要求"欢迎页展示最近打开的项目列表"，但后端只支持存储单个最近路径，不支持多个。
+
+**建议修复**:
+- 短期：将 `"Recent Projects"` 区域标题改为"上次打开的项目"或隐藏该列表（因为只有一个路径），避免 `UI` 误导用户。
+- 长期：后端改为存储项目列表（如 `Vec<String>`），前端才能真正显示多个最近项目。
+
+**原因**: 验收条件明确要求"从 `get_recent_project` 获取"最近打开的项目列表"，但后端只存一个路径，列表功能形同虚设。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: `loadRecentProjects` 在 `selectProject` 后被重复调用
+
+**位置**: `desktop_app/src/stores/projectStore.ts:40`
+
+**问题描述**:
+`selectProject` 调用 `save_recent_project` 后立即调用 `get().loadRecentProjects()`。但 `loadRecentProjects` 内部又会检测到 `projectPath` 已存在（刚设置的），所以不会重复设置。这个调用实际上只是更新 `recentProjects` 列表。逻辑虽正确但有些冗余——可以直接把当前路径加入 `recentProjects` 列表而不需要再次 `invoke` 后端。
+
+**建议修复**:
+```ts
+// 在 selectProject 中，set 之后直接更新 recentProjects
+set((state) => ({
+  projectPath: path,
+  config,
+  recentProjects: [path, ...state.recentProjects.filter((p) => p !== path)].slice(0, 5),
+}));
+```
+
+---
+
+#### 问题 4: 旋转加载 `SVG` 有重复的 `<path>` 元素
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx:122-131`
+
+**问题描述**:
+加载动画的 `SVG` 中有两个完全相同的 `<path>` 元素（`d` 属性相同），第二个是多余的，会影响旋转动画的视觉效果。
+
+**代码片段**:
+```tsx
+<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018..." />
+<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018..." /> // 重复
+```
+
+**建议修复**: 删除第二个重复的 `<path>` 元素。
+
+---
+
+#### 问题 5: 缺少 `select_project_dir` 为 `null` 时（用户取消）的提示
+
+**位置**: `desktop_app/src/stores/projectStore.ts:31`
+
+**问题描述**:
+当用户在文件夹选择对话框中点击"取消"时，`select_project_dir` 返回 `null`。当前代码在 `if (path)` 分支外直接结束，不做任何提示。虽然不报错，但用户可能会困惑为什么没有反应。
+
+**建议修复**: 可选地设置一个信息性提示，或者保持现状（静默处理取消也是合理的 `UX`）。
+
+---
+
+### 建议改进 (可选)
+
+- `lib.rs:61` 缩进不一致：`.invoke_handler` 相比上面的 `.plugin` 少了 4 个空格缩进
+- `DashboardPage.tsx` 中 `WelcomeScreen` 和 `ProjectInfoScreen` 可以拆成独立文件，减少单文件 364 行的体积
+- "快捷操作" 中的 "新建工作流" 和 "查看 Issues" 按钮目前是占位符，没有实际功能，可以考虑后续子任务中实现
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 备注 |
+|---|---|---|
+| 创建 `zustand store` 管理项目状态 | ✅ | `projectStore.ts` 完整 |
+| 无项目时显示欢迎引导页 + 选择按钮 | ✅ | `WelcomeScreen` 组件完整 |
+| 欢迎页展示最近打开的项目列表 | ⚠️ | 后端只存单个路径，列表只有一项 |
+| 点击选择项目目录调用 `select_project_dir` 并触发配置检测 | ✅ | `selectProject action` 逻辑正确 |
+| 选择项目后从欢迎引导切换到项目信息展示 | ✅ | 条件渲染正确 |
+| 项目路径保存到 `Tauri store`，下次启动自动加载 | ✅ | `useEffect` 调用 `loadRecentProjects` |
+| `npx tsc --noEmit` 通过 | ✅ | 编译无错误 |
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 修复最近项目列表点击逻辑（问题 1）：新增 `loadProject(path)` `action`，点击列表项时加载对应项目
+2. 修复最近项目列表与后端的不匹配（问题 2）：要么改为单条显示，要么后端支持多项目存储
+3. 删除重复的 `SVG path` 元素（问题 4）
+
+---
+
+## 学习总结
+
+- **模式**: `zustand` 外部调用 `store` 方法使用 `useStoreName.getState().action()`，组件内使用 `hook` 解构
+- **踩坑**: 后端 `get_recent_project` 只存单个路径，前端却期望列表——前后端接口设计需要先对齐
+- **经验**: `Tauri` `capabilities` 需要显式声明 `dialog:allow-open` 才能打开文件夹选择对话框
+- **模式**: `Zustand store` 中 `async action` 的标准模式：`set({ loading: true })` → `try/catch` → `finally set({ loading: false })`
