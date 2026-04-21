@@ -3570,7 +3570,6 @@ EOF
 
         # 切换回主分支前，先处理未提交的更改
         cd "$PROJECT_ROOT"
-        local main_branch
         main_branch=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
         [ -z "$main_branch" ] && main_branch="master"
 
