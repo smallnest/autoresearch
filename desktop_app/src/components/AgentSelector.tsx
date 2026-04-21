@@ -87,7 +87,11 @@ export default function AgentSelector() {
   const { selectedAgents, toggleAgent, reorderAgents, selectAll, clearAll } = useAgentStore();
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // 需要 5px 移动才触发拖拽，避免误触
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
