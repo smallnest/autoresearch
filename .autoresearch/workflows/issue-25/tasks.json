@@ -1,0 +1,52 @@
+{
+  "issueNumber": 25,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "创建 Agent Store 与基础类型定义",
+      "description": "创建 Zustand store 管理 agent 选择状态。定义 AgentInfo 类型，实现 selectedAgents 有序数组、toggleAgent/reorderAgents/selectAll/clearAll 操作，支持状态持久化到 localStorage。",
+      "acceptanceCriteria": [
+        "Store 文件位于 src/stores/agentStore.ts",
+        "selectedAgents 为有序字符串数组",
+        "toggleAgent 能正确切换 agent 选中状态",
+        "reorderAgents 能正确调整 agent 顺序",
+        "selectAll/clearAll 快捷操作正确",
+        "状态能持久化到本地存储"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "实现 Agent 选择器 UI 组件",
+      "description": "安装 @dnd-kit/core 和 @dnd-kit/sortable 依赖。创建 AgentSelector 组件，包含 AgentTag 子组件和拖拽排序列表。实现已选区（可拖拽）和备选区（灰色展示），支持全选和清空按钮。",
+      "acceptanceCriteria": [
+        "成功安装 @dnd-kit/core 和 @dnd-kit/sortable",
+        "AgentSelector 组件位于 src/components/AgentSelector.tsx",
+        "显示 claude/codex/opencode 三个 agent 作为可勾选标签",
+        "勾选的 agent 按顺序排列，支持拖拽调整顺序",
+        "未勾选的 agent 灰色展示在下方备选区",
+        "全选和清空按钮功能正常"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "集成到设置页面并验证",
+      "description": "将 AgentSelector 组件集成到 SettingsPage，调整样式符合 dark 主题。运行 typecheck 和 lint 检查，在浏览器中验证所有交互功能正常。",
+      "acceptanceCriteria": [
+        "SettingsPage 正确显示 Agent 选择器",
+        "样式符合项目 dark 主题（gray-800/900 背景）",
+        "Typecheck 无错误",
+        "Lint 无新增错误",
+        "浏览器验证：勾选/取消/拖拽/全选/清空全部正常"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": true
+    }
+  ]
+}

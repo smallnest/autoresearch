@@ -1,0 +1,73 @@
+
+
+我将审核子任务 T-002 的实现。让我先检查相关文件和依赖。
+[94m[1m| [0m[90m Glob     [0m{"pattern":"**/AgentSelector*","path":"/Users/chaoyuepan/ai/autoresearch"}
+[94m[1m| [0m[90m Glob     [0m{"pattern":"**/package.json","path":"/Users/chaoyuepan/ai/autoresearch"}
+[96m[1m| [0m[90m Read     [0mdesktop_app/package.json
+[94m[1m| [0m[90m Glob     [0m{"pattern":"desktop_app/src/**/*.tsx"}
+
+[94m[1m| [0m[90m Glob     [0m{"pattern":"desktop_app/src/components/*"}[94m[1m| [0m[90m Grep     [0m{"pattern":"AgentSelector","path":"/Users/chaoyuepan/ai/autoresearch/desktop_app"}
+[94m[1m| [0m[90m Glob     [0m{"pattern":"desktop_app/src/**/*.ts*"}
+[96m[1m| [0m[90m Read     [0mdesktop_app/src/stores/agentStore.ts
+[96m[1m| [0m[90m Read     [0mdesktop_app/src/pages/SettingsPage.tsx
+[94m[1m| [0m[90m Grep     [0m{"path":"/Users/chaoyuepan/ai/autoresearch/desktop_app/src","pattern":"dnd"}
+[94m[1m| [0m[90m Glob     [0m{"pattern":".autoresearch/workflows/issue-25/**"}
+[96m[1m| [0m[90m Read     [0m.autoresearch/workflows/issue-25/progress.md
+[96m[1m| [0m[90m Read     [0m.autoresearch/workflows/issue-25/tasks.json
+## 审核报告
+
+### Issue
+- 编号: #25
+- 迭代次数: 当前在 T-002 (UI 组件)
+
+### 总体评价
+**评分: 50/100**
+
+### 严重问题 (必须修复)
+
+1. **AgentSelector 组件完全未创建** (阻塞性问题)
+   - 验收条件要求组件位于 `src/components/AgentSelector.tsx`，但该文件不存在
+   - 所有 UI 相关验收条件均未满足
+
+2. **dnd-kit 依赖已安装但未使用**
+   - `@dnd-kit/core` 和 `@dnd-kit/sortable` 已在 package.json 中安装
+   - 但代码中没有任何引用或实现拖拽功能
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 |
+|---------|------|
+| 成功安装 @dnd-kit/core 和 @dnd-kit/sortable | ✅ 已安装 |
+| AgentSelector 组件位于 src/components/AgentSelector.tsx | ❌ 文件不存在 |
+| 显示 claude/codex/opencode 三个 agent 作为可勾选标签 | ❌ 未实现 |
+| 勾选的 agent 按顺序排列，支持拖拽调整顺序 | ❌ 未实现 |
+| 未勾选的 agent 灰色展示在下方备选区 | ❌ 未实现 |
+| 全选和清空按钮功能正常 | ❌ 未实现 |
+
+### 已完成的实现
+
+- **agentStore.ts**: 完整的 Zustand store 实现，包含所有状态管理逻辑（toggleAgent, reorderAgents, selectAll, clearAll）
+- 依赖安装正确
+
+### 建议修复
+
+需要创建 `desktop_app/src/components/AgentSelector.tsx` 组件，实现：
+1. 使用 @dnd-kit/core 的 DndContext 和 @dnd-kit/sortable 的 SortableContext
+2. 已选区：显示已选中的 agent 标签，支持拖拽排序
+3. 备选区：显示未选中的 agent（灰色样式）
+4. 全选/清空按钮使用 agentStore 的 selectAll/clearAll 方法
+
+### 审核结论
+- [x] 需要修改
+
+### 自检验证
+
+> 由于核心实现完全缺失，无法执行编译/类型检查和浏览器验证。
+
+---
+
+## Learnings
+
+- **Pattern**: Zustand stores 使用 `create<State>()` 带 actions 和 getters 在同一对象中
+- **Pattern**: 使用 `persist` middleware 从 `zustand/middleware` 实现 localStorage 持久化
+- **经验**: UI 组件实现需同时创建组件文件并集成到页面中，不能仅安装依赖
