@@ -34,6 +34,10 @@
 set -e
 set -o pipefail
 
+# 设置 locale 避免 awk/sed/grep 的多字节转换错误
+export LC_ALL=C
+export LANG=C
+
 # ==================== 环境变量处理 ====================
 if [ -f "$HOME/.zshrc" ]; then
     eval "$(grep -E '^export (OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY)=' "$HOME/.zshrc" 2>/dev/null)" || true
