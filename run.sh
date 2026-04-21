@@ -1948,6 +1948,30 @@ detect_dev_server_command() {
     fi
   fi
 
+  # Monorepo/子目录搜索：如果根目录未找到 dev server 命令，
+  # 扫描一级子目录中包含 package.json 的 Node.js 项目
+  if [ -z "$cmd" ]; then
+    local sub_dir
+    for sub_dir in "$project_root"/*/; do
+      [ -d "$sub_dir" ] || continue
+      [ -f "$sub_dir/package.json" ] || continue
+      # 检查子目录的 package.json 是否有 dev 相关 script
+      if jq -e '.scripts.dev' "$sub_dir/package.json" > /dev/null 2>&1; then
+        local sub_name
+        sub_name=$(basename "$sub_dir")
+        cmd="cd $sub_name && npm run dev"
+        log "在子目录 $sub_name/ 中检测到 dev server 命令" >&2
+        break
+      elif jq -e '.scripts.start' "$sub_dir/package.json" > /dev/null 2>&1; then
+        local sub_name
+        sub_name=$(basename "$sub_dir")
+        cmd="cd $sub_name && npm start"
+        log "在子目录 $sub_name/ 中检测到 start 命令" >&2
+        break
+      fi
+    done
+  fi
+
   echo "$cmd"
 }
 
@@ -1963,29 +1987,45 @@ detect_dev_server_port() {
     return
   fi
 
-  # 检查 package.json
-  if [ -f "$project_root/package.json" ]; then
+  # 搜索目录列表：根目录 + 一级子目录（含 package.json 的）
+  local search_dirs=("$project_root")
+  local sub_dir
+  for sub_dir in "$project_root"/*/; do
+    [ -d "$sub_dir" ] || continue
+    [ -f "$sub_dir/package.json" ] || continue
+    search_dirs+=("$sub_dir")
+  done
+
+  # 在所有搜索目录中查找端口配置
+  local search_dir
+  for search_dir in "${search_dirs[@]}"; do
     # 检查 vite config
-    if [ -f "$project_root/vite.config.ts" ] || [ -f "$project_root/vite.config.js" ]; then
-      port=$(grep -oE 'port:\s*[0-9]+' "$project_root/vite.config.ts" "$project_root/vite.config.js" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    if [ -f "$search_dir/vite.config.ts" ] || [ -f "$search_dir/vite.config.js" ]; then
+      local vite_config
+      for vite_config in "$search_dir/vite.config.ts" "$search_dir/vite.config.js"; do
+        [ -f "$vite_config" ] || continue
+        port=$(grep -oE 'port:\s*[0-9]+' "$vite_config" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+        [ -n "$port" ] && break
+      done
+      [ -n "$port" ] && break
     fi
     # 检查 next config
-    if [ -z "$port" ] && ([ -f "$project_root/next.config.js" ] || [ -f "$project_root/next.config.ts" ]); then
+    if [ -z "$port" ] && ([ -f "$search_dir/next.config.js" ] || [ -f "$search_dir/next.config.ts" ]); then
       port="3000"
+      break
     fi
-  fi
-
-  # 检查 .env 文件
-  if [ -z "$port" ]; then
-    for env_file in "$project_root/.env" "$project_root/.env.local" "$project_root/.env.development"; do
-      if [ -f "$env_file" ]; then
-        port=$(grep -E '^PORT=|^VITE_PORT=|^NEXT_PORT=' "$env_file" 2>/dev/null | grep -oE '[0-9]+' | head -1)
-        if [ -n "$port" ]; then
-          break
+    # 检查 .env 文件
+    if [ -z "$port" ]; then
+      local env_file
+      for env_file in "$search_dir/.env" "$search_dir/.env.local" "$search_dir/.env.development"; do
+        if [ -f "$env_file" ]; then
+          port=$(grep -E '^PORT=|^VITE_PORT=|^NEXT_PORT=' "$env_file" 2>/dev/null | grep -oE '[0-9]+' | head -1)
+          [ -n "$port" ] && break
         fi
-      fi
-    done
-  fi
+      done
+      [ -n "$port" ] && break
+    fi
+  done
 
   # 默认端口
   if [ -z "$port" ]; then
@@ -2063,124 +2103,343 @@ capture_screenshot() {
  local work_dir
  work_dir=$(dirname "$output_file")
 
- log "捕获截图: $target_url -> $output_file"
+ log "捕获截图: $target_url -> $output_file" >&2
 
  # 创建截图目录
  mkdir -p "$work_dir" 2>/dev/null || true
 
  # 检查截图工具可用性
  local tools_available=0
- if command -v playwright &> /dev/null || command -v npx &> /dev/null; then
- tools_available=1
+ local chrome_path=""
+ # macOS: 检查标准安装路径
+ if [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
+   chrome_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+   tools_available=1
  fi
- if command -v google-chrome &> /dev/null || command -v chromium &> /dev/null || command -v chromium-browser &> /dev/null; then
- tools_available=1
+ if [ -z "$chrome_path" ] && command -v google-chrome &> /dev/null; then
+   chrome_path="google-chrome"
+   tools_available=1
+ fi
+ if [ -z "$chrome_path" ] && command -v chromium &> /dev/null; then
+   tools_available=1
+ fi
+ if [ -z "$chrome_path" ] && command -v chromium-browser &> /dev/null; then
+   tools_available=1
+ fi
+ if command -v playwright &> /dev/null || command -v npx &> /dev/null; then
+   tools_available=1
  fi
 
  if [ $tools_available -eq 0 ]; then
- error "截图失败: 无可用截图工具 (playwright, google-chrome, chromium 均不可用)"
- echo "截图工具不可用，跳过 UI 验证" >> "$work_dir/verify.log" 2>/dev/null || true
- return 1
+   log "截图失败: 无可用截图工具 (chrome, playwright, chromium 均不可用)" >&2
+   echo "截图工具不可用，跳过 UI 验证" >> "$work_dir/verify.log" 2>/dev/null || true
+   return 1
+ fi
+
+ # 优先使用 Chrome CDP 协议截图（最可靠，无外部依赖）
+ if [ $success -eq 0 ] && [ -n "$chrome_path" ]; then
+   log "使用 Chrome CDP 协议截图..." >&2
+   if capture_screenshot_cdp "$chrome_path" "$target_url" "$output_file"; then
+     success=1
+     log "Chrome CDP 截图成功" >&2
+   else
+     log "Chrome CDP 截图失败，尝试下一个工具..." >&2
+   fi
  fi
 
  # 优先使用 playwright
  if [ $success -eq 0 ]; then
- if command -v playwright &> /dev/null; then
- log "使用 playwright 截图..."
- if playwright screenshot \
- --viewport-size="1280,720" \
- --wait-for-timeout=5000 \
- "$target_url" \
- "$output_file" 2>/dev/null; then
- success=1
- log "playwright 截图成功"
- else
- log "playwright 截图失败，尝试下一个工具..."
- fi
- fi
+   if command -v playwright &> /dev/null; then
+     log "使用 playwright 截图..." >&2
+     if playwright screenshot \
+     --viewport-size="1280,720" \
+     --wait-for-timeout=5000 \
+     "$target_url" \
+     "$output_file" 2>/dev/null; then
+       success=1
+       log "playwright 截图成功" >&2
+     else
+       log "playwright 截图失败，尝试下一个工具..." >&2
+     fi
+   fi
  fi
 
  # 如果 playwright 失败，尝试使用 npx playwright
  if [ $success -eq 0 ]; then
- if command -v npx &> /dev/null; then
- log "尝试使用 npx playwright 截图..."
- if npx playwright screenshot \
- --viewport-size="1280,720" \
- --wait-for-timeout=5000 \
- "$target_url" \
- "$output_file" 2>/dev/null; then
- success=1
- log "npx playwright 截图成功"
- else
- log "npx playwright 截图失败，尝试下一个工具..."
- fi
- fi
+   if command -v npx &> /dev/null; then
+     log "尝试使用 npx playwright 截图..." >&2
+     if npx playwright screenshot \
+     --viewport-size="1280,720" \
+     --wait-for-timeout=5000 \
+     "$target_url" \
+     "$output_file" 2>/dev/null; then
+       success=1
+       log "npx playwright 截图成功" >&2
+     else
+       log "npx playwright 截图失败，尝试下一个工具..." >&2
+     fi
+   fi
  fi
 
- # 如果 playwright 都失败，尝试使用 google-chrome
- if [ $success -eq 0 ]; then
- if command -v google-chrome &> /dev/null; then
- log "尝试使用 google-chrome 截图..."
- if timeout 30 google-chrome \
- --headless \
- --disable-gpu \
- --screenshot="$output_file" \
- --window-size=1280,720 \
- "$target_url" 2>/dev/null; then
- success=1
- log "google-chrome 截图成功"
- else
- log "google-chrome 截图失败，尝试下一个工具..."
- fi
- fi
+ # 如果都失败，尝试使用 google-chrome headless --screenshot
+ if [ $success -eq 0 ] && [ -n "$chrome_path" ]; then
+   log "尝试使用 Chrome headless --screenshot..." >&2
+   if timeout 30 "$chrome_path" \
+   --headless \
+   --disable-gpu \
+   --screenshot="$output_file" \
+   --window-size=1280,720 \
+   "$target_url" 2>/dev/null; then
+     success=1
+     log "Chrome headless 截图成功" >&2
+   else
+     log "Chrome headless 截图失败，尝试下一个工具..." >&2
+   fi
  fi
 
  # 尝试 chromium
  if [ $success -eq 0 ]; then
- if command -v chromium &> /dev/null; then
- log "尝试使用 chromium 截图..."
- if timeout 30 chromium \
- --headless \
- --disable-gpu \
- --screenshot="$output_file" \
- --window-size=1280,720 \
- "$target_url" 2>/dev/null; then
- success=1
- log "chromium 截图成功"
- else
- log "chromium 截图失败，尝试下一个工具..."
- fi
- fi
+   if command -v chromium &> /dev/null; then
+     log "尝试使用 chromium 截图..." >&2
+     if timeout 30 chromium \
+     --headless \
+     --disable-gpu \
+     --screenshot="$output_file" \
+     --window-size=1280,720 \
+     "$target_url" 2>/dev/null; then
+       success=1
+       log "chromium 截图成功" >&2
+     else
+       log "chromium 截图失败，尝试下一个工具..." >&2
+     fi
+   fi
  fi
 
  # 尝试 chromium-browser
  if [ $success -eq 0 ]; then
- if command -v chromium-browser &> /dev/null; then
- log "尝试使用 chromium-browser 截图..."
- if timeout 30 chromium-browser \
- --headless \
- --disable-gpu \
- --screenshot="$output_file" \
- --window-size=1280,720 \
- "$target_url" 2>/dev/null; then
- success=1
- log "chromium-browser 截图成功"
- else
- log "chromium-browser 截图失败"
- fi
- fi
+   if command -v chromium-browser &> /dev/null; then
+     log "尝试使用 chromium-browser 截图..." >&2
+     if timeout 30 chromium-browser \
+     --headless \
+     --disable-gpu \
+     --screenshot="$output_file" \
+     --window-size=1280,720 \
+     "$target_url" 2>/dev/null; then
+       success=1
+       log "chromium-browser 截图成功" >&2
+     else
+       log "chromium-browser 截图失败" >&2
+     fi
+   fi
  fi
 
  # 记录结果到日志
  if [ $success -eq 1 ]; then
- log "截图成功: $output_file"
- echo "截图成功: $output_file" >> "$work_dir/verify.log" 2>/dev/null || true
- return 0
+   log "截图成功: $output_file" >&2
+   echo "截图成功: $output_file" >> "$work_dir/verify.log" 2>/dev/null || true
+   return 0
  else
- error "截图失败: 无法使用任何可用工具捕获截图"
- echo "截图失败: 所有可用工具均无法完成截图" >> "$work_dir/verify.log" 2>/dev/null || true
- return 1
+   log "截图失败: 无法使用任何可用工具捕获截图" >&2
+   echo "截图失败: 所有可用工具均无法完成截图" >> "$work_dir/verify.log" 2>/dev/null || true
+   return 1
  fi
+}
+
+# 使用 Chrome DevTools Protocol (CDP) 截图
+# 参数: $1 = Chrome 可执行文件路径, $2 = 目标 URL, $3 = 输出文件路径
+# 返回: 0 = 成功, 1 = 失败
+capture_screenshot_cdp() {
+  local chrome_bin="$1"
+  local target_url="$2"
+  local output_file="$3"
+  local cdp_port=19222
+  local cdp_tmp_dir
+  cdp_tmp_dir=$(mktemp -d)
+  local chrome_pid=""
+
+  # 清理函数
+  _cdp_cleanup() {
+    if [ -n "$chrome_pid" ] && kill -0 "$chrome_pid" 2>/dev/null; then
+      kill "$chrome_pid" 2>/dev/null || true
+      sleep 0.5
+      kill -9 "$chrome_pid" 2>/dev/null || true
+    fi
+    rm -rf "$cdp_tmp_dir" 2>/dev/null || true
+  }
+
+  # 启动 Chrome 并开启远程调试端口
+  "$chrome_bin" \
+    --headless=new \
+    --disable-gpu \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --remote-debugging-port="$cdp_port" \
+    --user-data-dir="$cdp_tmp_dir/chrome-profile" \
+    --window-size=1280,720 \
+    about:blank \
+    > /dev/null 2>&1 &
+  chrome_pid=$!
+
+  # 等待 CDP 端口就绪
+  local retries=0
+  local max_retries=20
+  while [ $retries -lt $max_retries ]; do
+    if curl -s "http://localhost:$cdp_port/json/version" > /dev/null 2>&1; then
+      break
+    fi
+    sleep 0.5
+    retries=$((retries + 1))
+  done
+
+  if [ $retries -ge $max_retries ]; then
+    _cdp_cleanup
+    return 1
+  fi
+
+  # 创建临时 Node.js 脚本通过 CDP WebSocket 截图
+  local node_script="$cdp_tmp_dir/screenshot.js"
+  cat > "$node_script" << 'CDPSCRIPT'
+const http = require('http');
+const net = require('net');
+const crypto = require('crypto');
+const fs = require('fs');
+
+const port = parseInt(process.argv[2]);
+const targetUrl = process.argv[3];
+const outFile = process.argv[4];
+
+function httpGet(u) {
+  return new Promise((resolve, reject) => {
+    http.get(u, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => resolve(d));
+    }).on('error', reject);
+  });
+}
+
+async function main() {
+  try {
+    const targetsJson = await httpGet('http://localhost:' + port + '/json');
+    const targets = JSON.parse(targetsJson);
+    const pageTarget = targets.find(t => t.type === 'page');
+    if (!pageTarget) { process.exit(1); }
+
+    const wsUrl = new URL(pageTarget.webSocketDebuggerUrl);
+
+    const sock = new net.Socket();
+    let buf = Buffer.alloc(0);
+    let handshakeDone = false;
+    let msgId = 1;
+    const handlers = new Map();
+
+    function sendWS(obj) {
+      const payload = JSON.stringify(obj);
+      const mask = crypto.randomBytes(4);
+      const len = Buffer.byteLength(payload);
+      let hdr;
+      if (len < 126) {
+        hdr = Buffer.alloc(6); hdr[0] = 0x81; hdr[1] = 0x80 | len; mask.copy(hdr, 2);
+      } else if (len < 65536) {
+        hdr = Buffer.alloc(8); hdr[0] = 0x81; hdr[1] = 0x80 | 126; hdr.writeUInt16BE(len, 2); mask.copy(hdr, 4);
+      } else {
+        hdr = Buffer.alloc(14); hdr[0] = 0x81; hdr[1] = 0x80 | 127; hdr.writeBigUInt64BE(BigInt(len), 2); mask.copy(hdr, 10);
+      }
+      const body = Buffer.from(payload, 'utf8');
+      const masked = Buffer.alloc(body.length);
+      for (let i = 0; i < body.length; i++) masked[i] = body[i] ^ mask[i & 3];
+      sock.write(Buffer.concat([hdr, masked]));
+    }
+
+    function parseFrames(data) {
+      const msgs = []; let off = 0;
+      while (off < data.length) {
+        if (off + 2 > data.length) break;
+        let pl = data[off + 1] & 0x7f, hl = 2;
+        if (pl === 126) { if (off + 4 > data.length) break; pl = data.readUInt16BE(off + 2); hl = 4; }
+        else if (pl === 127) { if (off + 10 > data.length) break; pl = Number(data.readBigUInt64BE(off + 2)); hl = 10; }
+        if (off + hl + pl > data.length) break;
+        if ((data[off] & 0x0f) === 1) msgs.push(data.slice(off + hl, off + hl + pl).toString());
+        off += hl + pl;
+      }
+      return { msgs, rest: data.slice(off) };
+    }
+
+    sock.on('data', chunk => {
+      if (!handshakeDone) {
+        const headerEnd = chunk.indexOf('\r\n\r\n');
+        if (headerEnd === -1) return;
+        handshakeDone = true;
+        chunk = chunk.slice(headerEnd + 4);
+        if (chunk.length === 0) return;
+      }
+      buf = Buffer.concat([buf, chunk]);
+      const { msgs, rest } = parseFrames(buf);
+      buf = rest;
+      for (const m of msgs) {
+        try {
+          const p = JSON.parse(m);
+          if (p.id && handlers.has(p.id)) { handlers.get(p.id)(p); handlers.delete(p.id); }
+        } catch {}
+      }
+    });
+    sock.on('error', () => process.exit(1));
+
+    await new Promise(resolve => {
+      sock.connect(parseInt(wsUrl.port), wsUrl.hostname, () => {
+        const key = crypto.randomBytes(16).toString('base64');
+        sock.write(
+          'GET ' + wsUrl.pathname + ' HTTP/1.1\r\n' +
+          'Host: localhost:' + wsUrl.port + '\r\n' +
+          'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
+          'Sec-WebSocket-Key: ' + key + '\r\n' +
+          'Sec-WebSocket-Version: 13\r\n\r\n'
+        );
+        setTimeout(resolve, 500);
+      });
+    });
+
+    const navId = msgId++;
+    sendWS({ id: navId, method: 'Page.navigate', params: { url: targetUrl } });
+    await new Promise(r => { handlers.set(navId, () => r()); setTimeout(r, 8000); });
+    await new Promise(r => setTimeout(r, 3000));
+
+    const vpId = msgId++;
+    sendWS({ id: vpId, method: 'Emulation.setDeviceMetricsOverride', params: { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false } });
+    await new Promise(r => { handlers.set(vpId, () => r()); setTimeout(r, 2000); });
+
+    const ssId = msgId++;
+    sendWS({ id: ssId, method: 'Page.captureScreenshot', params: { format: 'png' } });
+    const result = await new Promise(r => {
+      handlers.set(ssId, resp => r(resp));
+      setTimeout(() => r(null), 15000);
+    });
+
+    if (result && result.result && result.result.data) {
+      fs.writeFileSync(outFile, Buffer.from(result.result.data, 'base64'));
+      process.exit(0);
+    } else {
+      process.exit(1);
+    }
+  } catch(e) {
+    process.exit(1);
+  }
+}
+main();
+CDPSCRIPT
+
+  local screenshot_success=0
+
+  if command -v node &> /dev/null; then
+    node "$node_script" "$cdp_port" "$target_url" "$output_file" 2>/dev/null
+    if [ -f "$output_file" ] && [ -s "$output_file" ] && file "$output_file" 2>/dev/null | grep -q "PNG"; then
+      screenshot_success=1
+    fi
+  fi
+
+  _cdp_cleanup
+
+  return $((1 - screenshot_success))
 }
 
 # 使用 LLM 验证 UI 截图
