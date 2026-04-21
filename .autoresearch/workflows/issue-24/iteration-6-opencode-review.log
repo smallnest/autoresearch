@@ -1,0 +1,213 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m✱ [0mGlob "**/*.{ts,tsx,rs}"[90m in . · 14 matches[0m
+我将审核 Issue #24 中 T-002 子任务的实现。首先
+[0m→ [0mRead .
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m✱ [0mGlob "**/store*"[90m in desktop_app · 0 matches[0m
+[0m→ [0mRead desktop_app/src/App.tsx
+[0m→ [0mRead desktop_app/package.json
+[0m✱ [0mGlob "**/*.{ts,tsx}"[90m in desktop_app/src · 10 matches[0m
+[0m
+[0m$ [0mls -la desktop_app/src/ && ls -la desktop_app/src/stores/ 2>/dev/null || echo "stores directory not found"
+total 40
+drwxr-xr-x@ 10 smallnest  staff   320 Apr 20 23:07 .
+drwxr-xr-x@ 18 smallnest  staff   576 Apr 20 23:49 ..
+-rw-r--r--@  1 smallnest  staff   659 Apr 20 23:07 App.tsx
+drwxr-xr-x@  3 smallnest  staff    96 Apr 20 21:09 assets
+-rw-r--r--@  1 smallnest  staff  1115 Apr 20 23:07 CLAUDE.md
+drwxr-xr-x@  5 smallnest  staff   160 Apr 20 23:07 components
+-rw-r--r--@  1 smallnest  staff   129 Apr 20 21:09 index.css
+-rw-r--r--@  1 smallnest  staff   344 Apr 20 23:07 main.tsx
+drwxr-xr-x@  6 smallnest  staff   192 Apr 20 23:07 pages
+-rw-r--r--@  1 smallnest  staff    38 Apr 20 21:09 vite-env.d.ts
+stores directory not found
+[0m
+[0m$ [0mfind . -name "*.ts" -o -name "*.tsx" | xargs grep -l "zustand\|useProjectStore\|select_project_dir\|detect_project_config" 2>/dev/null | head -20
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/immer.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/persist.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/ssrSafe.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/combine.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/devtools.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/redux.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/middleware/subscribeWithSelector.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/react.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/traditional.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/shallow.d.ts
+./desktop_app/node_modules/.pnpm/zustand@5.0.12_@types+react@18.3.28_react@18.3.1/node_modules/zustand/index.d.ts
+[0m
+## 审核报告
+
+### Issue
+- 编号: #24
+- 子任务: T-002 - 前端项目管理状态与欢迎引导页
+- 类型: UI
+
+### 总体评价
+**评分: 25/100**
+
+该子任务几乎没有实现。虽然后端 Rust 代码已完成（`select_project_dir`, `detect_project_config`, `get_recent_project`），但前端代码完全缺失：
+1. 没有创建 zustand store
+2. DashboardPage 仍是原始占位实现
+3. 没有欢迎引导页
+4. 没有调用后端命令的逻辑
+
+### 严重问题 (必须修复)
+
+#### 1. Zustand Store 未创建 ❌
+**问题**: 项目依赖中已安装 `zustand@5.0.4`，但没有创建任何 store 文件。  
+**验收条件**: "创建 zustand store 管理项目状态（路径、配置检测、最近列表）"  
+**建议**: 创建 `src/stores/projectStore.ts`：
+```typescript
+import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
+
+interface ProjectConfig {
+  has_autoresearch_dir: boolean;
+  has_program_md: boolean;
+  has_agents_dir: boolean;
+}
+
+interface ProjectState {
+  projectPath: string | null;
+  config: ProjectConfig | null;
+  recentProjects: string[];
+  isLoading: boolean;
+  error: string | null;
+  selectProject: () => Promise<void>;
+  loadRecentProject: () => Promise<void>;
+}
+
+export const useProjectStore = create<ProjectState>((set, get) => ({
+  projectPath: null,
+  config: null,
+  recentProjects: [],
+  isLoading: false,
+  error: null,
+  selectProject: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const path = await invoke<string | null>('select_project_dir');
+      if (path) {
+        const config = await invoke<ProjectConfig>('detect_project_config', { projectPath: path });
+        set({ projectPath: path, config });
+        // Save to Tauri store
+        await invoke('save_recent_project', { path });
+      }
+    } catch (e) {
+      set({ error: String(e) });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+  loadRecentProject: async () => {
+    const path = await invoke<string | null>('get_recent_project');
+    if (path) {
+      const config = await invoke<ProjectConfig>('detect_project_config', { projectPath: path });
+      set({ projectPath: path, config });
+    }
+  }
+}));
+```
+
+#### 2. DashboardPage 未完成欢迎引导页 ❌
+**当前代码** (第1-10行):
+```typescript
+function DashboardPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
+      <p className="text-gray-400">Overview of your automated development workflows.</p>
+    </div>
+  );
+}
+```
+
+**期望**: 应该根据是否有选中项目来切换显示：
+- 无项目时：显示欢迎引导页，包含"选择项目目录"按钮和最近项目列表
+- 有项目时：显示项目信息
+
+**建议实现**:
+```typescript
+import { useProjectStore } from '../stores/projectStore';
+import { useEffect } from 'react';
+
+function DashboardPage() {
+  const { projectPath, config, recentProjects, isLoading, selectProject, loadRecentProjects } = useProjectStore();
+
+  useEffect(() => {
+    loadRecentProjects();
+  }, []);
+
+  if (!projectPath) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center h-full">
+        <h2 className="text-2xl font-bold mb-4">欢迎使用 Autoresearch</h2>
+        <p className="text-gray-400 mb-8">选择一个项目目录开始</p>
+        <button 
+          onClick={selectProject}
+          disabled={isLoading}
+          className="px-6 py-3 bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          {isLoading ? '加载中...' : '选择项目目录'}
+        </button>
+        {recentProjects.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-lg mb-4">最近项目</h3>
+            {/* 渲染最近项目列表 */}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">项目信息</h1>
+      <p>路径: {projectPath}</p>
+      {/* 显示 config 信息 */}
+    </div>
+  );
+}
+```
+
+#### 3. 缺少保存最近项目的后端命令 ❌
+**问题**: 后端有 `get_recent_project` 但没有对应的 `save_recent_project` 命令来保存项目路径。  
+**建议**: 在 `lib.rs` 中添加：
+```rust
+#[tauri::command]
+async fn save_recent_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+    store.set("recent_project", path);
+    store.save().map_err(|e| e.to_string())
+}
+```
+
+#### 4. 类型检查未通过风险 ❌
+由于上述代码缺失，运行 `npx tsc --noEmit` 会因为没有 store 和相关类型而失败。
+
+### 一般问题
+
+#### 5. DashboardPage 缺少类型导出
+建议为组件 props 和状态添加类型定义。
+
+### 审核结论
+- [x] **阻塞** - 子任务核心功能完全未实现
+
+### 自检验证
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查 - ❌ 未执行
+- [ ] 实现者已执行 Lint 检查 - ❌ 未执行  
+- [ ] 实现者已运行相关测试 - ❌ 无测试
+- [ ] 实现者已确认测试覆盖 - ❌ 无测试
+```
+
+## Learnings
+- **踩坑**: 后端命令已实现但前端完全未调用，子任务实现不完整
+- **经验**: Tauri v2 前端调用后端命令使用 `@tauri-apps/api/core` 的 `invoke` 函数
+- **模式**: Zustand store 应该放在 `src/stores/` 目录，使用 `create` 函数创建
+- **建议**: 实现 UI 子任务时需要同时关注：store 逻辑、组件渲染、后端命令调用三个层面

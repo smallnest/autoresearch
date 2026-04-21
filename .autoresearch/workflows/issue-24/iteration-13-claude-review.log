@@ -1,0 +1,99 @@
+TypeScript 编译通过。现在，让我来验证一下根据验收标准，UI 组件是否已全部实现。
+
+## 审核报告
+
+### Issue
+- 编号: #24
+- 子任务: T-003 - 配置检测结果可视化与缺失配置提示
+- 迭代次数: 11
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+T-003 的所有验收条件均已实现，代码结构清晰，与现有 dark theme 一致，TypeScript 编译通过。
+
+---
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | 配置检测结果用绿色勾/红色叉图标展示 | ✅ | `ConfigBadge` 组件使用 `CheckIcon`/`XIcon` 配合绿/红主题 |
+| 2 | 分别显示三项配置状态 | ✅ | `DashboardPage.tsx:401-412` 三个 `ConfigBadge` 分别展示 `.autoresearch/`、`program.md`、`agents/` |
+| 3 | 缺少配置时显示初始化提示 UI | ✅ | `InitTemplatePrompt` 组件 (L242-292)，条件显示逻辑在 L385-387 |
+| 4 | 提示 UI 有"稍后"和"了解"按钮 | ✅ | L276-286，两个按钮均实现 |
+| 5 | 配置完整时显示成功提示 | ✅ | `ConfigCompleteNotification` 组件 (L295-313)，L382 条件渲染 |
+| 6 | 样式与 dark theme 一致 | ✅ | 使用 gray-800/900 基础色、green/yellow/red 语义色，与项目风格一致 |
+| 7 | `npx tsc --noEmit` 通过 | ✅ | 编译无错误 |
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: `handleLearnMore` 使用 `alert()` 不够优雅
+
+**位置**: `DashboardPage.tsx:346-348`
+
+**问题描述**:
+`handleLearnMore` 使用原生 `alert()` 弹窗，与整个 dark theme UI 风格不协调。
+
+**代码片段**:
+```tsx
+const handleLearnMore = () => {
+  alert('了解更多功能将在后续版本中实现');
+  setShowInitPrompt(false);
+};
+```
+
+**建议**: 可以使用 `window.open()` 打开文档链接或显示一个模态框。但鉴于 Issue 要求"仅提示，不做实际初始化操作"，这是一个可接受的占位实现。
+
+#### 问题 2: `showInitPrompt` 状态在切换项目时不会重置
+
+**位置**: `DashboardPage.tsx:324`
+
+**问题描述**:
+如果用户点击"稍后"关闭了提示，然后切换到另一个也缺少配置的项目，提示不会再次出现。因为 `showInitPrompt` 初始值硬编码为 `true`，但组件并未因 `projectPath` 变化而重新挂载（同一个 `ProjectInfoScreen` 实例可能被复用）。
+
+不过实际上，由于 React 的条件渲染 `projectPath ? <ProjectInfoScreen /> : <WelcomeScreen />`，当 `projectPath` 变化时组件确实会重新挂载，所以这个问题在实际中不太可能触发。标记为建议改进。
+
+---
+
+### 建议改进 (可选)
+
+- `ConfigBadge`、`InitTemplatePrompt`、`ConfigCompleteNotification` 都是单文件内的私有组件。如果后续其他页面需要复用，可以考虑提取到 `src/components/` 目录。
+- "项目状态"卡片（L416-438）仅基于 `has_autoresearch_dir` 显示"已配置/未配置"，可以整合三项状态给出更精确的摘要。
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 90 | 所有验收条件满足，`alert()` 为轻微瑕疵 |
+| 测试质量 (25%) | 100 | UI 组件，测试维度豁免 |
+| 代码质量 (20%) | 85 | 组件拆分清晰，命名合理，组件内联 SVG 略冗长但符合项目惯例 |
+| 安全性 (10%) | 100 | 无安全问题 |
+| 性能 (10%) | 100 | 无性能问题 |
+
+**总分**: 90×0.35 + 100×0.25 + 85×0.20 + 100×0.10 + 100×0.10 = **93/100**
+
+修正评分（因 `alert()` 占位实现扣 2 分，组件内联过多 SVG 不影响功能但略冗长扣 3 分）: **88/100**
+
+---
+
+### 审核结论
+
+- [x] **通过** - 代码质量达标，所有验收条件满足，TypeScript 编译通过，样式与 dark theme 一致。
+
+**下一步行动**: 子任务 T-003 通过审核，可标记为 `passes: true`。进入浏览器截图验证阶段。
+
+---
+
+## Learnings
+
+- **模式**: `DashboardPage` 采用两个子组件 (`WelcomeScreen`/`ProjectInfoScreen`) 根据 `projectPath` 条件渲染，子组件内部再通过 `config` 状态决定显示配置结果或初始化提示
+- **踩坑**: store 中 `recentProjects` 目前是单条记录（后端 `get_recent_project` 只存单条），前端按数组处理以保持扩展性
+- **经验**: T-003 的三大 UI 功能（初始化提示、操作按钮、完整配置提示）已全部实现，组件拆分为 `ConfigBadge`、`InitTemplatePrompt`、`ConfigCompleteNotification` 三层

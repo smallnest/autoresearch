@@ -1,0 +1,29 @@
+所有修复已完成。以下是已完成工作的总结：
+
+## 已应用的修复
+
+### 严重问题 (已修复)
+
+1.  **问题1 — 最近项目点击处理程序** (`projectStore.ts:52-69`, `DashboardPage.tsx:163`): 添加了新的 `loadProject(path)` 动作，用于对给定路径调用 `detect_project_config`、`save_recent_project`，并更新状态。点击处理程序现在调用 `loadProject(recentPath)` 而非 `loadRecentProjects()`。
+
+2.  **问题2 — UI 与后端不匹配** (`DashboardPage.tsx:155`): 将部分标题从“最近项目”改为“上次打开的项目”，以准确反映后端只存储单个路径。`loadRecentProjects` 现在直接设置 `recentProjects: [path]`。
+
+### 一般问题 (已修复)
+
+3.  **问题3 — 冗余调用** (`projectStore.ts:39-43`): `selectProject` 现在通过单个 `set()` 调用内联更新 `recentProjects`，而不是在保存后调用 `loadRecentProjects()`。
+
+4.  **问题4 — 重复的 SVG 路径** (`DashboardPage.tsx:123-127`): 从加载动画中移除了重复的 `<path>` 元素。
+
+### 其他修复
+
+5.  **lib.rs 缩进** (`lib.rs:61`): 修复了 `.invoke_handler` 的缩进，使其与上面的 `.plugin` 链对齐。
+
+6.  **变量遮蔽** (`DashboardPage.tsx:158`): 将 `.map()` 回调变量从 `projectPath` 重命名为 `recentPath`，以避免遮蔽组件属性。
+
+所有更改均通过 `npx tsc --noEmit` 检查。
+
+## 经验总结
+
+-   **模式**: Zustand 存储中，每个路由操作（`selectProject`, `loadProject`）应原子性地执行配置检测 + 持久化 + 状态更新，而不是链接多个异步操作。
+-   **避坑**: 后端 `get_recent_project` 只存储单个路径——前端列表功能是为未来可扩展性而设，但必须在 UI 中如实反映当前限制。
+-   **避坑**: `.map()` 回调中的变量遮蔽（命名参数与组件属性相同）会导致无声错误——请使用描述性名称，如 `recentPath`。

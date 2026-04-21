@@ -1,0 +1,245 @@
+[0m
+> build · moonshotai/kimi-k2.5
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+我将根据审核反馈改进 Issue #24 的实现。首先让我查看当前代码状态
+[0m→ [0mRead desktop_app/package.json
+[0m
+[0m# [0mTodos
+[ ] 创建 src/stores/projectStore.ts - zustand store 管理项目状态
+[ ] 添加 save_recent_project 后端命令到 lib.rs
+[ ] 更新 DashboardPage.tsx 实现欢迎引导页和项目信息展示
+[ ] 运行类型检查确保无错误
+[ ] 更新目录级 CLAUDE.md 记录可复用模式
+[0m
+根据审核反馈，我将制定修复计划并逐步实现。
+
+## 第一步：
+[0m$ [0mmkdir -p /Users/smallnest/ai/autoresearch/desktop_app/src/stores
+(no output)
+[0m
+[0m← [0mWrite desktop_app/src/stores/projectStore.ts
+Wrote file successfully.
+[0m
+[0m# [0mTodos
+[x] 创建 src/stores/projectStore.ts - zustand store 管理项目状态
+[ ] 添加 save_recent_project 后端命令到 lib.rs
+[ ] 更新 DashboardPage.tsx 实现欢迎引导页和项目信息展示
+[ ] 运行类型检查确保无错误
+[ ] 更新目录级 CLAUDE.md 记录可复用模式
+[0m
+[0m← [0mEdit desktop_app/src-tauri/src/lib.rs
+Index: /Users/smallnest/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
+===================================================================
+--- /Users/smallnest/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
++++ /Users/smallnest/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
+@@ -42,8 +42,17 @@
+         .and_then(|v| v.as_str().map(String::from));
+     Ok(value)
+ }
+ 
++/// Saves the project path to the Tauri store as the most recent project.
++#[tauri::command]
++async fn save_recent_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
++    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
++        .map_err(|e| format!("Failed to open store: {}", e))?;
++    store.set("recent_project", path);
++    store.save().map_err(|e| e.to_string())
++}
++
+ #[cfg_attr(mobile, tauri::mobile_entry_point)]
+ pub fn run() {
+     tauri::Builder::default()
+         .plugin(tauri_plugin_opener::init())
+
+[0m
+[0m← [0mEdit desktop_app/src-tauri/src/lib.rs
+Index: /Users/smallnest/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
+===================================================================
+--- /Users/smallnest/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
++++ /Users/smallnest/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
+@@ -57,12 +57,13 @@
+     tauri::Builder::default()
+         .plugin(tauri_plugin_opener::init())
+         .plugin(tauri_plugin_dialog::init())
+         .plugin(tauri_plugin_store::Builder::default().build())
+-        .invoke_handler(tauri::generate_handler![
+-            select_project_dir,
+-            detect_project_config,
+-            get_recent_project,
+-        ])
++    .invoke_handler(tauri::generate_handler![
++        select_project_dir,
++        detect_project_config,
++        get_recent_project,
++        save_recent_project,
++    ])
+         .run(tauri::generate_context!())
+         .expect("error while running tauri application");
+ }
+
+[0m
+[0m# [0mTodos
+[x] 创建 src/stores/projectStore.ts - zustand store 管理项目状态
+[x] 添加 save_recent_project 后端命令到 lib.rs
+[ ] 更新 DashboardPage.tsx 实现欢迎引导页和项目信息展示
+[ ] 运行类型检查确保无错误
+[ ] 更新目录级 CLAUDE.md 记录可复用模式
+[0m
+border border-gray-700\"\n        >\
+[0m← [0mWrite desktop_app/src/pages/DashboardPage.tsx
+Wrote file successfully.
+[0m
+[0m# [0mTodos
+[x] 创建 src/stores/projectStore.ts - zustand store 管理项目状态
+[x] 添加 save_recent_project 后端命令到 lib.rs
+[x] 更新 DashboardPage.tsx 实现欢迎引导页和项目信息展示
+[ ] 运行类型检查确保无错误
+[ ] 更新目录级 CLAUDE.md 记录可复用模式
+[0m
+[0m$ [0mcd /Users/smallnest/ai/autoresearch/desktop_app && npm run typecheck 2>&1
+> desktop_app@0.1.0 typecheck
+> tsc --noEmit
+
+src/pages/DashboardPage.tsx(123,38): error TS1003: Identifier expected.
+src/pages/DashboardPage.tsx(123,39): error TS1002: Unterminated string literal.
+src/pages/DashboardPage.tsx(126,16): error TS1382: Unexpected token. Did you mean `{'>'}` or `&gt;`?
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=115, limit=20][0m
+[0m
+[0m← [0mEdit desktop_app/src/pages/DashboardPage.tsx
+Index: /Users/smallnest/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx
+===================================================================
+--- /Users/smallnest/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx
++++ /Users/smallnest/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx
+@@ -116,15 +116,20 @@
+         cx="12"
+         cy="12"
+         r="10"
+         stroke="currentColor"
+-        strokeWidth="4}
++        strokeWidth={4}
+       />
+       <path
+         className="opacity-75"
+         fill="currentColor"
+         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+       />
++      <path
++        className="opacity-75"
++        fill="currentColor"
++        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
++      />
+     </svg>
+     加载中...
+   </>
+ ) : (
+
+[0m
+[0m$ [0mcd /Users/smallnest/ai/autoresearch/desktop_app && npm run typecheck 2>&1
+> desktop_app@0.1.0 typecheck
+> tsc --noEmit
+[0m
+[0m$ [0mnpm run lint 2>&1
+npm error code ENOENT
+npm error syscall open
+npm error path /Users/smallnest/ai/autoresearch/package.json
+npm error errno -2
+npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/Users/smallnest/ai/autoresearch/package.json'
+npm error enoent This is related to npm not being able to find a file.
+npm error enoent
+npm error A complete log of this run can be found in: /Users/smallnest/.npm/_logs/2026-04-20T23_16_55_126Z-debug-0.log
+[0m
+[0m$ [0mnpm run lint 2>&1
+npm error code ENOENT
+npm error syscall open
+npm error path /Users/smallnest/ai/autoresearch/package.json
+npm error errno -2
+npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/Users/smallnest/ai/autoresearch/package.json'
+npm error enoent This is related to npm not being able to find a file.
+npm error enoent
+npm error A complete log of this run can be found in: /Users/smallnest/.npm/_logs/2026-04-20T23_17_14_225Z-debug-0.log
+[0m
+[0m$ [0mnpm run lint 2>&1
+> desktop_app@0.1.0 lint
+> eslint .
+
+
+/Users/smallnest/ai/autoresearch/desktop_app/src-tauri/target/debug/build/desktop_app-188379e17a979740/out/__global-api-script.js
+  1:1  error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+/Users/smallnest/ai/autoresearch/desktop_app/src-tauri/target/debug/build/desktop_app-e74445ffc254fe2c/out/__global-api-script.js
+  1:1  error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+✖ 2 problems (2 errors, 0 warnings)
+[0m
+[0m✱ [0mGlob "eslint.config.*"[90m in desktop_app · 1 match[0m
+[0m→ [0mRead desktop_app/eslint.config.js
+[0m
+[0m← [0mEdit desktop_app/eslint.config.js
+Index: /Users/smallnest/ai/autoresearch/desktop_app/eslint.config.js
+===================================================================
+--- /Users/smallnest/ai/autoresearch/desktop_app/eslint.config.js
++++ /Users/smallnest/ai/autoresearch/desktop_app/eslint.config.js
+@@ -1,9 +1,9 @@
+ import tseslint from "typescript-eslint";
+ 
+ export default tseslint.config(
+   {
+-    ignores: ["dist/"],
++    ignores: ["dist/", "src-tauri/target/"],
+   },
+   tseslint.configs.recommended,
+   {
+     rules: {
+
+[0m
+[0m$ [0mnpm run lint 2>&1
+> desktop_app@0.1.0 lint
+> eslint .
+[0m
+[0m# [0mTodos
+[x] 创建 src/stores/projectStore.ts - zustand store 管理项目状态
+[x] 添加 save_recent_project 后端命令到 lib.rs
+[x] 更新 DashboardPage.tsx 实现欢迎引导页和项目信息展示
+[x] 运行类型检查确保无错误
+[ ] 更新目录级 CLAUDE.md 记录可复用模式
+[0m
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m
+[0m← [0mEdit desktop_app/src/CLAUDE.md
+Index: /Users/smallnest/ai/autoresearch/desktop_app/src/CLAUDE.md
+===================================================================
+--- /Users/smallnest/ai/autoresearch/desktop_app/src/CLAUDE.md
++++ /Users/smallnest/ai/autoresearch/desktop_app/src/CLAUDE.md
+@@ -20,5 +20,19 @@
+ ## Dependencies
+ 
+ - react-router-dom: routing (BrowserRouter, Routes, Route, NavLink, Outlet)
+ - Tailwind CSS v4: utility-first styling via @tailwindcss/vite
+-- No global state library usage yet (zustand installed but unused)
++- zustand: global state management, stores in `src/stores/`
++
++## State Management (Zustand)
++
++- Stores are in `src/stores/` directory
++- Use `create<State>()` from zustand to define stores
++- Import store hooks with destructuring: `const { field, action } = useProjectStore()`
++- Async actions should handle loading and error states
++- Store pattern: state + actions + getters in one `create()` call
++
++## Tauri Integration
++
++- Import `invoke` from `@tauri-apps/api/core` to call Rust commands
++- Commands return `Promise<T>` and can throw errors
++- Pattern: `await invoke<ReturnType>('command_name', { args })`
+
+[0m
+[0m# [0mTodos
+[x] 创建 src/stores/projectStore.ts - zustand store 管理项目状态
+[x] 添加 save_recent_project 后端命令到 lib.rs
+[x] 更新 DashboardPage.tsx 实现欢迎引导页和项目信息展示
+[x] 运行类型检查确保无错误
+[x] 更新目录级 CLAUDE.md 记录可复用模式
+[0m
