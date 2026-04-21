@@ -2,7 +2,7 @@
 
 本文档定义如何从 GitHub 获取和筛选待处理的 Issues。
 
-> 暂时本文件还没有使用，未来在自动化批量处理issue的时候才会使用。
+> 本文档中的核心规则已开始在 `autoresearch/scheduler.py` 和 `--next / --batch` CLI 中落地，仍有部分高级策略待继续实现。
 
 ---
 

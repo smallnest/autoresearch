@@ -1,3 +1,9 @@
 tests/*.log
 tests/*.tmp
 .claude/
+.venv/
+__pycache__/
+*.pyc
+.autoresearch/archive/
+.autoresearch/workflows/
+.autoresearch/results.tsv

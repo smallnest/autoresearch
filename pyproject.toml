@@ -1,0 +1,20 @@
+[project]
+name = "autoresearch-swe-agent"
+version = "0.1.0"
+description = "GitHub issue driven multi-agent software automation runner"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "PacemakerG" }
+]
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["autoresearch"]
