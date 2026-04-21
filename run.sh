@@ -3485,9 +3485,31 @@ EOF
         PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
         log_console "✅ PR 已创建: $PR_URL"
 
-        # 合并 PR
+        # 合并 PR（不删除本地分支，我们自己处理）
         log_console "合并 PR #$PR_NUMBER..."
-        gh pr merge "$PR_NUMBER" --merge --delete-branch
+        gh pr merge "$PR_NUMBER" --merge
+
+        # 切换回主分支前，先处理未提交的更改
+        cd "$PROJECT_ROOT"
+        local main_branch
+        main_branch=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+        [ -z "$main_branch" ] && main_branch="master"
+
+        # 如果有未提交的更改，先 stash
+        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+            log "检测到未提交的更改，暂存..."
+            git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null || true
+        fi
+
+        # 切换回主分支并拉取最新代码
+        log_console "切换回 $main_branch 分支..."
+        git checkout "$main_branch" 2>/dev/null || true
+        git pull origin "$main_branch" 2>/dev/null || true
+
+        # 删除本地功能分支
+        if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+            git branch -D "$BRANCH_NAME" 2>/dev/null || true
+        fi
 
         # 添加评论到 Issue（仅包含总结信息）
         log_console "添加评论到 Issue #$ISSUE_NUMBER..."
