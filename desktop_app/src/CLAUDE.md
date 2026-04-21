@@ -45,6 +45,32 @@
 - `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
 - Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
 
+## IssuesPage 约定
+
+### 组件结构
+
+- `IssueListItem`: 单个 Issue 列表项，显示编号、标题、标签、创建时间、处理状态
+- `LabelBadge`: 可点击的标签徽章，支持选中高亮状态
+- `SearchIcon`/`CheckIcon`/`IssueIcon`/`ProcessedIcon`/`ClearIcon`: 内联 SVG 图标组件
+- `EmptyState`: 空状态提示组件
+
+### 功能实现
+
+- **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+- **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+- **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+- **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+- **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
+- **浏览器 fallback**: 非 Tauri 环境使用 mock 数据（5 个示例 issues，其中 2 个标记为已处理）
+
+### 样式约定
+
+- Issue 列表项: `bg-gray-800/50 border-gray-700`，选中时 `bg-blue-900/30 border-blue-600`
+- 标签徽章: 使用 GitHub label 的 `color` 字段作为背景色，自动计算文字颜色（黑白）
+- 已处理标记: 绿色主题（`bg-green-900/50 text-green-400`）
+- 搜索框: `bg-gray-800 border-gray-700`，focus 时 `border-blue-600 ring-blue-600`
+- 空状态: 居中显示，灰色图标和文字
+
 ## DashboardPage 约定
 
 ### 配置状态显示

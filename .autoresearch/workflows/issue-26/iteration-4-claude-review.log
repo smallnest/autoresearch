@@ -1,0 +1,119 @@
+## 审核报告
+
+### Issue
+- 编号: #26
+- 标题: [desktop-app] GitHub Issue 列表展示
+- 子任务: T-001 - Rust 后端: 实现 list_issues Tauri command
+- 迭代次数: 4
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+实现干净、完整，所有验收条件均已满足。代码结构清晰，错误处理得当，`cargo check` 和 `cargo clippy` 均无错误。
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| `list_issues` 命令能正确调用 `gh issue list` 并解析 JSON | **通过** | 第106-149行，完整实现 |
+| 返回结构包含 number、title、labels（含 name 和 color）、createdAt、state | **通过** | `GhIssue` 和 `GhLabel` struct 定义在第14-29行 |
+| `check_processed_issues` 命令能扫描 workflows 目录 | **通过** | 第153-159行，复用 `get_processed_issue_numbers` |
+| 命令在 `generate_handler!` 中注册 | **通过** | 第167-174行 |
+| `cargo check` 和 `cargo clippy` 无错误 | **通过** | 两者均 clean |
+| 正确处理 gh 未安装、非 Git 仓库等错误 | **通过** | 第113-121行检查 gh 可用性，第134-137行检查命令执行失败 |
+
+---
+
+### 正确性 (35%): 92/100
+
+**优点**:
+- `gh --version` 预检查确保 CLI 可用（第113-121行）
+- `gh issue list` 执行失败时返回 stderr 信息便于调试（第134-137行）
+- JSON 解析失败时包含原始输出内容便于排查（第140-141行）
+- `get_processed_issue_numbers` 正确处理了 workflows 目录不存在的情况，返回空列表（第85-87行）
+- `list_issues` 将 processed 信息与 issues 捆绑返回，减少前端请求次数
+
+**小问题**:
+- `--limit "100"` 硬编码，但这是合理的默认值，可以接受
+- `list_issues` 是同步命令（非 async），内部使用 `std::process::Command` 阻塞调用。对于 Tauri 命令来说这是可接受的，因为 Tauri 会在独立线程上运行同步命令
+
+---
+
+### 测试质量 (25%): 80/100
+
+测试质量维度已考虑豁免（Tauri command 层难以独立单元测试，需要 Tauri runtime），但核心解析逻辑 `get_processed_issue_numbers` 和 JSON 反序列化理论上可以测试。
+
+- `GhIssue`/`GhLabel` 的 serde 反序列化依赖于 `gh` 的实际输出格式，没有独立测试
+- `get_processed_issue_numbers` 的目录扫描逻辑没有单元测试
+- 不过这是 Tauri command 层代码，测试价值有限，扣分较轻
+
+---
+
+### 代码质量 (20%): 95/100
+
+**优点**:
+- `GhIssue`、`GhLabel`、`IssuesResult` 结构体命名清晰
+- `get_processed_issue_numbers` 被提取为独立函数，在 `list_issues` 和 `check_processed_issues` 之间复用
+- `#[serde(rename = "createdAt")]` 正确处理了 camelCase 映射
+- 错误信息描述性强（如包含路径、包含原始输出）
+- 代码风格一致，与现有代码（`select_project_dir`、`detect_project_config`）保持统一
+
+**小建议**:
+- `String::from_utf8_lossy(&output.stdout)` 返回 `Cow<str>`，传递给 `serde_json::from_str` 没有问题，但严格来说如果 gh 输出了非 UTF-8 字节会导致静默替换而非报错。实际中 gh 输出总是 UTF-8，影响可忽略
+
+---
+
+### 安全性 (10%): 90/100
+
+**优点**:
+- `project_path` 参数在使用前检查是否为有效目录
+- 无注入风险：`gh` 命令参数都是硬编码的，不接受用户输入拼接
+- 文件系统操作限定在 `.autoresearch/workflows/` 目录内
+
+**小问题**:
+- `Command::new("gh")` 在 `PATH` 中查找，理论上如果 PATH 被篡改可能执行恶意程序。但这是桌面应用场景，风险极低
+
+---
+
+### 性能 (10%): 95/100
+
+**优点**:
+- `numbers.sort()` 保持返回结果有序，开销可忽略
+- 没有不必要的内存分配
+- 一次 `gh issue list` 调用获取所有数据
+
+**无性能问题**
+
+---
+
+### 评分明细
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 92 | 32.2 |
+| 测试质量 | 25% | 80 | 20.0 |
+| 代码质量 | 20% | 95 | 19.0 |
+| 安全性 | 10% | 90 | 9.0 |
+| 性能 | 10% | 95 | 9.5 |
+| **总分** | | | **89.7 → 90** |
+
+---
+
+### 审核结论
+
+- [x] **通过** - 代码质量达标，所有验收条件满足
+
+实现完整、代码清晰、错误处理得当。`cargo check` 和 `cargo clippy` 均通过。无必须修复的问题。
+
+---
+
+## Learnings
+
+- **模式**: `get_processed_issue_numbers` 提取为独立函数并在多个 command 间复用，是 Tauri 命令层的好模式
+- **经验**: `list_issues` 将 processed_numbers 与 issues 捆绑返回（`IssuesResult`），减少前端往返，值得在后续命令中参考
+- **踩坑**: `gh` CLI 的 JSON 输出中 `createdAt` 是 camelCase，需要 `#[serde(rename = "createdAt")]` 来桥接

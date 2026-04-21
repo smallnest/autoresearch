@@ -1,0 +1,39 @@
+## T-001 Implementation Summary
+
+### Changes made to `desktop_app/src-tauri/src/lib.rs`:
+
+1. **New imports**: `std::fs`, `std::process::Command`
+
+2. **New structs**:
+   - `GhLabel` — with `name` and `color` fields, derives `Serialize`/`Deserialize`
+   - `GhIssue` — with `number`, `title`, `labels`, `createdAt` (renamed), `state` fields
+   - `IssuesResult` — wraps `issues` and `processed_numbers` for the frontend
+
+3. **`list_issues` command** (`#[tauri::command] fn`):
+   - Validates `project_path` is a directory
+   - Checks `gh` CLI availability (`gh --version`)
+   - Executes `gh issue list --json number,title,labels,createdAt,state --limit 100`
+   - Parses JSON output into `Vec<GhIssue>`
+   - Calls shared helper to get processed issue numbers
+   - Returns `IssuesResult` combining both
+
+4. **`check_processed_issues` command** (`#[tauri::command] fn`):
+   - Standalone command that scans `.autoresearch/workflows/issue-*` directories
+   - Returns sorted list of processed issue numbers
+
+5. **`get_processed_issue_numbers` helper** (private `fn`):
+   - Reads `.autoresearch/workflows/` directory
+   - Extracts issue numbers from `issue-N` directory names
+   - Returns sorted `Vec<i64>`
+
+6. **Registered** both new commands in `generate_handler![]`
+
+### Quality checks:
+- `cargo check` — passed
+- `cargo clippy` — passed, no warnings
+
+## Learnings
+
+- **模式**: Tauri commands in this project follow `Result<T, String>` error handling pattern consistently; all errors are surfaced as descriptive strings
+- **踩坑**: `gh issue list` outputs `createdAt` in camelCase but Rust convention is snake_case — used `#[serde(rename = "createdAt")]` to bridge this
+- **经验**: The `list_issues` command bundles processed status info with issue data in a single call, reducing frontend round-trips
