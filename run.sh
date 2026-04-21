@@ -82,17 +82,18 @@ log_console() {
     local msg="$1"
     local timestamp
     timestamp=$(date '+%H:%M:%S')
-    echo "[$timestamp] $msg"
+    # 使用 UTF-8 locale 输出中文
+    LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 echo "[$timestamp] $msg"
     if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$WORK_DIR/terminal.log"
+        LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$WORK_DIR/terminal.log"
     fi
 }
 
 error() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1"
-    echo "$msg" >&2
+    LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 echo "$msg" >&2
     if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
-        echo "$msg" >> "$WORK_DIR/terminal.log"
+        LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 echo "$msg" >> "$WORK_DIR/terminal.log"
     fi
 }
 
@@ -475,22 +476,37 @@ run_with_retry() {
 
         # Check for non-zero exit code from the agent
         if [ $exit_code -ne 0 ]; then
-            log "Agent $agent 以非零退出码退出: $exit_code"
-            log_console "❌ $agent 调用失败"
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+            log_console "❌ $agent 调用失败 (退出码: $exit_code)"
+            if [ -n "$error_tail" ]; then
+                log_console "错误信息:"
+                echo "$error_tail" | while read -r line; do log_console "  $line"; done
+            fi
             continue
         fi
 
         # Check for fatal errors in output
         if has_fatal_error "$log_file"; then
-            log "检测到致命错误，将重试"
-            log_console "❌ $agent 调用失败"
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+            log_console "❌ $agent 调用失败 (检测到致命错误)"
+            if [ -n "$error_tail" ]; then
+                log_console "错误信息:"
+                echo "$error_tail" | while read -r line; do log_console "  $line"; done
+            fi
             continue
         fi
 
         # Check for API failures in output
         if has_api_failure "$log_file"; then
-            log "检测到 API 失败，将重试"
-            log_console "❌ $agent 调用失败"
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+            log_console "❌ $agent 调用失败 (API 错误)"
+            if [ -n "$error_tail" ]; then
+                log_console "错误信息:"
+                echo "$error_tail" | while read -r line; do log_console "  $line"; done
+            fi
             continue
         fi
 
@@ -498,8 +514,7 @@ run_with_retry() {
         local content_lines
         content_lines=$(grep -vE '^\s*$' "$log_file" | wc -l)
         if [ "$content_lines" -lt 5 ]; then
-            log "警告: 输出内容过少 ($content_lines 行)，将重试"
-            log_console "❌ $agent 调用失败"
+            log_console "❌ $agent 调用失败 (输出内容过少: $content_lines 行)"
             continue
         fi
 
