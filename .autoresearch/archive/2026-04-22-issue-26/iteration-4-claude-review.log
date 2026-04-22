@@ -1,0 +1,154 @@
+## 审核报告
+
+### Issue
+- 编号: #26
+- 标题: [desktop-app] GitHub Issue 列表展示
+- 子任务: T-001 - Rust 后端实现 list_issues Tauri command
+- 迭代次数: 4
+
+---
+
+### 总体评价
+
+**评分: 85/100**
+
+实现完整且规范，错误处理全面，代码质量良好。验收条件基本满足，但缺少单元测试。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 定义 Issue 和 Label 结构体 | ✅ | `lib.rs:5-21`，使用 serde::Serialize/Deserialize |
+| 实现 list_issues command | ✅ | `lib.rs:77-136`，完整实现 |
+| 错误处理 | ✅ | 处理了 gh 未安装、非 Git 仓库、无 GitHub remote、认证失败等 |
+| command 注册 | ✅ | `lib.rs:149` 已注册到 invoke_handler |
+| cargo clippy 无警告 | ✅ | 编译通过，无警告 |
+| cargo test 通过 | ✅ | 测试通过（但无测试用例） |
+
+---
+
+### 详细评审
+
+#### 1. 正确性 (35%) - 95/100
+
+**优点：**
+- 完整实现了 `list_issues` command，逻辑清晰
+- 错误处理全面，覆盖了：
+  - 目录不存在 (`lib.rs:80-82`)
+  - gh 未安装 (`lib.rs:85-99`)
+  - 非 Git 仓库 (`lib.rs:118-119`)
+  - 无 GitHub remote (`lib.rs:121-122`)
+  - 认证失败 (`lib.rs:124-125`)
+- 数据结构设计合理，使用 `#[serde(rename)]` 正确映射字段
+
+**小问题：**
+- `lib.rs:131` 使用 `String::from_utf8_lossy` 丢弃无效 UTF-8 字节，理论上 gh 输出应该总是有效 UTF-8，但可以记录这种情况
+
+#### 2. 测试质量 (25%) - 60/100
+
+**问题：缺少单元测试**
+
+虽然调用外部 CLI 的测试确实难以完全自动化，但可以添加：
+- 结构体序列化/反序列化测试
+- 错误消息匹配测试
+- 使用 mock 的集成测试（可选）
+
+**建议增加测试：**
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_issue_deserialization() {
+        let json = r#"{"number":42,"title":"Test","labels":[{"name":"bug","color":"ff0000","description":null}],"createdAt":"2024-01-01T00:00:00Z","state":"OPEN"}"#;
+        let issue: Issue = serde_json::from_str(json).unwrap();
+        assert_eq!(issue.number, 42);
+        assert_eq!(issue.title, "Test");
+        assert_eq!(issue.state, "OPEN");
+        assert_eq!(issue.labels.len(), 1);
+    }
+
+    #[test]
+    fn test_label_deserialization() {
+        let json = r#"{"name":"enhancement","color":"a2eeef","description":"New feature"}"#;
+        let label: Label = serde_json::from_str(json).unwrap();
+        assert_eq!(label.name, "enhancement");
+        assert_eq!(label.description, Some("New feature".to_string()));
+    }
+}
+```
+
+#### 3. 代码质量 (20%) - 95/100
+
+**优点：**
+- 命名清晰，`Label`、`Issue`、`ProjectConfig` 等
+- 结构简洁，无冗余代码
+- 遵循 Rust 惯用法
+
+**小建议：**
+- `lib.rs:131` 的 `String::from_utf8_lossy` 可以改为 `String::from_utf8` 并处理错误，或添加注释说明为何使用 lossy
+
+#### 4. 安全性 (10%) - 100/100
+
+- 使用 `.args()` 传递参数，避免命令注入
+- 输入验证：检查目录是否存在
+- 无敏感信息泄露
+
+#### 5. 性能 (10%) - 90/100
+
+**小问题：**
+- async 函数中调用同步的 `.output()` 会阻塞 tokio 运行时
+- 对于桌面应用影响不大，但可以改进
+
+**建议改进（可选）：**
+```rust
+#[tauri::command]
+async fn list_issues(project_path: String) -> Result<Vec<Issue>, String> {
+    tokio::task::spawn_blocking(move || {
+        // 同步逻辑
+    }).await.map_err(|e| e.to_string())?
+}
+```
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: 缺少单元测试
+
+**位置**: `lib.rs`
+
+**问题描述**:
+没有为 `Issue` 和 `Label` 结构体编写反序列化测试，无法验证 JSON 解析正确性
+
+**建议修复**:
+添加上述测试代码
+
+---
+
+### 建议改进 (可选)
+
+- 考虑将 `gh --version` 检查移到应用启动时或缓存结果，避免每次调用都检查
+- 可以为 `list_issues` 添加分页参数，`--limit 100` 是硬编码的
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+实现已满足验收条件，建议添加基础单元测试后合并。测试覆盖可以通过后续迭代完善。
+
+---
+
+## Learnings
+
+- **模式**: Tauri command 使用 `#[tauri::command]` 宏，async 函数用于异步操作
+- **模式**: 使用 `std::process::Command` 调用外部 CLI 工具，配合 `.args()` 避免命令注入
+- **模式**: gh CLI 错误消息检查：`not a git repository`、`Could not resolve to a Repository`、`not logged in`
+- **经验**: 使用 `String::from_utf8_lossy` 处理 CLI 输出，因为实际输出应该总是 UTF-8
+- **踩坑**: async 函数中同步调用 `.output()` 会阻塞 tokio 运行时，桌面应用影响不大但值得注意

@@ -1,0 +1,23 @@
+992 |     const info = provider.models[modelID]
+993 |     if (!info) {
+994 |       const availableModels = Object.keys(provider.models)
+995 |       const matches = fuzzysort.go(modelID, availableModels, { limit: 3, threshold: -10000 })
+996 |       const suggestions = matches.map((m) => m.target)
+997 |       throw new ModelNotFoundError({ providerID, modelID, suggestions })
+                  ^
+ProviderModelNotFoundError: ProviderModelNotFoundError
+ data: {
+  providerID: "openrouter",
+  modelID: "elephant-alpha",
+  suggestions: [ "openrouter/elephant-alpha" ],
+},
+
+      at getModel (src/provider/provider.ts:997:13)
+
+[91m[1mError: [0mUnexpected error, check log file at /Users/chaoyuepan/.local/share/opencode/log/2026-04-21T094302.log for more details
+
+SyntaxError: JSON Parse error: Unexpected EOF
+      at <parse> (1:1)
+      at parse (unknown:1:1)
+      at processTicksAndRejections (native:7:39)
+

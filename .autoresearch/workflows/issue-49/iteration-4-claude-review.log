@@ -1,0 +1,118 @@
+## 审核报告
+
+### Issue
+- 编号: #49
+- 标题: [hardness engineering] 全局 trap 清理机制
+- 迭代次数: 4 (T-002 审核)
+
+---
+
+### 总体评价
+
+**评分: 92/100**
+
+实现完全符合验收条件，代码质量高，测试覆盖全面。所有 12 个测试用例通过。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| trap 设置在脚本早期执行（函数定义之后） | ✅ | cleanup 在 550 行定义，trap 在 645 行设置 |
+| EXIT 信号触发 cleanup 函数 | ✅ | `trap 'cleanup EXIT' EXIT` |
+| INT 信号触发 cleanup 并正确退出（exit 130） | ✅ | `trap 'cleanup INT; trap - EXIT; exit 130' INT` |
+| TERM 信号触发 cleanup 并正确退出（exit 143） | ✅ | `trap 'cleanup TERM; trap - EXIT; exit 143' TERM` |
+| register_temp_file 函数能正确注册临时文件路径 | ✅ | 函数在 503-512 行，逻辑正确 |
+
+---
+
+### 正确性检查 (95/100)
+
+- ✅ INT 信号退出码 130 正确（128 + SIGINT(2)）
+- ✅ TERM 信号退出码 143 正确（128 + SIGTERM(15)）
+- ✅ INT/TERM trap 先 `trap - EXIT` 再 exit，避免 EXIT trap 重复执行
+- ✅ cleanup 函数使用 `CLEANUP_ALREADY_RAN` 实现幂等性
+- ✅ GLOBAL_TEMP_FILES 变量初始化在 472 行
+- ✅ register_temp_file 函数正确处理首次注册和追加场景
+- ✅ cleanup 函数正确遍历和清理 GLOBAL_TEMP_FILES 中的路径
+
+---
+
+### 测试质量 (90/100)
+
+测试文件 `tests/test_cleanup.sh` 覆盖了关键场景：
+- ✅ 临时文件和目录清理
+- ✅ 中断日志写入（正常/异常退出区分）
+- ✅ cleanup 幂等性验证
+- ✅ spinner 进程清理
+- ✅ 子进程树递归清理（使用 mock 进程树）
+
+**测试豁免**: Shell 脚本项目，测试质量维度已通过专项测试验证。
+
+---
+
+### 代码质量 (95/100)
+
+**优点**:
+- 注释清晰，说明 trap 设置意图和信号处理逻辑
+- 变量命名清晰（GLOBAL_TEMP_FILES, CLEANUP_ALREADY_RAN）
+- 函数职责单一
+- 使用 `${VAR:-default}` 处理未初始化变量
+
+**代码片段** (run.sh:503-512):
+```bash
+register_temp_file() {
+    local temp_path="$1"
+    if [ -n "$temp_path" ]; then
+        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+            GLOBAL_TEMP_FILES="$temp_path"
+        else
+            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+        fi
+    fi
+}
+```
+
+---
+
+### 安全性 (90/100)
+
+- ✅ 无注入风险
+- ✅ 无敏感信息泄露
+- ✅ 使用 `|| true` 避免命令失败导致脚本退出
+- ✅ 临时文件路径通过函数注册，统一管理
+
+---
+
+### 性能 (90/100)
+
+- ✅ 无明显性能问题
+- ✅ 临时文件清理使用 while 循环，适用于少量文件场景
+
+---
+
+### 建议改进 (可选)
+
+1. **代码组织**: trap 设置位置可以考虑移动到所有函数定义之后，使结构更清晰。当前 trap 在第 645 行设置，之后还有函数定义（run_with_retry 等）。
+
+2. **文档**: 可以在 CLAUDE.md 中添加 trap 机制的使用说明，方便后续维护。
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入下一个子任务
+
+**下一步行动**:
+T-002 审核通过，可以继续 T-003（验证孤儿进程清理效果）。
+
+---
+
+## Learnings
+
+- **模式**: INT/TERM trap 先 `trap - EXIT` 再 exit，避免 EXIT trap 重复执行
+- **模式**: cleanup 函数使用 `CLEANUP_ALREADY_RAN` 变量实现幂等性
+- **模式**: 使用 `${VAR:-default}` 处理 trap 触发时可能未初始化的变量
+- **经验**: exit code 130 = 128 + SIGINT(2), exit code 143 = 128 + SIGTERM(15)
+- **经验**: register_temp_file 使用 `$'\n'` 分隔符，方便 while 循环遍历

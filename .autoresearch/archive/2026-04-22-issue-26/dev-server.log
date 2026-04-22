@@ -1,0 +1,15 @@
+
+> desktop_app@0.1.0 dev
+> vite
+
+
+  VITE v7.3.2  ready in 224 ms
+
+  ➜  Local:   http://localhost:1420/
+4:59:41 PM [vite] (client) hmr update /src/index.css, /src/pages/IssuesPage.tsx
+5:00:47 PM [vite] (client) hmr update /src/index.css, /src/pages/IssuesPage.tsx
+5:05:46 PM [vite] (client) hmr update /src/pages/IssuesPage.tsx, /src/index.css
+11:58:47 AM [vite] (client) hmr update /src/pages/IssuesPage.tsx, /src/index.css
+11:59:39 AM [vite] (client) hmr update /src/index.css, /src/pages/IssuesPage.tsx
+11:59:41 AM [vite] (client) hmr update /src/pages/IssuesPage.tsx, /src/index.css
+11:59:41 AM [vite] (client) hmr update /src/index.css, /src/pages/IssuesPage.tsx

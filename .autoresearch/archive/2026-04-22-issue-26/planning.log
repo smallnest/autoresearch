@@ -1,0 +1,105 @@
+现在我已经了解了项目结构。让我分析 Issue #26 并进行子任务拆分。
+
+## Issue 分析
+
+**Issue #26: GitHub Issue 列表展示**
+
+核心需求：
+1. Rust 侧实现 Tauri command 调用 `gh issue list`
+2. 前端展示 Issue 列表（编号、标题、标签、时间）
+3. 搜索和过滤功能
+4. 已处理状态标记
+5. 交互功能（选中高亮）
+
+**技术要点：**
+- 依赖 Issue #24（项目目录选择功能，已实现）
+- 使用 `gh issue list` 命令而非直接调用 API
+- 前端使用 Zustand 状态管理 + Tailwind CSS
+
+**代码现状：**
+- Rust 后端已有基础的 Tauri commands 结构
+- 前端 IssuesPage.tsx 是空壳页面
+- 已有 projectStore 管理项目路径
+
+## 子任务拆分
+
+根据需求复杂度和技术依赖，建议拆分为 3 个子任务：
+
+**T-001**: Rust 后端实现 `list_issues` command
+- 独立的后端任务，无 UI 依赖
+- 解析 `gh issue list` JSON 输出
+- 错误处理（gh 未安装、非 Git 仓库等）
+
+**T-002**: 前端 Issue 列表基础展示
+- UI 类型任务
+- 展示 Issue 编号、标题、标签（彩色 tag）、创建时间
+- 创建 issueStore 管理状态
+- 基础列表渲染
+
+**T-003**: 搜索、过滤与交互功能
+- UI 类型任务
+- 关键词搜索（标题过滤）
+- 按标签过滤
+- 已处理 Issue 状态标记
+- 点击选中高亮
+
+```json
+{
+  "issueNumber": 26,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端实现 list_issues Tauri command",
+      "description": "在 Rust 后端实现 `list_issues` Tauri command，调用 `gh issue list --json number,title,labels,createdAt,state` 命令并解析 JSON 输出。需要定义 Issue 数据结构（包含 number, title, labels, createdAt, state 字段），处理命令执行错误（如 gh 未安装、非 Git 仓库、网络错误等）。command 需要接收项目路径参数，在该目录下执行 gh 命令。",
+      "acceptanceCriteria": [
+        "定义 Issue 和 Label 结构体（使用 serde::Serialize/Deserialize）",
+        "实现 list_issues command，调用 gh issue list 并解析 JSON",
+        "错误处理：gh 未安装、非 Git 仓库、网络错误等返回明确错误信息",
+        "command 注册到 invoke_handler 中",
+        "cargo clippy 无警告",
+        "cargo test 通过（如有测试）"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "前端 Issue 列表基础展示",
+      "description": "实现 IssuesPage 页面的基础 Issue 列表展示功能。创建 issueStore 管理 Issue 列表状态，调用后端 list_issues command 获取数据。页面展示 Issue 编号、标题、标签（彩色 tag）、创建时间。标签使用不同颜色显示，根据标签名称生成一致的背景色。",
+      "acceptanceCriteria": [
+        "创建 issueStore（Zustand），包含 issues 数组、loading、error 状态",
+        "IssuesPage 页面调用 list_issues 获取数据并展示",
+        "Issue 卡片展示：编号、标题、标签（彩色 tag）、创建时间",
+        "标签颜色根据名称生成一致的颜色（可使用字符串 hash）",
+        "列表为空时显示空状态提示",
+        "加载中显示 loading 状态",
+        "错误时显示错误信息",
+        "TypeScript 类型检查通过（npm run typecheck）",
+        "ESLint 检查通过（npm run lint）"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "搜索、过滤与交互功能",
+      "description": "实现 Issue 列表的搜索、过滤和交互功能。支持关键词搜索（标题过滤）、按标签过滤（点击标签 tag 切换过滤状态）、已处理过的 Issue 显示状态标记（读取 .autoresearch/workflows/ 目录判断）、列表点击选中高亮。搜索框实时过滤，标签过滤支持多选。",
+      "acceptanceCriteria": [
+        "搜索框支持实时关键词搜索（标题过滤）",
+        "点击标签 tag 可切换该标签的过滤状态（支持多标签过滤）",
+        "已处理过的 Issue 显示状态标记（如 '已处理' 徽章或图标）",
+        "列表项点击时高亮选中状态",
+        "过滤状态在 UI 中清晰显示（如已选标签、搜索关键词）",
+        "Rust 后端增加 check_issue_processed command 判断 Issue 是否已处理",
+        "TypeScript 类型检查通过（npm run typecheck）",
+        "ESLint 检查通过（npm run lint）",
+        "浏览器中验证功能正常"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

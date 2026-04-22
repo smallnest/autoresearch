@@ -1,0 +1,54 @@
+## 实现报告
+
+### 分析结果
+
+经过代码审查和测试验证，发现 **Issue #49 子任务 T-001 已经在 `run.sh` 中完整实现**。
+
+### 现有实现
+
+**1. 全局 cleanup 函数** (`run.sh:550-638`)
+- 清理 spinner 进程（复用 `stop_spinner`）
+- 清理 dev server 进程（复用 `cleanup_dev_server`）
+- 清理残留 agent 子进程（使用 `collect_descendant_pids` 递归清理）
+- 清理 `GLOBAL_TEMP_FILES` 中注册的临时文件/目录
+- 非正常退出时记录中断信息到 `log.md`
+
+**2. 全局 trap 设置** (`run.sh:640-645`)
+```bash
+trap 'cleanup EXIT' EXIT
+trap 'cleanup INT; trap - EXIT; exit 130' INT
+trap 'cleanup TERM; trap - EXIT; exit 143' TERM
+```
+
+**3. 辅助函数**
+- `list_child_pids()` / `collect_descendant_pids()` - 递归收集后代进程
+- `register_temp_file()` - 注册临时文件
+- `SCRIPT_COMPLETED_NORMALLY` / `CLEANUP_ALREADY_RAN` - 状态标记
+
+### 验收条件验证
+
+| 验收条件 | 状态 | 测试场景 |
+|---------|------|---------|
+| cleanup 能正确停止 spinner 进程 | ✅ | Scenario 4 |
+| cleanup 能清理脚本的所有子进程 | ✅ | Scenario 5 |
+| cleanup 能清理 GLOBAL_TEMP_FILES | ✅ | Scenario 1 |
+| 非正常退出时记录中断信息 | ✅ | Scenario 1 |
+| 正常退出时不记录中断信息 | ✅ | Scenario 2, 3 |
+
+### 测试结果
+
+```
+=== cleanup() Tests ===
+Total: 12  Passed: 12  Failed: 0
+```
+
+所有其他测试（168 个测试用例）也全部通过。
+
+---
+
+## Learnings
+
+- **模式**: cleanup 函数使用 `CLEANUP_ALREADY_RAN` 变量实现幂等性，避免重复清理
+- **模式**: INT/TERM trap 先 `trap - EXIT` 再 exit，避免 EXIT trap 重复执行
+- **模式**: 使用 mock 进程树测试递归进程清理逻辑，不依赖平台特定的 `pgrep` 行为
+- **经验**: Shell trap 的 EXIT 信号在正常退出时也会触发，需要用 `SCRIPT_COMPLETED_NORMALLY` 变量区分正常/异常退出

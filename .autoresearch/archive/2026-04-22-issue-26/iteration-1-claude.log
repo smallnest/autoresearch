@@ -1,0 +1,45 @@
+JSON 格式验证通过。结构体能正确解析 `gh issue list` 的输出（serde 会忽略未定义的字段如 `id`）。
+
+## 实现总结
+
+### 子任务 T-001: Rust 后端实现 list_issues Tauri command ✅
+
+**已完成的内容：**
+
+1. **数据结构定义** (`desktop_app/src-tauri/src/lib.rs:4-21`)
+   - `Label` 结构体：`name`, `color`, `description` 字段
+   - `Issue` 结构体：`number`, `title`, `labels`, `created_at`, `state` 字段
+   - 使用 `serde::Serialize/Deserialize` 宏
+   - 使用 `#[serde(rename = "createdAt")]` 处理 camelCase
+
+2. **list_issues command 实现** (`desktop_app/src-tauri/src/lib.rs:75-136`)
+   - 接收 `project_path` 参数
+   - 检查目录有效性
+   - 检查 gh CLI 是否安装
+   - 执行 `gh issue list --json number,title,labels,createdAt,state --limit 100`
+   - 解析 JSON 输出返回 `Vec<Issue>`
+
+3. **错误处理**
+   - 目录不存在
+   - gh CLI 未安装
+   - 非 Git 仓库
+   - 无 GitHub 远程仓库
+   - 未登录 GitHub CLI
+   - 命令执行错误
+   - JSON 解析错误
+
+4. **command 注册** (`desktop_app/src-tauri/src/lib.rs:144-150`)
+
+5. **质量检查通过**
+   - `cargo clippy -- -D warnings` ✅
+   - `cargo test` ✅
+
+---
+
+## Learnings
+
+- **模式**: Tauri command 使用 `#[tauri::command]` 宏标记，async 函数用于异步操作
+- **模式**: 使用 `std::process::Command` 调用外部 CLI 工具，配合 `.output()` 获取结果
+- **踩坑**: Rust 1.58+ 要求使用内联格式化字符串 `{variable}` 而非 `{}, variable`，clippy 会报错
+- **经验**: serde 默认忽略 JSON 中未定义的字段，无需为 gh 返回的所有字段（如 `id`）定义结构体成员
+- **经验**: `gh issue list` 返回的 `state` 是大写的 `"OPEN"/"CLOSED"`，不是小写
