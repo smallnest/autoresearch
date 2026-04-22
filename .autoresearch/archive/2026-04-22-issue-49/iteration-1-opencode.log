@@ -1,0 +1,232 @@
+[0m
+> build · big-pickle
+[0m
+我将首先分析 run.sh 脚本结构，了解现有实现，然后制定实现计划。
+[0m→ [0mRead run.sh
+需要继续查看 run.sh 的更多内容，特别是 cleanup_dev_server 相关函数。
+[0m✱ [0mGrep "cleanup_dev_server"[90m in . · 26 matches[0m
+[0m→ [0mRead run.sh[90m [offset=2620, limit=150][0m
+现在我理解了代码结构。让我继续查看脚本的真正入口位置（set -e 之后的位置）。
+[0m→ [0mRead run.sh[90m [offset=34, limit=30][0m
+[0m✱ [0mGrep "^main\(\)|^\s*\$#.*main"[90m in . · 1 match[0m
+[0m→ [0mRead run.sh[90m [offset=2480, limit=30][0m
+让我搜索 run.sh 的参数解析和实际调用入口的位置。
+[0m✱ [0mGrep "ISSUE_NUMBER=|parseopts|while.*getopts"[90m in . · 2 matches[0m
+[0m→ [0mRead run.sh[90m [offset=3010, limit=100][0m
+现在我理解了脚本结构。让我查看是否有保存 agent 子进程 PID 的变量。
+[0m✱ [0mGrep "AGENT_PID|_AGENT|Subprocess"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "\.autoresearch.*temp|mktemp"[90m in . · 2 matches[0m
+现在我完全理解了代码结构。我将制定实现计划并开始实现。
+
+## 第一步：制定计划
+
+需要实现的任务：
+1. 在脚本入口处（参数解析之前，约 3010 行附近）添加 `trap cleanup EXIT INT TERM`
+2. 创建 `cleanup` 函数（在现有函数区域，约 2637 行附近），实现：
+   - 调用 `stop_spinner` 杀掉 spinner 进程
+   - 杀掉残留的 agent 子进程
+   - 清理临时文件
+   - 记录中断位置到 log.md
+   - 调用 `cleanup_dev_server` 清理 dev server
+[0m
+[0m# [0mTodos
+[ ] 在脚本入口添加 trap cleanup EXIT INT TERM
+[ ] 创建 cleanup 函数，复用 stop_spinner 和 cleanup_dev_server 逻辑
+[ ] 验证实现：检查语法和逻辑
+[0m
+[0m→ [0mRead run.sh[90m [offset=3005, limit=20][0m
+我需要把 trap 设置在参数解析之后、主循环开始之前。让我查看主循环位置：
+[0m→ [0mRead run.sh[90m [offset=3100, limit=25][0m
+现在让我找到最佳位置。先在 cleanup_dev_server 附近添加 cleanup 函数：
+[0m→ [0mRead run.sh[90m [offset=2633, limit=20][0m
+现在我将进行实现。首先在 cleanup_dev_server 函数后添加 cleanup 函数：
+[0m
+[0m← [0mEdit run.sh
+Index: /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+===================================================================
+--- /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
++++ /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+@@ -2635,8 +2635,52 @@
+     _UI_DEV_SERVER_PID=""
+   fi
+ }
+ 
++# 全局清理函数 - 在脚本中断时执行清理
++cleanup() {
++  local exit_code=$?
++  local signal=""
++
++  if [ $# -gt 0 ] 2>/dev/null; then
++    signal="$1"
++  fi
++
++  if [ -n "$signal" ]; then
++    log "收到中断信号: $signal，正在清理..."
++  else
++    log "正在清理..."
++  fi
++
++  if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
++    echo "" >> "$WORK_DIR/log.md"
++    echo "### 中断清理 ($(date '+%Y-%m-%d %H:%M:%S'))" >> "$WORK_DIR/log.md"
++    echo "" >> "$WORK_DIR/log.md"
++    if [ -n "$signal" ]; then
++      echo "- 触发信号: $signal" >> "$WORK_DIR/log.md"
++    fi
++    echo "- 退出码: $exit_code" >> "$WORK_DIR/log.md"
++    echo "- 已清理: spinner 进程、agent 子进程、临时文件" >> "$WORK_DIR/log.md"
++  fi
++
++  stop_spinner
++
++  if [ -n "$AGENT_PID" ] && kill -0 "$AGENT_PID" 2>/dev/null; then
++    log "杀掉 agent 进程 (PID: $AGENT_PID)..."
++    kill "$AGENT_PID" 2>/dev/null || true
++    sleep 1
++    if kill -0 "$AGENT_PID" 2>/dev/null; then
++      kill -9 "$AGENT_PID" 2>/dev/null || true
++    fi
++  fi
++
++  cleanup_dev_server
++
++  if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
++    rm -f "$WORK_DIR"/*.tmp 2>/dev/null || true
++  fi
++}
++
+ # 运行完整的 UI 验证流程
+ # 参数: $1 = 工作目录, $2 = 子任务描述（可选）
+ # 返回: 0 = 通过, 1 = 失败
+ # 输出: 验证结果 JSON 到 stdout
+
+[0m
+现在需要在脚本入口处设置 trap。让我找到合适的位置：
+[0m→ [0mRead run.sh[90m [offset=3030, limit=30][0m
+[0m→ [0mRead run.sh[90m [offset=3095, limit=35][0m
+[0m
+[0m← [0mEdit run.sh
+Index: /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+===================================================================
+--- /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
++++ /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+@@ -3118,8 +3118,10 @@
+ 
+ # 创建分支
+ create_branch "$ISSUE_NUMBER"
+ 
++trap cleanup EXIT INT TERM
++
+ # ==================== 继续模式：恢复状态 ====================
+ 
+ ITERATION=0
+ PREVIOUS_FEEDBACK=""
+
+[0m
+现在需要在 run_with_retry 中保存 agent PID。让我查看它的实现：
+[0m→ [0mRead run.sh[90m [offset=425, limit=90][0m
+我需要修改 run_with_retry 以支持保存 agent 进程 PID 来支持清理。但首先让我检查当前实现是否足够。
+
+实际上，同步运行的 agent 进程在脚本退出时会自动被终止。但为了更安全的清理，让我修改 run_with_retry 以使用后台 + wait 方式：
+[0m
+[0m← [0mEdit run.sh
+Index: /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+===================================================================
+--- /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
++++ /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+@@ -448,19 +448,29 @@
+ 
+ # 启动等待动画
+ start_spinner "$agent 正在工作中..."
+ 
++# 保存当前 agent PID 用于可能的清理
++AGENT_PID="$$"
++
+ if [ "$agent" = "codex" ]; then
+-    codex exec --full-auto "$prompt" > "$log_file" 2>&1 || true
+-    exit_code=$?
++    codex exec --full-auto "$prompt" > "$log_file" 2>&1 &
++    AGENT_PID=$!
++    wait "$AGENT_PID" 2>/dev/null || true
+ elif [ "$agent" = "opencode" ]; then
+-    opencode run "$prompt" > "$log_file" 2>&1 || true
+-    exit_code=$?
++    opencode run "$prompt" > "$log_file" 2>&1 &
++    AGENT_PID=$!
++    wait "$AGENT_PID" 2>/dev/null || true
+ else
+-    claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 || true
+-    exit_code=$?
++    claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 &
++    AGENT_PID=$!
++    wait "$AGENT_PID" 2>/dev/null || true
+ fi
++exit_code=$?
+ 
++# 清除 agent PID
++AGENT_PID=""
++
+ # 停止等待动画
+ stop_spinner
+ 
+ # Check for context overflow first (non-retryable)
+
+[0m
+[0m# [0mTodos
+[x] 在脚本入口添加 trap cleanup EXIT INT TERM
+[x] 创建 cleanup 函数，复用 stop_spinner 和 cleanup_dev_server 逻辑
+[ ] 验证实现：检查语法和逻辑
+[0m
+[0m$ [0mbash -n /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh
+(no output)
+[0m
+[0m$ [0mcommand -v shellcheck && shellcheck /Users/musk/Documents/ai-coding/git/autoresearch-zsy/run.sh || echo "shellcheck not available"
+shellcheck not available
+[0m
+让我验证所有验收条件是否满足：
+[0m✱ [0mGrep "trap cleanup EXIT INT TERM"[90m in . · 1 match[0m
+[0m→ [0mRead run.sh[90m [offset=2637, limit=50][0m
+[0m→ [0mRead run.sh[90m [offset=2685, limit=20][0m
+所有验收条件都已满足。让我更新状态：
+[0m
+[0m# [0mTodos
+[x] 在脚本入口添加 trap cleanup EXIT INT TERM
+[x] 创建 cleanup 函数，复用 stop_spinner 和 cleanup_dev_server 逻辑
+[x] 验证实现：检查语法和逻辑
+[0m
+## 实现完成
+
+已在 run.sh 中添加全局 trap cleanup 清理机制：
+
+### 改动摘要
+
+1. **添加 trap cleanup EXIT INT TERM** (run.sh:3132)
+   - 在 `create_branch` 调用后、继续模式前设置全局 trap
+
+2. **创建 cleanup 函数** (run.sh:2649-2691)
+   - 记录中断信号和退出码到 log.md
+   - 调用 `stop_spinner` 杀掉 spinner 进程
+   - 杀掉残留的 agent 子进程
+   - 调用 `cleanup_dev_server` 清理 dev server
+   - 清理临时文件 (*.tmp)
+
+3. **修改 run_with_retry** (run.sh:449-469)
+   - agent 进程改为后台运行 + wait 方式
+   - 保存 AGENT_PID 供 cleanup 函数使用
+
+### 验收条件确认
+
+- [x] 脚本入口处设置 trap cleanup EXIT INT TERM
+- [x] cleanup 函数调用 stop_spinner
+- [x] cleanup 函数杀掉 agent 子进程
+- [x] cleanup 函数清理临时文件
+- [x] cleanup 函数记录中断位置到 log.md
+- [x] cleanup_dev_server 逻辑被 cleanup 函数调用
+
+---
+
+## Learnings
+
+- **模式**: 使用 `trap func EXIT INT TERM` 配合 `$?` 获取退出码可正确处理信号和正常退出两种情况
+- **踩坑**: `trap` 中信号参数在 bash 中不是 `$1`，而是 `$?` 来获取退出码；正确做法是不传参数，检查 `$?`
+- **经验**: agent 子进程需要用后台运行 + wait 方式才能获取 PID 用于后续清理

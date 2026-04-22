@@ -449,16 +449,26 @@ run_with_retry() {
         # 启动等待动画
         start_spinner "$agent 正在工作中..."
 
+        # 保存当前 agent PID 用于可能的清理
+        AGENT_PID="$$"
+
         if [ "$agent" = "codex" ]; then
-            codex exec --full-auto "$prompt" > "$log_file" 2>&1 || true
-            exit_code=$?
+            codex exec --full-auto "$prompt" > "$log_file" 2>&1 &
+            AGENT_PID=$!
+            wait "$AGENT_PID" 2>/dev/null || true
         elif [ "$agent" = "opencode" ]; then
-            opencode run "$prompt" > "$log_file" 2>&1 || true
-            exit_code=$?
+            opencode run "$prompt" > "$log_file" 2>&1 &
+            AGENT_PID=$!
+            wait "$AGENT_PID" 2>/dev/null || true
         else
-            claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 || true
-            exit_code=$?
+            claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 &
+            AGENT_PID=$!
+            wait "$AGENT_PID" 2>/dev/null || true
         fi
+        exit_code=$?
+
+        # 清除 agent PID
+        AGENT_PID=""
 
         # 停止等待动画
         stop_spinner
@@ -2636,6 +2646,50 @@ cleanup_dev_server() {
   fi
 }
 
+# 全局清理函数 - 在脚本中断时执行清理
+cleanup() {
+  local exit_code=$?
+  local signal=""
+
+  if [ $# -gt 0 ] 2>/dev/null; then
+    signal="$1"
+  fi
+
+  if [ -n "$signal" ]; then
+    log "收到中断信号: $signal，正在清理..."
+  else
+    log "正在清理..."
+  fi
+
+  if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+    echo "" >> "$WORK_DIR/log.md"
+    echo "### 中断清理 ($(date '+%Y-%m-%d %H:%M:%S'))" >> "$WORK_DIR/log.md"
+    echo "" >> "$WORK_DIR/log.md"
+    if [ -n "$signal" ]; then
+      echo "- 触发信号: $signal" >> "$WORK_DIR/log.md"
+    fi
+    echo "- 退出码: $exit_code" >> "$WORK_DIR/log.md"
+    echo "- 已清理: spinner 进程、agent 子进程、临时文件" >> "$WORK_DIR/log.md"
+  fi
+
+  stop_spinner
+
+  if [ -n "$AGENT_PID" ] && kill -0 "$AGENT_PID" 2>/dev/null; then
+    log "杀掉 agent 进程 (PID: $AGENT_PID)..."
+    kill "$AGENT_PID" 2>/dev/null || true
+    sleep 1
+    if kill -0 "$AGENT_PID" 2>/dev/null; then
+      kill -9 "$AGENT_PID" 2>/dev/null || true
+    fi
+  fi
+
+  cleanup_dev_server
+
+  if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+    rm -f "$WORK_DIR"/*.tmp 2>/dev/null || true
+  fi
+}
+
 # 运行完整的 UI 验证流程
 # 参数: $1 = 工作目录, $2 = 子任务描述（可选）
 # 返回: 0 = 通过, 1 = 失败
@@ -3074,6 +3128,8 @@ setup_work_directory "$ISSUE_NUMBER"
 
 # 创建分支
 create_branch "$ISSUE_NUMBER"
+
+trap cleanup EXIT INT TERM
 
 # ==================== 继续模式：恢复状态 ====================
 

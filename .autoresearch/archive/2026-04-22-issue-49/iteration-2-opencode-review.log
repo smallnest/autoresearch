@@ -1,0 +1,79 @@
+[0m
+> build · big-pickle
+[0m
+我将审核 Issue #49 子任务 T-001 的实现。首先让我查看项目代码中是否已添加全局 trap cleanup 清理机制。
+[0m✱ [0mGlob "*.sh"[90m in . · 6 matches[0m
+[0m✱ [0mGrep "trap.*cleanup"[90m in . · 34 matches[0m
+[0m→ [0mRead run.sh[90m [offset=3120, limit=80][0m
+[0m✱ [0mGrep "^cleanup\(\)"[90m in . · 4 matches[0m
+[0m→ [0mRead run.sh[90m [offset=2645, limit=60][0m
+[0m✱ [0mGrep "stop_spinner"[90m in . · 6 matches[0m
+[0m→ [0mRead run.sh[90m [limit=30, offset=410][0m
+[0m→ [0mRead run.sh[90m [limit=40, offset=2620][0m
+[0m✱ [0mGrep "AGENT_PID"[90m in . · 13 matches[0m
+[0m→ [0mRead run.sh[90m [limit=40, offset=450][0m
+现在让我检查是否有测试文件覆盖这个功能。
+[0m✱ [0mGrep "cleanup|trap"[90m in tests · 9 matches[0m
+现在让我验证关键问题：根据经验日志中提到的，bash trap 不会自动传递信号名称作为 `$1`。让我确认实现逻辑。
+
+## 审核报告
+
+### Issue
+- 编号: #49
+- 迭代次数: 1
+
+### 总体评价
+**评分: 85/100**
+
+### 验收条件审核
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 脚本入口处设置 trap cleanup EXIT INT TERM | ✅ | run.sh:3132 已添加 |
+| cleanup 函数能杀掉 spinner 进程 | ✅ | 调用 stop_spinner (run.sh:2675) |
+| cleanup 函数能杀掉残留的 agent 子进程 | ⚠️ | 部分实现，AGENT_PID 逻辑有问题 |
+| cleanup 函数能清理临时文件 | ✅ | rm -f "$WORK_DIR"/*.tmp (run.sh:2689) |
+| cleanup 函数能记录中断位置到 log.md | ✅ | run.sh:2664-2672 |
+| cleanup_dev_server 被 cleanup 调用 | ✅ | run.sh:2686 |
+
+### 严重问题 (建议修复)
+
+1. **AGENT_PID 逻辑错误** (run.sh:453-471)：当前使用 `AGENT_PID="$$"` 保存当前 shell PID，然后立即使用后台运行+wait 模式，之后立即清空 `AGENT_PID=""`。这意味着：
+   - 在 cleanup 执行时，AGENT_PID 永远是空的
+   - 无法清理 agent 子进程
+
+   **修复建议**：在后台运行开始前（`&` 之前）保存 `$!` 到变量：
+   ```bash
+   "$agent" ... > "$log_file" 2>&1 &
+   AGENT_PID=$!  # 移动到这里，在 wait 之前
+   wait "$AGENT_PID"
+   # 不要立即清空 AGENT_PID，让 cleanup 函数有机会清理
+   ```
+
+2. **信号参数处理有误** (run.sh:2654-2656)：bash trap 不会自动传递信号名称作为 `$1` 参数。当前代码 `if [ $# -gt 0 ]` 检查的是脚本参数而非信号参数。signal 变量永远是空的。
+
+   **修复建议**：移除无用的 signal 检测逻辑，或使用 `$?` 判断（如果是被信号终止，$? 会是 128+signo）。
+
+### 一般问题 (建议修复)
+
+3. **临时文件清理不够彻底**：只清理 `*.tmp` 文件，建议也清理可能的 PID 文件：
+   ```bash
+   rm -f "$WORK_DIR"/*.tmp "$WORK_DIR"/*.pid 2>/dev/null || true
+   ```
+
+### 审核结论
+- [ ] ~~通过~~ / [x] 需要修改
+
+**评分: 85/100** - 基本实现功能，但 AGENT_PID 逻辑错误导致无法真正清理 agent 子进程，需要修复后才能通过。
+
+### 测试质量维度已豁免
+
+Shell 脚本的 trap 机制难以通过单元测试验证，属于豁免范围。
+
+---
+
+## Learnings
+
+- **模式**: `trap cleanup EXIT INT TERM` 需配合 `$?` 获取退出码，`$1` 不是信号参数
+- **踩坑**: AGENT_PID 必须保存后台进程 PID（`$!`），且不能在 wait 后立即清空，否则 cleanup 无法清理
+- **经验**: 后台运行 (`&`) + wait 模式获取的 PID 如需清理，应在 wait 之后检查进程是否仍在运行，而不是立即清空变量

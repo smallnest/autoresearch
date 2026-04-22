@@ -1,0 +1,20 @@
+{
+  "issueNumber": 49,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "添加全局 trap cleanup 清理机制",
+      "description": "在脚本入口添加 trap cleanup EXIT INT TERM，实现 cleanup 函数复用已有的 stop_spinner 和 cleanup_dev_server 逻辑，清理 spinner 进程、agent 子进程、临时文件，并记录中断位置到 log.md",
+      "acceptanceCriteria": [
+        "脚本入口处设置 trap cleanup EXIT INT TERM",
+        "cleanup 函数能杀掉 spinner 进程 (调用 stop_spinner)",
+        "cleanup 函数能杀掉残留的 agent 子进程",
+        "cleanup 函数能清理临时文件",
+        "cleanup 函数能记录中断位置到 log.md",
+        "cleanup_dev_server 逻辑被 cleanup 函数调用"
+      ],
+      "priority": 1,
+      "passes": true
+    }
+  ]
+}

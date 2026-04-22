@@ -1,0 +1,6 @@
+error: invalid UTF-8 was detected in one or more arguments
+
+Usage: codex exec [OPTIONS] [PROMPT]
+       codex exec [OPTIONS] <COMMAND> [ARGS]
+
+For more information, try '--help'.
