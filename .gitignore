@@ -1,3 +1,4 @@
 tests/*.log
 tests/*.tmp
 .claude/
+.autoresearch/workflows/*/terminal.log

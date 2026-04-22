@@ -458,3 +458,19 @@ Agent 必须确保:
 ## 异常处理
 
 当 Agent 遇到阻塞时，应输出结构化的阻塞报告，说明原因、已尝试的方案和建议操作。
+
+### Tool Call 格式要求
+
+```
+⚠️ 当使用 MiniMax 等模型作为底层 LLM 时，tool_call 的 arguments 必须是标准的 JSON 对象字符串。
+
+禁止行为:
+✗ arguments 返回数组格式（如 [{"key": "value"}]），必须是对象格式（如 {"key": "value"}）
+✗ arguments 包含非法 JSON（如多余逗号、缺少引号等）
+✗ arguments 为空字符串时直接回传给 API
+
+如果检测到 tool_call arguments 格式异常：
+1. 解析 arguments 字符串，如果是数组则提取第一个元素
+2. 使用容错 JSON 解析器修复格式问题
+3. 无法修复时跳过该 tool_call 并记录日志
+```
