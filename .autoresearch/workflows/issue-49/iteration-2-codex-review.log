@@ -1,0 +1,2141 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019db3c4-cbd5-7de1-bf82-b8852d0be8df
+--------
+user
+审核 Issue #49 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [hardness engineering] 全局 trap 清理机制
+
+
+## 子任务审核
+
+子任务进度: 0/3 已完成 | 当前子任务: T-001 - 实现全局 cleanup 函数
+
+请审核当前子任务的实现：
+
+- **ID**: T-001
+- **标题**: 实现全局 cleanup 函数
+- **类型**: code
+- **描述**: 创建 cleanup 函数，负责清理 spinner 进程、残留 agent 子进程、临时文件，并记录中断位置到 log.md。复用已有的 stop_spinner 和 cleanup_dev_server 函数。
+- **验收条件**:
+  - cleanup 函数能正确停止 spinner 进程
+  - cleanup 函数能清理脚本的所有子进程
+  - cleanup 函数能清理 GLOBAL_TEMP_FILES 中注册的临时文件
+  - 非正常退出时，cleanup 函数记录中断信息到 log.md
+  - 正常退出时，cleanup 函数不记录中断信息
+
+
+请针对此子任务的验收条件进行审核。
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+# Issue #49 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 1 - 2026-04-22
+
+- **Agent**: claude
+- **类型**: 初始实现 - 实现全局 cleanup 函数
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: cleanup 函数使用 `CLEANUP_ALREADY_RAN` 变量实现幂等性，避免重复清理
+- **模式**: INT/TERM trap 先 `trap - EXIT` 再 exit，避免 EXIT trap 重复执行
+- **模式**: 使用 mock 进程树测试递归进程清理逻辑，不依赖平台特定的 `pgrep` 行为
+- **经验**: Shell trap 的 EXIT 信号在正常退出时也会触发，需要用 `SCRIPT_COMPLETED_NORMALLY` 变量区分正常/异常退出
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+
+codex
+我先定位 Issue #49 / T-001 相关实现和测试，确认 `cleanup` 函数、trap 逻辑以及对应验证是否满足验收条件。
+exec
+/bin/zsh -lc "rg --files /Users/chaoyuepan/ai/autoresearch | rg \"(test|spec)|\\.sh"'$|log'"\\.md"'$|progress'"\\.md"'$|CLAUDE'"\\.md"'$"' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/lib/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/lib/agent_logic.sh
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/run.sh
+/Users/chaoyuepan/ai/autoresearch/tests/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh
+/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh
+/Users/chaoyuepan/ai/autoresearch/tests/test_agent_logic.sh
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh
+
+exec
+/bin/zsh -lc "rg -n \"cleanup\\(|stop_spinner|cleanup_dev_server|GLOBAL_TEMP_FILES|SCRIPT_COMPLETED_NORMALLY|CLEANUP_ALREADY_RAN|trap .*EXIT|log.md|INT|TERM\" /Users/chaoyuepan/ai/autoresearch" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:56:- `run.sh` installs global `EXIT`, `INT`, and `TERM` traps near the spinner helpers.
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:57:- `cleanup()` must stay idempotent because interrupt paths can otherwise re-enter during exit handling.
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:58:- Signal traps should disable the `EXIT` trap before exiting, otherwise abnormal exits will append duplicate interruption records to `log.md`.
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:132:- FR-6: 解析 `log.md` 和各迭代 log 文件提取评分和 review 反馈
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:136:- FR-9: 停止任务时发送 SIGTERM 给 `run.sh` 进程组，等待优雅退出
+/Users/chaoyuepan/ai/autoresearch/docs/capture_gif.js:19:const INTERVAL = 1000 / FPS; // ms between frames
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:10:| 2 | [#49 全局 trap 清理机制](https://github.com/smallnest/autoresearch/issues/49) | `trap cleanup EXIT` 防止孤儿进程 | 高 | 未实现 |
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:48:**问题：** 脚本没有全局的 `trap cleanup EXIT`，中断时 spinner 进程、agent 子进程都会变成孤儿进程。
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:51:- 在脚本入口添加 `trap cleanup EXIT INT TERM`
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:52:- cleanup 函数负责：杀掉 spinner 进程、杀掉残留 agent 子进程、清理临时文件、记录中断位置到 log.md
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:53:- 复用已有的 `stop_spinner` 和 `cleanup_dev_server` 逻辑
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:140:- 运行中关键写入操作（tasks.json、log.md）加入错误检查
+/Users/chaoyuepan/ai/autoresearch/run.sh:184:        stop_spinner
+/Users/chaoyuepan/ai/autoresearch/run.sh:211:            stop_spinner
+/Users/chaoyuepan/ai/autoresearch/run.sh:239:            stop_spinner
+/Users/chaoyuepan/ai/autoresearch/run.sh:361:        # 如果命令被 SIGTERM (143) 或 SIGKILL (137) 终止，视为超时
+/Users/chaoyuepan/ai/autoresearch/run.sh:451:    echo "- 上下文溢出: 自动交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:472:GLOBAL_TEMP_FILES=""
+/Users/chaoyuepan/ai/autoresearch/run.sh:491:stop_spinner() {
+/Users/chaoyuepan/ai/autoresearch/run.sh:506:        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+/Users/chaoyuepan/ai/autoresearch/run.sh:507:            GLOBAL_TEMP_FILES="$temp_path"
+/Users/chaoyuepan/ai/autoresearch/run.sh:509:            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+/Users/chaoyuepan/ai/autoresearch/run.sh:515:SCRIPT_COMPLETED_NORMALLY=0
+/Users/chaoyuepan/ai/autoresearch/run.sh:516:CLEANUP_ALREADY_RAN=0
+/Users/chaoyuepan/ai/autoresearch/run.sh:550:cleanup() {
+/Users/chaoyuepan/ai/autoresearch/run.sh:553:    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+/Users/chaoyuepan/ai/autoresearch/run.sh:556:    CLEANUP_ALREADY_RAN=1
+/Users/chaoyuepan/ai/autoresearch/run.sh:558:    # 1. 清理 spinner 进程（复用 stop_spinner 函数）
+/Users/chaoyuepan/ai/autoresearch/run.sh:559:    stop_spinner
+/Users/chaoyuepan/ai/autoresearch/run.sh:561:    # 2. 清理 dev server 进程（复用 cleanup_dev_server 函数）
+/Users/chaoyuepan/ai/autoresearch/run.sh:562:    cleanup_dev_server
+/Users/chaoyuepan/ai/autoresearch/run.sh:586:    # 遍历 GLOBAL_TEMP_FILES 中注册的所有临时路径并清理
+/Users/chaoyuepan/ai/autoresearch/run.sh:587:    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+/Users/chaoyuepan/ai/autoresearch/run.sh:597:        done <<< "$GLOBAL_TEMP_FILES"
+/Users/chaoyuepan/ai/autoresearch/run.sh:600:    # 5. 记录中断位置到 log.md（仅当非正常退出时）
+/Users/chaoyuepan/ai/autoresearch/run.sh:601:    # EXIT 信号在正常退出时也会触发，所以需要检查 SCRIPT_COMPLETED_NORMALLY
+/Users/chaoyuepan/ai/autoresearch/run.sh:602:    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+/Users/chaoyuepan/ai/autoresearch/run.sh:603:        local log_file="$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:643:trap 'cleanup EXIT' EXIT
+/Users/chaoyuepan/ai/autoresearch/run.sh:644:trap 'cleanup INT; trap - EXIT; exit 130' INT
+/Users/chaoyuepan/ai/autoresearch/run.sh:645:trap 'cleanup TERM; trap - EXIT; exit 143' TERM
+/Users/chaoyuepan/ai/autoresearch/run.sh:687:        stop_spinner
+/Users/chaoyuepan/ai/autoresearch/run.sh:1032:        if [ ! -f "$WORK_DIR/log.md" ]; then
+/Users/chaoyuepan/ai/autoresearch/run.sh:1040:    cat > "$WORK_DIR/log.md" << EOF
+/Users/chaoyuepan/ai/autoresearch/run.sh:1647:            echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1648:            echo "### 规划阶段" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1649:            echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1650:            echo "已拆分为 $count 个子任务，详见: [tasks.json](./tasks.json)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1767:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1768:    echo "### 迭代 $iteration - Codex (实现)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1769:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1770:    echo "详见: [iteration-$iteration-codex.log](./iteration-$iteration-codex.log)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1869:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1870:    echo "### 迭代 $iteration - Claude (实现)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1871:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1872:    echo "详见: [iteration-$iteration-claude.log](./iteration-$iteration-claude.log)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1971:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1972:    echo "### 迭代 $iteration - OpenCode (实现)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1973:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1974:    echo "详见: [iteration-$iteration-opencode.log](./iteration-$iteration-opencode.log)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2058:    echo "- 审核评分 (OpenCode): $score/100" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2081:            echo "- 测试: ✅ 通过" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2085:            echo "- 测试: ❌ 失败" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2090:        echo "- 测试: ⏭️ 跳过 (未检测到测试框架)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2173:    echo "- 审核评分 (Claude): $score/100" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2260:    echo "- 审核评分 (Codex): $score/100" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2663:  _cdp_cleanup() {
+/Users/chaoyuepan/ai/autoresearch/run.sh:2964:cleanup_dev_server() {
+/Users/chaoyuepan/ai/autoresearch/run.sh:3017:  prev_trap_exit=$(trap -p EXIT | sed "s/trap -- '//;s/' EXIT$//")
+/Users/chaoyuepan/ai/autoresearch/run.sh:3018:  prev_trap_int=$(trap -p INT | sed "s/trap -- '//;s/' INT$//")
+/Users/chaoyuepan/ai/autoresearch/run.sh:3019:  prev_trap_term=$(trap -p TERM | sed "s/trap -- '//;s/' TERM$//")
+/Users/chaoyuepan/ai/autoresearch/run.sh:3020:  trap cleanup_dev_server EXIT INT TERM
+/Users/chaoyuepan/ai/autoresearch/run.sh:3029:    cleanup_dev_server
+/Users/chaoyuepan/ai/autoresearch/run.sh:3030:    [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
+/Users/chaoyuepan/ai/autoresearch/run.sh:3031:    [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
+/Users/chaoyuepan/ai/autoresearch/run.sh:3032:    [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
+/Users/chaoyuepan/ai/autoresearch/run.sh:3033:    echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}" >> "$work_dir/log.md" 2>/dev/null
+/Users/chaoyuepan/ai/autoresearch/run.sh:3060:  cleanup_dev_server
+/Users/chaoyuepan/ai/autoresearch/run.sh:3062:  [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
+/Users/chaoyuepan/ai/autoresearch/run.sh:3063:  [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
+/Users/chaoyuepan/ai/autoresearch/run.sh:3064:  [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
+/Users/chaoyuepan/ai/autoresearch/run.sh:3248:    cat >> "$WORK_DIR/log.md" << EOF
+/Users/chaoyuepan/ai/autoresearch/run.sh:3332:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3333:    echo "---" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3334:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3335:    echo "## 继续运行 (从迭代 $((last_iter + 1)) 继续)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3336:    echo "- 继续时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3337:    echo "- 上次评分: $FINAL_SCORE/100" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3343:        echo "- 子任务: $progress" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3347:    echo "" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3514:                    echo "- UI 验证: $ui_pass - $ui_feedback" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:3941:        if [ -f "$WORK_DIR/log.md" ]; then
+/Users/chaoyuepan/ai/autoresearch/run.sh:3942:            log_summary=$(cat "$WORK_DIR/log.md")
+/Users/chaoyuepan/ai/autoresearch/run.sh:3974:    SCRIPT_COMPLETED_NORMALLY=1
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:14:GLOBAL_TEMP_FILES=""
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:16:SCRIPT_COMPLETED_NORMALLY=0
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:17:CLEANUP_ALREADY_RAN=0
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:54:                KILL_LOG="${KILL_LOG}${signal:-TERM}:$pid"$'\n'
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:74:stop_spinner() {
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:82:cleanup_dev_server() {
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:89:        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:90:            GLOBAL_TEMP_FILES="$temp_path"
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:92:            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:133:cleanup() {
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:136:    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:139:    CLEANUP_ALREADY_RAN=1
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:141:    stop_spinner
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:142:    cleanup_dev_server
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:160:    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:168:        done <<< "$GLOBAL_TEMP_FILES"
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:171:    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:172:        local log_file="$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:212:    GLOBAL_TEMP_FILES=""
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:214:    SCRIPT_COMPLETED_NORMALLY=0
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:215:    CLEANUP_ALREADY_RAN=0
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:228:    : > "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:256:trap teardown_case EXIT
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:258:echo "=== cleanup() Tests ==="
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:269:cleanup INT
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:270:interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:274:assert_eq "cleanup_dev_server invoked" "1" "$DEV_SERVER_CLEANED"
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:279:SCRIPT_COMPLETED_NORMALLY=1
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:281:interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:287:cleanup TERM
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:289:interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh:311:assert_true "descendants killed before parent" "printf '%s' \"$KILL_LOG\" | grep -q 'TERM:61003'"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:112:cleanup() {
+/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh:512:cleanup() {
+/Users/chaoyuepan/ai/autoresearch/tests/test_extract_score.sh:517:trap cleanup EXIT
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:87:cleanup() {
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:92:trap cleanup EXIT
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:266:    echo "- 上下文溢出: 自动交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)" >> "$WORK_DIR/log.md"
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:275:cat > "$WORK_DIR/log.md" << 'EOF'
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:296:assert_true "log.md has overflow note" \
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:297:    "grep -q '上下文溢出.*自动交接' '$WORK_DIR/log.md'"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:4:const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:4:const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+codex
+已经定位到实现和测试。接下来直接读 `run.sh` 的 `cleanup`/trap 片段，以及 `tests/test_cleanup.sh`，按验收条件逐条核对并看是否有漏测或行为缺陷。
+exec
+/bin/zsh -lc "sed -n '472,645p' /Users/chaoyuepan/ai/autoresearch/run.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+GLOBAL_TEMP_FILES=""
+
+# 启动等待动画
+start_spinner() {
+    local msg="$1"
+    (
+        i=0
+        while true; do
+            local frame=$((i % 8))
+            local rocket="${SPINNER_ROCKET[$frame]}"
+            printf "\r  %s %s  " "$rocket" "$msg"
+            sleep 0.12
+            i=$((i + 1))
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+# 停止等待动画
+stop_spinner() {
+    if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+        kill "$SPINNER_PID" 2>/dev/null || true
+        wait "$SPINNER_PID" 2>/dev/null || true
+    fi
+    SPINNER_PID=""
+    # 清除当前行并换行，避免残留
+    printf "\r                                                          \r"
+}
+
+# 注册临时文件/目录，用于 cleanup 时自动清理
+# 用法: register_temp_file /path/to/temp/file
+register_temp_file() {
+    local temp_path="$1"
+    if [ -n "$temp_path" ]; then
+        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+            GLOBAL_TEMP_FILES="$temp_path"
+        else
+            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+        fi
+    fi
+}
+
+# 标记脚本是否正常完成（用于 cleanup 函数判断是否记录中断）
+SCRIPT_COMPLETED_NORMALLY=0
+CLEANUP_ALREADY_RAN=0
+
+# 列出某个父进程的直接子进程 PID，优先使用 pgrep，失败时回退到 ps
+list_child_pids() {
+    local parent_pid="$1"
+    local child_pids=""
+
+    if command -v pgrep >/dev/null 2>&1; then
+        child_pids=$(pgrep -P "$parent_pid" 2>/dev/null) || child_pids=""
+    fi
+
+    if [ -z "$child_pids" ] && command -v ps >/dev/null 2>&1; then
+        child_pids=$(ps -eo pid=,ppid= 2>/dev/null | awk -v ppid="$parent_pid" '$2 == ppid { print $1 }') || child_pids=""
+    fi
+
+    if [ -n "$child_pids" ]; then
+        printf '%s\n' "$child_pids"
+    fi
+}
+
+# 递归收集某个进程的所有后代进程 PID（深度优先，子孙在前）
+collect_descendant_pids() {
+    local parent_pid="$1"
+    local child_pid
+
+    while IFS= read -r child_pid; do
+        [ -z "$child_pid" ] && continue
+        collect_descendant_pids "$child_pid"
+        echo "$child_pid"
+    done < <(list_child_pids "$parent_pid")
+}
+
+# 全局清理函数
+# 当脚本被中断或退出时调用，清理所有资源
+cleanup() {
+    local exit_signal="${1:-EXIT}"
+
+    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+        return 0
+    fi
+    CLEANUP_ALREADY_RAN=1
+
+    # 1. 清理 spinner 进程（复用 stop_spinner 函数）
+    stop_spinner
+
+    # 2. 清理 dev server 进程（复用 cleanup_dev_server 函数）
+    cleanup_dev_server
+
+    # 3. 清理残留 agent 子进程
+    # 查找并清理可能残留的 claude/codex/opencode 进程
+    # 使用进程组清理，避免误杀其他进程
+    local descendant_pids
+    descendant_pids=$(collect_descendant_pids "$$") || true
+    if [ -n "$descendant_pids" ]; then
+        for pid in $descendant_pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+        # 等待子进程退出
+        sleep 1
+        # 强制清理未退出的子进程
+        for pid in $descendant_pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+
+    # 4. 清理全局临时文件/目录
+    # 遍历 GLOBAL_TEMP_FILES 中注册的所有临时路径并清理
+    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+        while IFS= read -r temp_path; do
+            if [ -z "$temp_path" ]; then
+                continue
+            fi
+            if [ -d "$temp_path" ]; then
+                rm -rf "$temp_path" 2>/dev/null || true
+            elif [ -f "$temp_path" ]; then
+                rm -f "$temp_path" 2>/dev/null || true
+            fi
+        done <<< "$GLOBAL_TEMP_FILES"
+    fi
+
+    # 5. 记录中断位置到 log.md（仅当非正常退出时）
+    # EXIT 信号在正常退出时也会触发，所以需要检查 SCRIPT_COMPLETED_NORMALLY
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+        local log_file="$WORK_DIR/log.md"
+        local interrupt_time
+        interrupt_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+        # 获取当前状态信息
+        local current_iteration="${ITERATION:-0}"
+        local current_score="${FINAL_SCORE:-0}"
+        local current_branch="${BRANCH_NAME:-unknown}"
+        local issue_num="${ISSUE_NUMBER:-unknown}"
+
+        # 追加中断记录
+        {
+            echo ""
+            echo "---"
+            echo ""
+            echo "## ⚠️ 脚本被中断"
+            echo ""
+            echo "- **中断信号**: $exit_signal"
+            echo "- **中断时间**: $interrupt_time"
+            echo "- **Issue**: #$issue_num"
+            echo "- **当前迭代**: $current_iteration"
+            echo "- **当前评分**: $current_score/100"
+            echo "- **当前分支**: $current_branch"
+            echo ""
+            echo "> 使用 \`./run.sh -c $issue_num\` 可继续运行"
+        } >> "$log_file" 2>/dev/null || true
+
+        log_console ""
+        log_console "⚠️ 脚本被 $exit_signal 信号中断"
+        log_console "📝 中断信息已记录到 $log_file"
+        log_console "💡 使用 ./run.sh -c $issue_num 可继续运行"
+    fi
+
+    # 清除终端行
+    printf "\r                                                          \r"
+}
+
+# ==================== 全局 Trap 设置 ====================
+# 在脚本入口处设置 trap，确保在任何阶段中断都能正确清理资源
+# cleanup 函数已设计为能安全处理所有未初始化变量的情况
+trap 'cleanup EXIT' EXIT
+trap 'cleanup INT; trap - EXIT; exit 130' INT
+trap 'cleanup TERM; trap - EXIT; exit 143' TERM
+
+exec
+/bin/zsh -lc "sed -n '1,360p' /Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+#!/bin/bash
+# tests/test_cleanup.sh - Unit tests for global cleanup logic
+#
+# Usage: bash tests/test_cleanup.sh
+
+set -e
+
+PASS=0
+FAIL=0
+TOTAL=0
+
+WORK_ROOT=""
+WORK_DIR=""
+GLOBAL_TEMP_FILES=""
+SPINNER_PID=""
+SCRIPT_COMPLETED_NORMALLY=0
+CLEANUP_ALREADY_RAN=0
+DEV_SERVER_CLEANED=0
+USE_MOCK_TREE=0
+MOCK_PROCESS_TREE=""
+MOCK_ALIVE_PIDS=""
+KILL_LOG=""
+
+log() {
+    :
+}
+
+log_console() {
+    :
+}
+
+kill() {
+    if [ "$USE_MOCK_TREE" -eq 1 ]; then
+        local signal=""
+        local pid=""
+
+        case "$1" in
+            -0|-9)
+                signal="$1"
+                pid="$2"
+                ;;
+            *)
+                pid="$1"
+                ;;
+        esac
+
+        if [ -z "$pid" ]; then
+            return 1
+        fi
+
+        if printf '%s\n' "$MOCK_ALIVE_PIDS" | grep -Fxq "$pid"; then
+            if [ "$signal" != "-0" ]; then
+                MOCK_ALIVE_PIDS=$(printf '%s\n' "$MOCK_ALIVE_PIDS" | grep -Fxv "$pid" || true)
+                KILL_LOG="${KILL_LOG}${signal:-TERM}:$pid"$'\n'
+            fi
+            return 0
+        fi
+
+        return 1
+    fi
+
+    builtin kill "$@"
+}
+
+start_spinner() {
+    (
+        while true; do
+            sleep 1
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+stop_spinner() {
+    if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+        kill "$SPINNER_PID" 2>/dev/null || true
+        wait "$SPINNER_PID" 2>/dev/null || true
+    fi
+    SPINNER_PID=""
+}
+
+cleanup_dev_server() {
+    DEV_SERVER_CLEANED=1
+}
+
+register_temp_file() {
+    local temp_path="$1"
+    if [ -n "$temp_path" ]; then
+        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+            GLOBAL_TEMP_FILES="$temp_path"
+        else
+            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+        fi
+    fi
+}
+
+list_child_pids() {
+    local parent_pid="$1"
+    local child_pids=""
+
+    if [ "$USE_MOCK_TREE" -eq 1 ]; then
+        child_pids=$(printf '%s\n' "$MOCK_PROCESS_TREE" | awk -v ppid="$parent_pid" '$1 == ppid { print $2 }') || child_pids=""
+        if [ -n "$child_pids" ]; then
+            printf '%s\n' "$child_pids"
+        fi
+        return 0
+    fi
+
+    if command -v pgrep >/dev/null 2>&1; then
+        child_pids=$(pgrep -P "$parent_pid" 2>/dev/null) || child_pids=""
+    fi
+
+    if [ -z "$child_pids" ] && command -v ps >/dev/null 2>&1; then
+        child_pids=$(ps -eo pid=,ppid= 2>/dev/null | awk -v ppid="$parent_pid" '$2 == ppid { print $1 }') || child_pids=""
+    fi
+
+    if [ -n "$child_pids" ]; then
+        printf '%s\n' "$child_pids"
+    fi
+}
+
+collect_descendant_pids() {
+    local parent_pid="$1"
+    local child_pid
+
+    while IFS= read -r child_pid; do
+        [ -z "$child_pid" ] && continue
+        collect_descendant_pids "$child_pid"
+        echo "$child_pid"
+    done < <(list_child_pids "$parent_pid")
+}
+
+cleanup() {
+    local exit_signal="${1:-EXIT}"
+
+    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+        return 0
+    fi
+    CLEANUP_ALREADY_RAN=1
+
+    stop_spinner
+    cleanup_dev_server
+
+    local descendant_pids
+    descendant_pids=$(collect_descendant_pids "$$")
+    if [ -n "$descendant_pids" ]; then
+        for pid in $descendant_pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+        sleep 1
+        for pid in $descendant_pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+
+    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+        while IFS= read -r temp_path; do
+            [ -z "$temp_path" ] && continue
+            if [ -d "$temp_path" ]; then
+                rm -rf "$temp_path" 2>/dev/null || true
+            elif [ -f "$temp_path" ]; then
+                rm -f "$temp_path" 2>/dev/null || true
+            fi
+        done <<< "$GLOBAL_TEMP_FILES"
+    fi
+
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+        local log_file="$WORK_DIR/log.md"
+        {
+            echo ""
+            echo "---"
+            echo ""
+            echo "## ⚠️ 脚本被中断"
+            echo ""
+            echo "- **中断信号**: $exit_signal"
+        } >> "$log_file"
+    fi
+}
+
+assert_true() {
+    local test_name="$1"
+    local cmd="$2"
+    TOTAL=$((TOTAL + 1))
+    if eval "$cmd"; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name"
+    fi
+}
+
+assert_eq() {
+    local test_name="$1"
+    local expected="$2"
+    local actual="$3"
+    TOTAL=$((TOTAL + 1))
+    if [ "$expected" = "$actual" ]; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+    fi
+}
+
+reset_state() {
+    GLOBAL_TEMP_FILES=""
+    SPINNER_PID=""
+    SCRIPT_COMPLETED_NORMALLY=0
+    CLEANUP_ALREADY_RAN=0
+    DEV_SERVER_CLEANED=0
+    USE_MOCK_TREE=0
+    MOCK_PROCESS_TREE=""
+    MOCK_ALIVE_PIDS=""
+    KILL_LOG=""
+}
+
+setup_case() {
+    reset_state
+    WORK_ROOT=$(mktemp -d)
+    WORK_DIR="$WORK_ROOT/work"
+    mkdir -p "$WORK_DIR"
+    : > "$WORK_DIR/log.md"
+}
+
+teardown_case() {
+    if [ -n "$WORK_ROOT" ] && [ -d "$WORK_ROOT" ]; then
+        rm -rf "$WORK_ROOT"
+    fi
+    WORK_ROOT=""
+    WORK_DIR=""
+}
+
+wait_for_pid() {
+    local parent_pid="$1"
+    local attempts=0
+    local child_pid=""
+
+    while [ $attempts -lt 50 ]; do
+        child_pid=$(list_child_pids "$parent_pid" | head -n 1 || true)
+        if [ -n "$child_pid" ]; then
+            echo "$child_pid"
+            return 0
+        fi
+        attempts=$((attempts + 1))
+        sleep 0.1
+    done
+    return 1
+}
+
+trap teardown_case EXIT
+
+echo "=== cleanup() Tests ==="
+echo ""
+
+setup_case
+echo "Scenario 1: abnormal cleanup removes temp paths and logs once"
+temp_file="$WORK_ROOT/temp.txt"
+temp_dir="$WORK_ROOT/tempdir"
+mkdir -p "$temp_dir"
+echo "temp" > "$temp_file"
+register_temp_file "$temp_file"
+register_temp_file "$temp_dir"
+cleanup INT
+interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+assert_true "temp file removed" "[ ! -f \"$temp_file\" ]"
+assert_true "temp dir removed" "[ ! -d \"$temp_dir\" ]"
+assert_eq "interrupt log written once" "1" "$interrupt_count"
+assert_eq "cleanup_dev_server invoked" "1" "$DEV_SERVER_CLEANED"
+teardown_case
+
+setup_case
+echo "Scenario 2: normal completion does not write interrupt log"
+SCRIPT_COMPLETED_NORMALLY=1
+cleanup EXIT
+interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+assert_eq "no interrupt log on normal exit" "0" "$interrupt_count"
+teardown_case
+
+setup_case
+echo "Scenario 3: cleanup is idempotent"
+cleanup TERM
+cleanup EXIT
+interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+assert_eq "duplicate cleanup does not duplicate log" "1" "$interrupt_count"
+teardown_case
+
+setup_case
+echo "Scenario 4: cleanup stops spinner process"
+start_spinner
+spinner_pid="$SPINNER_PID"
+assert_true "spinner started" "kill -0 \"$spinner_pid\" 2>/dev/null"
+cleanup EXIT
+assert_true "spinner stopped" "! kill -0 \"$spinner_pid\" 2>/dev/null"
+teardown_case
+
+setup_case
+echo "Scenario 5: cleanup kills descendant process tree"
+USE_MOCK_TREE=1
+MOCK_PROCESS_TREE="$$ 61001"$'\n'"61001 61002"$'\n'"61002 61003"
+MOCK_ALIVE_PIDS="61001"$'\n'"61002"$'\n'"61003"
+cleanup EXIT
+assert_true "direct child stopped" "! kill -0 61001 2>/dev/null"
+assert_true "grandchild stopped" "! kill -0 61002 2>/dev/null"
+assert_true "great-grandchild stopped" "! kill -0 61003 2>/dev/null"
+assert_true "descendants killed before parent" "printf '%s' \"$KILL_LOG\" | grep -q 'TERM:61003'"
+teardown_case
+
+echo ""
+echo "=========================================="
+echo "Total: $TOTAL  Passed: $PASS  Failed: $FAIL"
+echo "=========================================="
+
+if [ $FAIL -gt 0 ]; then
+    exit 1
+fi
+
+exit 0
+
+exec
+/bin/zsh -lc "sed -n '2950,3070p' /Users/chaoyuepan/ai/autoresearch/run.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ else
+ local feedback
+ feedback=$(echo "$json_result" | jq -r '.feedback // "UI 验证未通过"')
+ log "UI 验证未通过: $feedback" >&2
+ fi
+ echo "$json_result"
+ else
+ # JSON 解析失败，默认通过并记录警告
+ log "警告: 无法解析 LLM 验证结果，默认通过" >&2
+ echo '{"pass": true, "feedback": "无法解析验证结果，默认通过"}'
+ fi
+}
+
+# 清理 dev server 进程
+cleanup_dev_server() {
+  if [ -n "$_UI_DEV_SERVER_PID" ] && kill -0 "$_UI_DEV_SERVER_PID" 2>/dev/null; then
+    log "清理 dev server 进程 (PID: $_UI_DEV_SERVER_PID)..."
+    kill "$_UI_DEV_SERVER_PID" 2>/dev/null || true
+    sleep 1
+    # 确保进程已终止
+    if kill -0 "$_UI_DEV_SERVER_PID" 2>/dev/null; then
+      kill -9 "$_UI_DEV_SERVER_PID" 2>/dev/null || true
+    fi
+    _UI_DEV_SERVER_PID=""
+  fi
+}
+
+# 运行完整的 UI 验证流程
+# 参数: $1 = 工作目录, $2 = 子任务描述（可选）
+# 返回: 0 = 通过, 1 = 失败
+# 输出: 验证结果 JSON 到 stdout
+run_ui_verification() {
+  local work_dir="$1"
+  local subtask_desc="${2:-}"
+  local result_file="$work_dir/ui-verify-result.json"
+  local screenshot_file="$work_dir/ui-screenshot.png"
+
+  log "========== UI 验证开始 ==========" >&2
+
+  # 检查 UI 验证是否启用
+  if [ "$UI_VERIFY_ENABLED" != "yes" ] && [ "$UI_VERIFY_ENABLED" != "true" ]; then
+    log "UI 验证已禁用" >&2
+    echo '{"pass": true, "feedback": "UI 验证已禁用"}'
+    return 0
+  fi
+
+  # 步骤 1: 检测 dev server 命令
+  local dev_cmd
+  dev_cmd=$(detect_dev_server_command "$PROJECT_ROOT")
+  if [ -z "$dev_cmd" ]; then
+    log "警告: 无法检测 dev server 启动命令，跳过 UI 验证" >&2
+    echo '{"pass": true, "feedback": "无法检测 dev server 命令，跳过 UI 验证"}'
+    return 0
+  fi
+  log "检测到 dev server 命令: $dev_cmd" >&2
+
+  # 步骤 2: 检测端口号
+  local port
+  port=$(detect_dev_server_port "$PROJECT_ROOT")
+  log "检测到的 dev server 端口: $port" >&2
+
+  # 步骤 3: 启动 dev server
+  log "启动 dev server..." >&2
+  cd "$PROJECT_ROOT"
+
+  # 保存原 trap 并设置清理 trap
+  local prev_trap_exit prev_trap_int prev_trap_term
+  prev_trap_exit=$(trap -p EXIT | sed "s/trap -- '//;s/' EXIT$//")
+  prev_trap_int=$(trap -p INT | sed "s/trap -- '//;s/' INT$//")
+  prev_trap_term=$(trap -p TERM | sed "s/trap -- '//;s/' TERM$//")
+  trap cleanup_dev_server EXIT INT TERM
+
+  # 后台启动 dev server
+  bash -c "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
+  _UI_DEV_SERVER_PID=$!
+  log "dev server 已启动 (PID: $_UI_DEV_SERVER_PID)" >&2
+
+  # 步骤 4: 等待 dev server 就绪
+  if ! wait_for_dev_server "$port" "$UI_VERIFY_TIMEOUT"; then
+    cleanup_dev_server
+    [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
+    [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
+    [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
+    echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}" >> "$work_dir/log.md" 2>/dev/null
+    echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}"
+    return 1
+  fi
+
+ # 步骤 5: 捕获截图
+ local screenshot_success=0
+ local target_url="http://localhost:$port"
+ if capture_screenshot "$target_url" "$screenshot_file"; then
+ screenshot_success=1
+ else
+ # 截图失败：记录警告但继续，尝试降级处理
+ log "截图失败，尝试降级处理..." >&2
+ echo "截图失败时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$work_dir/ui-screenshot-error.log" 2>/dev/null || true
+ fi
+
+ # 步骤 6: 使用 LLM 验证截图（如果截图成功）
+ local verify_result
+ if [ $screenshot_success -eq 1 ]; then
+ verify_result=$(verify_ui_with_llm "$screenshot_file" "$subtask_desc")
+ else
+ # 截图失败时的降级处理：记录警告但标记为通过，不阻塞主流程
+ log "截图不可用，UI 验证降级为通过" >&2
+ verify_result='{"pass": true, "feedback": "截图工具不可用，跳过 UI 验证（降级处理）"}'
+ fi
+
+  # 步骤 7: 清理 dev server
+  cleanup_dev_server
+  # 恢复原 trap
+  [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
+  [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
+  [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
+
+  # 保存验证结果
+  echo "$verify_result" > "$result_file"
+
+  # 记录到日志
+  local pass
+
+codex
+实现本身和测试都已找到。现在补一层证据：看当前改动范围和测试执行结果，确认审核不是基于静态阅读做推断。
+exec
+/bin/zsh -lc 'git -C /Users/chaoyuepan/ai/autoresearch status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ D .autoresearch/workflows/issue-48/.last_score
+ D .autoresearch/workflows/issue-48/hard-gate-1.log
+ D .autoresearch/workflows/issue-48/hard-gate-2.log
+ D .autoresearch/workflows/issue-48/iteration-1-claude.log
+ D .autoresearch/workflows/issue-48/iteration-2-codex-review.log
+ D .autoresearch/workflows/issue-48/iteration-2-codex.log
+ D .autoresearch/workflows/issue-48/iteration-3-opencode-review.log
+ D .autoresearch/workflows/issue-48/log.md
+ D .autoresearch/workflows/issue-48/planning.log
+ D .autoresearch/workflows/issue-48/progress.md
+ D .autoresearch/workflows/issue-48/tasks.json
+ D .autoresearch/workflows/issue-48/terminal.log
+ M CLAUDE.md
+ M run.sh
+ M tests/CLAUDE.md
+?? .autoresearch/archive/2026-04-22-issue-26/
+?? .autoresearch/archive/2026-04-22-issue-48/
+?? .autoresearch/workflows/issue-49/
+?? tests/test_cleanup.sh
+
+exec
+/bin/zsh -lc 'git -C /Users/chaoyuepan/ai/autoresearch diff -- run.sh tests/test_cleanup.sh CLAUDE.md tests/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+diff --git a/CLAUDE.md b/CLAUDE.md
+index bd24320..5d335bb 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -20,7 +20,12 @@ autoresearch is a fully automated software development tool: given a GitHub Issu
+ ./run.sh --no-archive 42
+ ```
+ 
+-There are no build/test/lint commands for autoresearch itself. The only test file is `tests/test_extract_score.sh` which tests the score parsing logic.
++There are no build/test/lint commands for autoresearch itself. Shell-based regression tests live under `tests/`, including:
++- `tests/test_extract_score.sh`
++- `tests/test_agent_logic.sh`
++- `tests/test_archive.sh`
++- `tests/test_context_overflow.sh`
++- `tests/test_cleanup.sh`
+ 
+ ## Architecture
+ 
+@@ -46,6 +51,13 @@ If planning fails (no tasks.json generated), falls back to original mode: implem
+ 
+ Agent rotation (from iteration 2): `(iter - 1) % N` where N = number of agents.
+ 
++### Global Cleanup / Traps
++
++- `run.sh` installs global `EXIT`, `INT`, and `TERM` traps near the spinner helpers.
++- `cleanup()` must stay idempotent because interrupt paths can otherwise re-enter during exit handling.
++- Signal traps should disable the `EXIT` trap before exiting, otherwise abnormal exits will append duplicate interruption records to `log.md`.
++- Child-process cleanup is recursive via `collect_descendant_pids()` and should keep a `ps` fallback because `pgrep -P` is not reliable in every macOS environment.
++
+ ### Subtask System (tasks.json)
+ 
+ Planning phase (before iteration 1) asks the first agent to split the Issue into subtasks, saved to `.autoresearch/workflows/issue-N/tasks.json`:
+diff --git a/run.sh b/run.sh
+index ec3c32a..3fdf460 100755
+--- a/run.sh
++++ b/run.sh
+@@ -468,6 +468,9 @@ SPINNER_ROCKET=(
+ )
+ SPINNER_PID=""
+ 
++# 全局临时文件追踪（用于 cleanup 函数清理）
++GLOBAL_TEMP_FILES=""
++
+ # 启动等待动画
+ start_spinner() {
+     local msg="$1"
+@@ -487,14 +490,160 @@ start_spinner() {
+ # 停止等待动画
+ stop_spinner() {
+     if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+-        kill "$SPINNER_PID" 2>/dev/null
+-        wait "$SPINNER_PID" 2>/dev/null
++        kill "$SPINNER_PID" 2>/dev/null || true
++        wait "$SPINNER_PID" 2>/dev/null || true
+     fi
+     SPINNER_PID=""
+     # 清除当前行并换行，避免残留
+     printf "\r                                                          \r"
+ }
+ 
++# 注册临时文件/目录，用于 cleanup 时自动清理
++# 用法: register_temp_file /path/to/temp/file
++register_temp_file() {
++    local temp_path="$1"
++    if [ -n "$temp_path" ]; then
++        if [ -z "$GLOBAL_TEMP_FILES" ]; then
++            GLOBAL_TEMP_FILES="$temp_path"
++        else
++            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
++        fi
++    fi
++}
++
++# 标记脚本是否正常完成（用于 cleanup 函数判断是否记录中断）
++SCRIPT_COMPLETED_NORMALLY=0
++CLEANUP_ALREADY_RAN=0
++
++# 列出某个父进程的直接子进程 PID，优先使用 pgrep，失败时回退到 ps
++list_child_pids() {
++    local parent_pid="$1"
++    local child_pids=""
++
++    if command -v pgrep >/dev/null 2>&1; then
++        child_pids=$(pgrep -P "$parent_pid" 2>/dev/null) || child_pids=""
++    fi
++
++    if [ -z "$child_pids" ] && command -v ps >/dev/null 2>&1; then
++        child_pids=$(ps -eo pid=,ppid= 2>/dev/null | awk -v ppid="$parent_pid" '$2 == ppid { print $1 }') || child_pids=""
++    fi
++
++    if [ -n "$child_pids" ]; then
++        printf '%s\n' "$child_pids"
++    fi
++}
++
++# 递归收集某个进程的所有后代进程 PID（深度优先，子孙在前）
++collect_descendant_pids() {
++    local parent_pid="$1"
++    local child_pid
++
++    while IFS= read -r child_pid; do
++        [ -z "$child_pid" ] && continue
++        collect_descendant_pids "$child_pid"
++        echo "$child_pid"
++    done < <(list_child_pids "$parent_pid")
++}
++
++# 全局清理函数
++# 当脚本被中断或退出时调用，清理所有资源
++cleanup() {
++    local exit_signal="${1:-EXIT}"
++
++    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
++        return 0
++    fi
++    CLEANUP_ALREADY_RAN=1
++
++    # 1. 清理 spinner 进程（复用 stop_spinner 函数）
++    stop_spinner
++
++    # 2. 清理 dev server 进程（复用 cleanup_dev_server 函数）
++    cleanup_dev_server
++
++    # 3. 清理残留 agent 子进程
++    # 查找并清理可能残留的 claude/codex/opencode 进程
++    # 使用进程组清理，避免误杀其他进程
++    local descendant_pids
++    descendant_pids=$(collect_descendant_pids "$$") || true
++    if [ -n "$descendant_pids" ]; then
++        for pid in $descendant_pids; do
++            if kill -0 "$pid" 2>/dev/null; then
++                kill "$pid" 2>/dev/null || true
++            fi
++        done
++        # 等待子进程退出
++        sleep 1
++        # 强制清理未退出的子进程
++        for pid in $descendant_pids; do
++            if kill -0 "$pid" 2>/dev/null; then
++                kill -9 "$pid" 2>/dev/null || true
++            fi
++        done
++    fi
++
++    # 4. 清理全局临时文件/目录
++    # 遍历 GLOBAL_TEMP_FILES 中注册的所有临时路径并清理
++    if [ -n "$GLOBAL_TEMP_FILES" ]; then
++        while IFS= read -r temp_path; do
++            if [ -z "$temp_path" ]; then
++                continue
++            fi
++            if [ -d "$temp_path" ]; then
++                rm -rf "$temp_path" 2>/dev/null || true
++            elif [ -f "$temp_path" ]; then
++                rm -f "$temp_path" 2>/dev/null || true
++            fi
++        done <<< "$GLOBAL_TEMP_FILES"
++    fi
++
++    # 5. 记录中断位置到 log.md（仅当非正常退出时）
++    # EXIT 信号在正常退出时也会触发，所以需要检查 SCRIPT_COMPLETED_NORMALLY
++    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
++        local log_file="$WORK_DIR/log.md"
++        local interrupt_time
++        interrupt_time=$(date '+%Y-%m-%d %H:%M:%S')
++
++        # 获取当前状态信息
++        local current_iteration="${ITERATION:-0}"
++        local current_score="${FINAL_SCORE:-0}"
++        local current_branch="${BRANCH_NAME:-unknown}"
++        local issue_num="${ISSUE_NUMBER:-unknown}"
++
++        # 追加中断记录
++        {
++            echo ""
++            echo "---"
++            echo ""
++            echo "## ⚠️ 脚本被中断"
++            echo ""
++            echo "- **中断信号**: $exit_signal"
++            echo "- **中断时间**: $interrupt_time"
++            echo "- **Issue**: #$issue_num"
++            echo "- **当前迭代**: $current_iteration"
++            echo "- **当前评分**: $current_score/100"
++            echo "- **当前分支**: $current_branch"
++            echo ""
++            echo "> 使用 \`./run.sh -c $issue_num\` 可继续运行"
++        } >> "$log_file" 2>/dev/null || true
++
++        log_console ""
++        log_console "⚠️ 脚本被 $exit_signal 信号中断"
++        log_console "📝 中断信息已记录到 $log_file"
++        log_console "💡 使用 ./run.sh -c $issue_num 可继续运行"
++    fi
++
++    # 清除终端行
++    printf "\r                                                          \r"
++}
++
++# ==================== 全局 Trap 设置 ====================
++# 在脚本入口处设置 trap，确保在任何阶段中断都能正确清理资源
++# cleanup 函数已设计为能安全处理所有未初始化变量的情况
++trap 'cleanup EXIT' EXIT
++trap 'cleanup INT; trap - EXIT; exit 130' INT
++trap 'cleanup TERM; trap - EXIT; exit 143' TERM
++
+ run_with_retry() {
+     local agent=$1
+     local prompt="$2"
+@@ -1022,6 +1171,7 @@ mark_subtask_passed() {
+     fi
+     local tmp_file
+     tmp_file=$(mktemp)
++    register_temp_file "$tmp_file"
+     jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file" && mv "$tmp_file" "$tasks_file"
+     log "子任务 $subtask_id 已标记为通过"
+ }
+@@ -1228,6 +1378,7 @@ extract_learnings_from_log() {
+     # 先清理日志中的无效 UTF-8 字符到临时文件
+     local cleaned_file
+     cleaned_file=$(mktemp)
++    register_temp_file "$cleaned_file"
+     iconv -f UTF-8 -t UTF-8 -c "$log_file" > "$cleaned_file" 2>/dev/null || cp "$log_file" "$cleaned_file"
+ 
+     # 优先提取 ## Learnings 区块
+@@ -1321,6 +1472,7 @@ get_progress_content() {
+     # 先清理文件中的无效 UTF-8 字符
+     local cleaned_file
+     cleaned_file=$(mktemp)
++    register_temp_file "$cleaned_file"
+     iconv -f UTF-8 -t UTF-8 -c "$progress_file" > "$cleaned_file" 2>/dev/null || cp "$progress_file" "$cleaned_file"
+ 
+     local content
+@@ -2504,6 +2656,7 @@ capture_screenshot_cdp() {
+   local cdp_port=19222
+   local cdp_tmp_dir
+   cdp_tmp_dir=$(mktemp -d)
++  register_temp_file "$cdp_tmp_dir"
+   local chrome_pid=""
+ 
+   # 清理函数
+@@ -3463,7 +3616,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+         first_agent="${AGENT_NAMES[0]}"
+         first_impl_func="run_${first_agent}"
+         $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
+-        local first_ret=$?
++        first_ret=$?
+         if [ $first_ret -ne 0 ]; then
+             impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
+@@ -3471,12 +3624,12 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+             elif [ $first_ret -eq 2 ]; then
+                 log_console "⚠️ $first_agent 被跳过 (模型错误)，尝试其他 agent..."
+                 for skip_idx in $(seq 1 $((${#AGENT_NAMES[@]} - 1))); do
+-                    local skip_agent="${AGENT_NAMES[$skip_idx]}"
++                    skip_agent="${AGENT_NAMES[$skip_idx]}"
+                     log_console "尝试 $skip_agent..."
+                     SKIPPED_AGENT=0
+-                    local skip_func="run_${skip_agent}"
++                    skip_func="run_${skip_agent}"
+                     $skip_func "$ISSUE_NUMBER" "$ITERATION" ""
+-                    local skip_ret=$?
++                    skip_ret=$?
+                     if [ $skip_ret -eq 0 ]; then
+                         first_agent="$skip_agent"
+                         first_ret=0
+@@ -3502,7 +3655,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+             if ! run_hard_gate_checks "$ITERATION"; then
+                 log_console "❌ 硬门禁检查未通过"
+                 HARD_GATE_FAILED=1
+-                local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
++                gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+                 PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
+                 ITERATION_FAILED=1
+             else
+@@ -3533,7 +3686,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+         first_agent="${AGENT_NAMES[0]}"
+         first_impl_func="run_${first_agent}"
+         $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
+-        local first_ret=$?
++        first_ret=$?
+         if [ $first_ret -ne 0 ]; then
+             impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
+             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
+@@ -3541,12 +3694,12 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+             elif [ $first_ret -eq 2 ]; then
+                 log_console "⚠️ $first_agent 被跳过 (模型错误)，尝试其他 agent..."
+                 for skip_idx in $(seq 1 $((${#AGENT_NAMES[@]} - 1))); do
+-                    local skip_agent="${AGENT_NAMES[$skip_idx]}"
++                    skip_agent="${AGENT_NAMES[$skip_idx]}"
+                     log_console "尝试 $skip_agent..."
+                     SKIPPED_AGENT=0
+-                    local skip_func="run_${skip_agent}"
++                    skip_func="run_${skip_agent}"
+                     $skip_func "$ISSUE_NUMBER" "$ITERATION" ""
+-                    local skip_ret=$?
++                    skip_ret=$?
+                     if [ $skip_ret -eq 0 ]; then
+                         first_agent="$skip_agent"
+                         first_ret=0
+@@ -3571,7 +3724,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+             if ! run_hard_gate_checks "$ITERATION"; then
+                 log_console "❌ 硬门禁检查未通过"
+                 HARD_GATE_FAILED=1
+-                local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
++                gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+                 PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
+                 ITERATION_FAILED=1
+             else
+@@ -3610,7 +3763,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+             if [ $skip_idx -eq $agent_idx ]; then
+                 continue
+             fi
+-            local skip_agent="${AGENT_NAMES[$skip_idx]}"
++            skip_agent="${AGENT_NAMES[$skip_idx]}"
+             log_console "尝试 $skip_agent..."
+             SKIPPED_AGENT=0
+             run_review_and_fix $skip_idx
+@@ -3818,6 +3971,7 @@ EOF
+         log_console "$PR_URL"
+     fi
+ 
++    SCRIPT_COMPLETED_NORMALLY=1
+     exit 0
+ fi
+ 
+diff --git a/tests/CLAUDE.md b/tests/CLAUDE.md
+index 23c99d1..07b7eee 100644
+--- a/tests/CLAUDE.md
++++ b/tests/CLAUDE.md
+@@ -5,8 +5,12 @@
+ - `test_extract_score.sh`: 测试分数提取逻辑。
+ - `test_agent_logic.sh`: 测试 Agent 列表解析和轮转逻辑。
+ - `test_archive.sh`: 测试运行归档机制逻辑。
++- `test_context_overflow.sh`: 测试上下文溢出检测与交接逻辑。
++- `test_cleanup.sh`: 测试全局 cleanup、trap 幂等和临时文件/子进程回收逻辑。
+ 
+ ## 注意事项
+ - 测试脚本应能独立运行，不依赖外部 API。
+ - 使用 `assert` 风格的函数进行验证。
+ - 遵循项目现有的测试模式。
++- 对 shell 运行时行为的测试，优先抽取 `run.sh` 中的函数做隔离验证，不直接 `source run.sh`。
++- 涉及进程树的测试要允许宿主环境差异；必要时使用 mock 进程树验证递归清理逻辑，而不是依赖平台特定的 `pgrep` 行为。
+
+exec
+/bin/zsh -lc 'bash /Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 1104ms:
+  PASS: direct child stopped
+  PASS: grandchild stopped
+  PASS: great-grandchild stopped
+  PASS: descendants killed before parent
+
+==========================================
+Total: 12  Passed: 12  Failed: 0
+==========================================
+
+codex
+我已经把实现和回归测试跑过一遍，测试当前是全绿。最后再取精确行号，给出按严重度排序的审核结论和是否达标。
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh | sed -n '70,330p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+    70	    ) &
+    71	    SPINNER_PID=$!
+    72	}
+    73	
+    74	stop_spinner() {
+    75	    if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+    76	        kill "$SPINNER_PID" 2>/dev/null || true
+    77	        wait "$SPINNER_PID" 2>/dev/null || true
+    78	    fi
+    79	    SPINNER_PID=""
+    80	}
+    81	
+    82	cleanup_dev_server() {
+    83	    DEV_SERVER_CLEANED=1
+    84	}
+    85	
+    86	register_temp_file() {
+    87	    local temp_path="$1"
+    88	    if [ -n "$temp_path" ]; then
+    89	        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+    90	            GLOBAL_TEMP_FILES="$temp_path"
+    91	        else
+    92	            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+    93	        fi
+    94	    fi
+    95	}
+    96	
+    97	list_child_pids() {
+    98	    local parent_pid="$1"
+    99	    local child_pids=""
+   100	
+   101	    if [ "$USE_MOCK_TREE" -eq 1 ]; then
+   102	        child_pids=$(printf '%s\n' "$MOCK_PROCESS_TREE" | awk -v ppid="$parent_pid" '$1 == ppid { print $2 }') || child_pids=""
+   103	        if [ -n "$child_pids" ]; then
+   104	            printf '%s\n' "$child_pids"
+   105	        fi
+   106	        return 0
+   107	    fi
+   108	
+   109	    if command -v pgrep >/dev/null 2>&1; then
+   110	        child_pids=$(pgrep -P "$parent_pid" 2>/dev/null) || child_pids=""
+   111	    fi
+   112	
+   113	    if [ -z "$child_pids" ] && command -v ps >/dev/null 2>&1; then
+   114	        child_pids=$(ps -eo pid=,ppid= 2>/dev/null | awk -v ppid="$parent_pid" '$2 == ppid { print $1 }') || child_pids=""
+   115	    fi
+   116	
+   117	    if [ -n "$child_pids" ]; then
+   118	        printf '%s\n' "$child_pids"
+   119	    fi
+   120	}
+   121	
+   122	collect_descendant_pids() {
+   123	    local parent_pid="$1"
+   124	    local child_pid
+   125	
+   126	    while IFS= read -r child_pid; do
+   127	        [ -z "$child_pid" ] && continue
+   128	        collect_descendant_pids "$child_pid"
+   129	        echo "$child_pid"
+   130	    done < <(list_child_pids "$parent_pid")
+   131	}
+   132	
+   133	cleanup() {
+   134	    local exit_signal="${1:-EXIT}"
+   135	
+   136	    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+   137	        return 0
+   138	    fi
+   139	    CLEANUP_ALREADY_RAN=1
+   140	
+   141	    stop_spinner
+   142	    cleanup_dev_server
+   143	
+   144	    local descendant_pids
+   145	    descendant_pids=$(collect_descendant_pids "$$")
+   146	    if [ -n "$descendant_pids" ]; then
+   147	        for pid in $descendant_pids; do
+   148	            if kill -0 "$pid" 2>/dev/null; then
+   149	                kill "$pid" 2>/dev/null || true
+   150	            fi
+   151	        done
+   152	        sleep 1
+   153	        for pid in $descendant_pids; do
+   154	            if kill -0 "$pid" 2>/dev/null; then
+   155	                kill -9 "$pid" 2>/dev/null || true
+   156	            fi
+   157	        done
+   158	    fi
+   159	
+   160	    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+   161	        while IFS= read -r temp_path; do
+   162	            [ -z "$temp_path" ] && continue
+   163	            if [ -d "$temp_path" ]; then
+   164	                rm -rf "$temp_path" 2>/dev/null || true
+   165	            elif [ -f "$temp_path" ]; then
+   166	                rm -f "$temp_path" 2>/dev/null || true
+   167	            fi
+   168	        done <<< "$GLOBAL_TEMP_FILES"
+   169	    fi
+   170	
+   171	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+   172	        local log_file="$WORK_DIR/log.md"
+   173	        {
+   174	            echo ""
+   175	            echo "---"
+   176	            echo ""
+   177	            echo "## ⚠️ 脚本被中断"
+   178	            echo ""
+   179	            echo "- **中断信号**: $exit_signal"
+   180	        } >> "$log_file"
+   181	    fi
+   182	}
+   183	
+   184	assert_true() {
+   185	    local test_name="$1"
+   186	    local cmd="$2"
+   187	    TOTAL=$((TOTAL + 1))
+   188	    if eval "$cmd"; then
+   189	        PASS=$((PASS + 1))
+   190	        echo "  PASS: $test_name"
+   191	    else
+   192	        FAIL=$((FAIL + 1))
+   193	        echo "  FAIL: $test_name"
+   194	    fi
+   195	}
+   196	
+   197	assert_eq() {
+   198	    local test_name="$1"
+   199	    local expected="$2"
+   200	    local actual="$3"
+   201	    TOTAL=$((TOTAL + 1))
+   202	    if [ "$expected" = "$actual" ]; then
+   203	        PASS=$((PASS + 1))
+   204	        echo "  PASS: $test_name"
+   205	    else
+   206	        FAIL=$((FAIL + 1))
+   207	        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+   208	    fi
+   209	}
+   210	
+   211	reset_state() {
+   212	    GLOBAL_TEMP_FILES=""
+   213	    SPINNER_PID=""
+   214	    SCRIPT_COMPLETED_NORMALLY=0
+   215	    CLEANUP_ALREADY_RAN=0
+   216	    DEV_SERVER_CLEANED=0
+   217	    USE_MOCK_TREE=0
+   218	    MOCK_PROCESS_TREE=""
+   219	    MOCK_ALIVE_PIDS=""
+   220	    KILL_LOG=""
+   221	}
+   222	
+   223	setup_case() {
+   224	    reset_state
+   225	    WORK_ROOT=$(mktemp -d)
+   226	    WORK_DIR="$WORK_ROOT/work"
+   227	    mkdir -p "$WORK_DIR"
+   228	    : > "$WORK_DIR/log.md"
+   229	}
+   230	
+   231	teardown_case() {
+   232	    if [ -n "$WORK_ROOT" ] && [ -d "$WORK_ROOT" ]; then
+   233	        rm -rf "$WORK_ROOT"
+   234	    fi
+   235	    WORK_ROOT=""
+   236	    WORK_DIR=""
+   237	}
+   238	
+   239	wait_for_pid() {
+   240	    local parent_pid="$1"
+   241	    local attempts=0
+   242	    local child_pid=""
+   243	
+   244	    while [ $attempts -lt 50 ]; do
+   245	        child_pid=$(list_child_pids "$parent_pid" | head -n 1 || true)
+   246	        if [ -n "$child_pid" ]; then
+   247	            echo "$child_pid"
+   248	            return 0
+   249	        fi
+   250	        attempts=$((attempts + 1))
+   251	        sleep 0.1
+   252	    done
+   253	    return 1
+   254	}
+   255	
+   256	trap teardown_case EXIT
+   257	
+   258	echo "=== cleanup() Tests ==="
+   259	echo ""
+   260	
+   261	setup_case
+   262	echo "Scenario 1: abnormal cleanup removes temp paths and logs once"
+   263	temp_file="$WORK_ROOT/temp.txt"
+   264	temp_dir="$WORK_ROOT/tempdir"
+   265	mkdir -p "$temp_dir"
+   266	echo "temp" > "$temp_file"
+   267	register_temp_file "$temp_file"
+   268	register_temp_file "$temp_dir"
+   269	cleanup INT
+   270	interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+   271	assert_true "temp file removed" "[ ! -f \"$temp_file\" ]"
+   272	assert_true "temp dir removed" "[ ! -d \"$temp_dir\" ]"
+   273	assert_eq "interrupt log written once" "1" "$interrupt_count"
+   274	assert_eq "cleanup_dev_server invoked" "1" "$DEV_SERVER_CLEANED"
+   275	teardown_case
+   276	
+   277	setup_case
+   278	echo "Scenario 2: normal completion does not write interrupt log"
+   279	SCRIPT_COMPLETED_NORMALLY=1
+   280	cleanup EXIT
+   281	interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+   282	assert_eq "no interrupt log on normal exit" "0" "$interrupt_count"
+   283	teardown_case
+   284	
+   285	setup_case
+   286	echo "Scenario 3: cleanup is idempotent"
+   287	cleanup TERM
+   288	cleanup EXIT
+   289	interrupt_count=$(grep -c '^## ⚠️ 脚本被中断' "$WORK_DIR/log.md" || true)
+   290	assert_eq "duplicate cleanup does not duplicate log" "1" "$interrupt_count"
+   291	teardown_case
+   292	
+   293	setup_case
+   294	echo "Scenario 4: cleanup stops spinner process"
+   295	start_spinner
+   296	spinner_pid="$SPINNER_PID"
+   297	assert_true "spinner started" "kill -0 \"$spinner_pid\" 2>/dev/null"
+   298	cleanup EXIT
+   299	assert_true "spinner stopped" "! kill -0 \"$spinner_pid\" 2>/dev/null"
+   300	teardown_case
+   301	
+   302	setup_case
+   303	echo "Scenario 5: cleanup kills descendant process tree"
+   304	USE_MOCK_TREE=1
+   305	MOCK_PROCESS_TREE="$$ 61001"$'\n'"61001 61002"$'\n'"61002 61003"
+   306	MOCK_ALIVE_PIDS="61001"$'\n'"61002"$'\n'"61003"
+   307	cleanup EXIT
+   308	assert_true "direct child stopped" "! kill -0 61001 2>/dev/null"
+   309	assert_true "grandchild stopped" "! kill -0 61002 2>/dev/null"
+   310	assert_true "great-grandchild stopped" "! kill -0 61003 2>/dev/null"
+   311	assert_true "descendants killed before parent" "printf '%s' \"$KILL_LOG\" | grep -q 'TERM:61003'"
+   312	teardown_case
+   313	
+   314	echo ""
+   315	echo "=========================================="
+   316	echo "Total: $TOTAL  Passed: $PASS  Failed: $FAIL"
+   317	echo "=========================================="
+   318	
+   319	if [ $FAIL -gt 0 ]; then
+   320	    exit 1
+   321	fi
+   322	
+   323	exit 0
+
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/run.sh | sed -n '490,645p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   490	# 停止等待动画
+   491	stop_spinner() {
+   492	    if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+   493	        kill "$SPINNER_PID" 2>/dev/null || true
+   494	        wait "$SPINNER_PID" 2>/dev/null || true
+   495	    fi
+   496	    SPINNER_PID=""
+   497	    # 清除当前行并换行，避免残留
+   498	    printf "\r                                                          \r"
+   499	}
+   500	
+   501	# 注册临时文件/目录，用于 cleanup 时自动清理
+   502	# 用法: register_temp_file /path/to/temp/file
+   503	register_temp_file() {
+   504	    local temp_path="$1"
+   505	    if [ -n "$temp_path" ]; then
+   506	        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+   507	            GLOBAL_TEMP_FILES="$temp_path"
+   508	        else
+   509	            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+   510	        fi
+   511	    fi
+   512	}
+   513	
+   514	# 标记脚本是否正常完成（用于 cleanup 函数判断是否记录中断）
+   515	SCRIPT_COMPLETED_NORMALLY=0
+   516	CLEANUP_ALREADY_RAN=0
+   517	
+   518	# 列出某个父进程的直接子进程 PID，优先使用 pgrep，失败时回退到 ps
+   519	list_child_pids() {
+   520	    local parent_pid="$1"
+   521	    local child_pids=""
+   522	
+   523	    if command -v pgrep >/dev/null 2>&1; then
+   524	        child_pids=$(pgrep -P "$parent_pid" 2>/dev/null) || child_pids=""
+   525	    fi
+   526	
+   527	    if [ -z "$child_pids" ] && command -v ps >/dev/null 2>&1; then
+   528	        child_pids=$(ps -eo pid=,ppid= 2>/dev/null | awk -v ppid="$parent_pid" '$2 == ppid { print $1 }') || child_pids=""
+   529	    fi
+   530	
+   531	    if [ -n "$child_pids" ]; then
+   532	        printf '%s\n' "$child_pids"
+   533	    fi
+   534	}
+   535	
+   536	# 递归收集某个进程的所有后代进程 PID（深度优先，子孙在前）
+   537	collect_descendant_pids() {
+   538	    local parent_pid="$1"
+   539	    local child_pid
+   540	
+   541	    while IFS= read -r child_pid; do
+   542	        [ -z "$child_pid" ] && continue
+   543	        collect_descendant_pids "$child_pid"
+   544	        echo "$child_pid"
+   545	    done < <(list_child_pids "$parent_pid")
+   546	}
+   547	
+   548	# 全局清理函数
+   549	# 当脚本被中断或退出时调用，清理所有资源
+   550	cleanup() {
+   551	    local exit_signal="${1:-EXIT}"
+   552	
+   553	    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+   554	        return 0
+   555	    fi
+   556	    CLEANUP_ALREADY_RAN=1
+   557	
+   558	    # 1. 清理 spinner 进程（复用 stop_spinner 函数）
+   559	    stop_spinner
+   560	
+   561	    # 2. 清理 dev server 进程（复用 cleanup_dev_server 函数）
+   562	    cleanup_dev_server
+   563	
+   564	    # 3. 清理残留 agent 子进程
+   565	    # 查找并清理可能残留的 claude/codex/opencode 进程
+   566	    # 使用进程组清理，避免误杀其他进程
+   567	    local descendant_pids
+   568	    descendant_pids=$(collect_descendant_pids "$$") || true
+   569	    if [ -n "$descendant_pids" ]; then
+   570	        for pid in $descendant_pids; do
+   571	            if kill -0 "$pid" 2>/dev/null; then
+   572	                kill "$pid" 2>/dev/null || true
+   573	            fi
+   574	        done
+   575	        # 等待子进程退出
+   576	        sleep 1
+   577	        # 强制清理未退出的子进程
+   578	        for pid in $descendant_pids; do
+   579	            if kill -0 "$pid" 2>/dev/null; then
+   580	                kill -9 "$pid" 2>/dev/null || true
+   581	            fi
+   582	        done
+   583	    fi
+   584	
+   585	    # 4. 清理全局临时文件/目录
+   586	    # 遍历 GLOBAL_TEMP_FILES 中注册的所有临时路径并清理
+   587	    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+   588	        while IFS= read -r temp_path; do
+   589	            if [ -z "$temp_path" ]; then
+   590	                continue
+   591	            fi
+   592	            if [ -d "$temp_path" ]; then
+   593	                rm -rf "$temp_path" 2>/dev/null || true
+   594	            elif [ -f "$temp_path" ]; then
+   595	                rm -f "$temp_path" 2>/dev/null || true
+   596	            fi
+   597	        done <<< "$GLOBAL_TEMP_FILES"
+   598	    fi
+   599	
+   600	    # 5. 记录中断位置到 log.md（仅当非正常退出时）
+   601	    # EXIT 信号在正常退出时也会触发，所以需要检查 SCRIPT_COMPLETED_NORMALLY
+   602	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+   603	        local log_file="$WORK_DIR/log.md"
+   604	        local interrupt_time
+   605	        interrupt_time=$(date '+%Y-%m-%d %H:%M:%S')
+   606	
+   607	        # 获取当前状态信息
+   608	        local current_iteration="${ITERATION:-0}"
+   609	        local current_score="${FINAL_SCORE:-0}"
+   610	        local current_branch="${BRANCH_NAME:-unknown}"
+   611	        local issue_num="${ISSUE_NUMBER:-unknown}"
+   612	
+   613	        # 追加中断记录
+   614	        {
+   615	            echo ""
+   616	            echo "---"
+   617	            echo ""
+   618	            echo "## ⚠️ 脚本被中断"
+   619	            echo ""
+   620	            echo "- **中断信号**: $exit_signal"
+   621	            echo "- **中断时间**: $interrupt_time"
+   622	            echo "- **Issue**: #$issue_num"
+   623	            echo "- **当前迭代**: $current_iteration"
+   624	            echo "- **当前评分**: $current_score/100"
+   625	            echo "- **当前分支**: $current_branch"
+   626	            echo ""
+   627	            echo "> 使用 \`./run.sh -c $issue_num\` 可继续运行"
+   628	        } >> "$log_file" 2>/dev/null || true
+   629	
+   630	        log_console ""
+   631	        log_console "⚠️ 脚本被 $exit_signal 信号中断"
+   632	        log_console "📝 中断信息已记录到 $log_file"
+   633	        log_console "💡 使用 ./run.sh -c $issue_num 可继续运行"
+   634	    fi
+   635	
+   636	    # 清除终端行
+   637	    printf "\r                                                          \r"
+   638	}
+   639	
+   640	# ==================== 全局 Trap 设置 ====================
+   641	# 在脚本入口处设置 trap，确保在任何阶段中断都能正确清理资源
+   642	# cleanup 函数已设计为能安全处理所有未初始化变量的情况
+   643	trap 'cleanup EXIT' EXIT
+   644	trap 'cleanup INT; trap - EXIT; exit 130' INT
+   645	trap 'cleanup TERM; trap - EXIT; exit 143' TERM
+
+codex
+**审核发现**
+
+1. 中低风险: 回归测试复制了实现逻辑，而不是直接验证 `run.sh` 中的真实函数与 trap 接线，导致测试对“实现是否真的被接入脚本入口”的保障偏弱。[tests/test_cleanup.sh#L74](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L74) 到 [tests/test_cleanup.sh#L182](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L182) 基本重写了一份 [run.sh#L491](/Users/chaoyuepan/ai/autoresearch/run.sh#L491) 到 [run.sh#L645](/Users/chaoyuepan/ai/autoresearch/run.sh#L645) 的逻辑；当前测试只是在测试副本上调用 `cleanup`，没有实际触发 `EXIT/INT/TERM` trap。这样即使后续 `run.sh` 的 trap 注册或真实函数发生偏移，测试仍可能继续通过。
+
+2. 低风险: “异常退出只记录一次”这一点在实现上是对的，但自动化验证只覆盖了幂等 `cleanup` 调用，没有覆盖真实信号路径 `INT/TERM -> trap - EXIT -> exit`。实现位于 [run.sh#L643](/Users/chaoyuepan/ai/autoresearch/run.sh#L643) 到 [run.sh#L645](/Users/chaoyuepan/ai/autoresearch/run.sh#L645)，测试只验证了手工二次调用 `cleanup` 不重复写日志。[tests/test_cleanup.sh#L285](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L285) 到 [tests/test_cleanup.sh#L290](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L290) 不能完全替代真实 trap 路径验证。
+
+**总体评价**
+
+实现本身基本符合 T-001 的验收条件。`cleanup()` 具备幂等保护，能复用 `stop_spinner` 和 `cleanup_dev_server`，递归清理子进程，删除 `GLOBAL_TEMP_FILES` 注册的临时路径，并通过 `SCRIPT_COMPLETED_NORMALLY` 区分正常/异常退出日志写入。[run.sh#L550](/Users/chaoyuepan/ai/autoresearch/run.sh#L550) 到 [run.sh#L645](/Users/chaoyuepan/ai/autoresearch/run.sh#L645)
+
+我本地执行了 `bash tests/test_cleanup.sh`，12/12 通过。但主要扣分点在测试质量，不在功能实现本身。当前测试更像“实现副本自测”，对真实脚本接线的回归保护不足。
+
+**评分: 87/100**
+
+- 正确性: 33/35
+- 测试质量: 18/25
+- 代码质量: 18/20
+- 安全性: 9/10
+- 性能: 9/10
+
+结论：达标，但建议在合入前补一个真实 `run.sh` trap 路径的集成测试，至少验证 `INT/TERM` 下不会因 `EXIT` trap 再次追加中断日志。
+
+**实现者自检确认**
+
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [x] 实现者已运行相关测试
+- [x] 实现者已确认测试覆盖
+
+未看到编译/Lint 证据；对当前 shell 子任务来说影响不大，但流程上仍建议补齐。
+tokens used
+43,470
+**审核发现**
+
+1. 中低风险: 回归测试复制了实现逻辑，而不是直接验证 `run.sh` 中的真实函数与 trap 接线，导致测试对“实现是否真的被接入脚本入口”的保障偏弱。[tests/test_cleanup.sh#L74](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L74) 到 [tests/test_cleanup.sh#L182](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L182) 基本重写了一份 [run.sh#L491](/Users/chaoyuepan/ai/autoresearch/run.sh#L491) 到 [run.sh#L645](/Users/chaoyuepan/ai/autoresearch/run.sh#L645) 的逻辑；当前测试只是在测试副本上调用 `cleanup`，没有实际触发 `EXIT/INT/TERM` trap。这样即使后续 `run.sh` 的 trap 注册或真实函数发生偏移，测试仍可能继续通过。
+
+2. 低风险: “异常退出只记录一次”这一点在实现上是对的，但自动化验证只覆盖了幂等 `cleanup` 调用，没有覆盖真实信号路径 `INT/TERM -> trap - EXIT -> exit`。实现位于 [run.sh#L643](/Users/chaoyuepan/ai/autoresearch/run.sh#L643) 到 [run.sh#L645](/Users/chaoyuepan/ai/autoresearch/run.sh#L645)，测试只验证了手工二次调用 `cleanup` 不重复写日志。[tests/test_cleanup.sh#L285](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L285) 到 [tests/test_cleanup.sh#L290](/Users/chaoyuepan/ai/autoresearch/tests/test_cleanup.sh#L290) 不能完全替代真实 trap 路径验证。
+
+**总体评价**
+
+实现本身基本符合 T-001 的验收条件。`cleanup()` 具备幂等保护，能复用 `stop_spinner` 和 `cleanup_dev_server`，递归清理子进程，删除 `GLOBAL_TEMP_FILES` 注册的临时路径，并通过 `SCRIPT_COMPLETED_NORMALLY` 区分正常/异常退出日志写入。[run.sh#L550](/Users/chaoyuepan/ai/autoresearch/run.sh#L550) 到 [run.sh#L645](/Users/chaoyuepan/ai/autoresearch/run.sh#L645)
+
+我本地执行了 `bash tests/test_cleanup.sh`，12/12 通过。但主要扣分点在测试质量，不在功能实现本身。当前测试更像“实现副本自测”，对真实脚本接线的回归保护不足。
+
+**评分: 87/100**
+
+- 正确性: 33/35
+- 测试质量: 18/25
+- 代码质量: 18/20
+- 安全性: 9/10
+- 性能: 9/10
+
+结论：达标，但建议在合入前补一个真实 `run.sh` trap 路径的集成测试，至少验证 `INT/TERM` 下不会因 `EXIT` trap 再次追加中断日志。
+
+**实现者自检确认**
+
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [x] 实现者已运行相关测试
+- [x] 实现者已确认测试覆盖
+
+未看到编译/Lint 证据；对当前 shell 子任务来说影响不大，但流程上仍建议补齐。

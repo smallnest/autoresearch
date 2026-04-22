@@ -20,7 +20,12 @@ autoresearch is a fully automated software development tool: given a GitHub Issu
 ./run.sh --no-archive 42
 ```
 
-There are no build/test/lint commands for autoresearch itself. The only test file is `tests/test_extract_score.sh` which tests the score parsing logic.
+There are no build/test/lint commands for autoresearch itself. Shell-based regression tests live under `tests/`, including:
+- `tests/test_extract_score.sh`
+- `tests/test_agent_logic.sh`
+- `tests/test_archive.sh`
+- `tests/test_context_overflow.sh`
+- `tests/test_cleanup.sh`
 
 ## Architecture
 
@@ -45,6 +50,13 @@ Iteration 2+: Agent round-robin review + fix per subtask
 If planning fails (no tasks.json generated), falls back to original mode: implement entire Issue in one go.
 
 Agent rotation (from iteration 2): `(iter - 1) % N` where N = number of agents.
+
+### Global Cleanup / Traps
+
+- `run.sh` installs global `EXIT`, `INT`, and `TERM` traps near the spinner helpers.
+- `cleanup()` must stay idempotent because interrupt paths can otherwise re-enter during exit handling.
+- Signal traps should disable the `EXIT` trap before exiting, otherwise abnormal exits will append duplicate interruption records to `log.md`.
+- Child-process cleanup is recursive via `collect_descendant_pids()` and should keep a `ps` fallback because `pgrep -P` is not reliable in every macOS environment.
 
 ### Subtask System (tasks.json)
 

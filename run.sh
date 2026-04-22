@@ -468,6 +468,9 @@ SPINNER_ROCKET=(
 )
 SPINNER_PID=""
 
+# 全局临时文件追踪（用于 cleanup 函数清理）
+GLOBAL_TEMP_FILES=""
+
 # 启动等待动画
 start_spinner() {
     local msg="$1"
@@ -487,13 +490,161 @@ start_spinner() {
 # 停止等待动画
 stop_spinner() {
     if [ -n "$SPINNER_PID" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
-        kill "$SPINNER_PID" 2>/dev/null
-        wait "$SPINNER_PID" 2>/dev/null
+        kill "$SPINNER_PID" 2>/dev/null || true
+        wait "$SPINNER_PID" 2>/dev/null || true
     fi
     SPINNER_PID=""
     # 清除当前行并换行，避免残留
     printf "\r                                                          \r"
 }
+
+# 注册临时文件/目录，用于 cleanup 时自动清理
+# 用法: register_temp_file /path/to/temp/file
+register_temp_file() {
+    local temp_path="$1"
+    if [ -n "$temp_path" ]; then
+        if [ -z "$GLOBAL_TEMP_FILES" ]; then
+            GLOBAL_TEMP_FILES="$temp_path"
+        else
+            GLOBAL_TEMP_FILES="$GLOBAL_TEMP_FILES"$'\n'"$temp_path"
+        fi
+    fi
+}
+
+# 标记脚本是否正常完成（用于 cleanup 函数判断是否记录中断）
+SCRIPT_COMPLETED_NORMALLY=0
+CLEANUP_ALREADY_RAN=0
+
+# 列出某个父进程的直接子进程 PID，优先使用 pgrep，失败时回退到 ps
+list_child_pids() {
+    local parent_pid="$1"
+    local child_pids=""
+
+    if command -v pgrep >/dev/null 2>&1; then
+        child_pids=$(pgrep -P "$parent_pid" 2>/dev/null) || child_pids=""
+    fi
+
+    if [ -z "$child_pids" ] && command -v ps >/dev/null 2>&1; then
+        child_pids=$(ps -eo pid=,ppid= 2>/dev/null | awk -v ppid="$parent_pid" '$2 == ppid { print $1 }') || child_pids=""
+    fi
+
+    if [ -n "$child_pids" ]; then
+        printf '%s\n' "$child_pids"
+    fi
+}
+
+# 递归收集某个进程的所有后代进程 PID（深度优先，子孙在前）
+collect_descendant_pids() {
+    local parent_pid="$1"
+    local child_pid
+
+    while IFS= read -r child_pid; do
+        [ -z "$child_pid" ] && continue
+        collect_descendant_pids "$child_pid"
+        echo "$child_pid"
+    done < <(list_child_pids "$parent_pid")
+}
+
+# 全局清理函数
+# 当脚本被中断或退出时调用，清理所有资源
+cleanup() {
+    local exit_signal="${1:-EXIT}"
+
+    if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
+        return 0
+    fi
+    CLEANUP_ALREADY_RAN=1
+
+    # 1. 清理 spinner 进程（复用 stop_spinner 函数）
+    stop_spinner
+
+    # 2. 清理 dev server 进程（复用 cleanup_dev_server 函数）
+    cleanup_dev_server
+
+    # 3. 清理残留 agent 子进程
+    # 查找并清理可能残留的 claude/codex/opencode 进程
+    # 使用进程组清理，避免误杀其他进程
+    local descendant_pids
+    descendant_pids=$(collect_descendant_pids "$$") || true
+    if [ -n "$descendant_pids" ]; then
+        for pid in $descendant_pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+        # 等待子进程退出
+        sleep 1
+        # 强制清理未退出的子进程
+        for pid in $descendant_pids; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
+
+    # 4. 清理全局临时文件/目录
+    # 遍历 GLOBAL_TEMP_FILES 中注册的所有临时路径并清理
+    if [ -n "$GLOBAL_TEMP_FILES" ]; then
+        while IFS= read -r temp_path; do
+            if [ -z "$temp_path" ]; then
+                continue
+            fi
+            if [ -d "$temp_path" ]; then
+                rm -rf "$temp_path" 2>/dev/null || true
+            elif [ -f "$temp_path" ]; then
+                rm -f "$temp_path" 2>/dev/null || true
+            fi
+        done <<< "$GLOBAL_TEMP_FILES"
+    fi
+
+    # 5. 记录中断位置到 log.md（仅当非正常退出时）
+    # EXIT 信号在正常退出时也会触发，所以需要检查 SCRIPT_COMPLETED_NORMALLY
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ] && [ "$SCRIPT_COMPLETED_NORMALLY" -eq 0 ]; then
+        local log_file="$WORK_DIR/log.md"
+        local interrupt_time
+        interrupt_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+        # 获取当前状态信息
+        local current_iteration="${ITERATION:-0}"
+        local current_score="${FINAL_SCORE:-0}"
+        local current_branch="${BRANCH_NAME:-unknown}"
+        local issue_num="${ISSUE_NUMBER:-unknown}"
+
+        # 追加中断记录
+        {
+            echo ""
+            echo "---"
+            echo ""
+            echo "## ⚠️ 脚本被中断"
+            echo ""
+            echo "- **中断信号**: $exit_signal"
+            echo "- **中断时间**: $interrupt_time"
+            echo "- **Issue**: #$issue_num"
+            echo "- **当前迭代**: $current_iteration"
+            echo "- **当前评分**: $current_score/100"
+            echo "- **当前分支**: $current_branch"
+            echo ""
+            echo "> 使用 \`./run.sh -c $issue_num\` 可继续运行"
+        } >> "$log_file" 2>/dev/null || true
+
+        log_console ""
+        log_console "⚠️ 脚本被 $exit_signal 信号中断"
+        log_console "📝 中断信息已记录到 $log_file"
+        log_console "💡 使用 ./run.sh -c $issue_num 可继续运行"
+    fi
+
+    # 清除终端行
+    printf "\r                                                          \r"
+}
+
+# ==================== 全局 Trap 设置 ====================
+# 在脚本入口处设置 trap，确保在任何阶段中断都能正确清理资源
+# cleanup 函数已设计为能安全处理所有未初始化变量的情况
+# EXIT 信号在正常退出时也会触发，cleanup 内部通过 SCRIPT_COMPLETED_NORMALLY 区分
+# INT/TERM 信号处理：先调用 cleanup，再禁用 EXIT trap 避免重复执行，最后以特定退出码退出
+trap 'cleanup EXIT' EXIT
+trap 'cleanup INT; trap - EXIT; exit 130' INT
+trap 'cleanup TERM; trap - EXIT; exit 143' TERM
 
 run_with_retry() {
     local agent=$1
@@ -1022,6 +1173,7 @@ mark_subtask_passed() {
     fi
     local tmp_file
     tmp_file=$(mktemp)
+    register_temp_file "$tmp_file"
     jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file" && mv "$tmp_file" "$tasks_file"
     log "子任务 $subtask_id 已标记为通过"
 }
@@ -1228,6 +1380,7 @@ extract_learnings_from_log() {
     # 先清理日志中的无效 UTF-8 字符到临时文件
     local cleaned_file
     cleaned_file=$(mktemp)
+    register_temp_file "$cleaned_file"
     iconv -f UTF-8 -t UTF-8 -c "$log_file" > "$cleaned_file" 2>/dev/null || cp "$log_file" "$cleaned_file"
 
     # 优先提取 ## Learnings 区块
@@ -1321,6 +1474,7 @@ get_progress_content() {
     # 先清理文件中的无效 UTF-8 字符
     local cleaned_file
     cleaned_file=$(mktemp)
+    register_temp_file "$cleaned_file"
     iconv -f UTF-8 -t UTF-8 -c "$progress_file" > "$cleaned_file" 2>/dev/null || cp "$progress_file" "$cleaned_file"
 
     local content
@@ -2504,6 +2658,7 @@ capture_screenshot_cdp() {
   local cdp_port=19222
   local cdp_tmp_dir
   cdp_tmp_dir=$(mktemp -d)
+  register_temp_file "$cdp_tmp_dir"
   local chrome_pid=""
 
   # 清理函数
@@ -3463,7 +3618,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
-        local first_ret=$?
+        first_ret=$?
         if [ $first_ret -ne 0 ]; then
             impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
@@ -3471,12 +3626,12 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             elif [ $first_ret -eq 2 ]; then
                 log_console "⚠️ $first_agent 被跳过 (模型错误)，尝试其他 agent..."
                 for skip_idx in $(seq 1 $((${#AGENT_NAMES[@]} - 1))); do
-                    local skip_agent="${AGENT_NAMES[$skip_idx]}"
+                    skip_agent="${AGENT_NAMES[$skip_idx]}"
                     log_console "尝试 $skip_agent..."
                     SKIPPED_AGENT=0
-                    local skip_func="run_${skip_agent}"
+                    skip_func="run_${skip_agent}"
                     $skip_func "$ISSUE_NUMBER" "$ITERATION" ""
-                    local skip_ret=$?
+                    skip_ret=$?
                     if [ $skip_ret -eq 0 ]; then
                         first_agent="$skip_agent"
                         first_ret=0
@@ -3502,7 +3657,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             if ! run_hard_gate_checks "$ITERATION"; then
                 log_console "❌ 硬门禁检查未通过"
                 HARD_GATE_FAILED=1
-                local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+                gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
                 PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
                 ITERATION_FAILED=1
             else
@@ -3533,7 +3688,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
         $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
-        local first_ret=$?
+        first_ret=$?
         if [ $first_ret -ne 0 ]; then
             impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
@@ -3541,12 +3696,12 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             elif [ $first_ret -eq 2 ]; then
                 log_console "⚠️ $first_agent 被跳过 (模型错误)，尝试其他 agent..."
                 for skip_idx in $(seq 1 $((${#AGENT_NAMES[@]} - 1))); do
-                    local skip_agent="${AGENT_NAMES[$skip_idx]}"
+                    skip_agent="${AGENT_NAMES[$skip_idx]}"
                     log_console "尝试 $skip_agent..."
                     SKIPPED_AGENT=0
-                    local skip_func="run_${skip_agent}"
+                    skip_func="run_${skip_agent}"
                     $skip_func "$ISSUE_NUMBER" "$ITERATION" ""
-                    local skip_ret=$?
+                    skip_ret=$?
                     if [ $skip_ret -eq 0 ]; then
                         first_agent="$skip_agent"
                         first_ret=0
@@ -3571,7 +3726,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             if ! run_hard_gate_checks "$ITERATION"; then
                 log_console "❌ 硬门禁检查未通过"
                 HARD_GATE_FAILED=1
-                local gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
+                gate_log="$WORK_DIR/hard-gate-$ITERATION.log"
                 PREVIOUS_FEEDBACK="硬门禁检查未通过，请根据以下错误修复代码：\n\n$(cat "$gate_log" 2>/dev/null || echo "详见 hard-gate-$ITERATION.log")"
                 ITERATION_FAILED=1
             else
@@ -3610,7 +3765,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
             if [ $skip_idx -eq $agent_idx ]; then
                 continue
             fi
-            local skip_agent="${AGENT_NAMES[$skip_idx]}"
+            skip_agent="${AGENT_NAMES[$skip_idx]}"
             log_console "尝试 $skip_agent..."
             SKIPPED_AGENT=0
             run_review_and_fix $skip_idx
@@ -3818,6 +3973,7 @@ EOF
         log_console "$PR_URL"
     fi
 
+    SCRIPT_COMPLETED_NORMALLY=1
     exit 0
 fi
 

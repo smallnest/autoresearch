@@ -1,0 +1,64 @@
+根据我对代码的分析，Issue #49 的核心功能已经在未提交的改动中实现了。但我仍需要按要求进行子任务拆分规划。
+
+## Issue #49 分析
+
+### 问题
+脚本中断时，spinner 进程和 agent 子进程会变成孤儿进程。
+
+### 已有的改动（未提交）
+从 `git diff` 可以看到，当前已有：
+- `GLOBAL_TEMP_FILES` 全局变量
+- `register_temp_file()` 函数
+- `cleanup()` 函数（处理 spinner、agent 子进程、临时文件、中断日志）
+- 三个 trap 设置（EXIT、INT、TERM）
+
+### 子任务拆分
+
+```json
+{
+  "issueNumber": 49,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现全局 cleanup 函数",
+      "description": "创建 cleanup 函数，负责清理 spinner 进程、残留 agent 子进程、临时文件，并记录中断位置到 log.md。复用已有的 stop_spinner 和 cleanup_dev_server 函数。",
+      "acceptanceCriteria": [
+        "cleanup 函数能正确停止 spinner 进程",
+        "cleanup 函数能清理脚本的所有子进程",
+        "cleanup 函数能清理 GLOBAL_TEMP_FILES 中注册的临时文件",
+        "非正常退出时，cleanup 函数记录中断信息到 log.md",
+        "正常退出时，cleanup 函数不记录中断信息"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "设置全局 trap 并添加辅助函数",
+      "description": "在脚本入口处设置 trap cleanup EXIT INT TERM，并添加 GLOBAL_TEMP_FILES 变量和 register_temp_file 辅助函数用于追踪临时文件。",
+      "acceptanceCriteria": [
+        "trap 设置在脚本早期执行（函数定义之后）",
+        "EXIT 信号触发 cleanup 函数",
+        "INT 信号（Ctrl+C）触发 cleanup 并正确退出（exit 130）",
+        "TERM 信号触发 cleanup 并正确退出（exit 143）",
+        "register_temp_file 函数能正确注册临时文件路径"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "验证孤儿进程清理效果",
+      "description": "通过手动测试验证：中断脚本后，spinner 进程和 agent 子进程不会残留。可以使用 ps 命令检查进程状态。",
+      "acceptanceCriteria": [
+        "脚本正常完成时，无残留进程",
+        "Ctrl+C 中断脚本时，spinner 进程被清理",
+        "Ctrl+C 中断脚本时，agent 子进程被清理",
+        "中断后 log.md 包含中断信息记录"
+      ],
+      "priority": 3,
+      "passes": false
+    }
+  ]
+}
+```

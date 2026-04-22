@@ -1,0 +1,8 @@
+
+
+我来审核 Issue #26 的 T-003 子任务实现。首先让我并行探索相关代码。
+[94m[1m| [0m[90m Glob     [0m{"pattern":"**/*.{ts,tsx,rs}","path":"/Users/chaoyuepan/ai/autoresearch"}
+[94m[1m| [0m[90m Grep     [0m{"pattern":"search|filter|issue.*processed","include":"*.{ts,tsx}","path":"/Users/chaoyuepan/ai/autoresearch"}
+[96m[1m| [0m[90m Read     [0mdesktop_app/src/pages/IssuesPage.tsx
+[96m[1m| [0m[90m Read     [0mdesktop_app/src/stores/issueStore.ts
+[96m[1m| [0m[90m Read     [0mdesktop_app/src-tauri/src/lib.rs

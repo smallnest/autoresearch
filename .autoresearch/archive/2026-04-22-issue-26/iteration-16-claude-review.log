@@ -1,0 +1,113 @@
+现在我可以给出完整的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #26
+- 标题: [desktop-app] GitHub Issue 列表展示
+- 迭代次数: 15 (最终审核)
+
+---
+
+### 总体评价
+
+**评分: 92/100**
+
+功能实现完整，所有子任务验收条件均已满足。代码质量优秀，遵循项目现有模式，错误处理完善，类型安全。Rust clippy 和 TypeScript 类型检查均通过，ESLint 无错误（仅有 unused vars warnings，不影响功能）。
+
+---
+
+### 验收条件检查
+
+#### T-001: Rust 后端实现 list_issues Tauri command
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| Issue/Label 结构体定义 | ✅ | `lib.rs:6-22`，serde 序列化支持 |
+| list_issues command 实现 | ✅ | `lib.rs:78-137`，完整实现 |
+| 错误处理完善 | ✅ | gh 未安装、非 Git 仓库、无 GitHub remote、认证失败等均有处理 |
+| command 注册 | ✅ | `lib.rs:183-189` |
+| cargo clippy 无警告 | ✅ | 通过 |
+| cargo test 通过 | ✅ | 无测试文件，豁免 |
+
+#### T-002: 前端 Issue 列表基础展示
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| issueStore 创建 | ✅ | `issueStore.ts`，Zustand 模式，包含 issues/loading/error 状态 |
+| IssuesPage 调用 list_issues | ✅ | `IssuesPage.tsx:24-29` |
+| Issue 卡片展示 | ✅ | 编号、标题、标签（彩色 tag）、时间均有展示 |
+| 标签颜色生成 | ✅ | `issueStore.ts:44-54`，字符串 hash 生成 HSL 颜色 |
+| 空状态/loading/错误处理 | ✅ | `IssuesPage.tsx:49-78, 169-178` |
+| TypeScript 类型检查 | ✅ | 通过 |
+| ESLint 检查 | ✅ | 通过（仅有 unused vars warnings） |
+
+#### T-003: 搜索、过滤与交互功能
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 搜索框实时关键词搜索 | ✅ | `IssuesPage.tsx:112-118`，标题过滤 |
+| 标签过滤支持多选 | ✅ | `IssuesPage.tsx:134-154`，toggleLabelFilter 实现多选 |
+| 已处理 Issue 状态标记 | ✅ | `IssuesPage.tsx:219-223`，显示 "processed" 徽章 |
+| 列表点击选中高亮 | ✅ | `IssuesPage.tsx:187-191`，ring-2 ring-blue-500 |
+| 过滤状态清晰显示 | ✅ | `IssuesPage.tsx:156-166`，显示过滤数量和条件 |
+| Rust check_issue_processed command | ✅ | `lib.rs:141-175` |
+| TypeScript 类型检查 | ✅ | 通过 |
+| ESLint 检查 | ✅ | 通过 |
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 95/100 | 功能完整，错误处理全面 |
+| 测试质量 (25%) | 85/100 | 无单元测试，但功能验证通过（豁免原因：UI 类型功能） |
+| 代码质量 (20%) | 95/100 | 代码清晰，遵循项目规范，有少量 unused vars warnings |
+| 安全性 (10%) | 100/100 | 使用 `.args()` 避免命令注入，无敏感信息泄露 |
+| 性能 (10%) | 90/100 | useMemo 优化过滤计算，无明显性能问题 |
+
+**总分计算**: 95×0.35 + 85×0.25 + 95×0.20 + 100×0.10 + 90×0.10 = **92.5 → 92/100**
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: ESLint unused-vars warnings
+
+**位置**: `issueStore.ts:34-39`
+
+**问题描述**:
+IssueState 接口中定义的参数在 action 实现中未使用，触发 unused-vars 警告。
+
+**建议修复**:
+使用下划线前缀标记未使用参数：
+```typescript
+fetchProcessedIssues: async (_projectPath: string) => { ... }
+```
+
+**原因**: 减少警告噪音，提高代码整洁度
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+代码已达到可接受标准（92/100 > 85），建议提交人工审核并创建 PR。
+
+---
+
+## Learnings
+
+- **模式**: Tauri command 使用 `#[tauri::command]` 宏，async 函数用于异步操作
+- **模式**: 使用 `std::process::Command` 调用外部 CLI 工具，配合 `.args()` 避免命令注入
+- **模式**: Zustand store 结构：interface State + create<State>() + async actions
+- **模式**: 使用 `isTauri` 检测运行环境，提供 Browser fallback 便于开发调试
+- **模式**: 字符串 hash 生成一致颜色：`hue = Math.abs(hash) % 360`
+- **经验**: Tauri 前端调用后端：`await invoke<T>('command', { args })`
+- **经验**: `gh issue list` 返回的 `state` 是大写的 `"OPEN"/"CLOSED"`
+- **经验**: gh CLI 错误消息检查：`not a git repository`、`Could not resolve to a Repository`、`not logged in`

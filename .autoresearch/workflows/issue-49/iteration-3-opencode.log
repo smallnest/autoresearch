@@ -1,0 +1,13 @@
+[93m[1m| [0m[90m Todo     [0m5 todos
+[96m[1m| [0m[90m Read     [0mrun.sh
+[93m[1m| [0m[90m Todo     [0m4 todos
+[96m[1m| [0m[90m Read     [0mtests/test_cleanup.sh
+[93m[1m| [0m[90m Todo     [0m3 todos
+[92m[1m| [0m[90m Edit     [0mrun.sh
+[93m[1m| [0m[90m Todo     [0m2 todos
+[?25l│
+◆  Permission required: bash (bash tests/test_cleanup.sh)
+│  ● Allow once
+│  ○ Always allow: bash*
+│  ○ Reject
+└

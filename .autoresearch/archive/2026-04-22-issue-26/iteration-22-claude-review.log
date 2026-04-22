@@ -1,0 +1,99 @@
+## 审核报告
+
+### Issue
+- 编号: #26
+- 标题: [desktop-app] GitHub Issue 列表展示
+- 迭代次数: 22
+
+---
+
+### 总体评价
+
+**评分: 95/100**
+
+实现完整且质量优秀，所有验收标准均已满足，代码结构清晰，错误处理完善。
+
+---
+
+### 验收标准检查
+
+| 验收标准 | 状态 | 说明 |
+|---------|------|------|
+| Rust 侧 `list_issues` command | ✅ | 完整实现，包含 gh CLI 检测和错误处理 |
+| 前端展示 Issue 信息 | ✅ | 编号、标题、彩色标签、创建时间均已展示 |
+| 关键词搜索 | ✅ | 标题过滤功能正常 |
+| 标签过滤 | ✅ | 点击标签切换过滤，支持多选 |
+| 已处理 Issue 标记 | ✅ | `check_issue_processed` 正确读取 workflows 目录 |
+| 点击选中高亮 | ✅ | 蓝色 ring 高亮效果 |
+| Typecheck/lint passes | ✅ | 无错误 |
+| Verify in browser | ✅ | 已通过 |
+
+---
+
+### 代码质量亮点
+
+**1. Rust 后端错误处理完善**
+```rust
+// lib.rs:119-128 - 针对不同错误场景给出明确提示
+if error_msg.contains("not a git repository") {
+    return Err("The project directory is not a Git repository".to_string());
+}
+if error_msg.contains("Could not resolve to a Repository") {
+    return Err("No GitHub repository found...".to_string());
+}
+if error_msg.contains("not logged in") {
+    return Err("Not logged in to GitHub CLI...".to_string());
+}
+```
+
+**2. 前端环境检测优雅**
+```typescript
+// issueStore.ts:4 - 支持 Tauri 和纯浏览器两种环境
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+```
+
+**3. 性能优化合理**
+```typescript
+// IssuesPage.tsx:31-47 - 使用 useMemo 避免重复计算
+const allLabels = useMemo(() => {...}, [issues]);
+const filteredIssues = useMemo(() => {...}, [issues, searchQuery, selectedLabels]);
+```
+
+**4. 标签颜色一致性**
+```typescript
+// issueStore.ts:44-54 - hash 算法生成一致颜色
+function generateColorFromString(str: string): string {
+  // ... hash 计算
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
+```
+
+---
+
+### 建议改进 (可选)
+
+1. **Issue 数量限制**: 当前硬编码 `--limit 100`，可考虑作为可配置参数
+2. **刷新机制**: 可添加手动刷新按钮或轮询机制
+3. **排序功能**: 可增加按创建时间/编号排序选项
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+代码已达到优秀标准，建议合并并关闭 Issue #26。
+
+---
+
+## Learnings
+
+- **模式**: Tauri command 错误处理模式：使用 `Result<T, String>` 返回，检查 `output.status.success()` 和 stderr 消息，针对不同错误场景给出用户友好提示
+- **模式**: 前端环境检测：`'__TAURI_INTERNALS__' in window` 判断是否在 Tauri 环境中运行
+- **模式**: Zustand store 结构：定义 interface State，使用 `create<State>()` 创建 store，分离 sync/async actions
+- **模式**: 字符串生成一致颜色：使用 hash 算法 `hue = Math.abs(hash) % 360`，确保同一标签名始终显示相同颜色
+- **经验**: `gh issue list` 返回的 `state` 字段是大写的 `"OPEN"/"CLOSED"`，前端需要 `toLowerCase()` 显示
+- **经验**: Tauri 前端调用后端：`await invoke<T>('command', { args })`，使用泛型指定返回类型
+- **经验**: 使用 `useMemo` 优化列表过滤计算，避免每次渲染重复计算

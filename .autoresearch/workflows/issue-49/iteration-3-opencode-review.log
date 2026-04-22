@@ -1,0 +1,10 @@
+[96m[1m| [0m[90m Read     [0mrun.sh
+[94m[1m| [0m[90m Glob     [0m{"pattern":"**/*.sh","path":"/Users/chaoyuepan/ai/autoresearch"}
+[96m[1m| [0m[90m Read     [0mtests/test_cleanup.sh
+[96m[1m| [0m[90m Read     [0mrun.sh
+[?25l│
+◆  Permission required: bash (bash tests/test_cleanup.sh)
+│  ● Allow once
+│  ○ Always allow: bash*
+│  ○ Reject
+└
