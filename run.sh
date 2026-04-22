@@ -384,6 +384,18 @@ trim_prompt_for_codex_retry() {
 $trimmed"
 }
 
+# 检测 MiniMax 等模型的 tool_call 格式错误（重试无意义，需要终止当前调用）
+has_toolcall_format_error() {
+    local log_file="$1"
+    # MiniMax 模型返回 malformed tool_call arguments（数组格式、多余逗号等）
+    # 这类错误在 agent 内部会话中累积，重试同样的 prompt 无法解决
+    local pattern='invalid.function.arguments.json'
+    pattern+='|invalid.params.*tool_call'
+    pattern+='|bad_request_error.*tool_call'
+    pattern+='|MinimaxException'
+    grep -qE "$pattern" "$log_file" 2>/dev/null
+}
+
 # 检测 Agent 输出是否包含上下文溢出信号
 detect_context_overflow() {
     local log_file="$1"
@@ -489,6 +501,7 @@ run_with_retry() {
     local log_file="$3"
     local retry=0
     local success=0
+    local skip_agent=0
 
     while [ $retry -lt $MAX_RETRIES ]; do
         retry=$((retry + 1))
@@ -527,6 +540,19 @@ run_with_retry() {
         # Check for context overflow first (non-retryable)
         if detect_context_overflow "$log_file"; then
             log_console "检测到上下文溢出，停止重试"
+            break
+        fi
+
+        # Check for MiniMax tool_call format errors (non-retryable: model bug, skip this agent)
+        if has_toolcall_format_error "$log_file"; then
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+            log_console "⚠️ $agent 遇到 MiniMax tool_call 格式错误，终止并跳过此 agent"
+            if [ -n "$error_tail" ]; then
+                log_console "错误信息:"
+                echo "$error_tail" | while read -r line; do log_console "  $line"; done
+            fi
+            skip_agent=1
             break
         fi
 
@@ -610,6 +636,9 @@ run_with_retry() {
 
     if [ $success -eq 1 ]; then
         return 0
+    elif [ $skip_agent -eq 1 ]; then
+        error "$agent 遇到不可恢复的模型错误，跳过此 agent"
+        return 2
     else
         error "$agent 调用失败，已重试 $MAX_RETRIES 次"
         return 1
@@ -1435,7 +1464,12 @@ $agent_instructions
     local log_file="$WORK_DIR/planning.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry "$first_agent" "$prompt" "$log_file"; then
+    run_with_retry "$first_agent" "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        log "规划阶段 agent 被跳过，将不拆分子任务（回退到原有模式）"
+        return 1
+    elif [ $agent_ret -ne 0 ]; then
         log "规划阶段失败，将不拆分子任务（回退到原有模式）"
         return 1
     fi
@@ -1570,7 +1604,11 @@ $codex_instructions
     local log_file="$WORK_DIR/iteration-$iteration-codex.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry codex "$prompt" "$log_file"; then
+    run_with_retry codex "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
         return 1
     fi
 
@@ -1668,7 +1706,11 @@ $claude_instructions
     local log_file="$WORK_DIR/iteration-$iteration-claude.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry claude "$prompt" "$log_file"; then
+    run_with_retry claude "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
         return 1
     fi
 
@@ -1766,7 +1808,11 @@ $opencode_instructions
     local log_file="$WORK_DIR/iteration-$iteration-opencode.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry opencode "$prompt" "$log_file"; then
+    run_with_retry opencode "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
         return 1
     fi
 
@@ -1825,7 +1871,12 @@ $opencode_instructions
     local log_file="$WORK_DIR/iteration-$iteration-opencode-review.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry opencode "$prompt" "$log_file"; then
+    run_with_retry opencode "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
         echo "0" > "$WORK_DIR/.last_score"
         return 1
     fi
@@ -1935,7 +1986,12 @@ $claude_instructions
     local log_file="$WORK_DIR/iteration-$iteration-claude-review.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry claude "$prompt" "$log_file"; then
+    run_with_retry claude "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
         echo "0" > "$WORK_DIR/.last_score"
         return 1
     fi
@@ -2017,7 +2073,12 @@ $codex_instructions
     local log_file="$WORK_DIR/iteration-$iteration-codex-review.log"
 
     cd "$PROJECT_ROOT"
-    if ! run_with_retry codex "$prompt" "$log_file"; then
+    run_with_retry codex "$prompt" "$log_file"
+    local agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
         echo "0" > "$WORK_DIR/.last_score"
         return 1
     fi
@@ -3253,9 +3314,16 @@ run_review_and_fix() {
     local impl_func="run_${agent_name}"
 
     # 审核
-    if ! $review_func "$ISSUE_NUMBER" "$ITERATION"; then
+    $review_func "$ISSUE_NUMBER" "$ITERATION"
+    local review_ret=$?
+    if [ $review_ret -ne 0 ]; then
         local review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
         if handle_context_overflow "$ITERATION" "$agent_name" "$review_log"; then
+            return
+        fi
+        if [ $review_ret -eq 2 ]; then
+            log_console "⚠️ $agent_name 审核被跳过 (模型错误)，尝试下一个 agent"
+            SKIPPED_AGENT=1
             return
         fi
         log "$agent_name 审核失败，跳到下一次迭代"
@@ -3330,9 +3398,16 @@ run_review_and_fix() {
     log_console "评分未达标 ($SCORE/$PASSING_SCORE)，$agent_name 根据反馈修复..."
 
     REVIEW_FEEDBACK=$(cat "$REVIEW_LOG_FILE")
-    if ! $impl_func "$ISSUE_NUMBER" "$ITERATION" "$REVIEW_FEEDBACK"; then
+    $impl_func "$ISSUE_NUMBER" "$ITERATION" "$REVIEW_FEEDBACK"
+    local impl_ret=$?
+    if [ $impl_ret -ne 0 ]; then
         local impl_log="$WORK_DIR/iteration-$ITERATION-${agent_name}.log"
         if handle_context_overflow "$ITERATION" "$agent_name" "$impl_log"; then
+            return
+        fi
+        if [ $impl_ret -eq 2 ]; then
+            log_console "⚠️ $agent_name 修复被跳过 (模型错误)，尝试下一个 agent"
+            SKIPPED_AGENT=1
             return
         fi
         log_console "$agent_name 修复失败，跳到下一次迭代"
@@ -3365,6 +3440,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     HARD_GATE_FAILED=0
     CONTEXT_OVERFLOW=0
     UI_VERIFY_FAILED=0
+    SKIPPED_AGENT=0
 
     log_console ""
     log_console "──────────────────────────────────────────"
@@ -3386,15 +3462,42 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         HARD_GATE_FAILED=0
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
-        if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
+        $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
+        local first_ret=$?
+        if [ $first_ret -ne 0 ]; then
             impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
                 : # 上下文溢出已自动交接
+            elif [ $first_ret -eq 2 ]; then
+                log_console "⚠️ $first_agent 被跳过 (模型错误)，尝试其他 agent..."
+                for skip_idx in $(seq 1 $((${#AGENT_NAMES[@]} - 1))); do
+                    local skip_agent="${AGENT_NAMES[$skip_idx]}"
+                    log_console "尝试 $skip_agent..."
+                    SKIPPED_AGENT=0
+                    local skip_func="run_${skip_agent}"
+                    $skip_func "$ISSUE_NUMBER" "$ITERATION" ""
+                    local skip_ret=$?
+                    if [ $skip_ret -eq 0 ]; then
+                        first_agent="$skip_agent"
+                        first_ret=0
+                        break
+                    elif [ $skip_ret -ne 2 ]; then
+                        log_console "❌ $skip_agent 初始实现失败"
+                        ITERATION_FAILED=1
+                        break
+                    fi
+                    log_console "⚠️ $skip_agent 也被跳过"
+                done
+                if [ $first_ret -ne 0 ] && [ $ITERATION_FAILED -eq 0 ]; then
+                    log_console "❌ 所有 agent 均被跳过，标记为失败"
+                    ITERATION_FAILED=1
+                fi
             else
                 log_console "❌ $first_agent 初始实现失败"
                 ITERATION_FAILED=1
             fi
-        else
+        fi
+        if [ $first_ret -eq 0 ]; then
             # 硬门禁检查：build → lint → test
             if ! run_hard_gate_checks "$ITERATION"; then
                 log_console "❌ 硬门禁检查未通过"
@@ -3429,10 +3532,36 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         HARD_GATE_FAILED=0
         first_agent="${AGENT_NAMES[0]}"
         first_impl_func="run_${first_agent}"
-        if ! $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""; then
+        $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
+        local first_ret=$?
+        if [ $first_ret -ne 0 ]; then
             impl_log="$WORK_DIR/iteration-$ITERATION-${first_agent}.log"
             if handle_context_overflow "$ITERATION" "$first_agent" "$impl_log"; then
                 : # 上下文溢出已自动交接
+            elif [ $first_ret -eq 2 ]; then
+                log_console "⚠️ $first_agent 被跳过 (模型错误)，尝试其他 agent..."
+                for skip_idx in $(seq 1 $((${#AGENT_NAMES[@]} - 1))); do
+                    local skip_agent="${AGENT_NAMES[$skip_idx]}"
+                    log_console "尝试 $skip_agent..."
+                    SKIPPED_AGENT=0
+                    local skip_func="run_${skip_agent}"
+                    $skip_func "$ISSUE_NUMBER" "$ITERATION" ""
+                    local skip_ret=$?
+                    if [ $skip_ret -eq 0 ]; then
+                        first_agent="$skip_agent"
+                        first_ret=0
+                        break
+                    elif [ $skip_ret -ne 2 ]; then
+                        log_console "❌ $skip_agent 初始实现失败"
+                        ITERATION_FAILED=1
+                        break
+                    fi
+                    log_console "⚠️ $skip_agent 也被跳过"
+                done
+                if [ $first_ret -ne 0 ] && [ $ITERATION_FAILED -eq 0 ]; then
+                    log_console "❌ 所有 agent 均被跳过，标记为失败"
+                    ITERATION_FAILED=1
+                fi
             else
                 log_console "❌ $first_agent 初始实现失败"
                 ITERATION_FAILED=1
@@ -3473,6 +3602,25 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     agent_idx=$(get_review_agent $ITERATION)
     agent_name="${AGENT_NAMES[$agent_idx]}"
     run_review_and_fix $agent_idx
+
+    # 跳过的 agent：尝试其他可用 agent
+    if [ $SKIPPED_AGENT -eq 1 ]; then
+        log_console "⚠️ $agent_name 被跳过，尝试其他 agent..."
+        for skip_idx in $(seq 0 $((${#AGENT_NAMES[@]} - 1))); do
+            if [ $skip_idx -eq $agent_idx ]; then
+                continue
+            fi
+            local skip_agent="${AGENT_NAMES[$skip_idx]}"
+            log_console "尝试 $skip_agent..."
+            SKIPPED_AGENT=0
+            run_review_and_fix $skip_idx
+            if [ $SKIPPED_AGENT -eq 0 ]; then
+                agent_name="$skip_agent"
+                break
+            fi
+            log_console "⚠️ $skip_agent 也被跳过"
+        done
+    fi
 
     # 上下文溢出时跳过正常处理（进度已由 handle_context_overflow 保存）
     if [ $CONTEXT_OVERFLOW -eq 1 ]; then
