@@ -1,0 +1,93 @@
+我已经获取所有必要的上下文。这是我的审查：
+
+## 审核报告
+
+### Issue
+- 编号: #51
+- 标题: [hardness engineering] Continue 模式 git 状态校验
+- 子任务: T-002 - Continue 模式检测本地分支与 remote tracking branch 的分叉
+- 迭代次数: 4
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+实现简洁正确，准确满足了所有验收条件。代码内联在 `restore_continue_state()` 中，逻辑清晰、错误处理得当，测试覆盖了四种核心场景且全部通过。
+
+---
+
+### 正确性 (35%): 95/100
+
+**优点:**
+- `git show-ref --verify --quiet` 先检查 remote ref 是否存在，避免 `git rev-list` 在无 remote 时报错
+- `git rev-list` 使用 `|| echo "0\t0"` 做 fallback，保证 `rev_count` 不为空
+- 分叉（ahead>0 && behind>0）、落后（behind>0）、无 remote 三种情况均正确处理
+- 不自动执行 rebase/pull，仅打印警告和建议，符合安全要求
+- `2>/dev/null` 抑制了不需要的错误输出
+
+**小问题:**
+- **ahead-only 场景无任何日志**: 当本地领先远程（ahead>0, behind=0）时，没有输出任何信息（测试中 assert_not_contains 验证了这一点，但这更像是"缺少正面确认"而非有意为之）。建议添加一条 info 级别日志如 `log "本地分支领先远程 $ahead 个提交"`，方便调试。不影响功能，扣分很小。
+
+### 测试质量 (25%): 90/100
+
+**优点:**
+- 四个场景全部覆盖: no-remote、behind、ahead-only、diverged
+- 使用真实 git 仓库 + bare remote 进行测试，可靠性高
+- `assert_contains` / `assert_not_contains` 验证了 console 和 log 输出的关键内容
+- 13/13 全部通过
+
+**小问题:**
+- 测试中 `check_branch_divergence` 是从 run.sh 复制出来的副本，不是直接 source run.sh。如果 run.sh 的逻辑修改了但测试未同步更新，会造成测试与实际代码不一致。但考虑到 run.sh 不适合直接 source（有副作用），这是合理的折衷。
+
+### 代码质量 (20%): 85/100
+
+**优点:**
+- 内联在 `restore_continue_state()` 中，位置合理——checkout 分支之后、检测 residual stash 之前
+- `ahead`/`behind` 变量名清晰
+- 日志消息中包含具体的 ahead/behind 数量，信息量充足
+- 遵循项目已有的 log/log_console 双通道日志模式
+
+**小问题:**
+- 没有提取为独立函数（如 `check_branch_divergence()`），导致测试中需要复制一份。如果后续其他地方也需要分叉检测，会有重复代码。但作为单次使用的内联逻辑，可以接受。
+
+### 安全性 (10%): 95/100
+
+- 不自动执行 rebase/pull，避免破坏用户工作
+- `2>/dev/null` 防止错误信息泄露到 stderr
+- `git rev-list` 命令中 `$remote_branch` 和 `$branch` 来自内部变量（`origin/feature/issue-N` 格式），不存在注入风险
+
+### 性能 (10%): 90/100
+
+- `git show-ref` 和 `git rev-list` 都是轻量级操作，耗时可忽略
+- `awk` 解析输出是标准做法
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**验收条件检查:**
+- [x] `restore_continue_state()` 检测 local 与 remote tracking branch 的分叉状态
+- [x] 分叉时打印明确的警告信息（包含 ahead/behind commit 数量）
+- [x] remote tracking branch 不存在时跳过检测（不报错）
+- [x] 新增对应的 shell 单元测试覆盖 diverged/ahead/behind/no-remote 四种场景
+- [x] `bash -n run.sh` 语法检查通过
+
+---
+
+### 建议改进 (可选)
+
+1. 为 ahead-only 场景添加 info 日志（`log "本地分支领先远程 $ahead 个提交"`），方便调试
+2. 可考虑将分叉检测提取为 `check_branch_divergence()` 函数，方便测试复用和未来扩展
+
+---
+
+## Learnings
+
+- **模式**: `git rev-list --left-right --count origin/branch...branch` 输出 `<behind>\t<ahead>`，用 awk 分别提取
+- **模式**: `git show-ref --verify --quiet refs/remotes/origin/branch` 是检查 remote ref 存在性的可靠方式
+- **踩坑**: 测试中需要复制函数逻辑做隔离测试（run.sh 不适合直接 source），需注意同步维护
+- **经验**: 分叉检测只输出警告不自动修复是正确的设计选择，避免在自动化流程中破坏用户数据

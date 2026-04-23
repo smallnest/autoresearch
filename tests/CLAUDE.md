@@ -10,6 +10,8 @@
 - `test_branch_cleanup.sh`: 测试 post-merge branch cleanup 的非致命失败日志与继续执行行为。
 - `test_git_push.sh`: 测试 git push 失败处理逻辑（set -e 兼容、日志写入、stash 重试）。
 - `test_git_error_handling.sh`: 综合测试 Git 操作容错（gh pr merge 失败、branch cleanup 失败、日志记录正确性）。
+- `test_continue_dirty.sh`: 测试 continue 模式 dirty working tree 检测（auto stash、residual stash 恢复、stash 失败降级）。
+- `test_continue_diverged.sh`: 测试 continue 模式本地分支与 remote tracking branch 分叉检测（diverged/ahead/behind/no-remote 四种场景）。
 
 ## 注意事项
 - 测试脚本应能独立运行，不依赖外部 API。

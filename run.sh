@@ -3918,6 +3918,74 @@ restore_continue_state() {
         exit 1
     fi
 
+    # 检测 dirty working tree 并自动 stash
+    local dirty_files
+    dirty_files=$(git status --porcelain 2>/dev/null)
+    if [ -n "$dirty_files" ]; then
+        local stash_msg="autoresearch-temp-continue-$ISSUE_NUMBER-$(date +%s)"
+        log_console "⚠️ 检测到未提交的更改，自动 stash..."
+        log "检测到 dirty working tree，执行 git stash push -m \"$stash_msg\""
+        if git stash push -u -m "$stash_msg" 2>/dev/null; then
+            log_console "已 stash 未提交的更改: $stash_msg"
+            log "stash 成功: $stash_msg"
+            # 记录 stash ref 以便后续恢复
+            CONTINUE_STASH_REF="$stash_msg"
+        else
+            log_console "⚠️ stash 失败，继续运行（dirty 文件可能影响后续操作）"
+            log "stash 失败，降级继续"
+            CONTINUE_STASH_REF=""
+        fi
+    else
+        CONTINUE_STASH_REF=""
+    fi
+
+    # 检测本地分支与 remote tracking branch 的分叉状态
+    local remote_branch="origin/$branch"
+    if git show-ref --verify --quiet "refs/remotes/$remote_branch" 2>/dev/null; then
+        local rev_count
+        rev_count=$(git rev-list --left-right --count "$remote_branch...$branch" 2>/dev/null || echo "0	0")
+        local ahead behind
+        ahead=$(echo "$rev_count" | awk '{print $2}')
+        behind=$(echo "$rev_count" | awk '{print $1}')
+        if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
+            log_console "⚠️ 本地分支与远程分支已分叉: ahead $ahead, behind $behind"
+            log "分支分叉检测: $branch 与 $remote_branch 分叉 (ahead=$ahead, behind=$behind)"
+            log_console "建议执行: git rebase $remote_branch 或手动合并后再继续"
+        elif [ "$behind" -gt 0 ]; then
+            log_console "⚠️ 本地分支落后远程 $behind 个提交"
+            log "分支落后检测: $branch 落后 $remote_branch $behind 个提交"
+            log_console "建议执行: git pull $remote_branch 后再继续"
+        fi
+    else
+        log "远程分支 $remote_branch 不存在，跳过分叉检测"
+    fi
+
+    # 检测是否有残留的 autoresearch stash（上次中断遗留）
+    # 排除本次 continue 刚创建的 stash
+    local residual_stash
+    if [ -n "$CONTINUE_STASH_REF" ]; then
+        residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | grep -v "$CONTINUE_STASH_REF" | head -1 || true)
+    else
+        residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | head -1 || true)
+    fi
+    if [ -n "$residual_stash" ]; then
+        log_console "⚠️ 发现上次中断遗留的 stash: $residual_stash"
+        log "发现残留 stash: $residual_stash"
+        # 尝试恢复残留 stash
+        local stash_index
+        stash_index=$(echo "$residual_stash" | grep -oE 'stash@\{[0-9]+\}' | head -1)
+        if [ -n "$stash_index" ]; then
+            log_console "尝试恢复残留 stash..."
+            if git stash pop "$stash_index" 2>/dev/null; then
+                log_console "已恢复残留 stash"
+                log "残留 stash 恢复成功: $stash_index"
+            else
+                log_console "⚠️ 残留 stash pop 失败（可能有冲突），请手动处理"
+                log "残留 stash pop 失败: $stash_index"
+            fi
+        fi
+    fi
+
     # 追加继续标记到日志
     echo "" >> "$WORK_DIR/log.md"
     echo "---" >> "$WORK_DIR/log.md"
@@ -4010,6 +4078,7 @@ PREVIOUS_FEEDBACK=""
 FINAL_SCORE=0
 CONSECUTIVE_ITERATION_FAILURES=0
 CONTEXT_RETRIES=0
+CONTINUE_STASH_REF=""
 
 if [ $CONTINUE_MODE -eq 1 ]; then
     restore_continue_state
@@ -4421,6 +4490,23 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 done
 
 # ==================== 最终处理 ====================
+
+# Continue 模式下恢复 stash 的 dirty 文件（如有）
+if [ -n "$CONTINUE_STASH_REF" ]; then
+    log_console "恢复 continue 时 stash 的更改..."
+    local_stash=$(git stash list 2>/dev/null | grep "$CONTINUE_STASH_REF" | grep -oE 'stash@\{[0-9]+\}' | head -1 || true)
+    if [ -n "$local_stash" ]; then
+        if git stash pop "$local_stash" 2>/dev/null; then
+            log "continue stash 恢复成功: $local_stash"
+        else
+            log_console "⚠️ continue stash pop 失败（可能有冲突），请手动处理"
+            log "continue stash pop 失败: $local_stash"
+        fi
+    else
+        log "continue stash 未找到: $CONTINUE_STASH_REF"
+    fi
+    CONTINUE_STASH_REF=""
+fi
 
 if check_score_passed "$FINAL_SCORE"; then
     record_final_result "$ISSUE_NUMBER" "completed" "$ITERATION" "$FINAL_SCORE"
