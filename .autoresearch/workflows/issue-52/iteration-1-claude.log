@@ -1,0 +1,29 @@
+全部完成。以下是变更摘要：
+
+## 所做变更
+
+### `run.sh`
+
+1.  **新增 `validate_tasks_json()`** (`run.sh:1685`) — 使用 `jq '.'` + 空文件检查来验证 `tasks.json` 的完整性。如果文件缺失、为空或包含无效 JSON，则返回 1。
+
+2.  **重写 `mark_subtask_passed()`** (`run.sh:1695`) — 现在采用原子写入：
+    -   使用 `mktemp "${tasks_dir}/tasks.XXXXXX"` 在 `tasks.json` 同一目录下创建临时文件（确保在同一文件系统上，`mv` 是原子操作）
+    -   在移动文件之前验证 `jq` 输出的 JSON 有效性 — 如果无效则中止，并记录错误日志
+    -   在失败路径上正确清理临时文件（`rm -f "$tmp_file"`）
+    -   移除了多余的 `register_temp_file` 调用，因为在成功和失败路径上临时文件都会立即被清理
+
+3.  **在 `continue` 模式启动时进行完整性检查** (`run.sh:4120`) — 在 `restore_continue_state` 之后，检查 `tasks.json`。如果文件损坏，则删除它并回退到原始模式（无子任务）。
+
+### `tests/test_extract_score.sh`
+
+-   更新了 `mark_subtask_passed()` 的测试副本，使其与新的原子实现匹配
+-   新增 `validate_tasks_json()` 测试：有效 JSON、无效 JSON、空文件、缺失文件
+-   新增原子写入测试：验证无临时文件残留，标记不存在的 ID 仍能产生有效的 JSON
+
+### 测试结果：所有 11 个测试文件中的所有 502 个测试均通过。
+
+## 经验总结
+
+-   **模式**：原子文件写入应使用 `mktemp` 和目标目录前缀（`${dir}/prefix.XXXXXX`），以确保 `mv` 在同一文件系统上是原子操作
+-   **踩坑**：`jq '.'` 对空文件（0 字节）返回 exit code 0 — 必须用 `[ ! -s "$file" ]` 进行空文件检查
+-   **经验**：测试文件维护自己的函数副本 — 对 `run.sh` 中函数的更改必须同时应用于测试文件

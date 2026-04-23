@@ -1,0 +1,42 @@
+我现在对代码库有了全面的了解。让我来分析一下这个 Issue 并规划子任务。
+
+这个问题包含三个不同的关注点：
+1. `mark_subtask_passed()` 中使用 `mktemp` 进行原子写入（目前 `mktemp` 可能不在同一文件系统上创建文件）
+2. 在移动 `jq` 输出之前对其进行 JSON 有效性验证
+3. 在继续模式启动时进行 `tasks.json` 完整性检查，如果损坏则回退
+
+```json
+{
+  "issueNumber": 52,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "mark_subtask_passed() 原子写入与 JSON 校验",
+      "description": "改进 mark_subtask_passed() 函数：1) 使用 mktemp 在 tasks.json 同目录创建临时文件，确保 mv 在同一文件系统上是原子操作；2) 在 mv 之前用 jq 验证输出的 JSON 有效性，无效则拒绝覆盖。同时修复 register_temp_file 在 mv 后的清理冗余问题。",
+      "acceptanceCriteria": [
+        "mktemp 创建的临时文件与 tasks.json 在同一目录（同一文件系统），确保 mv 是原子操作",
+        "jq 输出后、mv 之前验证 JSON 有效性，无效则跳过 mv 并输出错误日志",
+        "临时文件在失败路径下被正确清理（不残留）",
+        "bash tests/test_*.sh 全部通过（不破坏现有测试）"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "continue 模式启动时 tasks.json 完整性校验",
+      "description": "在 continue 模式恢复状态后、进入规划阶段前，校验 tasks.json 的完整性：1) 文件存在且非空；2) 能被 jq 正确解析；3) 包含有效的 subtasks 数组。校验失败时回退到原始模式（删除损坏的 tasks.json，记录警告日志），而不是中断运行。",
+      "acceptanceCriteria": [
+        "continue 模式启动时自动检测 tasks.json 完整性（文件存在、非空、合法 JSON、包含 subtasks 数组）",
+        "完整性校验失败时输出警告日志并回退到原始模式（不中断运行）",
+        "完整性校验正常时不影响现有 continue 流程",
+        "新增测试脚本覆盖：正常 tasks.json、空文件、非法 JSON、缺失 subtasks 字段等场景"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": false
+    }
+  ]
+}
+```

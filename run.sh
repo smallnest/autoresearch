@@ -1681,7 +1681,22 @@ get_current_subtask_title() {
     echo "$subtask" | jq -r '.title' 2>/dev/null
 }
 
-# 标记指定子任务为 passes: true
+# 校验 tasks.json 的 JSON 有效性
+# 返回: 0 = 有效, 1 = 无效或不存在
+validate_tasks_json() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 1
+    fi
+    # 空文件视为无效
+    if [ ! -s "$tasks_file" ]; then
+        return 1
+    fi
+    jq '.' "$tasks_file" >/dev/null 2>&1
+}
+
+# 标记指定子任务为 passes: true（原子写入 + JSON 校验）
 mark_subtask_passed() {
     local subtask_id="$1"
     local tasks_file
@@ -1689,10 +1704,27 @@ mark_subtask_passed() {
     if [ ! -f "$tasks_file" ]; then
         return 1
     fi
+    # 在 tasks.json 同目录创建临时文件，确保 mv 在同一文件系统上是原子操作
+    local tasks_dir
+    tasks_dir=$(dirname "$tasks_file")
     local tmp_file
-    tmp_file=$(mktemp)
+    tmp_file=$(mktemp "${tasks_dir}/tasks.XXXXXX")
     register_temp_file "$tmp_file"
-    jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file" && mv "$tmp_file" "$tasks_file"
+
+    if ! jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file"; then
+        log "❌ 子任务 $subtask_id: jq 处理失败，跳过写入"
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    # 写入前校验 JSON 有效性
+    if ! jq '.' "$tmp_file" >/dev/null 2>&1; then
+        log "❌ 子任务 $subtask_id: jq 输出的 JSON 无效，拒绝覆盖 tasks.json"
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    mv "$tmp_file" "$tasks_file"
     log "子任务 $subtask_id 已标记为通过"
 }
 
@@ -4087,6 +4119,17 @@ if [ $CONTINUE_MODE -eq 1 ]; then
     if [ -z "$ITERATION" ] || ! [ "$ITERATION" -gt 0 ] 2>/dev/null; then
         error "无法恢复迭代状态，ITERATION=$ITERATION"
         exit 1
+    fi
+
+    # 校验 tasks.json 完整性，损坏则删除并回退到原始模式
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ -f "$tasks_file" ]; then
+        if ! validate_tasks_json; then
+            log "⚠️ tasks.json 已损坏，删除并回退到原始模式"
+            log_console "⚠️ tasks.json 已损坏，回退到原始模式（无子任务拆分）"
+            rm -f "$tasks_file"
+        fi
     fi
 
     # 不指定轮数时，总迭代数=默认值；指定时，总迭代数=已有+指定轮数

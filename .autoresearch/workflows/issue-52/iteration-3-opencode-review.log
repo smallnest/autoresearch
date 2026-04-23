@@ -1,0 +1,98 @@
+[0m
+> build · k2p6
+[0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=4100][0m
+[0m→ [0mRead tests/test_extract_score.sh[90m [limit=100, offset=1][0m
+[0m✱ [0mGrep "validate_tasks_json"[90m in . · 9 matches[0m
+[0m→ [0mRead run.sh[90m [limit=40, offset=1680][0m
+[0m→ [0mRead tests/test_extract_score.sh[90m [limit=80, offset=1170][0m
+[0m
+[0m$ [0mbash tests/test_extract_score.sh 2>&1 | tail -30
+PASS: section has 当前子任务 header
+  PASS: section has T-001
+  PASS: section has 测试子任务
+  PASS: section has 条件1
+--- get_subtask_review_section() ---
+  PASS: review section has 子任务审核 header
+  PASS: review section has T-001
+  PASS: review section has 验收条件
+--- Edge cases ---
+  PASS: empty subtasks array returns false
+  PASS: empty subtasks current id is empty (expected=, actual=)
+  PASS: all passed returns true for all_subtasks_passed
+  PASS: all passed current id is empty (expected=, actual=)
+  PASS: no tasks.json: all_subtasks_passed returns true (backward compat)
+  PASS: no tasks.json: get_subtask_section returns empty (expected=, actual=)
+--- validate_tasks_json() ---
+  PASS: valid json returns true
+  PASS: invalid json returns false
+  PASS: empty file returns false
+  PASS: no file returns false
+--- mark_subtask_passed() atomic write ---
+  PASS: T-001 marked as passed (expected=true, actual=true)
+  PASS: T-002 still false (expected=false, actual=false)
+  PASS: no temp files left behind (expected=0, actual=0)
+  PASS: mark non-existent id succeeds (jq still valid) (expected=0, actual=0)
+  PASS: file still valid JSON after non-existent id mark (expected=T-001, actual=T-001)
+
+==========================================
+Total: 177  Passed: 177  Failed: 0
+==========================================
+[0m
+## 审核报告
+
+### Issue
+- 编号: #52
+- 迭代次数: 2
+- 子任务: T-002 - continue 模式启动时 tasks.json 完整性校验
+
+### 总体评价
+**评分: 95/100**
+
+### 严重问题 (必须修复)
+无
+
+### 一般问题 (建议修复)
+1. **校验逻辑不完整** (`run.sh:1686`)：`validate_tasks_json()` 仅校验 JSON 语法有效性，未校验 `subtasks` 数组是否存在。根据验收条件第 1 条，应确保 "包含有效的 subtasks 数组"。当前实现：
+   ```bash
+   jq '.' "$tasks_file" >/dev/null 2>&1
+   ```
+   应增强为：
+   ```bash
+   jq -e '.subtasks | type == "array"' "$tasks_file" >/dev/null 2>&1
+   ```
+
+2. **测试覆盖不完整** (`tests/test_extract_score.sh:1176`)：现有测试覆盖了有效 JSON、无效 JSON、空文件、缺失文件，但缺少 "包含 subtasks 数组" 的校验测试。应补充：
+   - 合法 JSON 但缺失 `subtasks` 字段 → 应返回 false
+   - `subtasks` 不是数组 → 应返回 false
+
+### 建议改进 (可选)
+1. 考虑在删除损坏的 `tasks.json` 前备份到 `.autoresearch/archive/` 或保留副本，便于调试
+2. `validate_tasks_json` 的注释可更新为 "返回: 0 = 有效（含 subtasks 数组）, 1 = 无效或不存在"
+
+### 审核结论
+- [ ] 通过 / 需要修改 / 阻塞
+
+**需要修改**：虽然核心功能正确，但 `validate_tasks_json()` 未校验 `subtasks` 数组存在性，与验收条件 "包含有效的 subtasks 数组" 不完全一致。建议修复后重新审核。
+
+### 自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [x] 实现者已执行编译/类型检查
+- [x] 实现者已执行 Lint 检查
+- [x] 实现者已运行相关测试
+- [x] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+---
+
+## Learnings
+
+- **模式**: `validate_tasks_json()` 应使用 `jq -e '.subtasks | type == "array"'` 而非仅 `jq '.'` 来确保结构完整性
+- **踩坑**: 验收条件中 "包含有效的 subtasks 数组" 容易被忽略，仅校验 JSON 语法不够
+- **经验**: Shell 测试中应覆盖"合法 JSON 但结构不符合预期"的边界场景
