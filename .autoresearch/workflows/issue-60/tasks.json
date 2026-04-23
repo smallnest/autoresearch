@@ -1,0 +1,53 @@
+{
+  "issueNumber": 60,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现上下文大小估算与预防性压缩触发机制",
+      "description": "在 run.sh 中添加 prompt token 估算函数 estimate_prompt_tokens()，通过字符数近似计算 token 数（英文约4字符/token，中文约2字符/token，取混合系数3）。在每次迭代构建 prompt 后调用此函数，当估算 token 数超过 CONTEXT_COMPRESS_THRESHOLD（默认150000）时，主动触发上下文压缩而非等到溢出。新增配置变量 CONTEXT_COMPRESS_THRESHOLD 和 CONTEXT_KEEP_RECENT。修改 handle_context_overflow() 使其在溢出时自动调用压缩函数，而不仅是简单交接。更新 tests/test_context_overflow.sh 添加 token 估算和阈值触发的测试用例。",
+      "acceptanceCriteria": [
+        "estimate_prompt_tokens() 函数能对中英文混合文本给出合理估算",
+        "当 prompt 估算超过 CONTEXT_COMPRESS_THRESHOLD 时，自动触发压缩",
+        "CONTEXT_COMPRESS_THRESHOLD 和 CONTEXT_KEEP_RECENT 可通过环境变量配置",
+        "handle_context_overflow() 在溢出时调用 compress_context() 进行压缩而非仅交接",
+        "测试覆盖 token 估算逻辑和阈值触发逻辑"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "实现历史迭代日志摘要生成与压缩",
+      "description": "在 run.sh 中实现核心的上下文压缩逻辑。包括：(1) compress_context() 函数，分析工作流目录中的文件，按策略压缩上下文；(2) generate_iteration_summary() 函数，对单个迭代日志提取关键信息（完成的工作、修改的文件、关键决策、失败的尝试、Learnings），生成摘要保存到 .autoresearch/workflows/issue-N/summaries/iteration-N-summary.md；(3) 压缩策略：保留最近 CONTEXT_KEEP_RECENT（默认3）次迭代的完整日志，更早的日志替换为摘要；压缩重复性的代码 diff，只保留文件名和关键变更描述；清理已通过子任务的详细描述，只保留标题和结论。(4) compress_context() 调用后，prompt 组装函数（如 get_progress_content、get_subtask_section）自动使用摘要而非原始日志。更新 tests/test_context_overflow.sh 添加压缩逻辑的测试。",
+      "acceptanceCriteria": [
+        "compress_context() 能按策略压缩历史日志，生成摘要文件",
+        "generate_iteration_summary() 能从迭代日志中提取关键信息",
+        "摘要文件保存到 summaries/ 目录，格式为 iteration-N-summary.md",
+        "最近 CONTEXT_KEEP_RECENT 次迭代日志保持完整，更早的被替换为摘要",
+        "compress_context() 执行后，后续 prompt 组装自动使用压缩后的内容",
+        "如果压缩后仍溢出，能继续压缩更早期内容（渐进式压缩）",
+        "测试覆盖摘要生成和压缩策略逻辑"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "实现 prompt 智能裁剪与溢出恢复流程",
+      "description": "在上下文压缩基础上，完善溢出后的恢复流程：(1) trim_prompt_for_overflow() 函数，当压缩后 prompt 仍过大时，按优先级裁剪 prompt 内容——保留当前子任务描述、未完成子任务列表、最近的 review 反馈、progress.md 经验日志；移除已通过子任务的详细描述（只保留标题）、历史迭代摘要中的冗余代码片段、program.md 中与当前项目语言无关的部分。(2) 修改主迭代循环中的溢出处理：溢出时先调用 compress_context()，然后 trim_prompt_for_overflow()，再继续迭代；如果仍溢出，渐进式压缩（增加压缩力度，如保留更少的最近迭代）。(3) 重构 handle_context_overflow() 使其与新压缩流程集成，CONTEXT_RETRIES 计数逻辑不变但重试之间会进行压缩。(4) 更新 tests/test_context_overflow.sh 添加智能裁剪和溢出恢复的测试。",
+      "acceptanceCriteria": [
+        "trim_prompt_for_overflow() 按优先级裁剪 prompt 内容",
+        "溢出处理流程：检测溢出 → compress_context() → trim_prompt_for_overflow() → 继续迭代",
+        "渐进式压缩：一次压缩不够时，后续压缩更激进（保留更少历史）",
+        "handle_context_overflow() 与新压缩流程正确集成",
+        "关键上下文（当前子任务、未完成列表、最近反馈）在裁剪中被保留",
+        "测试覆盖 prompt 裁剪逻辑和完整的溢出恢复流程"
+      ],
+      "priority": 3,
+      "type": "code",
+      "passes": true
+    }
+  ]
+}

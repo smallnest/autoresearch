@@ -1,0 +1,200 @@
+[0m
+> build · k2p6
+[0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=1][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=1][0m
+[0m→ [0mRead run.sh[90m [limit=300, offset=400][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=300, offset=200][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=300, offset=500][0m
+[0m→ [0mRead run.sh[90m [limit=200, offset=1000][0m
+[0m✱ [0mGrep "generate_iteration_summary"[90m in . · 4 matches[0m
+[0m✱ [0mGrep "get_progress_content|get_subtask_section"[90m in . · 18 matches[0m
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh
+=== detect_context_overflow() Tests ===
+
+--- Context overflow signals (should detect) ---
+  PASS: context length exceeded
+  PASS: context_length_exceeded (underscore)
+  PASS: maximum context length
+  PASS: token limit exceeded
+  PASS: token_limit_reached
+  PASS: too many tokens
+  PASS: exceeds the maximum
+  PASS: exceeded the maximum number of tokens
+  PASS: input is too long
+  PASS: context window exceeded
+  PASS: maximum context window
+  PASS: case insensitive
+  PASS: mixed case
+  PASS: in multiline output
+--- Normal output (should NOT detect) ---
+  PASS: normal implementation output
+  PASS: empty file
+  PASS: nonexistent file
+  PASS: context discussion
+  PASS: token discussion
+  PASS: limit discussion
+  PASS: maximum discussion
+
+=== handle_context_overflow() Tests ===
+
+--- Overflow detected and handled ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: PREVIOUS_FEEDBACK mentions overflow
+  PASS: progress.md has overflow entry
+  PASS: log.md has overflow note
+--- Non-overflow not handled ---
+  PASS: handle returns 1 for normal output
+  PASS: CONTEXT_RETRIES stays 0 for normal (expected=0, actual=0)
+--- Max retries reached ---
+  PASS: handle returns 1 when max retries reached
+  PASS: CONTEXT_RETRIES at max+1 (expected=4, actual=4)
+--- Multiple retries increment counter ---
+  PASS: first retry: counter=1 (expected=1, actual=1)
+  PASS: second retry: counter=2 (expected=2, actual=2)
+  PASS: third retry: counter=3 (expected=3, actual=3)
+  PASS: fourth retry exceeds max
+
+=== estimate_prompt_tokens() Tests ===
+
+--- Token estimation for various text types ---
+  PASS: English text token estimate (expected=34, actual=34)
+  PASS: Chinese text token estimate (expected=24, actual=24)
+  PASS: Empty text returns 0 tokens (expected=0, actual=0)
+  PASS: Mixed text token estimate (expected=40, actual=40)
+  PASS: 450000 chars → 150000 tokens (expected=150000, actual=150000)
+
+=== compress_context() Tests ===
+
+--- Basic compression behavior ---
+  PASS: Summary for iteration-1 exists
+  PASS: Summary for iteration-2 exists
+  PASS: Original iteration-1 log removed
+  PASS: Original iteration-2 log removed
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+  PASS: Iteration-5 log kept
+  PASS: Summary has key content
+--- Compression when logs <= keep_recent ---
+  PASS: Iteration-1 log still exists
+  PASS: Iteration-2 log still exists
+  PASS: No summary files created
+--- Compression with non-existent directory ---
+  PASS: Non-existent dir returns 1 (expected=1, actual=1)
+--- Re-compression skips already summarized logs ---
+  PASS: Iteration-1 log removed (already summarized)
+  PASS: Iteration-2 log removed (newly compressed)
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+
+=== check_and_compress_prompt() Tests ===
+
+--- Below threshold: no compression ---
+  PASS: No compression for small prompt (expected=0, actual=0)
+  PASS: No summaries dir for small prompt
+--- Above threshold: triggers compression ---
+  PASS: Summaries dir created after threshold breach
+  PASS: Summary created for iteration-1
+  PASS: Summary created for iteration-2
+--- Custom threshold via environment variable ---
+  PASS: No compression with high threshold
+  PASS: Compression triggered with low threshold
+
+=== handle_context_overflow() with compress_context() ===
+
+--- Overflow triggers compression ---
+  PASS: handle returns 0 for overflow with compression
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created by overflow handler
+  PASS: Log notes compression
+
+==========================================
+Total: 70  Passed: 70  Failed: 0
+==========================================
+[0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=1589][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=1359][0m
+## 审核报告
+
+### Issue
+- 编号: #60
+- 迭代次数: 2
+- 当前子任务: T-002 - 实现历史迭代日志摘要生成与压缩
+
+### 总体评价
+**评分: 72/100**
+
+### 严重问题 (必须修复)
+
+1. **缺少 `generate_iteration_summary()` 函数**
+   - 子任务明确要求实现 `generate_iteration_summary()` 函数，能从迭代日志中提取关键信息（完成的工作、修改的文件、关键决策、失败的尝试、Learnings），生成结构化摘要保存到 `summaries/iteration-N-summary.md`
+   - 当前实现中，`compress_context()` 直接内联了简单的 grep 提取逻辑，没有独立的 `generate_iteration_summary()` 函数
+   - 摘要格式也不符合要求：当前只是简单拼接 grep 结果，没有提取"完成的工作、修改的文件、关键决策、失败的尝试、Learnings"等结构化信息
+
+2. **prompt 组装函数未自动使用摘要**
+   - 验收条件要求："compress_context() 调用后，prompt 组装函数（如 get_progress_content、get_subtask_section）自动使用摘要而非原始日志"
+   - 检查 `get_progress_content()` (run.sh:1589) 和 `get_subtask_section()` (run.sh:1359)，两者均未读取 `summaries/` 目录下的摘要文件
+   - `get_progress_content()` 仍然直接读取 `progress.md`，没有检查或使用 `summaries/` 中的内容
+
+3. **缺少渐进式压缩能力**
+   - 验收条件要求："如果压缩后仍溢出，能继续压缩更早期内容（渐进式压缩）"
+   - 当前 `compress_context()` 只压缩一次，没有机制在压缩后仍溢出时继续压缩更早的摘要
+
+### 一般问题 (建议修复)
+
+4. **摘要内容质量不足**
+   - 当前使用简单的 grep 模式匹配关键行，没有真正"提取"结构化信息
+   - 建议按子任务要求的维度组织摘要：完成的工作、修改的文件、关键决策、失败的尝试、Learnings
+
+5. **代码 diff 压缩未实现**
+   - 验收条件提到"压缩重复性的代码 diff，只保留文件名和关键变更描述"
+   - 当前实现没有处理代码 diff 的压缩
+
+6. **已通过子任务清理未实现**
+   - 验收条件提到"清理已通过子任务的详细描述，只保留标题和结论"
+   - 当前实现没有处理子任务状态的清理
+
+### 建议改进
+
+7. **测试覆盖不足**
+   - 测试验证了基本的压缩行为，但未测试：
+     - `generate_iteration_summary()` 函数（因为未实现）
+     - prompt 组装函数使用摘要的逻辑
+     - 渐进式压缩场景
+     - 摘要内容的结构化提取
+
+8. **变量名不一致**
+   - run.sh:56 定义了 `CONTEXT_KEEP_RECENT`，但注释和某些地方使用了 `CONTEXT_KEEP_RECURRENT`（run.sh:56 行注释写的是 `CONTEXT_KEEP_RECURRENT`，但变量名是 `CONTEXT_KEEP_RECENT`）
+
+### 审核结论
+- [ ] 需要修改
+
+### 自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+**测试运行结果**: 70/70 测试通过，但测试未覆盖缺失的功能点。
+
+---
+
+## Learnings
+
+- **模式**: 当前 `compress_context()` 实现是一个基础版本，使用简单的 grep 提取关键行
+- **踩坑**: 子任务要求实现 `generate_iteration_summary()` 独立函数，但实际实现将其内联在 `compress_context()` 中
+- **经验**: prompt 组装函数（`get_progress_content`、`get_subtask_section`）需要显式修改以支持读取摘要文件，这不是自动发生的

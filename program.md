@@ -462,15 +462,18 @@ Agent 必须确保:
 ### Tool Call 格式要求
 
 ```
-⚠️ 当使用 MiniMax 等模型作为底层 LLM 时，tool_call 的 arguments 必须是标准的 JSON 对象字符串。
+⚠️ 调用工具（tool/function call）时，arguments 必须严格遵循以下格式规范：
 
-禁止行为:
-✗ arguments 返回数组格式（如 [{"key": "value"}]），必须是对象格式（如 {"key": "value"}）
-✗ arguments 包含非法 JSON（如多余逗号、缺少引号等）
-✗ arguments 为空字符串时直接回传给 API
+1. arguments 必须是合法的 JSON 对象（字典/dict），不得为数组
+   ✓ 正确: {"path": "src/main.go", "content": "package main"}
+   ✗ 错误: [{"path": "src/main.go", "content": "package main"}]
 
-如果检测到 tool_call arguments 格式异常：
-1. 解析 arguments 字符串，如果是数组则提取第一个元素
-2. 使用容错 JSON 解析器修复格式问题
-3. 无法修复时跳过该 tool_call 并记录日志
+2. arguments 的 JSON 字符串必须语法正确，不得包含：
+   - 多余的逗号（如 {"a": 1,} 或 {"a": 1,,"b": 2}）
+   - 缺少引号的键或值
+   - 末尾多余的标点
+
+3. 如果只需传递一个对象的参数，直接使用对象格式，不要包裹在数组中
+
+4. 任何 tool call 的 arguments 都必须是完整、可解析的 JSON 对象字符串
 ```

@@ -1,0 +1,37 @@
+所有测试通过 (315/315 在所有测试套件中)。T-001 子任务的实现已完成。以下是已实现内容的总结：
+
+### T-001 实现总结
+
+**在 `run.sh` 中的更改：**
+
+1.  **`estimate_prompt_tokens()`** (第 425 行) - 根据字符数估算 token 数量，使用混合系数 3 (英文约 4 字符/token，中文约 2 字符/token，混合约 3 字符/token)
+
+2.  **`compress_context()`** (第 438 行) - 通过以下方式压缩历史迭代日志：
+    -   将旧日志移动到 `summaries/` 目录，并附带基于关键行的摘要
+    -   保留最近的 `CONTEXT_KEEP_RECENT` 日志不变
+    -   跳过已压缩的日志
+    -   记录到 `log.md` 中
+
+3.  **`check_and_compress_prompt()`** (第 518 行) - 主动检查：当估算的 prompt token 数量超过 `CONTEXT_COMPRESS_THRESHOLD` 时，在溢出发生之前触发压缩
+
+4.  **`handle_context_overflow()`** (第 540 行) - 修改为在溢出时调用 `compress_context()`，而不是仅仅执行简单切换
+
+5.  **配置变量** (第 55-56 行):
+    -   `CONTEXT_COMPRESS_THRESHOLD=${CONTEXT_COMPRESS_THRESHOLD:-150000}`
+    -   `CONTEXT_KEEP_RECURRENT=${CONTEXT_KEEP_RECENT:-3}`
+
+6.  **主动检查** - `check_and_compress_prompt()` 在所有 6 个 agent 调用点（codex, claude, opencode × implementation + review）的 prompt 构建之后被调用
+
+**在 `tests/test_context_overflow.sh` 中的更改：**
+-   添加了 `estimate_prompt_tokens()` 的测试 (5 个案例: 英文, 中文, 空, 混合, 大文本)
+-   添加了 `compress_context()` 的测试 (4 个场景: 基本压缩, 无需压缩, 不存在的目录, 重新压缩)
+-   添加了 `check_and_compress_prompt()` 的测试 (3 个场景: 阈值以下, 阈值以上, 自定义阈值)
+-   添加了 `handle_context_overflow()` 与 `compress_context()` 集成的测试
+
+**测试结果:** 所有测试文件共 70/70 个测试通过，315/315 个测试通过。
+
+## 经验教训
+
+-   **模式**：`run.sh` 中的 Shell 函数遵循以下模式：检查前置条件 → 执行逻辑 → 记录到 `log.md` → 返回状态码。新函数应遵循此模式。
+-   **避坑**：`CONTEXT_COMPRESS_THRESHOLD` 和 `CONTEXT_KEEP_RECENT` 必须使用 `${VAR:-default}` 语法，以允许环境变量覆盖，同时提供合理的默认值。
+-   **经验**：主动压缩（在构建 prompt 后检查 token 数量）比响应式压缩（仅在溢出后）更有效。prompt 估算使用简单的 `char_count / 3` 方法，对于令牌限制检查来说已足够准确。

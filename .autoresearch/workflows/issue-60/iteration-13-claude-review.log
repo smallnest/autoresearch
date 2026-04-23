@@ -1,0 +1,110 @@
+它使用的是 bash，所以 glob 问题在 bash 中不会引起错误。不过，`C++` awk 正则表达式模式仍然存在技术性问题——在 awk 扩展正则表达式中，`C++` 意味着“一个或多个 `+` 字符跟在 `C` 后面”，而不是“字面字符串 `C++`”。它会匹配 `C++` 但也会匹配 `C+` 和 `C++++++++`。对于这种用途来说，这是一个小问题，并非关键。
+
+现在我已掌握所有所需信息。让我来整理审核结果。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #60
+- 标题: [enhancement] 上下文溢出时进行智能压缩和摘要
+- 迭代次数: 12
+- 子任务: T-003 - 实现 prompt 智能裁剪与溢出恢复流程
+
+---
+
+### 总体评价
+
+**评分: 82/100**
+
+相比前次迭代（72-76分）有显著改进。核心功能已正确集成：`trim_prompt_smart()` 通过 `apply_prompt_trimming()` 在全部 6 个 agent runner 函数中被调用，`handle_context_overflow()` 正确执行渐进式压缩 + 多级裁剪策略，主循环中 `PROMPT_TRIMMED` 的重置时机正确。但存在一个已通过子任务检测的正则 bug 导致 `test_trim_prompt.sh` 有 1 个测试失败，以及 `get_program_instructions()` 中的一处 shell 引用问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 已通过子任务检测正则不匹配 YAML 列表格式
+
+**位置**: `run.sh:1485`
+
+**问题描述**:
+awk 模式 `/passes.:.*true/` 中的 `.` 匹配 `passes` 和 `:` 之间的**任意一个字符**。这在匹配 JSON 格式 `"passes": true` 时工作正常（`"` 是那个字符），但不匹配 YAML 列表格式 `- passes: true`（`s` 后直接跟 `:`，没有中间字符）。
+
+这导致当 prompt 中子任务以 `- passes: true` 格式出现时，已通过子任务的详细描述不会被移除，裁剪失效。
+
+`test_trim_prompt.sh` 中有一个对应测试因此失败：
+```
+FAIL: removes T-001 description (expected NOT to contain 'long description of the parser task')
+```
+
+**建议修复**:
+```bash
+# 将
+if (/passes.:.*true/) {
+# 改为
+if (/passes.?:.*true/) {
+```
+`?` 使 `.` 变为可选，同时匹配 `"passes": true` 和 `passes: true` 两种格式。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 2: `get_program_instructions()` 中的 shell 引用问题
+
+**位置**: `run.sh:1377`
+
+**问题描述**:
+```bash
+/^[#]+ .*'(Go|Python|TypeScript|Rust|Frontend|Java|Ruby|PHP|C++)'/ { skip=1; next }
+```
+这里的 `'(Go|...)'` 打破了 awk 的单引号字符串，让 shell 解释括号内容。在 zsh 中会触发 "no matches found" 错误。虽然 `run.sh` 的 shebang 是 `#!/bin/bash` 不受影响，但这不是良好的编码实践。此外 `C++` 在 awk 正则中表示 `C` 后跟一个或多个 `+`，应转义为 `C\+\+`。
+
+**建议修复**:
+将 awk 程序移入变量或使用双引号+转义来避免引号嵌套问题。
+
+#### 问题 3: `test_trim_prompt.sh` 中 `apply_prompt_trimming()` 与 `run.sh` 版本不一致
+
+**问题描述**:
+`test_trim_prompt.sh` 中的 `apply_prompt_trimming()` 只实现了级别 0/1/2 三种状态（用 2 表示"已裁剪"防止重复），而 `run.sh` 中的实现支持 0/1/2/3 四个级别（1=轻度, 2=中度, 3=重度）。测试没有覆盖级别 2 和 3 的实际行为（移除历史摘要、移除 Agent Persona），而 `test_context_overflow.sh` 中有覆盖。两个测试文件对同一函数的行为定义不一致，增加了维护混乱。
+
+**建议修复**: 将 `test_trim_prompt.sh` 中的 `apply_prompt_trimming()` 替换为与 `run.sh` 一致的版本，或合并测试文件。
+
+---
+
+### 建议改进 (可选)
+
+- `handle_context_overflow()` 第 691 行在压缩循环结束后恢复 `CONTEXT_KEEP_RECENT=$original_keep`，但如果在压缩过程中脚本被信号中断，全局变量不会恢复。可以在 `cleanup()` 中考虑重置。
+- `trim_prompt_smart()` 的三步裁剪（awk 管道）每次都 fork 3 个子进程，对于大型 prompt 可能有性能影响。可以考虑合并为一个 awk 脚本。
+
+---
+
+### 各维度评分
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 80 | 核心流程正确集成，但 passes 检测正则有 bug |
+| 测试质量 (25%) | 85 | 181 个测试中 180 通过，覆盖完整；`test_trim_prompt.sh` 有 1 个失败 |
+| 代码质量 (20%) | 82 | 结构清晰，命名一致，但 shell 引用问题 |
+| 安全性 (10%) | 95 | 无注入风险 |
+| 性能 (10%) | 80 | 三次 awk 管道可优化但非瓶颈 |
+
+**加权总分**: 80×0.35 + 85×0.25 + 82×0.20 + 95×0.10 + 80×0.10 = **82.25 → 82**
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+修复 `run.sh:1485` 的正则 `/passes.:.*true/` → `/passes.?:.*true/`，使已通过子任务检测同时支持 JSON 和 YAML 列表格式。修复后重新运行 `test_trim_prompt.sh` 验证。
+
+---
+
+## Learnings
+
+- **模式**: `apply_prompt_trimming()` 在全部 6 个 agent runner 中统一调用（`prompt=$(apply_prompt_trimming "$prompt")`），这是避免"孤儿代码"的有效模式——每个 prompt 组装点都经过统一入口
+- **踩坑**: awk 正则中的 `.` 在 `passes.:` 中被误以为是"冒号"，实际是"passes 和冒号之间的任意一个字符"。在 shell+awk 混合编程中，正则含义需要格外仔细验证
+- **经验**: 测试中的输入格式必须与生产代码实际生成的格式一致。`get_subtask_section()` 生成的格式是 `- **ID**: T-xxx`（JSON via jq），测试中手写的 `- passes: true`（无引号）与生产格式 `"passes": true`（有引号）不匹配，导致了正则 bug 被暴露但也说明测试比生产更严格

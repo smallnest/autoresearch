@@ -1,0 +1,93 @@
+现在我已全面了解情况。让我来整理审核报告。
+
+## 审核报告
+
+### Issue
+- 编号: #57
+- 标题: [hardness engineering] Prompt 裁剪策略导致关键信息丢失
+- 迭代次数: 3
+- 子任务: T-001 - 实现结构化 prompt 裁剪函数
+
+---
+
+### 总体评价
+
+**评分: 82/100**
+
+实现采用了正确的架构策略（在拼接阶段控制而非事后裁剪），`PROMPT_TRIMMED` 标志位 + `get_program_instructions_trimmed()` 的机制设计合理。但存在一个严重问题：`trim_prompt_smart()` 函数是死代码，从未被调用。测试覆盖完善（34/34 全通过），但测试的是未被使用的函数。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `trim_prompt_smart()` 是死代码，从未被调用
+
+**位置**: `run.sh:873-926`
+
+**问题描述**:
+`trim_prompt_smart()` 函数已定义但在 `run.sh` 中没有任何调用点。Issue 验收条件明确要求"trim_prompt_smart() 函数实现完成"且需区分 prompt 中的必要段和可选段、去掉 program.md 全文和 agent persona 冗余内容。实际裁剪机制完全通过 `PROMPT_TRIMMED` 标志 + `get_program_instructions_trimmed()` 来工作，后者只是简单地跳过整个 program.md 文件读取。
+
+这意味着验收条件中"去掉 agent persona 中的冗余示例代码块"（>20行的代码块裁剪）**完全未实现**。当 `PROMPT_TRIMMED=1` 时，agent instructions（如 `agents/claude.md`）中的冗长示例仍然会被完整包含在 prompt 中。
+
+**建议修复**:
+两种方案：
+1. 删除 `trim_prompt_smart()` 死代码，更新验收条件说明实际采用的方案
+2. 在 `run_codex`/`run_claude`/`run_opencode` 中集成 `trim_prompt_smart()`，当 `PROMPT_TRIMMED=1` 时对 agent instructions 内容进行裁剪
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 2: 测试中的函数实现与 run.sh 不完全一致
+
+**位置**: `tests/test_trim_prompt.sh:21-72`
+
+**问题描述**:
+测试文件中复制了 `trim_prompt_smart()` 的实现，而非从 `run.sh` 中 `source` 或提取。如果 `run.sh` 中的实现修改，测试不会反映变化。测试实际测试的是一个独立的副本，而非生产代码。
+
+#### 问题 3: `get_program_instructions_trimmed` 的规划阶段调用
+
+**位置**: `run.sh:1394`
+
+**问题描述**:
+规划阶段 (`run_planning_phase`) 也使用了 `get_program_instructions_trimmed()`。如果在规划阶段之前的上下文溢出设置了 `PROMPT_TRIMMED=1`，规划阶段也会跳过 program.md。但在正常的流程中，规划阶段最先执行，此时 `PROMPT_TRIMMED` 应该为 0，所以这只是一个防御性考虑。
+
+---
+
+### 建议改进 (可选)
+
+- 测试框架中可以考虑从 `run.sh` 直接 `source` 函数，而非复制实现。现有项目中的 `test_extract_score.sh` 就是这种模式。
+- `trim_prompt_smart()` 中的 awk 代码块处理逻辑（删除 >20 行的代码块）设计良好，建议在 agent instructions 的读取逻辑中实际使用。
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 决定 `trim_prompt_smart()` 的去留：要么删除并说明实际方案，要么集成到 prompt 拼接流程中
+2. 如果保留，需确保 agent persona 的冗长内容也能被裁剪
+3. 更新测试以验证实际生效的裁剪路径
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 70 | 核心机制（标志位+跳过program.md）正确，但 trim_prompt_smart 是死代码，agent persona 裁剪未实现 |
+| 测试质量 (25%) | 80 | 34 个测试全通过，覆盖全面；但测试的是死代码副本而非生产代码 |
+| 代码质量 (20%) | 95 | 命名清晰，注释充分，架构选择合理 |
+| 安全性 (10%) | 100 | 无注入风险，无敏感信息泄露 |
+| 性能 (10%) | 100 | 标志位检查开销极小 |
+
+**总分**: 70×0.35 + 80×0.25 + 95×0.20 + 100×0.10 + 100×0.10 = **82/100**
+
+---
+
+## Learnings
+
+- **模式**: 实际生效的裁剪策略采用了"预防式"设计——通过 `get_program_instructions_trimmed()` 在 prompt 拼接阶段就跳过 program.md，而非事后裁剪已拼接的完整 prompt。这比 `trim_prompt_smart()` 的事后裁剪更干净。
+- **踩坑**: `trim_prompt_smart()` 在 `run.sh` 中定义但从未被调用，是死代码。验证函数是否被使用应该通过 `grep` 搜索调用点来确认。
+- **经验**: Issue 的验收条件中描述的具体实现方式（区分必要段/可选段、裁剪冗长代码块）与实际采用的方案（标志位+跳过整个文件读取）有差异。实现时应明确选择一种方案并更新验收条件。

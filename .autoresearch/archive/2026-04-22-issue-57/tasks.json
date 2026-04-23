@@ -1,0 +1,50 @@
+{
+  "issueNumber": 57,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现结构化 prompt 裁剪函数",
+      "description": "在 run.sh 中实现 `trim_prompt_smart()` 函数，替代暴力裁剪策略。函数应：\n1. 将 prompt 分为必要段（Issue 描述、项目路径、语言、子任务详情）和可选段（program.md、agent persona 示例代码）\n2. 裁剪时只去掉可选段（program.md 全文和 agent instructions 中的冗余示例），保留必要段\n3. 在裁剪后的 prompt 末尾保留最新的 review 反馈和错误信息\n4. 不添加 'Do NOT use any tool calls' 等限制性前缀\n5. 设置全局标志位 `PROMPT_TRIMMED=1`，确保裁剪只触发一次，防止逐次缩短\n6. 只在上下文溢出（context overflow）场景触发，其他错误场景（API 失败、超时、致命错误）不应裁剪 prompt",
+      "acceptanceCriteria": [
+        "trim_prompt_smart() 函数实现完成，能区分 prompt 中的必要段和可选段",
+        "裁剪时保留 Issue 描述、项目路径、语言、子任务详情、review 反馈等关键信息",
+        "裁剪时去掉 program.md 全文和 agent persona 冗余内容",
+        "不添加禁止 tool call 的限制性前缀",
+        "通过 PROMPT_TRIMMED 标志位确保只裁剪一次",
+        "新增单元测试 test_trim_prompt.sh 验证裁剪逻辑的正确性"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "在上下文溢出处理流程中集成裁剪逻辑",
+      "description": "修改 `handle_context_overflow()` 和 `run_with_retry()` 函数，在检测到上下文溢出时调用 `trim_prompt_smart()` 进行结构化裁剪：\n1. 在 `handle_context_overflow()` 中设置裁剪标志并记录日志\n2. 在下一次迭代的 prompt 组装时（run_codex/run_claude/run_opencode），检查 `PROMPT_TRIMMED` 标志，若已设置则跳过加载 program.md 等可选内容\n3. 确保 `run_with_retry()` 中的上下文溢出分支（detect_context_overflow）不再直接 break，而是设置裁剪标志后继续\n4. 确保非上下文溢出的失败场景（API 错误、超时等）不触发裁剪",
+      "acceptanceCriteria": [
+        "handle_context_overflow() 中正确设置 PROMPT_TRIMMED 标志",
+        "run_codex/run_claude/run_opencode 的 prompt 组装逻辑检查 PROMPT_TRIMMED，已裁剪时跳过 program.md",
+        "上下文溢出时触发裁剪，非溢出场景（API 失败、超时、致命错误）不触发裁剪",
+        "裁剪后的 prompt 仍包含足够的上下文让 agent 能继续工作",
+        "现有 test_context_overflow.sh 测试通过"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "添加 prompt 裁剪的单元测试和集成验证",
+      "description": "编写全面的测试来验证 prompt 裁剪策略：\n1. 单元测试 trim_prompt_smart() 的各场景：正常裁剪、空输入、已裁剪标志、多次调用不重复裁剪\n2. 测试裁剪后的 prompt 包含必要信息（Issue 标题、项目路径、子任务描述）且不包含被移除的内容（program.md 关键片段）\n3. 测试非上下文溢出场景不会触发裁剪\n4. 测试 PROMPT_TRIMMED 标志的幂等性（多次 handle_context_overflow 不会重复裁剪）\n5. 验证 shellcheck 通过",
+      "acceptanceCriteria": [
+        "新增 test_trim_prompt.sh 测试文件覆盖所有裁剪场景",
+        "所有测试通过（bash test_trim_prompt.sh && bash tests/test_context_overflow.sh && bash tests/test_extract_score.sh）",
+        "shellcheck run.sh 无新增错误",
+        "测试覆盖：裁剪保留必要信息、裁剪移除可选内容、幂等性、非触发场景"
+      ],
+      "priority": 3,
+      "type": "code",
+      "passes": false
+    }
+  ]
+}

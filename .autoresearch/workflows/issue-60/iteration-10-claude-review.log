@@ -1,0 +1,152 @@
+## 审核报告
+
+### Issue
+- 编号: #60
+- 标题: [enhancement] 上下文溢出时进行智能压缩和摘要
+- 迭代次数: 10
+- 子任务: T-003 - 实现 prompt 智能裁剪与溢出恢复流程
+
+---
+
+### 总体评价
+
+**评分: 72/100**
+
+核心功能基本存在，但存在关键的集成缺失：`trim_prompt_smart()` 函数已实现但**从未被调用**，实际的裁剪逻辑仅通过 `PROMPT_TRIMMED` 标志跳过整个 program.md，而非按优先级精细裁剪。测试全部通过但覆盖的是**未集成的函数**，存在"孤儿代码"问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `trim_prompt_smart()` 定义但从未调用 — 核心功能未集成
+
+**位置**: `run.sh:1337-1388`
+
+**问题描述**:
+T-003 的核心需求是"按优先级裁剪 prompt 内容——保留当前子任务描述、未完成子任务列表、最近的 review 反馈；移除已通过子任务的详细描述"。`trim_prompt_smart()` 函数实现了此逻辑，但 grep 结果显示它在整个代码库中**只在定义处出现**，从未在 `handle_context_overflow()` 或主循环中被调用。
+
+**代码片段**:
+```bash
+# run.sh:1337 - 定义了 trim_prompt_smart()
+trim_prompt_smart() {
+    local prompt="$1"
+    if [ "$PROMPT_TRIMMED" -eq 1 ]; then
+        echo "$prompt"
+        return
+    fi
+    ...
+}
+# 但没有任何地方调用它！
+```
+
+**建议修复**:
+在 `handle_context_overflow()` 中调用 `trim_prompt_smart()`，或在 prompt 组装阶段调用。例如在 `get_program_instructions()` 之外增加一个 prompt 级别的裁剪步骤：
+
+```bash
+# 在 handle_context_overflow() 中，compress_context 之后
+trim_prompt_smart "$current_prompt"
+```
+
+**原因**: 如果核心裁剪函数不被调用，T-003 的主要验收条件"按优先级裁剪 prompt 内容"实际上没有生效。
+
+---
+
+#### 问题 2: `PROMPT_TRIMMED=1` 在下一次迭代被重置，裁剪效果丢失
+
+**位置**: `run.sh:3954` (重置) vs `run.sh:683` (设置)
+
+**问题描述**:
+`handle_context_overflow()` 在第 683 行设置 `PROMPT_TRIMMED=1`，但主循环在第 3954 行（每次迭代开始时）将其重置为 0。由于溢出处理后会 `continue` 到下一次迭代，`PROMPT_TRIMMED=1` 的效果在下一次迭代开始时就被清除了。这意味着实际的裁剪行为（跳过 program.md）**可能从未生效**。
+
+**建议修复**:
+方案 A：不在每次迭代开始时无条件重置 `PROMPT_TRIMMED`，改为在成功执行一次迭代后重置。
+方案 B：将 `PROMPT_TRIMMED` 作为更持久的标志，直到上下文压力解除。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: 测试中的 `handle_context_overflow()` 副本与生产代码不一致
+
+**位置**: `tests/test_context_overflow.sh:252-278`
+
+**问题描述**:
+测试文件中的 `handle_context_overflow()` 是内联复制的简化版本，**不包含 `PROMPT_TRIMMED=1` 的设置**，也不调用 `trim_prompt_smart()`。这意味着测试验证的是一个与生产代码不同的函数。
+
+**代码片段**:
+```bash
+# test_context_overflow.sh:252 - 测试版本
+handle_context_overflow() {
+    ...
+    compress_context "$TEST_WORK_DIR"
+    ...
+    # 缺少: PROMPT_TRIMMED=1
+    # 缺少: CONTEXT_OVERFLOW=1
+}
+```
+
+**建议修复**:
+从 `run.sh` source 提取函数，或确保测试副本与生产代码完全一致。
+
+---
+
+#### 问题 4: `handle_context_overflow()` 缺少渐进式压缩
+
+**位置**: `run.sh:649-686`
+
+**问题描述**:
+`handle_context_overflow()` 只调用了一次 `compress_context()`，没有渐进式压缩逻辑。虽然 `check_and_compress_prompt()` 有渐进式压缩，但溢出恢复路径中并未使用。子任务要求"如果仍溢出，渐进式压缩（增加压缩力度）"。
+
+**建议修复**:
+在 `handle_context_overflow()` 中加入重试循环，类似 `check_and_compress_prompt()` 的渐进式逻辑。
+
+---
+
+#### 问题 5: 裁剪策略过于粗暴 — 全部跳过 program.md 而非按优先级
+
+**位置**: `run.sh:1314-1333`
+
+**问题描述**:
+当前的裁剪策略是通过 `PROMPT_TRIMMED` 标志让 `get_program_instructions()` 返回空字符串，完全跳过 program.md。这不符合"按优先级裁剪"的要求——应该保留与当前项目语言相关的部分，移除无关部分。
+
+---
+
+### 建议改进 (可选)
+
+- `trim_prompt_smart()` 中的长代码块检测（>20 行）阈值应该可配置
+- 考虑在 `trim_prompt_smart()` 中添加对"已通过子任务详细描述"的识别和移除
+- `test_trim_prompt.sh` 中的 `get_program_instructions_trimmed()` 是模拟版本，应考虑测试真实的 `get_program_instructions()`
+
+---
+
+### 各维度评分
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 | 65 | 核心裁剪函数未集成，`PROMPT_TRIMMED` 生命周期有 bug，裁剪策略过于粗暴 |
+| 测试质量 | 85 | 测试覆盖面广（103+34 全通过），但存在孤儿测试问题 |
+| 代码质量 | 80 | `trim_prompt_smart()` 本身实现合理，`generate_iteration_summary()` 设计良好，但集成缺失 |
+| 安全性 | 90 | 无安全风险，输入处理合理 |
+| 性能 | 85 | 压缩逻辑使用 grep 提取，性能可接受 |
+
+**总分**: 65×0.35 + 85×0.25 + 80×0.20 + 90×0.10 + 85×0.10 = **76.75 ≈ 72**（向下取整反映核心功能未集成的严重性）
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. **集成 `trim_prompt_smart()`**: 在 `handle_context_overflow()` 或 prompt 组装流程中调用它
+2. **修复 `PROMPT_TRIMMED` 生命周期**: 确保裁剪效果持续到上下文压力解除
+3. **添加渐进式压缩到溢出恢复**: `handle_context_overflow()` 中应有多轮压缩逻辑
+4. **消除测试与生产代码的差异**: 确保测试验证的是实际运行路径
+
+---
+
+## Learnings
+
+- **模式**: `trim_prompt_smart()` 的分层裁剪策略（先移除 program.md，再移除长代码块）是 shell 脚本中处理大文本的有效模式
+- **踩坑**: 定义了函数但忘记在关键路径中调用是最隐蔽的集成问题——grep 验证函数调用（而非仅定义）是必要的自检步骤
+- **经验**: `PROMPT_TRIMMED` 这种全局标志在迭代循环中的生命周期需要仔细设计重置时机——在循环顶部无条件重置会导致标志失效
