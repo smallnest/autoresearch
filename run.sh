@@ -987,14 +987,11 @@ run_with_retry() {
         start_spinner "$agent 正在工作中..."
 
         if [ "$agent" = "codex" ]; then
-            timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 || true
-            exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         elif [ "$agent" = "opencode" ]; then
-            timeout_wrapper "$AGENT_TIMEOUT" opencode run "$prompt" > "$log_file" 2>&1 || true
-            exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" opencode run "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         else
-            timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 || true
-            exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         fi
 
         # 停止等待动画
@@ -1082,6 +1079,12 @@ run_with_retry() {
                 log_console "错误信息:"
                 echo "$error_tail" | while read -r line; do log_console "  $line"; done
             fi
+            continue
+        fi
+
+        # Check file existence and non-empty (guards against filesystem errors / race conditions)
+        if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+            log_console "❌ $agent 调用失败 (输出文件不存在或为空，将重试)"
             continue
         fi
 
@@ -2226,8 +2229,8 @@ $agent_instructions
     local log_file="$WORK_DIR/planning.log"
 
     cd "$PROJECT_ROOT"
-    run_with_retry "$first_agent" "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry "$first_agent" "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         log "规划阶段 agent 被跳过，将不拆分子任务（回退到原有模式）"
         return 1
@@ -2239,6 +2242,12 @@ $agent_instructions
     # 从 agent 输出中提取 tasks.json
     local tasks_file
     tasks_file=$(get_tasks_file)
+
+    # 防御性检查：确保日志文件存在且非空
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        log "警告: 规划阶段输出文件不存在或为空，回退到原有模式"
+        return 1
+    fi
 
     # 尝试提取 ```json ... ``` 代码块
     local json_content
@@ -2368,8 +2377,8 @@ $codex_instructions
     prompt=$(apply_prompt_trimming "$prompt")
     check_and_compress_prompt "$prompt" "$WORK_DIR"
     cd "$PROJECT_ROOT"
-    run_with_retry codex "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry codex "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         return 2
     elif [ $agent_ret -ne 0 ]; then
@@ -2472,8 +2481,8 @@ $claude_instructions
     prompt=$(apply_prompt_trimming "$prompt")
     check_and_compress_prompt "$prompt" "$WORK_DIR"
     cd "$PROJECT_ROOT"
-    run_with_retry claude "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry claude "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         return 2
     elif [ $agent_ret -ne 0 ]; then
@@ -2576,8 +2585,8 @@ $opencode_instructions
     prompt=$(apply_prompt_trimming "$prompt")
     check_and_compress_prompt "$prompt" "$WORK_DIR"
     cd "$PROJECT_ROOT"
-    run_with_retry opencode "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry opencode "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         return 2
     elif [ $agent_ret -ne 0 ]; then
@@ -2641,8 +2650,8 @@ $opencode_instructions
     prompt=$(apply_prompt_trimming "$prompt")
     check_and_compress_prompt "$prompt" "$WORK_DIR"
     cd "$PROJECT_ROOT"
-    run_with_retry opencode "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry opencode "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         echo "0" > "$WORK_DIR/.last_score"
         return 2
@@ -2653,23 +2662,29 @@ $opencode_instructions
 
     local score=0
     local review_result
-    review_result=$(cat "$log_file")
-
-    # 先检测 sentinel 标记
-    local sentinel
-    sentinel=$(check_sentinel "$review_result")
-    if [ "$sentinel" = "pass" ]; then
-        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
-        score=100
-    elif [ "$sentinel" = "fail" ]; then
-        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
-        score=0
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        log "警告: 审核输出文件不存在或为空，默认评分 50"
+        review_result=""
+        score=50
     else
-        score=$(extract_score "$review_result")
+        review_result=$(cat "$log_file")
 
-        if [ -z "$score" ] || [ "$score" = "0" ]; then
-            log "警告: 无法从审核结果中提取评分，默认为 50"
-            score=50
+        # 先检测 sentinel 标记
+        local sentinel
+        sentinel=$(check_sentinel "$review_result")
+        if [ "$sentinel" = "pass" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+            score=100
+        elif [ "$sentinel" = "fail" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+            score=0
+        else
+            score=$(extract_score "$review_result")
+
+            if [ -z "$score" ] || [ "$score" = "0" ]; then
+                log "警告: 无法从审核结果中提取评分，默认为 50"
+                score=50
+            fi
         fi
     fi
 
@@ -2758,8 +2773,8 @@ $claude_instructions
     prompt=$(apply_prompt_trimming "$prompt")
     check_and_compress_prompt "$prompt" "$WORK_DIR"
     cd "$PROJECT_ROOT"
-    run_with_retry claude "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry claude "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         echo "0" > "$WORK_DIR/.last_score"
         return 2
@@ -2770,23 +2785,29 @@ $claude_instructions
 
     local score=0
     local review_result
-    review_result=$(cat "$log_file")
-
-    # 先检测 sentinel 标记
-    local sentinel
-    sentinel=$(check_sentinel "$review_result")
-    if [ "$sentinel" = "pass" ]; then
-        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
-        score=100
-    elif [ "$sentinel" = "fail" ]; then
-        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
-        score=0
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        log "警告: 审核输出文件不存在或为空，默认评分 50"
+        review_result=""
+        score=50
     else
-        score=$(extract_score "$review_result")
+        review_result=$(cat "$log_file")
 
-        if [ -z "$score" ] || [ "$score" = "0" ]; then
-            log "警告: 无法从审核结果中提取评分，默认为 50"
-            score=50
+        # 先检测 sentinel 标记
+        local sentinel
+        sentinel=$(check_sentinel "$review_result")
+        if [ "$sentinel" = "pass" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+            score=100
+        elif [ "$sentinel" = "fail" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+            score=0
+        else
+            score=$(extract_score "$review_result")
+
+            if [ -z "$score" ] || [ "$score" = "0" ]; then
+                log "警告: 无法从审核结果中提取评分，默认为 50"
+                score=50
+            fi
         fi
     fi
 
@@ -2847,8 +2868,8 @@ $codex_instructions
     prompt=$(apply_prompt_trimming "$prompt")
     check_and_compress_prompt "$prompt" "$WORK_DIR"
     cd "$PROJECT_ROOT"
-    run_with_retry codex "$prompt" "$log_file" || true
-    local agent_ret=$?
+    local agent_ret=0
+    run_with_retry codex "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         echo "0" > "$WORK_DIR/.last_score"
         return 2
@@ -2859,23 +2880,29 @@ $codex_instructions
 
     local score=0
     local review_result
-    review_result=$(cat "$log_file")
-
-    # 先检测 sentinel 标记
-    local sentinel
-    sentinel=$(check_sentinel "$review_result")
-    if [ "$sentinel" = "pass" ]; then
-        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
-        score=100
-    elif [ "$sentinel" = "fail" ]; then
-        log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
-        score=0
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        log "警告: 审核输出文件不存在或为空，默认评分 50"
+        review_result=""
+        score=50
     else
-        score=$(extract_score "$review_result")
+        review_result=$(cat "$log_file")
 
-        if [ -z "$score" ] || [ "$score" = "0" ]; then
-            log "警告: 无法从审核结果中提取评分，默认为 50"
-            score=50
+        # 先检测 sentinel 标记
+        local sentinel
+        sentinel=$(check_sentinel "$review_result")
+        if [ "$sentinel" = "pass" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+            score=100
+        elif [ "$sentinel" = "fail" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+            score=0
+        else
+            score=$(extract_score "$review_result")
+
+            if [ -z "$score" ] || [ "$score" = "0" ]; then
+                log "警告: 无法从审核结果中提取评分，默认为 50"
+                score=50
+            fi
         fi
     fi
 
@@ -3541,8 +3568,12 @@ $subtask_desc"
  if claude -p "$prompt" --dangerously-skip-permissions \
  --file "$screenshot_file" \
  > "$log_file" 2>&1; then
+ if [ -f "$log_file" ] && [ -s "$log_file" ]; then
  result=$(cat "$log_file")
  llm_success=1
+ else
+ error "LLM 验证输出文件为空 (尝试 $retry/$max_llm_retries)"
+ fi
  else
  error "LLM 验证调用失败 (尝试 $retry/$max_llm_retries)"
  fi
