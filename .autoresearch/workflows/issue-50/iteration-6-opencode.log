@@ -1,0 +1,10 @@
+[93m[1m| [0m[90m Todo     [0m5 todos
+
+[96m[1m| [0m[90m Read     [0mrun.sh[94m[1m| [0m[90m Grep     [0mgit checkout.*main.*||.*true|git pull.*||.*true|git branch -D.*||.*true
+[94m[1m| [0m[90m Grep     [0mgit checkout.*main.*||.*true|git pull.*||.*true|git branch -D.*||.*true
+[?25l│
+◆  Permission required: bash (grep -n "git checkout.*main.*||.*true\|git pull.*||.*true\|git branch -D.*||.*true" /Users/chaoyuepan/ai/autoresearch/run.sh)
+│  ● Allow once
+│  ○ Always allow: grep*
+│  ○ Reject
+└

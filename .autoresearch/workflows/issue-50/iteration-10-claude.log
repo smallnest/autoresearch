@@ -1,0 +1,24 @@
+## 任务完成
+
+已成功创建 `tests/test_git_error_handling.sh` 测试文件，覆盖以下场景：
+
+| 场景 | 描述 |
+|------|------|
+| Scenario 1 | gh pr merge 失败时记录 PR URL 和日志，流程继续 |
+| Scenario 2 | gh pr merge 成功时正常工作 |
+| Scenario 3 | branch cleanup checkout 失败时记录警告，流程继续 |
+| Scenario 4 | branch cleanup pull 失败时记录警告，流程继续 |
+| Scenario 5 | branch cleanup delete 失败时记录警告，流程继续 |
+| Scenario 6 | 分支不存在时跳过删除，无警告 |
+| Scenario 7 | 组合失败（PR merge + branch cleanup）不阻塞流程 |
+
+测试结果：**20/20 通过**
+
+---
+
+## Learnings
+
+- **模式**: 使用 mock 函数覆盖外部命令（`gh`、`git`）是测试容错逻辑的有效方法，避免依赖真实网络环境
+- **模式**: `if ! cmd; then log; fi` 模式是 Shell 脚本容错处理的最佳实践，比 `|| true` 更可控
+- **经验**: 组合失败场景测试能验证多个容错机制同时工作时的行为，确保流程不被阻塞
+- **踩坑**: 测试文件需要 `source lib/branch_cleanup.sh` 来复用已实现的容错逻辑，避免重复实现

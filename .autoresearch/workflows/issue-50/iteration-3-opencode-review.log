@@ -1,0 +1,13 @@
+[94m[1m| [0m[90m Grep     [0mgit push
+[94m[1m| [0m[90m Glob     [0m{"pattern":"**/run.sh","path":"/Users/chaoyuepan/ai/autoresearch"}
+[96m[1m| [0m[90m Read     [0mrun.sh
+[94m[1m| [0m[90m Grep     [0mpush_branch_with_recovery
+[96m[1m| [0m[90m Read     [0mlib/git_push.sh
+[96m[1m| [0m[90m Read     [0mtests/test_git_push.sh
+[?25l│
+◆  Permission required: bash (bash tests/test_git_push.sh)
+│  ● Allow once
+│  ○ Always allow: bash*
+│  ○ Reject
+└
+                                                          

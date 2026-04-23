@@ -1,0 +1,50 @@
+## 修复完成
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| checkout main 失败时记录警告日志 | ✅ 通过 | 使用 `if ! git checkout; then log; fi` 模式 |
+| git pull 失败时记录警告日志 | ✅ 通过 | 使用 `if ! git pull; then log; fi` 模式 |
+| branch -D 失败时记录警告日志 | ✅ 通过 | 使用 `if ! git branch -D; then log; fi` 模式 |
+| 所有清理操作失败不影响主流程继续执行 | ✅ 通过 | 所有错误都被捕获并记录，不阻断流程 |
+
+### 修改内容
+
+**位置**: `run.sh:4519-4534`
+
+将原来的 `2>/dev/null || true` 模式改为带日志记录的容错模式：
+
+```bash
+# 修改前
+git checkout "$main_branch" 2>/dev/null || true
+git pull origin "$main_branch" 2>/dev/null || true
+git branch -D "$BRANCH_NAME" 2>/dev/null || true
+
+# 修改后
+if ! git checkout "$main_branch" 2>/dev/null; then
+    log_console "⚠️  切换到 $main_branch 分支失败，继续执行..."
+    log "branch cleanup: checkout $main_branch failed"
+fi
+if ! git pull origin "$main_branch" 2>/dev/null; then
+    log_console "⚠️  拉取 $main_branch 分支最新代码失败，继续执行..."
+    log "branch cleanup: git pull $main_branch failed"
+fi
+if ! git branch -D "$BRANCH_NAME" 2>/dev/null; then
+    log_console "⚠️  删除本地分支 $BRANCH_NAME 失败，可能分支不存在或未合并"
+    log "branch cleanup: git branch -D $BRANCH_NAME failed"
+fi
+```
+
+### 验证结果
+
+- 脚本语法检查通过
+- 相关测试 (test_git_push.sh) 15/15 通过
+
+---
+
+## Learnings
+
+- **模式**: Shell 脚本中 `|| true` 只确保流程不中断，配合 `2>/dev/null` 会静默所有错误；容错处理应使用 `if ! cmd; then log; fi` 模式记录失败
+- **踩坑**: `2>/dev/null` 会同时隐藏错误输出，导致问题排查困难；容错应保留错误信息到日志
+- **经验**: 同一 Issue 的多个子任务应保持实现模式一致（T-001 和 T-003 都涉及 git 操作容错，现已统一使用 `if ! cmd; then log; fi` 模式）

@@ -18,3 +18,4 @@
 2026-04-21T23:38:37+08:00	48	[hardness engineering] Agent 调用超时机制	completed	3	false	92	92	feature/issue-48	
 2026-04-22T14:39:55+08:00	49	[hardness engineering] 全局 trap 清理机制	completed	6	false	92	92	feature/issue-49	
 2026-04-23T08:09:39+08:00	60	[enhancement] 上下文溢出时进行智能压缩和摘要	completed	16	false	86	86	feature/issue-60	
+2026-04-23T11:33:02+08:00	50	[hardness engineering] Git 操作容错	completed	11	false	92	92	feature/issue-50	

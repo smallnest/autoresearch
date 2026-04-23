@@ -55,6 +55,7 @@ MAX_CONTEXT_RETRIES=${MAX_CONTEXT_RETRIES:-3}
 CONTEXT_COMPRESS_THRESHOLD=${CONTEXT_COMPRESS_THRESHOLD:-150000}
 CONTEXT_KEEP_RECENT=${CONTEXT_KEEP_RECENT:-3}
 AGENT_TIMEOUT=${AGENT_TIMEOUT:-600}
+PROMPT_TRIMMED=0  # 上下文溢出后的裁剪级别 (0=无, 1=轻度, 2=中度, 3=重度)
 
 # 脚本所在目录（用于查找默认 agents 配置和 program.md）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -67,6 +68,22 @@ if [ ! -f "$AGENT_LOGIC_LIB" ]; then
 fi
 # shellcheck source=/dev/null
 source "$AGENT_LOGIC_LIB"
+
+GIT_PUSH_LIB="$SCRIPT_DIR/lib/git_push.sh"
+if [ ! -f "$GIT_PUSH_LIB" ]; then
+    echo "ERROR: 缺少 git push 逻辑文件: $GIT_PUSH_LIB" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$GIT_PUSH_LIB"
+
+BRANCH_CLEANUP_LIB="$SCRIPT_DIR/lib/branch_cleanup.sh"
+if [ ! -f "$BRANCH_CLEANUP_LIB" ]; then
+    echo "ERROR: 缺少 branch cleanup 逻辑文件: $BRANCH_CLEANUP_LIB" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$BRANCH_CLEANUP_LIB"
 
 # 默认项目根目录 = 当前工作目录 (可通过 -p 参数覆盖)
 PROJECT_ROOT="$(pwd)"
@@ -807,8 +824,10 @@ collect_descendant_pids() {
 
 # 全局清理函数
 # 当脚本被中断或退出时调用，清理所有资源
+# 使用方法：trap 'cleanup EXIT' EXIT
 cleanup() {
     local exit_signal="${1:-EXIT}"
+    local exit_code=$?  # 必须在函数开始时捕获，后续命令会覆盖
 
     if [ "$CLEANUP_ALREADY_RAN" -eq 1 ]; then
         return 0
@@ -871,6 +890,26 @@ cleanup() {
         local current_branch="${BRANCH_NAME:-unknown}"
         local issue_num="${ISSUE_NUMBER:-unknown}"
 
+        # 分析退出原因
+        local exit_reason="未知"
+        case "$exit_code" in
+            0)   exit_reason="正常退出（但 SCRIPT_COMPLETED_NORMALLY 未设置）" ;;
+            1)   exit_reason="通用错误" ;;
+            2)   exit_reason="误用 shell 命令" ;;
+            126) exit_reason="命令无法执行" ;;
+            127) exit_reason="命令未找到" ;;
+            128) exit_reason="退出参数无效" ;;
+            130) exit_reason="被 SIGINT (Ctrl+C) 中断" ;;
+            137) exit_reason="被 SIGKILL 终止" ;;
+            143) exit_reason="被 SIGTERM 终止" ;;
+            *)   exit_reason="退出码 $exit_code" ;;
+        esac
+
+        # 检查是否是 set -e 导致的退出（命令返回非零）
+        if [ "$exit_signal" = "EXIT" ] && [ "$exit_code" -ne 0 ] && [ "$exit_code" -lt 128 ]; then
+            exit_reason="命令失败（set -e 触发）- $exit_reason"
+        fi
+
         # 追加中断记录
         {
             echo ""
@@ -879,17 +918,26 @@ cleanup() {
             echo "## ⚠️ 脚本被中断"
             echo ""
             echo "- **中断信号**: $exit_signal"
+            echo "- **退出码**: $exit_code"
+            echo "- **退出原因**: $exit_reason"
             echo "- **中断时间**: $interrupt_time"
             echo "- **Issue**: #$issue_num"
             echo "- **当前迭代**: $current_iteration"
             echo "- **当前评分**: $current_score/100"
             echo "- **当前分支**: $current_branch"
+            if [ -n "$LAST_COMMAND" ]; then
+                echo "- **最后执行命令**: \`$LAST_COMMAND\`"
+            fi
             echo ""
             echo "> 使用 \`./run.sh -c $issue_num\` 可继续运行"
         } >> "$log_file" 2>/dev/null || true
 
         log_console ""
         log_console "⚠️ 脚本被 $exit_signal 信号中断"
+        log_console "📋 退出码: $exit_code ($exit_reason)"
+        if [ -n "$LAST_COMMAND" ]; then
+            log_console "🔧 最后执行命令: $LAST_COMMAND"
+        fi
         log_console "📝 中断信息已记录到 $log_file"
         log_console "💡 使用 ./run.sh -c $issue_num 可继续运行"
     fi
@@ -903,6 +951,9 @@ cleanup() {
 # cleanup 函数已设计为能安全处理所有未初始化变量的情况
 # EXIT 信号在正常退出时也会触发，cleanup 内部通过 SCRIPT_COMPLETED_NORMALLY 区分
 # INT/TERM 信号处理：先调用 cleanup，再禁用 EXIT trap 避免重复执行，最后以特定退出码退出
+# DEBUG trap 用于记录最后执行的命令，帮助定位 set -e 触发的具体命令
+LAST_COMMAND=""
+trap 'LAST_COMMAND="$BASH_COMMAND"' DEBUG
 trap 'cleanup EXIT' EXIT
 trap 'cleanup INT; trap - EXIT; exit 130' INT
 trap 'cleanup TERM; trap - EXIT; exit 143' TERM
@@ -1368,7 +1419,7 @@ get_program_instructions() {
         return
     fi
 
-    if [ "$PROMPT_TRIMMED" -eq 0 ]; then
+    if [ "${PROMPT_TRIMMED:-0}" -eq 0 ]; then
         cat "$program_file"
         return
     fi
@@ -1514,8 +1565,8 @@ trim_prompt_smart() {
 # 在迭代成功完成时（非溢出退出）重置为 0
 apply_prompt_trimming() {
     local prompt="$1"
-    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
-        local trim_level=$PROMPT_TRIMMED
+    if [ "${PROMPT_TRIMMED:-0}" -ge 1 ]; then
+        local trim_level=${PROMPT_TRIMMED:-0}
         PROMPT_TRIMMED=0  # 标记已执行裁剪，防止同一 prompt 重复裁剪
         # 根据裁剪级别调整裁剪策略
         case $trim_level in
@@ -4403,9 +4454,11 @@ Closes #$ISSUE_NUMBER"
 
     git commit -m "$COMMIT_MSG" 2>/dev/null || log_console "没有需要提交的更改"
 
-    # 推送分支
-    log_console "推送分支 $BRANCH_NAME..."
-    git push -u origin "$BRANCH_NAME"
+    if ! push_branch_with_recovery; then
+        record_final_result "$ISSUE_NUMBER" "push_failed" "$ITERATION" "$FINAL_SCORE"
+        SCRIPT_COMPLETED_NORMALLY=1
+        exit 1
+    fi
 
     # 创建 PR
     log_console "创建 Pull Request..."
@@ -4456,7 +4509,27 @@ EOF
 
         # 合并 PR（不删除本地分支，我们自己处理）
         log_console "合并 PR #$PR_NUMBER..."
-        gh pr merge "$PR_NUMBER" --merge
+        MERGE_OUTPUT=""
+        if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+            log_console "⚠️ PR 合并失败，请手动处理"
+            log_console "PR URL: $PR_URL"
+            log "PR merge failed: $MERGE_OUTPUT"
+            cat >> "$WORK_DIR/log.md" << EOF
+
+---
+
+## ⚠️ PR 合并失败
+
+**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+**PR**: $PR_URL
+**错误输出**:
+\`\`\`
+$MERGE_OUTPUT
+\`\`\`
+
+请手动合并: gh pr merge $PR_NUMBER --merge
+EOF
+        fi
 
         # 切换回主分支前，先处理未提交的更改
         cd "$PROJECT_ROOT"
@@ -4469,15 +4542,7 @@ EOF
             git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null || true
         fi
 
-        # 切换回主分支并拉取最新代码
-        log_console "切换回 $main_branch 分支..."
-        git checkout "$main_branch" 2>/dev/null || true
-        git pull origin "$main_branch" 2>/dev/null || true
-
-        # 删除本地功能分支
-        if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
-            git branch -D "$BRANCH_NAME" 2>/dev/null || true
-        fi
+        cleanup_merged_branch "$main_branch" "$BRANCH_NAME"
 
         # 添加评论到 Issue（仅包含总结信息）
         log_console "添加评论到 Issue #$ISSUE_NUMBER..."

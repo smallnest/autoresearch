@@ -53,10 +53,12 @@ Agent rotation (from iteration 2): `(iter - 1) % N` where N = number of agents.
 
 ### Global Cleanup / Traps
 
-- `run.sh` installs global `EXIT`, `INT`, and `TERM` traps near the spinner helpers.
+- `run.sh` installs global `EXIT`, `INT`, `TERM`, and `DEBUG` traps near the spinner helpers.
 - `cleanup()` must stay idempotent because interrupt paths can otherwise re-enter during exit handling.
 - Signal traps should disable the `EXIT` trap before exiting, otherwise abnormal exits will append duplicate interruption records to `log.md`.
 - Child-process cleanup is recursive via `collect_descendant_pids()` and should keep a `ps` fallback because `pgrep -P` is not reliable in every macOS environment.
+- `DEBUG` trap records the last executed command in `LAST_COMMAND` to help identify which command triggered `set -e` exits.
+- `cleanup()` logs exit code, exit reason, and the last executed command to both `log.md` and console for debugging unexpected exits.
 
 ### Subtask System (tasks.json)
 
@@ -106,6 +108,11 @@ Project-level configs in `$PROJECT_ROOT/.autoresearch/` take precedence over def
 ### Continue Mode (`-c`)
 
 Restores state from `.autoresearch/workflows/issue-N/` log files: iteration count, last score, consecutive failure count, last review feedback, and subtask state (from tasks.json). MAX_ITERATIONS becomes `last_iteration + new_count`.
+
+### Git / GitHub Failure Paths
+
+- The final PR flow in [`run.sh`](/Users/chaoyuepan/ai/autoresearch/run.sh) is still `set -e` sensitive; `gh pr merge` must be wrapped with explicit failure handling rather than called bare.
+- When merge/cleanup operations are non-fatal by design, tests should mock `gh`/`git` failures and assert both `log.md` side effects and that later cleanup steps still execute.
 
 ## Key Design Constraints
 
