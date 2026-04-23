@@ -1,0 +1,50 @@
+好的。我现在对代码库有了清晰的认识。让我来制定任务拆分。
+
+分析总结：
+
+1.  **`run_with_retry` 内部**：已经进行了质量检查（包括 ≥5 行非空行检查），但在返回成功之前没有明确的“文件存在且非空”验证。
+2.  **消费点**：在 `run_with_retry` 之后，3 个审查函数和规划阶段都会 `cat "$log_file"`，而没有检查文件是否存在或是否非空。
+3.  **`|| true` 错误**：`run_with_retry ... || true; local agent_ret=$?` 模式意味着错误返回码被屏蔽，因此调用者即使在失败时也会继续执行。
+
+这是一个中小范围的 Issue，重点在于健壮性。两个子任务比较合适：
+
+- **T-001**：修复 `run_with_retry`，使其在返回前明确验证文件是否存在且非空；修复 `|| true` 导致返回码被屏蔽的错误。
+- **T-002**：在所有消费点（3 个审查函数 + 规划阶段）添加防御性文件检查。
+
+```json
+{
+  "issueNumber": 53,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "run_with_retry 成功退出前增加文件校验并修复返回码丢失 bug",
+      "description": "1) 在 run_with_retry 成功退出路径（success=1）增加显式文件存在性（-f）和非空（-s）检查，不满足则触发重试而非返回成功。2) 修复所有调用点的 `run_with_retry ... || true; local agent_ret=$?` 模式：`|| true` 会把返回码吞掉导致 agent_ret 始终为 0，改为先保存返回码再处理错误的写法，使调用方能正确感知失败并跳过 cat。同时为空文件情况触发重试而非静默返回空内容。",
+      "acceptanceCriteria": [
+        "run_with_retry 在 success=1 路径返回前，显式检查 log_file 存在且非空（-f && -s），不满足时触发重试",
+        "所有 run_with_retry 调用点正确捕获返回码（修复 || true 导致返回码丢失的问题）",
+        "空文件情况在 run_with_retry 内部触发重试，不再静默返回空内容",
+        "现有测试（tests/test_extract_score.sh 等）仍然通过",
+        "shellcheck run.sh 无新增错误"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "调用方读取 log_file 前增加防御性检查",
+      "description": "在所有读取 run_with_retry 输出文件的调用方位置（run_opencode_review、run_claude_review、run_codex_review 中 cat \"$log_file\"，以及 planning 阶段的 sed 解析）增加防御性检查：文件不存在或为空时，走降级路径（review 函数记录警告并使用默认分数 50，planning 阶段标记 planning 失败走 fallback 模式）。同时在 tests/ 下新增测试文件 test_output_validation.sh 验证这些防御逻辑。",
+      "acceptanceCriteria": [
+        "三个 review 函数（run_opencode_review、run_claude_review、run_codex_review）在 cat 前检查文件存在且非空，空/缺失时记录警告并降级处理",
+        "planning 阶段在 sed 解析前检查文件存在且非空，失败时走 fallback 模式",
+        "新增 tests/test_output_validation.sh 测试文件覆盖：空文件、不存在的文件、正常文件三种场景",
+        "所有现有测试仍然通过",
+        "shellcheck run.sh 无新增错误"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": false
+    }
+  ]
+}
+```

@@ -1,0 +1,229 @@
+[0m
+> build · k2p6
+[0m
+[0m→ [0mRead run.sh[90m [offset=2650, limit=250][0m
+[0m✱ [0mGlob "tests/test_output_validation.sh"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "planning.*sed|sed.*planning|tasks\.json|planning_phase|run_planning"[90m in . · 51 matches[0m
+[0m→ [0mRead run.sh[90m [limit=200, offset=2300][0m
+[0m→ [0mRead run.sh[90m [limit=150, offset=2141][0m
+[0m→ [0mRead run.sh[90m [limit=20, offset=2242][0m
+[0m→ [0mRead run.sh[90m [limit=20, offset=2246][0m
+[0m
+[0m$ [0mbash -n run.sh
+(no output)
+[0m
+[0m$ [0mshellcheck run.sh 2>&1 | tail -20
+Did you mean:
+            if [ "$skip_idx" -eq "$agent_idx" ]; then
+
+
+In run.sh line 4498:
+            run_review_and_fix $skip_idx
+                               ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean:
+            run_review_and_fix "$skip_idx"
+
+
+In run.sh line 4624:
+        total= passed=
+              ^-- SC1007 (warning): Remove space after = if trying to assign a value (for empty string, use var='' ... ).
+
+For more information:
+  https://www.shellcheck.net/wiki/SC2168 -- 'local' is only valid in functions.
+  https://www.shellcheck.net/wiki/SC1007 -- Remove space after = if trying to...
+  https://www.shellcheck.net/wiki/SC2034 -- PREVIOUS_FEEDBACK appears unused....
+[0m
+[0m$ [0mls tests/test_*.sh
+tests/test_agent_logic.sh
+tests/test_archive.sh
+tests/test_branch_cleanup.sh
+tests/test_cleanup.sh
+tests/test_context_overflow.sh
+tests/test_continue_dirty.sh
+tests/test_continue_diverged.sh
+tests/test_extract_score.sh
+tests/test_git_error_handling.sh
+tests/test_git_push.sh
+tests/test_trim_prompt.sh
+[0m
+[0m→ [0mRead run.sh[90m [limit=30, offset=2240][0m
+[0m
+[0m$ [0mbash tests/test_agent_logic.sh 2>&1 | tail -5
+PASS: custom order iter 4 wraps (expected=opencode, actual=opencode)
+
+==========================================
+Total: 52  Passed: 52  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_extract_score.sh 2>&1 | tail -5
+PASS: file still valid JSON after non-existent id mark (expected=T-001, actual=T-001)
+
+==========================================
+Total: 177  Passed: 177  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_cleanup.sh 2>&1 | tail -5
+PASS: descendants killed before parent
+
+==========================================
+Total: 12  Passed: 12  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_archive.sh 2>&1 | tail -5
+PASS: No archive when both are 1
+
+==========================================
+Total: 13  Passed: 13  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_git_error_handling.sh 2>&1 | tail -5
+PASS: PR merge error in log.md
+  PASS: checkout error in terminal.log
+
+=== Test Summary ===
+Total: 20, Passed: 20, Failed: 0
+[0m
+[0m$ [0mbash tests/test_branch_cleanup.sh 2>&1 | tail -5
+Scenario 4: missing branch skips delete without warnings
+  PASS: no delete attempted when branch missing
+
+=== Test Summary ===
+Total: 10, Passed: 10, Failed: 0
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh 2>&1 | tail -5
+PASS: Level 3 trimming removes persona
+
+==========================================
+Total: 126  Passed: 126  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_continue_dirty.sh 2>&1 | tail -5
+PASS: stash ref for modified tracked
+
+==========================================
+Total: 18  Passed: 18  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_git_push.sh 2>&1 | tail -5
+PASS: push succeeded
+  PASS: log.md has no errors
+
+=== Test Summary ===
+Total: 15, Passed: 15, Failed: 0
+[0m
+[0m$ [0mbash tests/test_continue_diverged.sh 2>&1 | tail -5
+PASS: log records diverged
+
+==========================================
+Total: 13  Passed: 13  Failed: 0
+==========================================
+[0m
+[0m$ [0mbash tests/test_trim_prompt.sh 2>&1 | tail -5
+PASS: keeps end text
+
+==========================================
+Total: 53  Passed: 53  Failed: 0
+==========================================
+[0m
+[0m→ [0mRead run.sh[90m [limit=30, offset=2240][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
+[0m→ [0mRead run.sh[90m [limit=50, offset=2235][0m
