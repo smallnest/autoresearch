@@ -348,6 +348,18 @@ get_current_subtask_title() {
     echo "$subtask" | jq -r '.title' 2>/dev/null
 }
 
+validate_tasks_json() {
+    local tasks_file
+    tasks_file=$(get_tasks_file)
+    if [ ! -f "$tasks_file" ]; then
+        return 1
+    fi
+    if [ ! -s "$tasks_file" ]; then
+        return 1
+    fi
+    jq '.' "$tasks_file" >/dev/null 2>&1
+}
+
 mark_subtask_passed() {
     local subtask_id="$1"
     local tasks_file
@@ -355,9 +367,22 @@ mark_subtask_passed() {
     if [ ! -f "$tasks_file" ]; then
         return 1
     fi
+    local tasks_dir
+    tasks_dir=$(dirname "$tasks_file")
     local tmp_file
-    tmp_file=$(mktemp)
-    jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file" && mv "$tmp_file" "$tasks_file"
+    tmp_file=$(mktemp "${tasks_dir}/tasks.XXXXXX")
+
+    if ! jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    if ! jq '.' "$tmp_file" >/dev/null 2>&1; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    mv "$tmp_file" "$tasks_file"
 }
 
 all_subtasks_passed() {
@@ -1147,6 +1172,58 @@ assert_eq "all passed current id is empty" "" "$(get_current_subtask_id)"
 rm -f "$WORK_DIR/tasks.json"
 assert_true "no tasks.json: all_subtasks_passed returns true (backward compat)" "all_subtasks_passed"
 assert_eq "no tasks.json: get_subtask_section returns empty" "" "$(get_subtask_section)"
+
+# --- validate_tasks_json() ---
+echo "--- validate_tasks_json() ---"
+
+# Valid JSON
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{"issueNumber": 42, "subtasks": []}
+INNEREOF
+assert_true "valid json returns true" "validate_tasks_json"
+
+# Invalid JSON
+echo "{invalid" > "$WORK_DIR/tasks.json"
+assert_false "invalid json returns false" "validate_tasks_json"
+
+# Empty file
+echo -n "" > "$WORK_DIR/tasks.json"
+assert_false "empty file returns false" "validate_tasks_json"
+
+# No file
+rm -f "$WORK_DIR/tasks.json"
+assert_false "no file returns false" "validate_tasks_json"
+
+# --- mark_subtask_passed() atomic write ---
+echo "--- mark_subtask_passed() atomic write ---"
+
+# Re-create valid tasks.json
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{
+  "issueNumber": 42,
+  "subtasks": [
+    { "id": "T-001", "title": "任务1", "description": "d", "acceptanceCriteria": [], "priority": 1, "passes": false },
+    { "id": "T-002", "title": "任务2", "description": "d", "acceptanceCriteria": [], "priority": 2, "passes": false }
+  ]
+}
+INNEREOF
+
+mark_subtask_passed "T-001"
+assert_eq "T-001 marked as passed" "true" "$(jq -r '.subtasks[0].passes' "$WORK_DIR/tasks.json")"
+assert_eq "T-002 still false" "false" "$(jq -r '.subtasks[1].passes' "$WORK_DIR/tasks.json")"
+
+# Verify no temp files left behind
+temp_count=$(find "$WORK_DIR" -name 'tasks.*' ! -name 'tasks.json' 2>/dev/null | wc -l | tr -d ' ')
+assert_eq "no temp files left behind" "0" "$temp_count"
+
+# Test mark_subtask_passed with non-existent ID still succeeds (jq produces valid JSON)
+cat > "$WORK_DIR/tasks.json" << 'INNEREOF'
+{ "issueNumber": 42, "subtasks": [{ "id": "T-001", "title": "t", "description": "d", "acceptanceCriteria": [], "priority": 1, "passes": false }] }
+INNEREOF
+result=0
+mark_subtask_passed "T-999" || result=$?
+assert_eq "mark non-existent id succeeds (jq still valid)" "0" "$result"
+assert_eq "file still valid JSON after non-existent id mark" "T-001" "$(jq -r '.subtasks[0].id' "$WORK_DIR/tasks.json")"
 
 # Clean up tasks test dir
 rm -rf "$WORK_DIR"
