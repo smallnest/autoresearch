@@ -1,0 +1,23 @@
+## 修复总结
+
+### 问题 1 (严重): `trim_prompt_smart()` / `PROMPT_TRIMMED` 集成到 run.sh
+- **run.sh**: 在每次迭代开始时添加了 `PROMPT_TRIMMED=0`（与 `CONTEXT_OVERFLOW=0` 并列）
+- **run.sh**: 在 `handle_context_overflow()` 中添加了 `PROMPT_TRIMMED=1`，这样溢出后的迭代会跳过 `program.md`
+- **run.sh**: `get_program_instructions()` 现在会在 `PROMPT_TRIMMED=1` 时提前返回 `""`，从而在溢出发生后节省 token
+- **run.sh**: 添加了 `trim_prompt_smart()` 函数（移除 `# Program` 部分和长代码块），并设置 `PROMPT_TRIMMED=1` 以防止重复裁剪
+
+### 问题 2: `check_and_compress_prompt()` 测试与生产环境同步
+- **test_context_overflow.sh**: 将测试版本修改为使用基于文件大小的重新估算（`remaining_size / 3`），与生产逻辑一致，而不是重新使用原始 prompt 大小
+
+### 问题 3: `compress_context()` 测试与生产环境对齐
+- **test_context_overflow.sh**: 将 `log_console` 调用（无需压缩，开始压缩，压缩完成，摘要失败）添加到与生产环境匹配的位置
+- **test_context_overflow.sh**: 添加了 `log()` 和 `log_console()` 存根（空操作），以防止在新对齐的代码中出现“command not found”错误
+
+### 问题 4: `grep` 模式收紧
+- **run.sh + test**: 将 `^#|^## |^### ` 修改为 `^#{1,3} [^#]`，以避免匹配 shell 注释和颜色代码
+
+## 经验总结
+
+- **模式**: 测试/生产代码对齐需要测试文件中 `log_console`/`log` 存根——这些存根是无操作（no-op），但对于运行时兼容性至关重要。
+- **陷阱**: 当测试文件定义了自己的函数副本时，每个差异（缺失的 `log_console`、不同的重新估算逻辑）都是一个潜在的覆盖漏洞。同步时，记得添加所需的存根。
+- **洞察**: `PROMPT_TRIMMED` 标志遵循“一次性裁剪”模式——它防止在多次调用时进行累进式缩减。这与测试中的幂等性检查相匹配。

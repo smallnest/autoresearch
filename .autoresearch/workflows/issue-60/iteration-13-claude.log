@@ -1,0 +1,25 @@
+## 修复总结
+
+### 已进行的更改
+
+**1. 严重问题：`trim_prompt_smart()` 中的正则表达式错误** (`run.sh:1485` 和 `test_trim_prompt.sh:110`)
+- `/passes.:.*true/` → `/passes.?:.*true/`
+- `.` 匹配“任意一个字符”，但 `?` 使其变为可选，因此现在它同时匹配 `"passes": true`（JSON）和 `passes: true`（YAML 列表格式）
+
+**2. 常规问题：`get_program_instructions()` 中的 shell 引用问题** (`run.sh:1377` 和 `test_trim_prompt.sh:162`)
+- 将 `awk` 模式从嵌入的单引号 `'(Go|...)'`（这会破坏 shell 引用）替换为使用 `awk -v lp="$lang_pattern"` 的方法
+- 将正则表达式中的 `C++` 正确转义为 `C\+\+`
+
+**3. 常规问题：`test_trim_prompt.sh` 与 `run.sh` 不一致**
+- 将 2 级 `apply_prompt_trimming()` 替换为匹配的 4 级版本（0=无裁剪, 1=轻量, 2=中等, 3=重度）
+- 添加了缺失的 `trim_prompt_for_overflow()` 别名
+- 更新了测试断言以匹配正确的行为
+- 移除了依赖通过 `$(...)` 子 shell 持久化状态的测试（这在 bash 中无法工作）
+
+### 测试结果：全部 424 个测试通过，0 个失败
+
+## 经验总结
+
+- **模式**: 在 `awk` 正则表达式中，`.` 匹配“任意一个字符”而非字面上的点。使用 `?` 使字符匹配变为可选（例如 `/passes.?:/`），可以同时匹配 JSON `"passes":` 和 YAML `passes:` 两种格式，无需将它们视为单独的情况。
+- **陷阱**: 嵌入了 `'...'` 的 `awk` 单引号字符串会在 bash 中破坏引用。使用 `awk -v var="$pattern"` 将动态模式传递给 `awk`，可以干净地避免引用问题。
+- **陷阱**: `$(func)` 中的变量赋值在子 shell 中运行 — 对全局变量的更改不会传播。不要测试通过命令替换调用的函数的副作用。

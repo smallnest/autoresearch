@@ -1,0 +1,115 @@
+现在我已掌握进行全面审查所需的所有信息。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #60
+- 标题: [enhancement] 上下文溢出时进行智能压缩和摘要
+- 子任务: T-002 - 实现历史迭代日志摘要生成与压缩
+- 迭代次数: 7
+
+---
+
+### 总体评价
+
+**评分: 82/100**
+
+核心压缩逻辑实现完整且健壮，`generate_iteration_summary()` 的 6 维 grep 提取设计实用，`compress_context()` 的摘要优先再删除策略安全。但存在一个关键的未集成功能（`trim_prompt_smart` / `PROMPT_TRIMMED`）和测试与生产代码的同步偏差问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `trim_prompt_smart()` 和 `PROMPT_TRIMMED` 未集成到 run.sh
+
+**位置**: `tests/test_trim_prompt.sh` (有实现), `run.sh` (无实现)
+
+**问题描述**:
+`test_trim_prompt.sh` 中定义了 `trim_prompt_smart()`、`get_program_instructions_trimmed()` 和 `PROMPT_TRIMMED` 标志，并有 34 个测试用例全部通过。但这些函数在 `run.sh` 中**完全不存在**。`grep` 确认 `PROMPT_TRIMMED`、`trim_prompt_smart`、`get_program_instructions_trimmed` 在 `run.sh` 中零匹配。
+
+这意味着测试验证的功能在生产代码中并不存在——测试是"孤儿测试"。
+
+**影响**: 子任务验收条件 "compress_context() 执行后，后续 prompt 组装自动使用压缩后的内容" 部分依赖此功能。虽然 `get_progress_content()` 已实现引用替换，但 program.md 的裁剪（溢出时跳过）尚未接入。
+
+**建议修复**: 将 `trim_prompt_smart()` 和 `PROMPT_TRIMMED` 逻辑集成到 `run.sh` 中，并在 `handle_context_overflow()` 中设置 `PROMPT_TRIMMED=1`，在 prompt 组装函数中检查该标志。或者，如果此功能属于 T-003 的范围，应在 `tasks.json` 中明确标注。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 2: `check_and_compress_prompt()` 测试版与生产版逻辑不同
+
+**位置**: `tests/test_context_overflow.sh:461` vs `run.sh:628-633`
+
+**问题描述**:
+测试版在 while 循环内重新估算 tokens 时，仍然基于**原始 prompt 文本**：
+```bash
+# 测试版 (line 461)
+estimated_tokens=$(estimate_prompt_tokens "$prompt")
+```
+
+生产版则基于**剩余日志文件的实际大小**：
+```bash
+# 生产版 (lines 629-633)
+local remaining_size=0
+while IFS= read -r f; do
+    remaining_size=$(( remaining_size + $(wc -c < "$f" 2>/dev/null || echo 0) ))
+done < <(ls -1 "$work_dir"/iteration-*-*.log ...)
+estimated_tokens=$(( remaining_size / 3 ))
+```
+
+生产版的实现更合理（基于实际文件大小而非原始 prompt），但测试验证的不是这个逻辑。这意味着生产代码的渐进式压缩循环可能在测试未覆盖的路径上表现不同。
+
+**建议修复**: 同步测试中的 `check_and_compress_prompt()` 使其与生产版一致，确保测试验证的是实际运行的逻辑。
+
+#### 问题 3: `compress_context()` 测试版缺少 `log_console` 和日志记录
+
+**位置**: `tests/test_context_overflow.sh:383-434` vs `run.sh:533-595`
+
+**问题描述**:
+测试版的 `compress_context()` 在不需要压缩时直接 `return 0` 而不打印任何信息（生产版会调用 `log_console`）。此外测试版省略了 `echo "- 上下文压缩: 压缩了 $compressed 个历史日志" >> "$work_dir/log.md"` 的压缩计数日志——只在最后无条件写入。这导致测试验证的行为与生产不完全对齐。
+
+**建议修复**: 对齐测试中的函数副本与生产版逻辑，或采用 `source` 方式提取函数。
+
+---
+
+### 建议改进 (可选)
+
+- **`generate_iteration_summary()` 的 grep 模式可能匹配过多**: `^#` 会匹配所有以 `#` 开头的行（包括 shell 注释、颜色码等），在 agent 输出中可能提取到大量噪音。建议收窄为 `^#{1,3} ` (需转义或调整)。
+- **临时文件清理**: `generate_iteration_summary()` 使用 `mktemp` 创建 `cleaned_file`，正常路径下有 `rm -f`，但如果 `grep` 命令被信号中断，临时文件可能残留。考虑用 `trap` 或 `register_temp_file` 注册。
+- **`estimate_prompt_tokens()` 的精度**: 混合中英文的 `char_count / 3` 是粗略估算。对于纯中文内容（约 2 字符/token）可能高估 50%，对纯英文（约 4 字符/token）可能低估 25%。当前用于阈值检测是足够的，但如果未来需要更精确的截断，可能需要改进。
+
+---
+
+### 审核维度评分
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 78 | 核心压缩逻辑正确，但 trim_prompt 未集成，测试/生产代码存在偏差 |
+| 测试质量 (25%) | 85 | 103+34 个测试全覆盖核心场景，但存在测试验证非生产代码的问题 |
+| 代码质量 (20%) | 88 | 函数命名清晰，结构良好，符合项目 shell 脚本规范 |
+| 安全性 (10%) | 95 | 摘要生成后才删除原始日志，有 UTF-8 清理，无注入风险 |
+| 性能 (10%) | 90 | 大文件 5 秒内完成，head 限制输出大小，渐进式压缩合理 |
+
+**加权总分**: 78×0.35 + 85×0.25 + 88×0.20 + 95×0.10 + 90×0.10 = **82.1 → 82/100**
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. **必须**: 将 `trim_prompt_smart()`、`PROMPT_TRIMMED`、`get_program_instructions_trimmed()` 集成到 `run.sh`（或将该功能明确划归 T-003）
+2. **建议**: 同步测试文件中的 `check_and_compress_prompt()` 使其与生产版一致
+3. **建议**: 对齐测试中 `compress_context()` 的日志记录逻辑
+
+---
+
+## Learnings
+
+- **模式**: `generate_iteration_summary()` 的 6 维 grep 提取是 shell 脚本中实用的信息提取模式，避免了调用 LLM 的递归依赖
+- **踩坑**: 测试文件中复制函数实现而非从 `run.sh` source 提取，容易导致测试/生产代码不同步。`check_and_compress_prompt()` 就是典型案例——测试验证的逻辑与生产代码不同
+- **经验**: 孤儿测试（测试有但生产代码没有的函数）是最隐蔽的问题——测试全绿不代表功能已集成，需要 grep 验证函数在生产代码中的存在性

@@ -1,0 +1,2165 @@
+[0m
+> build · k2p6
+[0m
+[0m# [0mTodos
+[ ] 分析审核反馈，制定修复计划
+[ ] 将 trim_prompt_smart() 重命名为 trim_prompt_for_overflow() 或创建别名
+[ ] 在 handle_context_overflow() 中显式调用 trim_prompt_for_overflow()
+[ ] 实现渐进式压缩闭环：压缩后调用 prompt 裁剪
+[ ] 添加 trim_prompt_for_overflow() 和完整溢出恢复流程的测试
+[ ] 考虑引入多级裁剪策略
+[ ] 运行测试验证修复
+[ ] 总结 Learnings
+[0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=1330][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=640][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=3940][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=4060][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=4280][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=1480][0m
+[0m→ [0mRead run.sh[90m [limit=100, offset=1385][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=1][0m
+[0m✱ [0mGrep "trim_prompt_for_overflow"[90m in . · 97 matches[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=200][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=400][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=600][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=800][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=200, offset=1000][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=100, offset=1200][0m
+[0m
+[0m# [0mTodos
+[x] 分析审核反馈，制定修复计划
+[ ] 将 trim_prompt_smart() 重命名为 trim_prompt_for_overflow() 或创建别名
+[ ] 在 handle_context_overflow() 中显式调用 trim_prompt_for_overflow()
+[ ] 实现渐进式压缩闭环：压缩后调用 prompt 裁剪
+[ ] 添加 trim_prompt_for_overflow() 和完整溢出恢复流程的测试
+[ ] 考虑引入多级裁剪策略
+[ ] 运行测试验证修复
+[ ] 总结 Learnings
+[0m
+[0m← [0mEdit run.sh
+Index: /Users/smallnest/ai/autoresearch/run.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/run.sh
++++ /Users/smallnest/ai/autoresearch/run.sh
+@@ -1387,8 +1387,13 @@
+ # 裁剪策略（按优先级）：
+ #   1. 保留：当前子任务描述、未完成子任务列表、最近 review 反馈、progress.md 经验日志
+ #   2. 移除：program.md 内容（get_program_instructions 已按语言裁剪）、长代码块（>20行）
+ #   3. 移除：已通过子任务的详细描述（只保留标题行）
++# 这是需求中要求的函数名 trim_prompt_for_overflow() 的别名
++trim_prompt_for_overflow() {
++    trim_prompt_smart "$@"
++}
++
+ trim_prompt_smart() {
+     local prompt="$1"
+ 
+     if [ -z "$prompt" ]; then
+
+[0m
+[0m→ [0mRead run.sh[90m [limit=80, offset=1485][0m
+[0m✗ [0medit failed
+[91m[1mError: [0mNo changes to apply: oldString and newString are identical.
+[0m→ [0mRead run.sh[90m [limit=80, offset=649][0m
+[0m
+[0m← [0mEdit run.sh
+Index: /Users/smallnest/ai/autoresearch/run.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/run.sh
++++ /Users/smallnest/ai/autoresearch/run.sh
+@@ -702,9 +702,16 @@
+     # 记录到日志
+     echo "- 上下文溢出: 压缩并交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)" >> "$WORK_DIR/log.md"
+ 
+     CONTEXT_OVERFLOW=1
+-    PROMPT_TRIMMED=1
++    # 设置多级裁剪策略：根据溢出次数调整裁剪力度
++    if [ $CONTEXT_RETRIES -eq 1 ]; then
++        PROMPT_TRIMMED=1  # 轻度裁剪
++    elif [ $CONTEXT_RETRIES -eq 2 ]; then
++        PROMPT_TRIMMED=2  # 中度裁剪
++    else
++        PROMPT_TRIMMED=3  # 重度裁剪
++    fi
+ 
+     return 0
+ }
+ 
+
+[0m
+[0m← [0mEdit run.sh
+Index: /Users/smallnest/ai/autoresearch/run.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/run.sh
++++ /Users/smallnest/ai/autoresearch/run.sh
+@@ -1500,12 +1500,50 @@
+ # PROMPT_TRIMMED 标志在 trim 后设为 1，防止同一 prompt 被重复裁剪
+ # 在迭代成功完成时（非溢出退出）重置为 0
+ apply_prompt_trimming() {
+     local prompt="$1"
+-    if [ "$PROMPT_TRIMMED" -eq 1 ]; then
+-        PROMPT_TRIMMED=2  # 标记已执行裁剪，防止同一 prompt 重复裁剪
+-        trim_prompt_smart "$prompt"
+-        PROMPT_TRIMMED=1  # 恢复标志，下次迭代的 prompt 仍需裁剪
++    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
++        local trim_level=$PROMPT_TRIMMED
++        PROMPT_TRIMMED=0  # 标记已执行裁剪，防止同一 prompt 重复裁剪
++        # 根据裁剪级别调整裁剪策略
++        case $trim_level in
++            1)
++                # 轻度裁剪：只移除 program.md 和长代码块
++                trim_prompt_for_overflow "$prompt"
++                ;;
++            2)
++                # 中度裁剪：额外移除已通过子任务的详细描述
++                local trimmed
++                trimmed=$(trim_prompt_for_overflow "$prompt")
++                # 进一步裁剪：移除更多历史迭代摘要
++                echo "$trimmed" | awk '
++                    BEGIN { in_history=0 }
++                    /^## 历史迭代摘要/ { in_history=1; next }
++                    /^## [^#]/ { in_history=0 }
++                    in_history { next }
++                    { print }
++                '
++                ;;
++            3)
++                # 重度裁剪：保留核心信息，移除大部分辅助内容
++                local trimmed
++                trimmed=$(trim_prompt_for_overflow "$prompt")
++                # 移除历史迭代摘要和 agent persona 示例
++                echo "$trimmed" | awk '
++                    BEGIN { in_history=0; in_persona=0 }
++                    /^## 历史迭代摘要/ { in_history=1; next }
++                    /^## [^#]/ { in_history=0 }
++                    in_history { next }
++                    /^## Agent Persona/ { in_persona=1; next }
++                    /^## [^#]/ { in_persona=0 }
++                    in_persona { next }
++                    { print }
++                '
++                ;;
++            *)
++                trim_prompt_for_overflow "$prompt"
++                ;;
++        esac
+     else
+         echo "$prompt"
+     fi
+ }
+
+[0m
+[0m# [0mTodos
+[x] 分析审核反馈，制定修复计划
+[x] 将 trim_prompt_smart() 重命名为 trim_prompt_for_overflow() 或创建别名
+[x] 在 handle_context_overflow() 中显式调用 trim_prompt_for_overflow()
+[x] 实现渐进式压缩闭环：压缩后调用 prompt 裁剪
+[ ] 添加 trim_prompt_for_overflow() 和完整溢出恢复流程的测试
+[x] 考虑引入多级裁剪策略
+[ ] 运行测试验证修复
+[ ] 总结 Learnings
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=100, offset=1240][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -1242,8 +1242,209 @@
+ 
+ assert_true "Token count reduced after compression" \
+     "[ $post_tokens -lt $initial_tokens ]"
+ 
++# ==================== Tests: trim_prompt_for_overflow() ====================
++
++echo ""
++echo "=== trim_prompt_for_overflow() Tests ==="
++echo ""
++
++echo "--- Basic trimming behavior ---"
++
++# Test 1: Empty prompt
++empty_trimmed=$(trim_prompt_for_overflow "")
++assert_eq "Empty prompt returns empty" "" "$empty_trimmed"
++
++# Test 2: Prompt with program.md section
++prompt_with_program="# Task Description
++
++Implement feature X.
++
++# Program Instructions
++
++## Go
++- Use gofmt
++- Follow Go conventions
++
++## Python
++- Use PEP8
++- Follow Python conventions
++
++# Current Subtask
++- **ID**: T-001
++- **Title**: Fix bug
++"
++trimmed_program=$(trim_prompt_for_overflow "$prompt_with_program")
++assert_true "Program section removed" \
++    "echo '$trimmed_program' | grep -q 'Implement feature X'"
++assert_false "Program instructions removed" \
++    "echo '$trimmed_program' | grep -q '^# Program'"
++
++# Test 3: Prompt with long code blocks
++prompt_with_long_code="# Task Description
++
++Fix the parser.
++
++\`\`\`go
++func parse() {
++    // line 1
++    // line 2
++    // line 3
++    // line 4
++    // line 5
++    // line 6
++    // line 7
++    // line 8
++    // line 9
++    // line 10
++    // line 11
++    // line 12
++    // line 13
++    // line 14
++    // line 15
++    // line 16
++    // line 17
++    // line 18
++    // line 19
++    // line 20
++    // line 21
++    // line 22
++}
++\`\`\`
++
++Continue with implementation.
++"
++trimmed_code=$(trim_prompt_for_overflow "$prompt_with_long_code")
++assert_true "Short content preserved" \
++    "echo '$trimmed_code' | grep -q 'Fix the parser'"
++assert_true "Continue text preserved" \
++    "echo '$trimmed_code' | grep -q 'Continue with implementation'"
++
++# Test 4: Prompt with passed subtasks
++prompt_with_subtasks="# Task Description
++
++Implement feature.
++
++- **ID**: T-001
++- **Title**: Setup project
++- **passes**: true
++- **Description**: Detailed setup steps...
++
++- **ID**: T-002
++- **Title**: Implement core
++- **passes**: false
++- **Description**: Core implementation details...
++
++# Review Feedback
++Please fix the bug.
++"
++trimmed_subtasks=$(trim_prompt_for_overflow "$prompt_with_subtasks")
++assert_true "Current task preserved" \
++    "echo '$trimmed_subtasks' | grep -q 'Implement feature'"
++assert_true "Failed subtask kept" \
++    "echo '$trimmed_subtasks' | grep -q 'T-002'"
++assert_true "Review feedback preserved" \
++    "echo '$trimmed_subtasks' | grep -q 'Please fix the bug'"
++
++echo "--- Function exists and is callable ---"
++
++assert_true "trim_prompt_for_overflow function exists" \
++    "type trim_prompt_for_overflow >/devdev/null 2>&1"
++
++# ==================== Tests: Complete overflow recovery flow ====================
++
++echo ""
++echo "=== Complete overflow recovery flow Tests ==="
++echo ""
++
++echo "--- Full flow: detect -> compress -> trim -> continue ---"
++
++FLOW_DIR="$TMPDIR_TESTS/flow_test"
++rm -rf "$FLOW_DIR"
++mkdir -p "$FLOW_DIR"
++
++WORK_DIR="$FLOW_DIR"
++cat > "$WORK_DIR/log.md" << 'EOF'
++# Issue #42 实现日志
++EOF
++
++for i in 1 2 3 4 5; do
++    echo "Iteration $i with ## Changes" > "$WORK_DIR/iteration-$i-claude.log"
++done
++
++init_progress
++
++CONTEXT_RETRIES=0
++CONSECUTIVE_ITERATION_FAILURES=1
++CONTEXT_OVERFLOW=0
++PROMPT_TRIMMED=0
++PREVIOUS_FEEDBACK=""
++CONTEXT_KEEP_RECENT=3
++
++overflow_log=$(make_log 'flow_overflow.log' 'Error: context length exceeded')
++
++assert_true "handle returns 0 for overflow" \
++    "handle_context_overflow 5 'claude' '$overflow_log'"
++
++assert_eq "CONTEXT_RETRIES incremented" "1" "$CONTEXT_RETRIES"
++assert_eq "CONTEXT_OVERFLOW set to 1" "1" "$CONTEXT_OVERFLOW"
++assert_eq "PROMPT_TRIMMED set to 1 (first overflow)" "1" "$PROMPT_TRIMMED"
++assert_eq "CONSECUTIVE_FAILURES reset to 0" "0" "$CONSECUTIVE_ITERATION_FAILURES"
++
++# Check that compression happened
++assert_true "Summaries dir created" \
++    "[ -d '$WORK_DIR/summaries' ]"
++
++# Check that trim_prompt_for_overflow can be called after overflow
++sample_prompt="# Task
++
++Implement feature X with many details.
++
++# Program
++Some program instructions.
++"
++trimmed_after_overflow=$(trim_prompt_for_overflow "$sample_prompt")
++assert_true "trim_prompt_for_overflow works after overflow" \
++    "[ -n \"$trimmed_after_overflow\" ]"
++
++echo "--- Progressive overflow increases trim level ---"
++
++# Second overflow should set PROMPT_TRIMMED=2
++CONTEXT_RETRIES=1
++PROMPT_TRIMMED=0
++handle_context_overflow 6 "codex" "$overflow_log"
++assert_eq "Second overflow sets PROMPT_TRIMMED=2" "2" "$PROMPT_TRIMMED"
++
++# Third overflow should set PROMPT_TRIMMED=3
++CONTEXT_RETRIES=2
++PROMPT_TRIMMED=0
++handle_context_overflow 7 "opencode" "$overflow_log"
++assert_eq "Third overflow sets PROMPT_TRIMMED=3" "3" "$PROMPT_TRIMMED"
++
++echo "--- apply_prompt_trimming respects trim levels ---"
++
++# Test level 1 (mild)
++PROMPT_TRIMMED=1
++test_prompt="# Task\n\nImplement.\n\n# Program\nInstructions.\n"
++level1_trimmed=$(apply_prompt_trimming "$test_prompt")
++assert_true "Level 1 trimming removes program" \
++    "! echo '$level1_trimmed' | grep -q '^# Program'"
++
++# Test level 2 (moderate)
++PROMPT_TRIMMED=2
++test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
++level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
++assert_true "Level 2 trimming removes history" \
++    "! echo '$level2_trimmed' | grep -q '历史迭代摘要'"
++
++# Test level 3 (aggressive)
++PROMPT_TRIMMED=3
++test_prompt3="# Task\n\nImplement.\n\n## Agent Persona\nExamples.\n\n## 历史迭代摘要\nOld summary.\n"
++level3_trimmed=$(apply_prompt_trimming "$test_prompt3")
++assert_true "Level 3 trimming removes persona" \
++    "! echo '$level3_trimmed' | grep -q 'Agent Persona'"
++
+ # ==================== Summary ====================
+ 
+ echo ""
+ echo "=========================================="
+
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh
+=== detect_context_overflow() Tests ===
+
+--- Context overflow signals (should detect) ---
+  PASS: context length exceeded
+  PASS: context_length_exceeded (underscore)
+  PASS: maximum context length
+  PASS: token limit exceeded
+  PASS: token_limit_reached
+  PASS: too many tokens
+  PASS: exceeds the maximum
+  PASS: exceeded the maximum number of tokens
+  PASS: input is too long
+  PASS: context window exceeded
+  PASS: maximum context window
+  PASS: case insensitive
+  PASS: mixed case
+  PASS: in multiline output
+--- Normal output (should NOT detect) ---
+  PASS: normal implementation output
+  PASS: empty file
+  PASS: nonexistent file
+  PASS: context discussion
+  PASS: token discussion
+  PASS: limit discussion
+  PASS: maximum discussion
+
+=== handle_context_overflow() Tests ===
+
+--- Overflow detected and handled ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: PREVIOUS_FEEDBACK mentions overflow
+  PASS: progress.md has overflow entry
+  PASS: log.md has overflow note
+--- Non-overflow not handled ---
+  PASS: handle returns 1 for normal output
+  PASS: CONTEXT_RETRIES stays 0 for normal (expected=0, actual=0)
+--- Max retries reached ---
+  PASS: handle returns 1 when max retries reached
+  PASS: CONTEXT_RETRIES at max+1 (expected=4, actual=4)
+--- Multiple retries increment counter ---
+  PASS: first retry: counter=1 (expected=1, actual=1)
+  PASS: second retry: counter=2 (expected=2, actual=2)
+  PASS: third retry: counter=3 (expected=3, actual=3)
+  PASS: fourth retry exceeds max
+
+=== estimate_prompt_tokens() Tests ===
+
+--- Token estimation for various text types ---
+  PASS: English text token estimate (expected=34, actual=34)
+  PASS: Chinese text token estimate (expected=24, actual=24)
+  PASS: Empty text returns 0 tokens (expected=0, actual=0)
+  PASS: Mixed text token estimate (expected=40, actual=40)
+  PASS: 450000 chars → 150000 tokens (expected=150000, actual=150000)
+
+=== compress_context() Tests ===
+
+--- Basic compression behavior ---
+  PASS: Summary for iteration-1 exists
+  PASS: Summary for iteration-2 exists
+  PASS: Original iteration-1 log removed
+  PASS: Original iteration-2 log removed
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+  PASS: Iteration-5 log kept
+  PASS: Summary has key content
+  PASS: Summary has '完成的工作' section
+  PASS: Summary has '修改的文件' section
+  PASS: Summary has '关键决策' section
+  PASS: Summary has '失败的尝试' section
+  PASS: Summary has 'Learnings' section
+--- Compression when logs <= keep_recent ---
+  PASS: Iteration-1 log still exists
+  PASS: Iteration-2 log still exists
+  PASS: No summary files created
+--- Compression with non-existent directory ---
+  PASS: Non-existent dir returns 1 (expected=1, actual=1)
+--- Re-compression skips already summarized logs ---
+  PASS: Iteration-1 log removed (already summarized)
+  PASS: Iteration-2 log removed (newly compressed)
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+
+=== check_and_compress_prompt() Tests ===
+
+--- Below threshold: no compression ---
+  PASS: No compression for small prompt (expected=0, actual=0)
+  PASS: No summaries dir for small prompt
+--- Above threshold: triggers compression ---
+  PASS: Summaries dir created after threshold breach
+  PASS: Summary created for iteration-1
+  PASS: Summary created for iteration-2
+--- Custom threshold via environment variable ---
+  PASS: No compression with high threshold
+  PASS: Compression triggered with low threshold
+
+=== generate_iteration_summary() Tests ===
+
+--- Structured extraction from log ---
+  PASS: Summary has completed work
+  PASS: Summary has modified files
+  PASS: Summary has key decisions
+  PASS: Summary has failed attempts
+  PASS: Summary has learnings
+  PASS: Summary has code diff
+--- Empty log handling ---
+  PASS: Non-existent log returns 1 (expected=1, actual=1)
+
+=== Progressive compression Tests ===
+
+--- Multiple compression rounds ---
+  PASS: Iteration-1 log removed after first compression
+  PASS: Iteration-5 log removed after first compression
+  PASS: Iteration-6 log kept
+  PASS: Iteration-8 log kept
+  PASS: Iteration-6 log removed after second compression
+  PASS: Iteration-7 summary exists
+  PASS: Iteration-11 log kept
+
+=== Prompt assembly uses summaries ===
+
+--- get_progress_content replaces log references ---
+  PASS: Progress content replaces log with summary
+  PASS: Progress content no longer has raw log reference
+
+=== handle_context_overflow() with compress_context() ===
+
+--- Overflow triggers compression ---
+  PASS: handle returns 0 for overflow with compression
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created by overflow handler
+  PASS: Log notes compression
+
+=== Large file performance Tests ===
+
+--- generate_iteration_summary handles large log ---
+tests/test_context_overflow.sh: line 1094: diff
+    echo diff: command not found
+  PASS: Summary generated for large file
+  PASS: Large file summary has key sections
+  PASS: Large file summary under 5 seconds
+
+=== Summary quality validation Tests ===
+
+--- Summary contains key information ---
+  PASS: Quality summary has completed work
+  PASS: Quality summary has modified files
+  PASS: Quality summary has key decisions
+  PASS: Quality summary has failed attempts
+  PASS: Quality summary has learnings
+  PASS: Quality summary has code diff
+  PASS: Summary is not empty
+  PASS: Summary has multiple sections
+
+=== Progressive compression token reduction Tests ===
+
+--- Token count decreases after compression ---
+  PASS: Token count reduced after compression
+
+=== trim_prompt_for_overflow() Tests ===
+
+--- Basic trimming behavior ---
+tests/test_context_overflow.sh: line 1255: trim_prompt_for_overflow: command not found
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=1245][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=300][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -298,10 +298,144 @@
+ 
+     return 0
+ }
+ 
+-# ==================== New functions: estimate_prompt_tokens, generate_iteration_summary & compress_context ====================
++# ==================== New functions: estimate_prompt_tokens, generate_iteration_summary, compress_context & trim_prompt_for_overflow ====================
+ 
++# 智能裁剪 prompt：保留关键信息，移除冗余内容
++# 从 run.sh 中提取的核心裁剪逻辑
++trim_prompt_for_overflow() {
++    local prompt="$1"
++
++    if [ -z "$prompt" ]; then
++        echo "$prompt"
++        return
++    fi
++
++    local trimmed="$prompt"
++
++    # 1. Remove program.md content (section starting with "# Program")
++    if echo "$trimmed" | grep -q "^# Program"; then
++        trimmed=$(echo "$trimmed" | awk '
++            BEGIN { in_program=0 }
++            /^# Program/ { in_program=1; next }
++            /^# [A-Z]/ { in_program=0 }
++            in_program { next }
++            { print }
++        ')
++    fi
++
++    # 2. Remove long code blocks (>20 lines)
++    trimmed=$(echo "$trimmed" | awk '
++        BEGIN { in_block=0; block_lines=0; block_buf="" }
++        /^```/ {
++            if (in_block) {
++                in_block=0
++                if (block_lines <= 20) {
++                    print block_buf
++                    print "```"
++                }
++                block_buf=""; block_lines=0
++            } else {
++                in_block=1; block_buf="```"; block_lines=0
++            }
++            next
++        }
++        in_block {
++            block_lines++
++            block_buf = block_buf "\n" $0
++            next
++        }
++        { print }
++    ')
++
++    # 3. Remove detailed descriptions of passed subtasks (keep only title lines)
++    trimmed=$(echo "$trimmed" | awk '
++        BEGIN { in_subtask=0; is_passed=0; title_lines=""; subtask_buf="" }
++        function flush_subtask() {
++            if (in_subtask) {
++                if (is_passed) { print title_lines }
++                else { print subtask_buf }
++                in_subtask=0; is_passed=0; title_lines=""; subtask_buf=""
++            }
++        }
++        /^- \*\*ID\*\*:.*T-[0-9]/ {
++            flush_subtask()
++            in_subtask=1; is_passed=0
++            title_lines=$0; subtask_buf=$0
++            next
++        }
++        in_subtask && /^[^- \t]/ {
++            flush_subtask()
++            print
++            next
++        }
++        in_subtask && /^$/ {
++            flush_subtask()
++            print
++            next
++        }
++        in_subtask {
++            subtask_buf = subtask_buf "\n" $0
++            if (/^- \*\*标题\*\*:/) {
++                title_lines = title_lines "\n" $0
++            }
++            if (/passes.:.*true/) {
++                is_passed=1
++            }
++            next
++        }
++        { print }
++        END { flush_subtask() }
++    ')
++
++    echo "$trimmed"
++}
++
++# 如果 PROMPT_TRIMMED>=1，对 prompt 应用智能裁剪
++apply_prompt_trimming() {
++    local prompt="$1"
++    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
++        local trim_level=$PROMPT_TRIMMED
++        PROMPT_TRIMMED=0
++        case $trim_level in
++            1)
++                trim_prompt_for_overflow "$prompt"
++                ;;
++            2)
++                local trimmed
++                trimmed=$(trim_prompt_for_overflow "$prompt")
++                echo "$trimmed" | awk '
++                    BEGIN { in_history=0 }
++                    /^## 历史迭代摘要/ { in_history=1; next }
++                    /^## [^#]/ { in_history=0 }
++                    in_history { next }
++                    { print }
++                '
++                ;;
++            3)
++                local trimmed
++                trimmed=$(trim_prompt_for_overflow "$prompt")
++                echo "$trimmed" | awk '
++                    BEGIN { in_history=0; in_persona=0 }
++                    /^## 历史迭代摘要/ { in_history=1; next }
++                    /^## [^#]/ { in_history=0 }
++                    in_history { next }
++                    /^## Agent Persona/ { in_persona=1; next }
++                    /^## [^#]/ { in_persona=0 }
++                    in_persona { next }
++                    { print }
++                '
++                ;;
++            *)
++                trim_prompt_for_overflow "$prompt"
++                ;;
++        esac
++    else
++        echo "$prompt"
++    fi
++}
++
+ estimate_prompt_tokens() {
+     local text="$1"
+     if [ -z "$text" ]; then
+         echo 0
+
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh
+=== detect_context_overflow() Tests ===
+
+--- Context overflow signals (should detect) ---
+  PASS: context length exceeded
+  PASS: context_length_exceeded (underscore)
+  PASS: maximum context length
+  PASS: token limit exceeded
+  PASS: token_limit_reached
+  PASS: too many tokens
+  PASS: exceeds the maximum
+  PASS: exceeded the maximum number of tokens
+  PASS: input is too long
+  PASS: context window exceeded
+  PASS: maximum context window
+  PASS: case insensitive
+  PASS: mixed case
+  PASS: in multiline output
+--- Normal output (should NOT detect) ---
+  PASS: normal implementation output
+  PASS: empty file
+  PASS: nonexistent file
+  PASS: context discussion
+  PASS: token discussion
+  PASS: limit discussion
+  PASS: maximum discussion
+
+=== handle_context_overflow() Tests ===
+
+--- Overflow detected and handled ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: PREVIOUS_FEEDBACK mentions overflow
+  PASS: progress.md has overflow entry
+  PASS: log.md has overflow note
+--- Non-overflow not handled ---
+  PASS: handle returns 1 for normal output
+  PASS: CONTEXT_RETRIES stays 0 for normal (expected=0, actual=0)
+--- Max retries reached ---
+  PASS: handle returns 1 when max retries reached
+  PASS: CONTEXT_RETRIES at max+1 (expected=4, actual=4)
+--- Multiple retries increment counter ---
+  PASS: first retry: counter=1 (expected=1, actual=1)
+  PASS: second retry: counter=2 (expected=2, actual=2)
+  PASS: third retry: counter=3 (expected=3, actual=3)
+  PASS: fourth retry exceeds max
+
+=== estimate_prompt_tokens() Tests ===
+
+--- Token estimation for various text types ---
+  PASS: English text token estimate (expected=34, actual=34)
+  PASS: Chinese text token estimate (expected=24, actual=24)
+  PASS: Empty text returns 0 tokens (expected=0, actual=0)
+  PASS: Mixed text token estimate (expected=40, actual=40)
+  PASS: 450000 chars → 150000 tokens (expected=150000, actual=150000)
+
+=== compress_context() Tests ===
+
+--- Basic compression behavior ---
+  PASS: Summary for iteration-1 exists
+  PASS: Summary for iteration-2 exists
+  PASS: Original iteration-1 log removed
+  PASS: Original iteration-2 log removed
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+  PASS: Iteration-5 log kept
+  PASS: Summary has key content
+  PASS: Summary has '完成的工作' section
+  PASS: Summary has '修改的文件' section
+  PASS: Summary has '关键决策' section
+  PASS: Summary has '失败的尝试' section
+  PASS: Summary has 'Learnings' section
+--- Compression when logs <= keep_recent ---
+  PASS: Iteration-1 log still exists
+  PASS: Iteration-2 log still exists
+  PASS: No summary files created
+--- Compression with non-existent directory ---
+  PASS: Non-existent dir returns 1 (expected=1, actual=1)
+--- Re-compression skips already summarized logs ---
+  PASS: Iteration-1 log removed (already summarized)
+  PASS: Iteration-2 log removed (newly compressed)
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+
+=== check_and_compress_prompt() Tests ===
+
+--- Below threshold: no compression ---
+  PASS: No compression for small prompt (expected=0, actual=0)
+  PASS: No summaries dir for small prompt
+--- Above threshold: triggers compression ---
+  PASS: Summaries dir created after threshold breach
+  PASS: Summary created for iteration-1
+  PASS: Summary created for iteration-2
+--- Custom threshold via environment variable ---
+  PASS: No compression with high threshold
+  PASS: Compression triggered with low threshold
+
+=== generate_iteration_summary() Tests ===
+
+--- Structured extraction from log ---
+  PASS: Summary has completed work
+  PASS: Summary has modified files
+  PASS: Summary has key decisions
+  PASS: Summary has failed attempts
+  PASS: Summary has learnings
+  PASS: Summary has code diff
+--- Empty log handling ---
+  PASS: Non-existent log returns 1 (expected=1, actual=1)
+
+=== Progressive compression Tests ===
+
+--- Multiple compression rounds ---
+  PASS: Iteration-1 log removed after first compression
+  PASS: Iteration-5 log removed after first compression
+  PASS: Iteration-6 log kept
+  PASS: Iteration-8 log kept
+  PASS: Iteration-6 log removed after second compression
+  PASS: Iteration-7 summary exists
+  PASS: Iteration-11 log kept
+
+=== Prompt assembly uses summaries ===
+
+--- get_progress_content replaces log references ---
+  PASS: Progress content replaces log with summary
+  PASS: Progress content no longer has raw log reference
+
+=== handle_context_overflow() with compress_context() ===
+
+--- Overflow triggers compression ---
+  PASS: handle returns 0 for overflow with compression
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created by overflow handler
+  PASS: Log notes compression
+
+=== Large file performance Tests ===
+
+--- generate_iteration_summary handles large log ---
+tests/test_context_overflow.sh: line 1228: diff
+    echo diff: command not found
+  PASS: Summary generated for large file
+  PASS: Large file summary has key sections
+  PASS: Large file summary under 5 seconds
+
+=== Summary quality validation Tests ===
+
+--- Summary contains key information ---
+  PASS: Quality summary has completed work
+  PASS: Quality summary has modified files
+  PASS: Quality summary has key decisions
+  PASS: Quality summary has failed attempts
+  PASS: Quality summary has learnings
+  PASS: Quality summary has code diff
+  PASS: Summary is not empty
+  PASS: Summary has multiple sections
+
+=== Progressive compression token reduction Tests ===
+
+--- Token count decreases after compression ---
+  PASS: Token count reduced after compression
+
+=== trim_prompt_for_overflow() Tests ===
+
+--- Basic trimming behavior ---
+  PASS: Empty prompt returns empty (expected=, actual=)
+  PASS: Program section removed
+  PASS: Program instructions removed
+  PASS: Short content preserved
+  PASS: Continue text preserved
+  PASS: Current task preserved
+  PASS: Failed subtask kept
+  PASS: Review feedback preserved
+--- Function exists and is callable ---
+  FAIL: trim_prompt_for_overflow function exists (expected true, got false)
+
+=== Complete overflow recovery flow Tests ===
+
+--- Full flow: detect -> compress -> trim -> continue ---
+tests/test_context_overflow.sh: line 71: /devdev/null: No such file or directory
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (first overflow) (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created
+  PASS: trim_prompt_for_overflow works after overflow
+--- Progressive overflow increases trim level ---
+  FAIL: Second overflow sets PROMPT_TRIMMED=2 (expected=2, actual=1)
+  FAIL: Third overflow sets PROMPT_TRIMMED=3 (expected=3, actual=1)
+--- apply_prompt_trimming respects trim levels ---
+  PASS: Level 1 trimming removes program
+  FAIL: Level 2 trimming removes history (expected true, got false)
+  FAIL: Level 3 trimming removes persona (expected true, got false)
+
+==========================================
+Total: 125  Passed: 120  Failed: 5
+==========================================
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=20, offset=1380][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=1470][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -1482,9 +1482,9 @@
+ 
+ echo "--- Function exists and is callable ---"
+ 
+ assert_true "trim_prompt_for_overflow function exists" \
+-    "type trim_prompt_for_overflow >/devdev/null 2>&1"
++    "type trim_prompt_for_overflow >/dev/null 2>&1"
+ 
+ # ==================== Tests: Complete overflow recovery flow ====================
+ 
+ echo ""
+
+[0m
+[0m→ [0mRead run.sh[90m [limit=80, offset=649][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -1542,17 +1542,17 @@
+     "[ -n \"$trimmed_after_overflow\" ]"
+ 
+ echo "--- Progressive overflow increases trim level ---"
+ 
+-# Second overflow should set PROMPT_TRIMMED=2
+-CONTEXT_RETRIES=1
++# Reset state for progressive test
++CONTEXT_RETRIES=0
+ PROMPT_TRIMMED=0
++
++# Second overflow should set PROMPT_TRIMMED=2
+ handle_context_overflow 6 "codex" "$overflow_log"
+ assert_eq "Second overflow sets PROMPT_TRIMMED=2" "2" "$PROMPT_TRIMMED"
+ 
+ # Third overflow should set PROMPT_TRIMMED=3
+-CONTEXT_RETRIES=2
+-PROMPT_TRIMMED=0
+ handle_context_overflow 7 "opencode" "$overflow_log"
+ assert_eq "Third overflow sets PROMPT_TRIMMED=3" "3" "$PROMPT_TRIMMED"
+ 
+ echo "--- apply_prompt_trimming respects trim levels ---"
+
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=1560][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -1568,16 +1568,16 @@
+ PROMPT_TRIMMED=2
+ test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+ level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+ assert_true "Level 2 trimming removes history" \
+-    "! echo '$level2_trimmed' | grep -q '历史迭代摘要'"
++    "! echo \"$level2_trimmed\" | grep -q '历史迭代摘要'"
+ 
+ # Test level 3 (aggressive)
+ PROMPT_TRIMMED=3
+ test_prompt3="# Task\n\nImplement.\n\n## Agent Persona\nExamples.\n\n## 历史迭代摘要\nOld summary.\n"
+ level3_trimmed=$(apply_prompt_trimming "$test_prompt3")
+ assert_true "Level 3 trimming removes persona" \
+-    "! echo '$level3_trimmed' | grep -q 'Agent Persona'"
++    "! echo \"$level3_trimmed\" | grep -q 'Agent Persona'"
+ 
+ # ==================== Summary ====================
+ 
+ echo ""
+
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh
+=== detect_context_overflow() Tests ===
+
+--- Context overflow signals (should detect) ---
+  PASS: context length exceeded
+  PASS: context_length_exceeded (underscore)
+  PASS: maximum context length
+  PASS: token limit exceeded
+  PASS: token_limit_reached
+  PASS: too many tokens
+  PASS: exceeds the maximum
+  PASS: exceeded the maximum number of tokens
+  PASS: input is too long
+  PASS: context window exceeded
+  PASS: maximum context window
+  PASS: case insensitive
+  PASS: mixed case
+  PASS: in multiline output
+--- Normal output (should NOT detect) ---
+  PASS: normal implementation output
+  PASS: empty file
+  PASS: nonexistent file
+  PASS: context discussion
+  PASS: token discussion
+  PASS: limit discussion
+  PASS: maximum discussion
+
+=== handle_context_overflow() Tests ===
+
+--- Overflow detected and handled ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: PREVIOUS_FEEDBACK mentions overflow
+  PASS: progress.md has overflow entry
+  PASS: log.md has overflow note
+--- Non-overflow not handled ---
+  PASS: handle returns 1 for normal output
+  PASS: CONTEXT_RETRIES stays 0 for normal (expected=0, actual=0)
+--- Max retries reached ---
+  PASS: handle returns 1 when max retries reached
+  PASS: CONTEXT_RETRIES at max+1 (expected=4, actual=4)
+--- Multiple retries increment counter ---
+  PASS: first retry: counter=1 (expected=1, actual=1)
+  PASS: second retry: counter=2 (expected=2, actual=2)
+  PASS: third retry: counter=3 (expected=3, actual=3)
+  PASS: fourth retry exceeds max
+
+=== estimate_prompt_tokens() Tests ===
+
+--- Token estimation for various text types ---
+  PASS: English text token estimate (expected=34, actual=34)
+  PASS: Chinese text token estimate (expected=24, actual=24)
+  PASS: Empty text returns 0 tokens (expected=0, actual=0)
+  PASS: Mixed text token estimate (expected=40, actual=40)
+  PASS: 450000 chars → 150000 tokens (expected=150000, actual=150000)
+
+=== compress_context() Tests ===
+
+--- Basic compression behavior ---
+  PASS: Summary for iteration-1 exists
+  PASS: Summary for iteration-2 exists
+  PASS: Original iteration-1 log removed
+  PASS: Original iteration-2 log removed
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+  PASS: Iteration-5 log kept
+  PASS: Summary has key content
+  PASS: Summary has '完成的工作' section
+  PASS: Summary has '修改的文件' section
+  PASS: Summary has '关键决策' section
+  PASS: Summary has '失败的尝试' section
+  PASS: Summary has 'Learnings' section
+--- Compression when logs <= keep_recent ---
+  PASS: Iteration-1 log still exists
+  PASS: Iteration-2 log still exists
+  PASS: No summary files created
+--- Compression with non-existent directory ---
+  PASS: Non-existent dir returns 1 (expected=1, actual=1)
+--- Re-compression skips already summarized logs ---
+  PASS: Iteration-1 log removed (already summarized)
+  PASS: Iteration-2 log removed (newly compressed)
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+
+=== check_and_compress_prompt() Tests ===
+
+--- Below threshold: no compression ---
+  PASS: No compression for small prompt (expected=0, actual=0)
+  PASS: No summaries dir for small prompt
+--- Above threshold: triggers compression ---
+  PASS: Summaries dir created after threshold breach
+  PASS: Summary created for iteration-1
+  PASS: Summary created for iteration-2
+--- Custom threshold via environment variable ---
+  PASS: No compression with high threshold
+  PASS: Compression triggered with low threshold
+
+=== generate_iteration_summary() Tests ===
+
+--- Structured extraction from log ---
+  PASS: Summary has completed work
+  PASS: Summary has modified files
+  PASS: Summary has key decisions
+  PASS: Summary has failed attempts
+  PASS: Summary has learnings
+  PASS: Summary has code diff
+--- Empty log handling ---
+  PASS: Non-existent log returns 1 (expected=1, actual=1)
+
+=== Progressive compression Tests ===
+
+--- Multiple compression rounds ---
+  PASS: Iteration-1 log removed after first compression
+  PASS: Iteration-5 log removed after first compression
+  PASS: Iteration-6 log kept
+  PASS: Iteration-8 log kept
+  PASS: Iteration-6 log removed after second compression
+  PASS: Iteration-7 summary exists
+  PASS: Iteration-11 log kept
+
+=== Prompt assembly uses summaries ===
+
+--- get_progress_content replaces log references ---
+  PASS: Progress content replaces log with summary
+  PASS: Progress content no longer has raw log reference
+
+=== handle_context_overflow() with compress_context() ===
+
+--- Overflow triggers compression ---
+  PASS: handle returns 0 for overflow with compression
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created by overflow handler
+  PASS: Log notes compression
+
+=== Large file performance Tests ===
+
+--- generate_iteration_summary handles large log ---
+tests/test_context_overflow.sh: line 1228: diff
+    echo diff: command not found
+  PASS: Summary generated for large file
+  PASS: Large file summary has key sections
+  PASS: Large file summary under 5 seconds
+
+=== Summary quality validation Tests ===
+
+--- Summary contains key information ---
+  PASS: Quality summary has completed work
+  PASS: Quality summary has modified files
+  PASS: Quality summary has key decisions
+  PASS: Quality summary has failed attempts
+  PASS: Quality summary has learnings
+  PASS: Quality summary has code diff
+  PASS: Summary is not empty
+  PASS: Summary has multiple sections
+
+=== Progressive compression token reduction Tests ===
+
+--- Token count decreases after compression ---
+  PASS: Token count reduced after compression
+
+=== trim_prompt_for_overflow() Tests ===
+
+--- Basic trimming behavior ---
+  PASS: Empty prompt returns empty (expected=, actual=)
+  PASS: Program section removed
+  PASS: Program instructions removed
+  PASS: Short content preserved
+  PASS: Continue text preserved
+  PASS: Current task preserved
+  PASS: Failed subtask kept
+  PASS: Review feedback preserved
+--- Function exists and is callable ---
+  PASS: trim_prompt_for_overflow function exists
+
+=== Complete overflow recovery flow Tests ===
+
+--- Full flow: detect -> compress -> trim -> continue ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (first overflow) (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created
+  PASS: trim_prompt_for_overflow works after overflow
+--- Progressive overflow increases trim level ---
+  FAIL: Second overflow sets PROMPT_TRIMMED=2 (expected=2, actual=1)
+  FAIL: Third overflow sets PROMPT_TRIMMED=3 (expected=3, actual=1)
+--- apply_prompt_trimming respects trim levels ---
+  PASS: Level 1 trimming removes program
+  FAIL: Level 2 trimming removes history (expected true, got false)
+  FAIL: Level 3 trimming removes persona (expected true, got false)
+
+==========================================
+Total: 125  Passed: 121  Failed: 4
+==========================================
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=253][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -290,9 +290,16 @@
+ 
+ PREVIOUS_FEEDBACK="上一次迭代因上下文溢出中断。请继续当前子任务的实现，参考 progress.md 中的进度记录。"
+ CONSECUTIVE_ITERATION_FAILURES=0
+ CONTEXT_OVERFLOW=1
+-PROMPT_TRIMMED=1
++# 设置多级裁剪策略：根据溢出次数调整裁剪力度
++if [ $CONTEXT_RETRIES -eq 1 ]; then
++    PROMPT_TRIMMED=1  # 轻度裁剪
++elif [ $CONTEXT_RETRIES -eq 2 ]; then
++    PROMPT_TRIMMED=2  # 中度裁剪
++else
++    PROMPT_TRIMMED=3  # 重度裁剪
++fi
+ 
+ append_to_progress "$iteration" "$agent_name" "$log_file" "N/A" "上下文溢出交接" ""
+ echo "- 上下文溢出: 压缩并交接 (第 $CONTEXT_RETRIES/$MAX_CONTEXT_RETRIES 次)" >> "$WORK_DIR/log.md"
+ 
+
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=350][0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=400][0m
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh
+=== detect_context_overflow() Tests ===
+
+--- Context overflow signals (should detect) ---
+  PASS: context length exceeded
+  PASS: context_length_exceeded (underscore)
+  PASS: maximum context length
+  PASS: token limit exceeded
+  PASS: token_limit_reached
+  PASS: too many tokens
+  PASS: exceeds the maximum
+  PASS: exceeded the maximum number of tokens
+  PASS: input is too long
+  PASS: context window exceeded
+  PASS: maximum context window
+  PASS: case insensitive
+  PASS: mixed case
+  PASS: in multiline output
+--- Normal output (should NOT detect) ---
+  PASS: normal implementation output
+  PASS: empty file
+  PASS: nonexistent file
+  PASS: context discussion
+  PASS: token discussion
+  PASS: limit discussion
+  PASS: maximum discussion
+
+=== handle_context_overflow() Tests ===
+
+--- Overflow detected and handled ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: PREVIOUS_FEEDBACK mentions overflow
+  PASS: progress.md has overflow entry
+  PASS: log.md has overflow note
+--- Non-overflow not handled ---
+  PASS: handle returns 1 for normal output
+  PASS: CONTEXT_RETRIES stays 0 for normal (expected=0, actual=0)
+--- Max retries reached ---
+  PASS: handle returns 1 when max retries reached
+  PASS: CONTEXT_RETRIES at max+1 (expected=4, actual=4)
+--- Multiple retries increment counter ---
+  PASS: first retry: counter=1 (expected=1, actual=1)
+  PASS: second retry: counter=2 (expected=2, actual=2)
+  PASS: third retry: counter=3 (expected=3, actual=3)
+  PASS: fourth retry exceeds max
+
+=== estimate_prompt_tokens() Tests ===
+
+--- Token estimation for various text types ---
+  PASS: English text token estimate (expected=34, actual=34)
+  PASS: Chinese text token estimate (expected=24, actual=24)
+  PASS: Empty text returns 0 tokens (expected=0, actual=0)
+  PASS: Mixed text token estimate (expected=40, actual=40)
+  PASS: 450000 chars → 150000 tokens (expected=150000, actual=150000)
+
+=== compress_context() Tests ===
+
+--- Basic compression behavior ---
+  PASS: Summary for iteration-1 exists
+  PASS: Summary for iteration-2 exists
+  PASS: Original iteration-1 log removed
+  PASS: Original iteration-2 log removed
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+  PASS: Iteration-5 log kept
+  PASS: Summary has key content
+  PASS: Summary has '完成的工作' section
+  PASS: Summary has '修改的文件' section
+  PASS: Summary has '关键决策' section
+  PASS: Summary has '失败的尝试' section
+  PASS: Summary has 'Learnings' section
+--- Compression when logs <= keep_recent ---
+  PASS: Iteration-1 log still exists
+  PASS: Iteration-2 log still exists
+  PASS: No summary files created
+--- Compression with non-existent directory ---
+  PASS: Non-existent dir returns 1 (expected=1, actual=1)
+--- Re-compression skips already summarized logs ---
+  PASS: Iteration-1 log removed (already summarized)
+  PASS: Iteration-2 log removed (newly compressed)
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+
+=== check_and_compress_prompt() Tests ===
+
+--- Below threshold: no compression ---
+  PASS: No compression for small prompt (expected=0, actual=0)
+  PASS: No summaries dir for small prompt
+--- Above threshold: triggers compression ---
+  PASS: Summaries dir created after threshold breach
+  PASS: Summary created for iteration-1
+  PASS: Summary created for iteration-2
+--- Custom threshold via environment variable ---
+  PASS: No compression with high threshold
+  PASS: Compression triggered with low threshold
+
+=== generate_iteration_summary() Tests ===
+
+--- Structured extraction from log ---
+  PASS: Summary has completed work
+  PASS: Summary has modified files
+  PASS: Summary has key decisions
+  PASS: Summary has failed attempts
+  PASS: Summary has learnings
+  PASS: Summary has code diff
+--- Empty log handling ---
+  PASS: Non-existent log returns 1 (expected=1, actual=1)
+
+=== Progressive compression Tests ===
+
+--- Multiple compression rounds ---
+  PASS: Iteration-1 log removed after first compression
+  PASS: Iteration-5 log removed after first compression
+  PASS: Iteration-6 log kept
+  PASS: Iteration-8 log kept
+  PASS: Iteration-6 log removed after second compression
+  PASS: Iteration-7 summary exists
+  PASS: Iteration-11 log kept
+
+=== Prompt assembly uses summaries ===
+
+--- get_progress_content replaces log references ---
+  PASS: Progress content replaces log with summary
+  PASS: Progress content no longer has raw log reference
+
+=== handle_context_overflow() with compress_context() ===
+
+--- Overflow triggers compression ---
+  PASS: handle returns 0 for overflow with compression
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created by overflow handler
+  PASS: Log notes compression
+
+=== Large file performance Tests ===
+
+--- generate_iteration_summary handles large log ---
+tests/test_context_overflow.sh: line 1235: diff
+    echo diff: command not found
+  PASS: Summary generated for large file
+  PASS: Large file summary has key sections
+  PASS: Large file summary under 5 seconds
+
+=== Summary quality validation Tests ===
+
+--- Summary contains key information ---
+  PASS: Quality summary has completed work
+  PASS: Quality summary has modified files
+  PASS: Quality summary has key decisions
+  PASS: Quality summary has failed attempts
+  PASS: Quality summary has learnings
+  PASS: Quality summary has code diff
+  PASS: Summary is not empty
+  PASS: Summary has multiple sections
+
+=== Progressive compression token reduction Tests ===
+
+--- Token count decreases after compression ---
+  PASS: Token count reduced after compression
+
+=== trim_prompt_for_overflow() Tests ===
+
+--- Basic trimming behavior ---
+  PASS: Empty prompt returns empty (expected=, actual=)
+  PASS: Program section removed
+  PASS: Program instructions removed
+  PASS: Short content preserved
+  PASS: Continue text preserved
+  PASS: Current task preserved
+  PASS: Failed subtask kept
+  PASS: Review feedback preserved
+--- Function exists and is callable ---
+  PASS: trim_prompt_for_overflow function exists
+
+=== Complete overflow recovery flow Tests ===
+
+--- Full flow: detect -> compress -> trim -> continue ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (first overflow) (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created
+  PASS: trim_prompt_for_overflow works after overflow
+--- Progressive overflow increases trim level ---
+  FAIL: Second overflow sets PROMPT_TRIMMED=2 (expected=2, actual=1)
+  FAIL: Third overflow sets PROMPT_TRIMMED=3 (expected=3, actual=2)
+--- apply_prompt_trimming respects trim levels ---
+  PASS: Level 1 trimming removes program
+  FAIL: Level 2 trimming removes history (expected true, got false)
+  FAIL: Level 3 trimming removes persona (expected true, got false)
+
+==========================================
+Total: 125  Passed: 121  Failed: 4
+==========================================
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=1540][0m
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -1549,11 +1549,13 @@
+     "[ -n \"$trimmed_after_overflow\" ]"
+ 
+ echo "--- Progressive overflow increases trim level ---"
+ 
+-# Reset state for progressive test
++# First overflow should set PROMPT_TRIMMED=1
+ CONTEXT_RETRIES=0
+ PROMPT_TRIMMED=0
++handle_context_overflow 5 "claude" "$overflow_log"
++assert_eq "First overflow sets PROMPT_TRIMMED=1" "1" "$PROMPT_TRIMMED"
+ 
+ # Second overflow should set PROMPT_TRIMMED=2
+ handle_context_overflow 6 "codex" "$overflow_log"
+ assert_eq "Second overflow sets PROMPT_TRIMMED=2" "2" "$PROMPT_TRIMMED"
+
+[0m
+[0m✗ [0medit failed
+[91m[1mError: [0mNo changes to apply: oldString and newString are identical.
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=20, offset=1574][0m
+[0m
+[0m$ [0mbash -c '
+PROMPT_TRIMMED=2
+test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+echo "Level2 result: [$level2_trimmed]"
+echo "$level2_trimmed" | grep -q "历史迭代摘要" && echo "FOUND" || echo "NOT FOUND"
+'
+bash: line 3: apply_prompt_trimming: command not found
+Level2 result: []
+NOT FOUND
+[0m
+[0m$ [0mbash -c '
+# Source the test file functions
+trim_prompt_for_overflow() {
+    local prompt="$1"
+    if [ -z "$prompt" ]; then
+        echo "$prompt"
+        return
+    fi
+    local trimmed="$prompt"
+    if echo "$trimmed" | grep -q "^# Program"; then
+        trimmed=$(echo "$trimmed" | awk '"'"'
+            BEGIN { in_program=0 }
+            /^# Program/ { in_program=1; next }
+            /^# [A-Z]/ { in_program=0 }
+            in_program { next }
+            { print }
+        '"'"')
+    fi
+    echo "$trimmed"
+}
+
+apply_prompt_trimming() {
+    local prompt="$1"
+    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
+        local trim_level=$PROMPT_TRIMMED
+        PROMPT_TRIMMED=0
+        case $trim_level in
+            1)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+            2)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '"'"'
+                    BEGIN { in_history=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    { print }
+                '"'"'
+                ;;
+            3)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '"'"'
+                    BEGIN { in_history=0; in_persona=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    /^## Agent Persona/ { in_persona=1; next }
+                    /^## [^#]/ { in_persona=0 }
+                    in_persona { next }
+                    { print }
+                '"'"'
+                ;;
+            *)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+        esac
+    else
+        echo "$prompt"
+    fi
+}
+
+PROMPT_TRIMMED=2
+test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+echo "Result: [$level2_trimmed]"
+echo "$level2_trimmed" | grep -q "历史迭代摘要" && echo "FOUND history" || echo "NOT FOUND history"
+'
+Result: [# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n]
+FOUND history
+[0m
+[0m→ [0mRead tests/test_context_overflow.sh[90m [limit=50, offset=400][0m
+[0m
+[0m$ [0mbash -c '
+# Test the exact function from the test file
+apply_prompt_trimming() {
+    local prompt="$1"
+    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
+        local trim_level=$PROMPT_TRIMMED
+        PROMPT_TRIMMED=0
+        case $trim_level in
+            1)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+            2)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '"'"'
+                    BEGIN { in_history=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    { print }
+                '"'"'
+                ;;
+            3)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '"'"'
+                    BEGIN { in_history=0; in_persona=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    /^## Agent Persona/ { in_persona=1; next }
+                    /^## [^#]/ { in_persona=0 }
+                    in_persona { next }
+                    { print }
+                '"'"'
+                ;;
+            *)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+        esac
+    else
+        echo "$prompt"
+    fi
+}
+
+trim_prompt_for_overflow() {
+    local prompt="$1"
+    if [ -z "$prompt" ]; then
+        echo "$prompt"
+        return
+    fi
+    local trimmed="$prompt"
+    if echo "$trimmed" | grep -q "^# Program"; then
+        trimmed=$(echo "$trimmed" | awk '"'"'
+            BEGIN { in_program=0 }
+            /^# Program/ { in_program=1; next }
+            /^# [A-Z]/ { in_program=0 }
+            in_program { next }
+            { print }
+        '"'"')
+    fi
+    echo "$trimmed"
+}
+
+PROMPT_TRIMMED=2
+test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+echo "Result: [$level2_trimmed]"
+echo "$level2_trimmed" | grep -q "历史迭代摘要" && echo "FOUND history" || echo "NOT FOUND history"
+'
+Result: [# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n]
+FOUND history
+[0m
+[0m$ [0mbash -c '
+# Test with the exact test file content
+cat > /tmp/test_trim.sh << '"'"'SCRIPT'
+#!/bin/bash
+
+trim_prompt_for_overflow() {
+    local prompt="$1"
+    if [ -z "$prompt" ]; then
+        echo "$prompt"
+        return
+    fi
+    local trimmed="$prompt"
+    if echo "$trimmed" | grep -q "^# Program"; then
+        trimmed=$(echo "$trimmed" | awk '"'"'"'"'"
+            BEGIN { in_program=0 }
+            /^# Program/ { in_program=1; next }
+            /^# [A-Z]/ { in_program=0 }
+            in_program { next }
+            { print }
+        '"'"'"'"'"')
+    fi
+    echo "$trimmed"
+}
+
+apply_prompt_trimming() {
+    local prompt="$1"
+    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
+        local trim_level=$PROMPT_TRIMMED
+        PROMPT_TRIMMED=0
+        case $trim_level in
+            1)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+            2)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '"'"'"'"'"
+                    BEGIN { in_history=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    { print }
+                '"'"'"'"'"')
+                ;;
+            3)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '"'"'"'"'"
+                    BEGIN { in_history=0; in_persona=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    /^## Agent Persona/ { in_persona=1; next }
+                    /^## [^#]/ { in_persona=0 }
+                    in_persona { next }
+                    { print }
+                '"'"'"'"'"')
+                ;;
+            *)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+        esac
+    else
+        echo "$prompt"
+    fi
+}
+
+PROMPT_TRIMMED=2
+test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+echo "Result: [$level2_trimmed]"
+echo "$level2_trimmed" | grep -q "历史迭代摘要" && echo "FOUND history" || echo "NOT FOUND history"
+SCRIPT
+
+bash /tmp/test_trim.sh
+'
+zsh:43: parse error near `)'
+[0m
+[0m$ [0mcat > /tmp/test_trim.sh << 'EOF'
+#!/bin/bash
+
+trim_prompt_for_overflow() {
+    local prompt="$1"
+    if [ -z "$prompt" ]; then
+        echo "$prompt"
+        return
+    fi
+    local trimmed="$prompt"
+    if echo "$trimmed" | grep -q "^# Program"; then
+        trimmed=$(echo "$trimmed" | awk '
+            BEGIN { in_program=0 }
+            /^# Program/ { in_program=1; next }
+            /^# [A-Z]/ { in_program=0 }
+            in_program { next }
+            { print }
+        ')
+    fi
+    echo "$trimmed"
+}
+
+apply_prompt_trimming() {
+    local prompt="$1"
+    if [ "$PROMPT_TRIMMED" -ge 1 ]; then
+        local trim_level=$PROMPT_TRIMMED
+        PROMPT_TRIMMED=0
+        case $trim_level in
+            1)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+            2)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '
+                    BEGIN { in_history=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    { print }
+                '
+                ;;
+            3)
+                local trimmed
+                trimmed=$(trim_prompt_for_overflow "$prompt")
+                echo "$trimmed" | awk '
+                    BEGIN { in_history=0; in_persona=0 }
+                    /^## 历史迭代摘要/ { in_history=1; next }
+                    /^## [^#]/ { in_history=0 }
+                    in_history { next }
+                    /^## Agent Persona/ { in_persona=1; next }
+                    /^## [^#]/ { in_persona=0 }
+                    in_persona { next }
+                    { print }
+                '
+                ;;
+            *)
+                trim_prompt_for_overflow "$prompt"
+                ;;
+        esac
+    else
+        echo "$prompt"
+    fi
+}
+
+PROMPT_TRIMMED=2
+test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+echo "Result: [$level2_trimmed]"
+echo "$level2_trimmed" | grep -q "历史迭代摘要" && echo "FOUND history" || echo "NOT FOUND history"
+EOF
+bash /tmp/test_trim.sh
+Result: [# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n]
+FOUND history
+[0m
+[0m$ [0mbash -c '
+# Test the exact awk pattern
+echo "## 历史迭代摘要" | awk '"'"'
+    BEGIN { in_history=0 }
+    /^## 历史迭代摘要/ { in_history=1; next }
+    /^## [^#]/ { in_history=0 }
+    in_history { next }
+    { print }
+'"'"'
+'
+(no output)
+[0m
+[0m$ [0mbash -c '
+# Test with full content
+cat << '"'"'EOF' | awk '
+    BEGIN { in_history=0 }
+    /^## 历史迭代摘要/ { in_history=1; next }
+    /^## [^#]/ { in_history=0 }
+    in_history { next }
+    { print }
+'
+# Task
+
+Implement.
+
+## 历史迭代摘要
+Old summary.
+
+# Program
+Instructions.
+EOF
+'
+zsh:20: unmatched '
+[0m
+[0m$ [0mcat << 'EOF' | awk '
+    BEGIN { in_history=0 }
+    /^## 历史迭代摘要/ { in_history=1; next }
+    /^## [^#]/ { in_history=0 }
+    in_history { next }
+    { print }
+'
+# Task
+
+Implement.
+
+## 历史迭代摘要
+Old summary.
+
+# Program
+Instructions.
+EOF
+# Task
+
+Implement.
+[0m
+[0m$ [0mcat << 'EOF' | awk '
+    BEGIN { in_history=0 }
+    /^## 历史迭代摘要/ { in_history=1; next }
+    /^## [^#]/ { in_history=0 }
+    in_history { next }
+    { print }
+'
+# Task
+
+Implement.
+
+## 历史迭代摘要
+Old summary.
+More old summary.
+
+## Other Section
+Some content.
+
+# Program
+Instructions.
+EOF
+# Task
+
+Implement.
+
+## Other Section
+Some content.
+
+# Program
+Instructions.
+[0m
+[0m$ [0mbash -c '
+# Test the exact test scenario
+test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
+echo "$test_prompt2" | awk '"'"'
+    BEGIN { in_history=0 }
+    /^## 历史迭代摘要/ { in_history=1; next }
+    /^## [^#]/ { in_history=0 }
+    in_history { next }
+    { print }
+'"'"'
+'
+# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n
+[0m
+[0m$ [0mbash -c '
+test_prompt2="# Task
+
+Implement.
+
+## 历史迭代摘要
+Old summary.
+
+# Program
+Instructions.
+"
+echo "$test_prompt2" | awk '"'"'
+    BEGIN { in_history=0 }
+    /^## 历史迭代摘要/ { in_history=1; next }
+    /^## [^#]/ { in_history=0 }
+    in_history { next }
+    { print }
+'"'"'
+'
+# Task
+
+Implement.
+[0m
+[0m← [0mEdit tests/test_context_overflow.sh
+Index: /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+===================================================================
+--- /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
++++ /Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+@@ -1574,16 +1574,34 @@
+     "! echo '$level1_trimmed' | grep -q '^# Program'"
+ 
+ # Test level 2 (moderate)
+ PROMPT_TRIMMED=2
+-test_prompt2="# Task\n\nImplement.\n\n## 历史迭代摘要\nOld summary.\n\n# Program\nInstructions.\n"
++test_prompt2="# Task
++
++Implement.
++
++## 历史迭代摘要
++Old summary.
++
++# Program
++Instructions.
++"
+ level2_trimmed=$(apply_prompt_trimming "$test_prompt2")
+ assert_true "Level 2 trimming removes history" \
+     "! echo \"$level2_trimmed\" | grep -q '历史迭代摘要'"
+ 
+ # Test level 3 (aggressive)
+ PROMPT_TRIMMED=3
+-test_prompt3="# Task\n\nImplement.\n\n## Agent Persona\nExamples.\n\n## 历史迭代摘要\nOld summary.\n"
++test_prompt3="# Task
++
++Implement.
++
++## Agent Persona
++Examples.
++
++## 历史迭代摘要
++Old summary.
++"
+ level3_trimmed=$(apply_prompt_trimming "$test_prompt3")
+ assert_true "Level 3 trimming removes persona" \
+     "! echo \"$level3_trimmed\" | grep -q 'Agent Persona'"
+ 
+
+[0m
+[0m$ [0mbash tests/test_context_overflow.sh
+=== detect_context_overflow() Tests ===
+
+--- Context overflow signals (should detect) ---
+  PASS: context length exceeded
+  PASS: context_length_exceeded (underscore)
+  PASS: maximum context length
+  PASS: token limit exceeded
+  PASS: token_limit_reached
+  PASS: too many tokens
+  PASS: exceeds the maximum
+  PASS: exceeded the maximum number of tokens
+  PASS: input is too long
+  PASS: context window exceeded
+  PASS: maximum context window
+  PASS: case insensitive
+  PASS: mixed case
+  PASS: in multiline output
+--- Normal output (should NOT detect) ---
+  PASS: normal implementation output
+  PASS: empty file
+  PASS: nonexistent file
+  PASS: context discussion
+  PASS: token discussion
+  PASS: limit discussion
+  PASS: maximum discussion
+
+=== handle_context_overflow() Tests ===
+
+--- Overflow detected and handled ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: PREVIOUS_FEEDBACK mentions overflow
+  PASS: progress.md has overflow entry
+  PASS: log.md has overflow note
+--- Non-overflow not handled ---
+  PASS: handle returns 1 for normal output
+  PASS: CONTEXT_RETRIES stays 0 for normal (expected=0, actual=0)
+--- Max retries reached ---
+  PASS: handle returns 1 when max retries reached
+  PASS: CONTEXT_RETRIES at max+1 (expected=4, actual=4)
+--- Multiple retries increment counter ---
+  PASS: first retry: counter=1 (expected=1, actual=1)
+  PASS: second retry: counter=2 (expected=2, actual=2)
+  PASS: third retry: counter=3 (expected=3, actual=3)
+  PASS: fourth retry exceeds max
+
+=== estimate_prompt_tokens() Tests ===
+
+--- Token estimation for various text types ---
+  PASS: English text token estimate (expected=34, actual=34)
+  PASS: Chinese text token estimate (expected=24, actual=24)
+  PASS: Empty text returns 0 tokens (expected=0, actual=0)
+  PASS: Mixed text token estimate (expected=40, actual=40)
+  PASS: 450000 chars → 150000 tokens (expected=150000, actual=150000)
+
+=== compress_context() Tests ===
+
+--- Basic compression behavior ---
+  PASS: Summary for iteration-1 exists
+  PASS: Summary for iteration-2 exists
+  PASS: Original iteration-1 log removed
+  PASS: Original iteration-2 log removed
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+  PASS: Iteration-5 log kept
+  PASS: Summary has key content
+  PASS: Summary has '完成的工作' section
+  PASS: Summary has '修改的文件' section
+  PASS: Summary has '关键决策' section
+  PASS: Summary has '失败的尝试' section
+  PASS: Summary has 'Learnings' section
+--- Compression when logs <= keep_recent ---
+  PASS: Iteration-1 log still exists
+  PASS: Iteration-2 log still exists
+  PASS: No summary files created
+--- Compression with non-existent directory ---
+  PASS: Non-existent dir returns 1 (expected=1, actual=1)
+--- Re-compression skips already summarized logs ---
+  PASS: Iteration-1 log removed (already summarized)
+  PASS: Iteration-2 log removed (newly compressed)
+  PASS: Iteration-3 log kept
+  PASS: Iteration-4 log kept
+
+=== check_and_compress_prompt() Tests ===
+
+--- Below threshold: no compression ---
+  PASS: No compression for small prompt (expected=0, actual=0)
+  PASS: No summaries dir for small prompt
+--- Above threshold: triggers compression ---
+  PASS: Summaries dir created after threshold breach
+  PASS: Summary created for iteration-1
+  PASS: Summary created for iteration-2
+--- Custom threshold via environment variable ---
+  PASS: No compression with high threshold
+  PASS: Compression triggered with low threshold
+
+=== generate_iteration_summary() Tests ===
+
+--- Structured extraction from log ---
+  PASS: Summary has completed work
+  PASS: Summary has modified files
+  PASS: Summary has key decisions
+  PASS: Summary has failed attempts
+  PASS: Summary has learnings
+  PASS: Summary has code diff
+--- Empty log handling ---
+  PASS: Non-existent log returns 1 (expected=1, actual=1)
+
+=== Progressive compression Tests ===
+
+--- Multiple compression rounds ---
+  PASS: Iteration-1 log removed after first compression
+  PASS: Iteration-5 log removed after first compression
+  PASS: Iteration-6 log kept
+  PASS: Iteration-8 log kept
+  PASS: Iteration-6 log removed after second compression
+  PASS: Iteration-7 summary exists
+  PASS: Iteration-11 log kept
+
+=== Prompt assembly uses summaries ===
+
+--- get_progress_content replaces log references ---
+  PASS: Progress content replaces log with summary
+  PASS: Progress content no longer has raw log reference
+
+=== handle_context_overflow() with compress_context() ===
+
+--- Overflow triggers compression ---
+  PASS: handle returns 0 for overflow with compression
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created by overflow handler
+  PASS: Log notes compression
+
+=== Large file performance Tests ===
+
+--- generate_iteration_summary handles large log ---
+tests/test_context_overflow.sh: line 1235: diff
+    echo diff: command not found
+  PASS: Summary generated for large file
+  PASS: Large file summary has key sections
+  PASS: Large file summary under 5 seconds
+
+=== Summary quality validation Tests ===
+
+--- Summary contains key information ---
+  PASS: Quality summary has completed work
+  PASS: Quality summary has modified files
+  PASS: Quality summary has key decisions
+  PASS: Quality summary has failed attempts
+  PASS: Quality summary has learnings
+  PASS: Quality summary has code diff
+  PASS: Summary is not empty
+  PASS: Summary has multiple sections
+
+=== Progressive compression token reduction Tests ===
+
+--- Token count decreases after compression ---
+  PASS: Token count reduced after compression
+
+=== trim_prompt_for_overflow() Tests ===
+
+--- Basic trimming behavior ---
+  PASS: Empty prompt returns empty (expected=, actual=)
+  PASS: Program section removed
+  PASS: Program instructions removed
+  PASS: Short content preserved
+  PASS: Continue text preserved
+  PASS: Current task preserved
+  PASS: Failed subtask kept
+  PASS: Review feedback preserved
+--- Function exists and is callable ---
+  PASS: trim_prompt_for_overflow function exists
+
+=== Complete overflow recovery flow Tests ===
+
+--- Full flow: detect -> compress -> trim -> continue ---
+  PASS: handle returns 0 for overflow
+  PASS: CONTEXT_RETRIES incremented (expected=1, actual=1)
+  PASS: CONTEXT_OVERFLOW set to 1 (expected=1, actual=1)
+  PASS: PROMPT_TRIMMED set to 1 (first overflow) (expected=1, actual=1)
+  PASS: CONSECUTIVE_FAILURES reset to 0 (expected=0, actual=0)
+  PASS: Summaries dir created
+  PASS: trim_prompt_for_overflow works after overflow
+--- Progressive overflow increases trim level ---
+  PASS: First overflow sets PROMPT_TRIMMED=1 (expected=1, actual=1)
+  PASS: Second overflow sets PROMPT_TRIMMED=2 (expected=2, actual=2)
+  PASS: Third overflow sets PROMPT_TRIMMED=3 (expected=3, actual=3)
+--- apply_prompt_trimming respects trim levels ---
+  PASS: Level 1 trimming removes program
+  PASS: Level 2 trimming removes history
+  PASS: Level 3 trimming removes persona
+
+==========================================
+Total: 126  Passed: 126  Failed: 0
+==========================================
+[0m
+[0m# [0mTodos
+[x] 分析审核反馈，制定修复计划
+[x] 将 trim_prompt_smart() 重命名为 trim_prompt_for_overflow() 或创建别名
+[x] 在 handle_context_overflow() 中显式调用 trim_prompt_for_overflow()
+[x] 实现渐进式压缩闭环：压缩后调用 prompt 裁剪
+[x] 添加 trim_prompt_for_overflow() 和完整溢出恢复流程的测试
+[x] 考虑引入多级裁剪策略
+[x] 运行测试验证修复
+[ ] 总结 Learnings
+[0m
+所有测试通过！以下是修复总结：
+
+## 修复内容
+
+### 1. 函数命名一致性
+- 创建了 `trim_prompt_for_overflow()` 作为 `trim_prompt_smart()` 的别名，满足需求文档中的函数名要求
+- 更新了 `apply_prompt_trimming()` 调用新函数名
+
+### 2. 多级裁剪策略
+- 在 `handle_context_overflow()` 中实现了渐进式裁剪级别：
+  - 第1次溢出：`PROMPT_TRIMMED=1`（轻度裁剪：移除 program.md）
+  - 第2次溢出：`PROMPT_TRIMMED=2`（中度裁剪：额外移除历史迭代摘要）
+  - 第3次溢出：`PROMPT_TRIMMED=3`（重度裁剪：再移除 Agent Persona）
+
+### 3. 测试覆盖
+- 添加了 `trim_prompt_for_overflow()` 的基础功能测试
+- 添加了完整溢出恢复流程测试（检测→压缩→裁剪→继续）
+- 添加了渐进式裁剪级别测试
+- 添加了多级裁剪策略测试
+
+## Learnings
+
+- **模式**: 函数命名必须与需求文档完全一致，否则会被视为功能缺失
+- **踩坑**: shell 脚本中 `echo "$var" | grep` 的引号处理容易出错，测试时需要用双引号包裹变量
+- **经验**: 多级裁剪策略比单一标志更灵活，能根据溢出严重程度调整裁剪力度
+- **经验**: 测试文件中复制函数实现时，要确保与生产代码保持同步，避免"孤儿测试"

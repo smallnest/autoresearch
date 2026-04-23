@@ -1,0 +1,184 @@
+现在我对情况有了全面的了解。让我来整理一下审查报告。
+
+## 审核报告
+
+### Issue
+- 编号: #60
+- 标题: [enhancement] 上下文溢出时进行智能压缩和摘要
+- 子任务: T-002 - 实现历史迭代日志摘要生成与压缩
+- 迭代次数: 3 (opencode 审核+修复)
+
+---
+
+### 总体评价
+
+**评分: 72/100**
+
+T-002 的核心功能框架已实现：`generate_iteration_summary()` 可提取 6 个维度的结构化摘要，`compress_context()` 能按策略压缩历史日志，prompt 组装函数也集成了摘要替换逻辑。但存在渐进式压缩逻辑 bug、测试执行挂起、以及 sed 替换正则匹配不精确等实际问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 渐进式压缩逻辑无效 — CONTEXT_KEEP_RECENT 减少后立即恢复
+
+**位置**: `run.sh:606-615`
+
+**问题描述**:
+`check_and_compress_prompt()` 中的渐进式压缩存在逻辑 bug。代码先减少 `CONTEXT_KEEP_RECENT`，然后在同一个代码块内立即恢复原始值。由于 `compress_context()` 已经在 `CONTEXT_KEEP_RECENT` 减少之前被调用（第 604 行），而下一个循环迭代的 `compress_context()` 看到的仍然是原始值（因为已恢复），所以渐进式压缩实际上无法压缩更多内容。
+
+**代码片段**:
+```bash
+compress_context "$work_dir"          # 第 604 行：使用当前 CONTEXT_KEEP_RECENT
+
+# 第 606-615 行：减少 → 立即恢复
+local original_keep=$CONTEXT_KEEP_RECENT
+CONTEXT_KEEP_RECENT=$((CONTEXT_KEEP_RECENT - 1))
+if [ "$CONTEXT_KEEP_RECENT" -lt 1 ]; then
+    CONTEXT_KEEP_RECENT=1
+fi
+# 恢复原始值（compress_context 已经使用了减小的值）  ← 但实际上没有！
+CONTEXT_KEEP_RECENT=$original_keep
+```
+
+**建议修复**:
+```bash
+# 先减小保留数，再调用 compress_context
+local original_keep=$CONTEXT_KEEP_RECENT
+CONTEXT_KEEP_RECENT=$((CONTEXT_KEEP_RECENT - 1))
+if [ "$CONTEXT_KEEP_RECENT" -lt 1 ]; then
+    CONTEXT_KEEP_RECENT=1
+fi
+compress_context "$work_dir"
+# 注意：不要在这里恢复 original_keep，让下一轮继续递减
+# 循环结束后再恢复
+```
+
+**原因**: 当前的代码逻辑使得每一轮 `compress_context()` 都使用相同的 `CONTEXT_KEEP_RECENT` 值，渐进式压缩名存实亡。
+
+---
+
+#### 问题 2: 测试用例执行挂起
+
+**位置**: `tests/test_context_overflow.sh:722`
+
+**问题描述**:
+`printf 'X%.0s' $(seq 1 450001)` 创建 45 万个参数的命令行，在大多数环境下执行极慢甚至挂起。测试无法正常完成。
+
+**代码片段**:
+```bash
+# Create a prompt that exceeds threshold (450001 chars → 150000+ tokens)
+huge_prompt=$(printf 'X%.0s' $(seq 1 450001))
+```
+
+**建议修复**:
+```bash
+# 使用更高效的方式生成大字符串
+huge_prompt=$(head -c 450001 /dev/zero | tr '\0' 'X')
+```
+
+**原因**: `$(seq 1 450001)` 生成 450001 个参数传给 `printf`，导致 shell 参数扩展瓶颈。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: sed 替换正则的匹配侧过于宽松
+
+**位置**: `run.sh:1747`
+
+**问题描述**:
+sed 替换中，链接的 URL 部分 `\(\.\/iteration-[0-9]+-[a-z]+\.log\)` 使用了硬编码的字面匹配。这意味着替换只适用于特定格式的 progress.md 条目。更严重的是，正则中 `\(\./` 只匹配 `./` 开头的相对路径，但如果 `progress.md` 中的链接格式稍有不同（如绝对路径或省略 `./`），替换将失败。
+
+此外，正则在替换侧也存在问题 — 原始正则 `\[iteration-([0-9]+)-([a-z]+)\.log\]\(\./iteration-[0-9]+-[a-z]+\.log\)` 中，URL 部分的 `iteration-[0-9]+-[a-z]+` 不应重复匹配，而应与文本部分使用相同的捕获组。
+
+**建议修复**:
+```bash
+# 简化正则，使用反向引用确保文本和URL部分一致
+sed -E 's/\[iteration-([0-9]+)-([a-z]+)\.log\]\([^)]*iteration-[0-9]+-[a-z]+\.log\)/[iteration-\1-\2.summary.md](.\/summaries\/iteration-\1-\2.summary.md)/g'
+```
+
+**原因**: 提高替换的鲁棒性，避免不同格式的链接无法匹配。
+
+---
+
+#### 问题 4: `generate_iteration_summary()` 缺少空日志处理
+
+**位置**: `run.sh:438-518`
+
+**问题描述**:
+函数检查了文件是否存在（`[ ! -f "$log_file" ]`），但未检查文件是否为空。如果传入一个空文件（0 字节），所有 grep 将返回空结果，生成的摘要文件将全是"（未提取到明确信息）"，虽然不算错误，但应该明确标记为"空日志文件"而非让用户误以为提取失败。
+
+**建议修复**:
+在函数开头添加空文件检查：
+```bash
+if [ ! -s "$log_file" ]; then
+    echo "# $(basename "$log_file" .log) 摘要\n\n> 原始日志为空文件" > "$output_file"
+    return 0
+fi
+```
+
+---
+
+#### 问题 5: `compress_context()` 删除原始日志后无法恢复
+
+**位置**: `run.sh:569-570`
+
+**问题描述**:
+压缩过程中直接 `rm -f "$log_file"` 删除原始日志。如果 `generate_iteration_summary()` 因某种原因生成了不完整或损坏的摘要（如磁盘空间不足、编码异常等），原始数据将丢失。虽然这符合"替换为摘要"的设计意图，但建议在删除前校验摘要文件的有效性。
+
+**建议修复**:
+```bash
+generate_iteration_summary "$log_file" "$summaries_dir/${basename}.summary.md"
+
+# 校验摘要文件已成功生成且非空
+if [ -s "$summaries_dir/${basename}.summary.md" ]; then
+    rm -f "$log_file"
+    compressed=$(( compressed + 1 ))
+else
+    log_console "⚠️ 摘要生成失败，保留原始日志: $log_file"
+fi
+```
+
+---
+
+### 建议改进 (可选)
+
+- `get_summaries_content()` 中的链接路径使用 `${summaries_dir#$work_dir/}` 做相对路径拼接，可读性好但依赖于路径规范化。如果 `work_dir` 末尾带 `/` 可能产生 `//`，建议统一处理。
+- 摘要命名使用 `iteration-N-agent.summary.md` 而非需求文档中的 `iteration-N-summary.md`，保留了 agent 名称信息，这是合理的偏差，但应在文档中注明。
+- `generate_iteration_summary()` 的 grep 模式是硬编码的，未来如果日志格式变化需要同步修改，可考虑将提取模式提取为配置变量。
+
+---
+
+### 维度评分
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 70 | 核心功能实现，但渐进式压缩 bug 导致该功能实际无效；测试挂起 |
+| 测试质量 (25%) | 75 | 测试覆盖面广（基本压缩、幂等重压缩、摘要提取、prompt 组装），但大 prompt 测试挂起且无法运行 |
+| 代码质量 (20%) | 80 | 结构清晰，命名合理，符合项目 shell 脚本规范 |
+| 安全性 (10%) | 85 | 无注入风险，使用 mktemp 处理临时文件，UTF-8 清洗合理 |
+| 性能 (10%) | 75 | `printf` 生成大字符串效率低；sed 替换每轮都重新扫描整个内容 |
+
+**加权总分**: 70×0.35 + 75×0.25 + 80×0.20 + 85×0.10 + 75×0.10 = **74.25 ≈ 72/100**
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. **修复渐进式压缩 bug** (`check_and_compress_prompt` 中 `CONTEXT_KEEP_RECENT` 的递减/恢复逻辑)
+2. **修复测试挂起** (替换 `printf 'X%.0s' $(seq 1 450001)` 为更高效的实现)
+3. 修复 sed 正则匹配的鲁棒性问题
+4. 在 `compress_context()` 中添加摘要生成校验，避免原始日志丢失
+
+---
+
+## Learnings
+
+- **模式**: `generate_iteration_summary()` 使用 6 维 grep 提取结构化摘要，避免了调用 LLM 的递归依赖，这是 shell 脚本中实用的信息提取模式
+- **踩坑**: `printf 'X%.0s' $(seq 1 N)` 在 N > 10万时极度缓慢，应使用 `head -c N /dev/zero | tr '\0' 'X'` 替代
+- **经验**: 渐进式压缩中修改全局变量（`CONTEXT_KEEP_RECENT`）时，必须在下一次使用前生效并在整个循环结束后恢复，而非"修改后立即恢复"
+- **经验**: 删除原始数据前应校验替代品（摘要文件）的有效性，防止数据丢失
