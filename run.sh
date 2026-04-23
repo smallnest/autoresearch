@@ -1126,6 +1126,18 @@ check_project() {
         exit 1
     fi
 
+    # 拉取 autoresearch 最新代码
+    local autoresearch_dir
+    autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
+        log "拉取 autoresearch 最新代码..."
+        if git -C "$autoresearch_dir" pull --rebase origin master &> /dev/null; then
+            log "autoresearch 代码已更新"
+        else
+            log_console "⚠️  autoresearch git pull 失败，继续使用当前版本"
+        fi
+    fi
+
     local lang=$(detect_language)
     log "项目目录: $PROJECT_ROOT"
     log "Git remote: $remote_url"
