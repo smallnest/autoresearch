@@ -1,0 +1,121 @@
+## 审核报告
+
+### Issue
+- 编号: #50
+- 标题: [hardness engineering] Git 操作容错
+- 迭代次数: 10
+- 子任务: T-004 - 添加 Git 操作容错测试用例
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-004 子任务要求创建 `tests/test_git_error_handling.sh` 测试文件，但该文件**完全不存在**。测试用例完全没有实现。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 测试脚本可独立运行，不依赖真实 Git 操作 | ❌ 未实现 | 测试文件不存在 |
+| 使用 mock 函数模拟 git/gh 命令失败 | ❌ 未实现 | 测试文件不存在 |
+| 验证错误处理函数被正确调用 | ❌ 未实现 | 测试文件不存在 |
+| 验证日志输出包含预期内容 | ❌ 未实现 | 测试文件不存在 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 测试文件完全不存在
+
+**位置**: `tests/test_git_error_handling.sh`
+
+**问题描述**:
+T-004 要求在 tests/ 目录下新增 `test_git_error_handling.sh`，测试 Git 操作失败场景。但该文件完全不存在。
+
+**建议修复**:
+创建测试文件，参考已有的测试模式：
+- `tests/test_git_push.sh` - 测试 git push 失败处理
+- `tests/test_branch_cleanup.sh` - 测试 branch 清理容错
+
+---
+
+#### 问题 2: T-002 的 gh pr merge 容错处理未实现
+
+**位置**: `run.sh:4512`
+
+**问题描述**:
+T-002 标记为 `passes: true`，但 `gh pr merge` 命令没有任何容错处理：
+
+```bash
+gh pr merge "$PR_NUMBER" --merge
+```
+
+这违反了 T-002 的验收条件：
+- 合并失败时应输出 PR URL 供用户手动合并
+- 记录合并失败日志到 log.md
+- 即使合并失败，也能继续执行后续清理流程
+
+**建议修复**:
+```bash
+# 合并 PR（不删除本地分支，我们自己处理）
+log_console "合并 PR #$PR_NUMBER..."
+if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+    log_console "⚠️ PR 合并失败，请手动处理"
+    log_console "PR URL: $PR_URL"
+    log "PR merge failed: $MERGE_OUTPUT"
+    cat >> "$WORK_DIR/log.md" << EOF
+
+## ⚠️ PR 合并失败
+
+**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+**PR**: $PR_URL
+**错误输出**:
+\`\`\`
+$MERGE_OUTPUT
+\`\`\`
+
+请手动合并: gh pr merge $PR_NUMBER --merge
+EOF
+fi
+```
+
+---
+
+### 测试文件实现建议
+
+根据验收条件，测试文件应包含以下场景：
+
+```bash
+#!/bin/bash
+# tests/test_git_error_handling.sh - 综合测试 Git 操作容错
+
+set -e
+
+# 1. 模拟 git push 失败场景
+# 2. 模拟 gh pr merge 失败场景
+# 3. 模拟 branch 清理失败场景
+# 4. 验证日志记录正确性
+```
+
+---
+
+### 审核结论
+
+- [ ] 阻塞 - 存在严重问题，需要重新实现
+
+**下一步行动**:
+1. 创建 `tests/test_git_error_handling.sh` 测试文件
+2. 添加 T-002 中 `gh pr merge` 的容错处理（T-002 标记通过但实际未实现）
+3. 测试应覆盖 git push、gh pr merge、branch cleanup 的失败场景
+
+---
+
+## Learnings
+
+- **模式**: 子任务标记为 `passes: true` 时，需要实际验证实现是否完成，不能仅依赖 tasks.json 状态
+- **踩坑**: T-002 和 T-004 之间存在依赖关系（T-004 测试 T-002 的容错逻辑），但 T-002 未完全实现导致 T-004 无法正确测试
+- **经验**: 多子任务的 Issue 应在审核时检查所有前置子任务的实现状态，确保测试有对应的代码可测

@@ -1,0 +1,2019 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019db864-d981-7ea3-bc81-471108e84592
+--------
+user
+审核 Issue #50 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [hardness engineering] Git 操作容错
+
+
+## 子任务审核
+
+子任务进度: 3/4 已完成 | 当前子任务: T-004 - 添加 Git 操作容错测试用例
+
+请审核当前子任务的实现：
+
+- **ID**: T-004
+- **标题**: 添加 Git 操作容错测试用例
+- **类型**: code
+- **描述**: 在 tests/ 目录下新增 test_git_error_handling.sh，测试 Git 操作失败场景：1) 模拟 git push 失败；2) 模拟 gh pr merge 失败；3) 验证错误处理函数返回正确状态；4) 验证日志记录正确
+- **验收条件**:
+  - 测试脚本可独立运行，不依赖真实 Git 操作
+  - 使用 mock 函数模拟 git/gh 命令失败
+  - 验证错误处理函数被正确调用
+  - 验证日志输出包含预期内容
+
+
+请针对此子任务的验收条件进行审核。
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+... (中间迭代记录已省略)
+
+�体评价
+**评分: 92/100**
+
+### 严重问题 (必须修复)
+无
+
+### 一般问题 (建议修复)
+无
+
+### 建议改进 (可选)
+1. **日志一致性**: `2>/dev/null` 会静默吞掉 git 的错误输出，虽然验收条件只要求"记录警告日志"，但建议将 stderr 重定向到日志文件而非直接丢弃，便于后续排查
+2. **测试覆盖**: 当前测试未覆盖"分支存在但删除失败"和"分支不存在跳过删除"的组合场[96m[1m| [0m[90m Read     [0mrun.sh
+[94m[1m| [0m[90m Grep     [0mbranch.*-D|checkout.*main|git.*pull
+[96m[1m| [0m[90m Read     [0mlib/branch_cleanup.sh
+[96m[1m| [0m[90m Read     [0mtests/test_branch_cleanup.sh
+## 审核报告
+
+### Issue
+- 编号: #50
+- 迭代次数: 8
+- 子任务: T-003 - branch 清理日志优化
+
+### 总体评价
+**评分: 92/100**
+
+### 严重问题 (必须修复)
+无
+
+### 一般问题 (建议修复)
+无
+
+### 建议改进 (可选)
+1. **日志一致性**: `2>/dev/null` 会静默吞掉 git 的错误输出，虽然验收条件只要求"记录警告日志"，但建议将 stderr 重定向到日志文件而非直接丢弃，便于后续排查
+2. **测试覆盖**: 当前测试未覆盖"分支存在但删除失败"和"分支不存在跳过删除"的组合场
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: `if ! cmd; then log; fi` 模式是 Shell 脚本容错处理的最佳实践，比 `|| true` 更可控
+- **经验**: 测试中使用 mock 函数覆盖外部命令（git）可以高效验证容错逻辑
+- **建议**: 后续可考虑将 `2>/dev/null` 改为 `2>>"$WORK_DIR/git-errors.log"` 保留诊断信息
+
+
+## Iteration 10 - 2026-04-23
+
+- **Agent**: claude
+- **类型**: 审核+修复 - T-004
+- **评分**: 50/100
+
+- **审核要点**:
+
+## 审核报告
+
+### Issue
+- 编号: #50
+- 标题: [hardness engineering] Git 操作容错
+- 迭代次数: 10
+- 子任务: T-004 - 添加 Git 操作容错测试用例
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-004 子任务要求创建 `tests/test_git_error_handling.sh` 测试文件，但该文件**完全不存在**。测试用例完全没有实现。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 测试脚本可独立运行，不依赖真实 Git 操作 | ❌ 未实现 | 测试文件不存在 |
+| 使用 mock 函数模拟 git/gh 命令失败 | ❌ 未实现 | 测试文件不存在 |
+| 验证错误处理函数被正确调用 | ❌ 未实现 | 测试文件不存在 |
+| 验证日志输出包含预期内容 | ❌ 未实现 | 测试文件不存在 
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: 子任务标记为 `passes: true` 时，需要实际验证实现是否完成，不能仅依赖 tasks.json 状态
+- **踩坑**: T-002 和 T-004 之间存在依赖关系（T-004 测试 T-002 的容错逻辑），但 T-002 未完全实现导致 T-004 无法正确测试
+- **经验**: 多子任务的 Issue 应在审核时检查所有前置子任务的实现状态，确保测试有对应的代码可测
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我会先检查与 T-004 相关的实现和测试文件，确认当前分支上是否实际新增了 `tests/test_git_error_handling.sh`，以及它测试的目标代码是否存在。
+exec
+/bin/zsh -lc "pwd && rg --files . | rg '("'^|/)tests/|(''^|/)lib/|(''^|/)run'"\\.sh"'$|CLAUDE'"\\.md"'$'"'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch
+./CLAUDE.md
+./lib/CLAUDE.md
+./lib/branch_cleanup.sh
+./lib/git_push.sh
+./lib/agent_logic.sh
+./desktop_app/src/CLAUDE.md
+./desktop_app/CLAUDE.md
+./run.sh
+./tests/test_context_overflow.sh
+./tests/test_git_error_handling.sh
+./tests/test_agent_logic.sh
+./tests/test_archive.sh
+./tests/test_extract_score.sh
+./tests/test_branch_cleanup.sh
+./tests/test_cleanup.sh
+./tests/test_git_push.sh
+./tests/CLAUDE.md
+./tests/test_trim_prompt.sh
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'rg -n "git_error|error handling|gh pr merge|git push|handle_.*error|log_.*warn|warn|warning" .' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ D .autoresearch/workflows/issue-60/.last_score
+ D .autoresearch/workflows/issue-60/hard-gate-1.log
+ D .autoresearch/workflows/issue-60/hard-gate-10.log
+ D .autoresearch/workflows/issue-60/hard-gate-11.log
+ D .autoresearch/workflows/issue-60/hard-gate-12.log
+ D .autoresearch/workflows/issue-60/hard-gate-13.log
+ D .autoresearch/workflows/issue-60/hard-gate-14.log
+ D .autoresearch/workflows/issue-60/hard-gate-15.log
+ D .autoresearch/workflows/issue-60/hard-gate-3.log
+ D .autoresearch/workflows/issue-60/hard-gate-4.log
+ D .autoresearch/workflows/issue-60/hard-gate-5.log
+ D .autoresearch/workflows/issue-60/hard-gate-6.log
+ D .autoresearch/workflows/issue-60/hard-gate-7.log
+ D .autoresearch/workflows/issue-60/hard-gate-8.log
+ D .autoresearch/workflows/issue-60/iteration-1-claude.log
+ D .autoresearch/workflows/issue-60/iteration-10-claude-review.log
+ D .autoresearch/workflows/issue-60/iteration-10-claude.log
+ D .autoresearch/workflows/issue-60/iteration-11-codex-review.log
+ D .autoresearch/workflows/issue-60/iteration-11-codex.log
+ D .autoresearch/workflows/issue-60/iteration-12-opencode-review.log
+ D .autoresearch/workflows/issue-60/iteration-12-opencode.log
+ D .autoresearch/workflows/issue-60/iteration-13-claude-review.log
+ D .autoresearch/workflows/issue-60/iteration-13-claude.log
+ D .autoresearch/workflows/issue-60/iteration-14-codex-review.log
+ D .autoresearch/workflows/issue-60/iteration-14-codex.log
+ D .autoresearch/workflows/issue-60/iteration-15-opencode-review.log
+ D .autoresearch/workflows/issue-60/iteration-15-opencode.log
+ D .autoresearch/workflows/issue-60/iteration-16-claude-review.log
+ D .autoresearch/workflows/issue-60/iteration-2-codex-review.log
+ D .autoresearch/workflows/issue-60/iteration-3-opencode-review.log
+ D .autoresearch/workflows/issue-60/iteration-3-opencode.log
+ D .autoresearch/workflows/issue-60/iteration-4-claude-review.log
+ D .autoresearch/workflows/issue-60/iteration-4-claude.log
+ D .autoresearch/workflows/issue-60/iteration-5-codex-review.log
+ D .autoresearch/workflows/issue-60/iteration-5-codex.log
+ D .autoresearch/workflows/issue-60/iteration-6-opencode-review.log
+ D .autoresearch/workflows/issue-60/iteration-6-opencode.log
+ D .autoresearch/workflows/issue-60/iteration-7-claude-review.log
+ D .autoresearch/workflows/issue-60/iteration-7-claude.log
+ D .autoresearch/workflows/issue-60/iteration-8-codex-review.log
+ D .autoresearch/workflows/issue-60/iteration-8-codex.log
+ D .autoresearch/workflows/issue-60/iteration-9-opencode-review.log
+ D .autoresearch/workflows/issue-60/log.md
+ D .autoresearch/workflows/issue-60/planning.log
+ D .autoresearch/workflows/issue-60/progress.md
+ D .autoresearch/workflows/issue-60/tasks.json
+ M CLAUDE.md
+ M lib/CLAUDE.md
+ M run.sh
+ M tests/CLAUDE.md
+?? .autoresearch/archive/2026-04-23-issue-49/
+?? .autoresearch/archive/2026-04-23-issue-60/
+?? .autoresearch/workflows/issue-50/
+?? lib/branch_cleanup.sh
+?? lib/git_push.sh
+?? tests/test_branch_cleanup.sh
+?? tests/test_git_error_handling.sh
+?? tests/test_git_push.sh
+
+ succeeded in 0ms:
+./CLAUDE.md:114:- The final PR flow in [`run.sh`](/Users/chaoyuepan/ai/autoresearch/run.sh) is still `set -e` sensitive; `gh pr merge` must be wrapped with explicit failure handling rather than called bare.
+./CLAUDE.md:145:- If screenshot fails: Logs warning, returns `pass: true` with degraded feedback
+./CLAUDE.md:146:- If LLM verification fails: Retries up to 3 times, then returns `pass: true` with warning
+./lib/CLAUDE.md:6:- `git_push.sh`: 包含 `git push` 容错与恢复建议逻辑，供 `run.sh` 和测试复用。
+./lib/git_push.sh:2:# Shared git push recovery helpers.
+./lib/git_push.sh:20:    push_output=$(git push -u origin "$BRANCH_NAME" 2>&1) || {
+./lib/git_push.sh:23:        error "git push 失败 (exit code: $push_exit_code)"
+./lib/git_push.sh:25:        log_console "❌ git push 失败！"
+./lib/git_push.sh:60:                log_console "重试 git push..."
+./lib/git_push.sh:61:                retry_output=$(git push -u origin "$BRANCH_NAME" 2>&1) || {
+./lib/git_push.sh:121:        log_console "   git push -u origin $BRANCH_NAME"
+./docs/hardness_engineering.md:15:| 7 | [#54 磁盘空间预检](https://github.com/smallnest/autoresearch/issues/54) | 启动时 `df` 检查，低于阈值 warn/abort | 低 | 未实现 |
+./docs/hardness_engineering.md:61:**问题：** `git push` 和 `gh pr merge` 在 `set -e` 下失败会直接 abort，没有任何清理和友好提示。失败后状态不一致，用户无法恢复。
+./docs/hardness_engineering.md:64:- `git push -u origin` 和 `gh pr merge` 加 `|| { error handling; return 1 }` 保护
+./docs/hardness_engineering.md:139:- 预留阈值（如 1GB），不足则 warn 或 abort
+./tests/test_trim_prompt.sh:365:问题2: Missing error handling
+./tests/test_trim_prompt.sh:366:建议: Add proper error handling
+./tests/test_trim_prompt.sh:375:assert_contains "preserves review suggestions" "$result" "Add proper error handling"
+./tests/test_trim_prompt.sh:578:- Use Result for error handling
+./tests/CLAUDE.md:11:- `test_git_push.sh`: 测试 git push 失败处理逻辑（set -e 兼容、日志写入、stash 重试）。
+./tests/CLAUDE.md:12:- `test_git_error_handling.sh`: 综合测试 Git 操作容错（gh pr merge 失败、branch cleanup 失败、日志记录正确性）。
+./run.sh:74:    echo "ERROR: 缺少 git push 逻辑文件: $GIT_PUSH_LIB" >&2
+./run.sh:170:        rust)   echo "cargo clippy -- -D warnings" ;;
+./run.sh:317:    # 仅匹配行首的错误模式，避免误判代码中讨论 "error handling" 等正常内容
+./run.sh:503:    failed_attempts=$(grep -iE '(失败|错误|问题|踩坑|尝试.*失败|不工作|报错|error|fail|issue|bug|broken|does not work|not working|⚠️|❌|warning|caution)' "$cleaned_file" 2>/dev/null | head -15)
+./run.sh:4513:        if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+./run.sh:4530:请手动合并: gh pr merge $PR_NUMBER --merge
+./tests/test_git_push.sh:2:# tests/test_git_push.sh - Unit tests for git push failure handling
+./tests/test_git_push.sh:5:# 1. `git push` first failure doesn't exit due to `set -e`
+./tests/test_git_push.sh:148:# Simulate the git push failure handling logic from run.sh
+./tests/test_git_push.sh:156:    PUSH_OUTPUT=$(git push -u origin "$BRANCH_NAME" 2>&1) || PUSH_EXIT_CODE=$?
+./tests/test_git_push.sh:159:        error "git push 失败 (exit code: ${PUSH_EXIT_CODE:-unknown})"
+./tests/test_git_push.sh:161:        log_console "❌ git push 失败！"
+./tests/test_git_push.sh:191:            log_console "重试 git push..."
+./tests/test_git_push.sh:194:            RETRY_OUTPUT=$(git push -u origin "$BRANCH_NAME" 2>&1) || RETRY_EXIT_CODE=$?
+./tests/test_git_push.sh:229:        log_console "3. 手动推送: git push -u origin $BRANCH_NAME"
+./tests/test_git_push.sh:245:echo "Scenario 1: git push failure doesn't exit script (set -e compatible)"
+./tests/test_git_push.sh:292:assert_contains "manual push command suggested" "$WORK_DIR/terminal.log" "git push -u origin"
+./tests/test_git_error_handling.sh:2:# tests/test_git_error_handling.sh - 综合测试 Git 操作容错
+./tests/test_git_error_handling.sh:5:# 1. gh pr merge 失败时不中断流程，记录日志并输出 PR URL
+./tests/test_git_error_handling.sh:6:# 2. git push 失败时记录详细错误日志
+./tests/test_git_error_handling.sh:10:# Usage: bash tests/test_git_error_handling.sh
+./tests/test_git_error_handling.sh:171:# Simulate gh pr merge failure handling from run.sh
+./tests/test_git_error_handling.sh:178:    if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+./tests/test_git_error_handling.sh:195:请手动合并: gh pr merge $PR_NUMBER --merge
+./tests/test_git_error_handling.sh:210:# Test 1: gh pr merge failure handling
+./tests/test_git_error_handling.sh:212:echo "Scenario 1: gh pr merge failure logs PR URL and continues"
+./tests/test_git_error_handling.sh:220:assert_contains "warning message logged" "$WORK_DIR/terminal.log" "PR 合并失败"
+./tests/test_git_error_handling.sh:222:assert_contains "manual command suggested" "$WORK_DIR/log.md" "gh pr merge 123"
+./tests/test_git_error_handling.sh:225:# Test 2: gh pr merge success
+./tests/test_git_error_handling.sh:227:echo "Scenario 2: gh pr merge success works normally"
+./tests/test_git_error_handling.sh:239:echo "Scenario 3: branch cleanup checkout failure logs warning and continues"
+./tests/test_git_error_handling.sh:246:assert_contains "checkout warning logged" "$WORK_DIR/terminal.log" "切换到 main 分支失败"
+./tests/test_git_error_handling.sh:253:echo "Scenario 4: branch cleanup pull failure logs warning and continues"
+./tests/test_git_error_handling.sh:260:assert_contains "pull warning logged" "$WORK_DIR/terminal.log" "拉取 main 分支最新代码失败"
+./tests/test_git_error_handling.sh:267:echo "Scenario 5: branch cleanup delete failure logs warning and continues"
+./tests/test_git_error_handling.sh:274:assert_contains "delete warning logged" "$WORK_DIR/terminal.log" "删除本地分支 feature/test-issue 失败"
+./tests/test_git_error_handling.sh:281:echo "Scenario 6: branch cleanup missing branch skips delete without warnings"
+./desktop_app/eslint.config.js:10:      "no-unused-vars": "warn",
+./tasks/prd-desktop-app.md:69:- [ ] 支持日志搜索和按级别过滤（info/warn/error）
+./program.md:293:cargo clippy -- -D warnings && cargo test
+./tests/test_branch_cleanup.sh:125:echo "Scenario 1: checkout failure logs warning and main flow continues"
+./tests/test_branch_cleanup.sh:130:assert_contains "checkout warning logged" "$WORK_DIR/terminal.log" "切换到 main 分支失败"
+./tests/test_branch_cleanup.sh:136:echo "Scenario 2: pull failure logs warning and main flow continues"
+./tests/test_branch_cleanup.sh:141:assert_contains "pull warning logged" "$WORK_DIR/terminal.log" "拉取 main 分支最新代码失败"
+./tests/test_branch_cleanup.sh:147:echo "Scenario 3: branch delete failure logs warning and main flow continues"
+./tests/test_branch_cleanup.sh:152:assert_contains "delete warning logged" "$WORK_DIR/terminal.log" "删除本地分支 feature/test-issue 失败"
+./tests/test_branch_cleanup.sh:158:echo "Scenario 4: missing branch skips delete without warnings"
+./tests/test_context_overflow.sh:505:    failed_attempts=$(grep -iE '(失败|错误|问题|踩坑|尝试.*失败|不工作|报错|error|fail|issue|bug|broken|does not work|not working|⚠️|❌|warning|caution)' "$cleaned_file" 2>/dev/null | head -15)
+./tests/test_extract_score.sh:629:assert_false "error handling discussion" "has_fatal_error $(make_log 'ok2.log' 'Consider adding error handling for edge cases')"
+./tests/test_extract_score.sh:656:assert_false "status discussion" "has_api_failure $(make_log 'api_ok2.log' 'Check the HTTP status codes for error handling')"
+./tests/test_extract_score.sh:823:Consider adding error handling for edge cases.
+./desktop_app/CLAUDE.md:29:- Tauri commands consistently use `Result<T, String>` for error handling
+
+codex
+相关文件已经存在。我现在核对 `run.sh`、`lib/*` 和这份新测试脚本之间是否真实对应，重点看它是不是独立可运行、是否真的 mock 了 `git/gh` 失败路径，以及断言是否覆盖了验收条件。
+exec
+/bin/zsh -lc "sed -n '1,260p' tests/test_git_error_handling.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+#!/bin/bash
+# tests/test_git_error_handling.sh - 综合测试 Git 操作容错
+#
+# Tests verify:
+# 1. gh pr merge 失败时不中断流程，记录日志并输出 PR URL
+# 2. git push 失败时记录详细错误日志
+# 3. branch 清理失败时记录警告日志
+# 4. 错误处理函数返回正确状态
+#
+# Usage: bash tests/test_git_error_handling.sh
+
+set -e
+
+PASS=0
+FAIL=0
+TOTAL=0
+
+WORK_ROOT=""
+WORK_DIR=""
+
+# Mock state variables
+MOCK_GH_PR_MERGE_FAIL=0
+MOCK_GIT_PUSH_FAIL=0
+MOCK_GIT_CHECKOUT_FAIL=0
+MOCK_GIT_PULL_FAIL=0
+MOCK_GIT_BRANCH_DELETE_FAIL=0
+MOCK_BRANCH_EXISTS=1
+MOCK_GH_LOG=""
+MOCK_GIT_LOG=""
+
+# Mock gh command
+gh() {
+    MOCK_GH_LOG="${MOCK_GH_LOG}gh $*\n"
+
+    case "$1" in
+        pr)
+            if [ "$2" = "merge" ]; then
+                if [ "$MOCK_GH_PR_MERGE_FAIL" -eq 1 ]; then
+                    echo "error: merge failed: PR is not mergeable" >&2
+                    return 1
+                fi
+                echo "✓ Merged pull request #$3"
+                return 0
+            fi
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+# Mock git command
+git() {
+    MOCK_GIT_LOG="${MOCK_GIT_LOG}git $*\n"
+
+    case "$1" in
+        push)
+            if [ "$MOCK_GIT_PUSH_FAIL" -eq 1 ]; then
+                echo "fatal: unable to access 'https://github.com/': Failed to connect" >&2
+                return 1
+            fi
+            echo "Push successful"
+            return 0
+            ;;
+        checkout)
+            [ "$MOCK_GIT_CHECKOUT_FAIL" -eq 1 ] && return 1
+            return 0
+            ;;
+        pull)
+            [ "$MOCK_GIT_PULL_FAIL" -eq 1 ] && return 1
+            return 0
+            ;;
+        show-ref)
+            [ "$MOCK_BRANCH_EXISTS" -eq 1 ] && return 0
+            return 1
+            ;;
+        branch)
+            if [ "$2" = "-D" ]; then
+                [ "$MOCK_GIT_BRANCH_DELETE_FAIL" -eq 1 ] && return 1
+                return 0
+            fi
+            return 0
+            ;;
+        diff|stash|remote)
+            return 0
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "$msg" >> "$WORK_DIR/terminal.log"
+    fi
+}
+
+log_console() {
+    local msg="$1"
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$WORK_DIR/terminal.log"
+    fi
+}
+
+error() {
+    local msg="$1"
+    echo "$msg" >&2
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $msg" >> "$WORK_DIR/terminal.log"
+    fi
+}
+
+assert_eq() {
+    local test_name="$1"
+    local expected="$2"
+    local actual="$3"
+    TOTAL=$((TOTAL + 1))
+    if [ "$expected" = "$actual" ]; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+    fi
+}
+
+assert_contains() {
+    local test_name="$1"
+    local file="$2"
+    local pattern="$3"
+    TOTAL=$((TOTAL + 1))
+    if grep -q "$pattern" "$file" 2>/dev/null; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name (pattern '$pattern' not found in $file)"
+    fi
+}
+
+reset_state() {
+    MOCK_GH_PR_MERGE_FAIL=0
+    MOCK_GIT_PUSH_FAIL=0
+    MOCK_GIT_CHECKOUT_FAIL=0
+    MOCK_GIT_PULL_FAIL=0
+    MOCK_GIT_BRANCH_DELETE_FAIL=0
+    MOCK_BRANCH_EXISTS=1
+    MOCK_GH_LOG=""
+    MOCK_GIT_LOG=""
+}
+
+setup_case() {
+    reset_state
+    WORK_ROOT=$(mktemp -d)
+    WORK_DIR="$WORK_ROOT/work"
+    mkdir -p "$WORK_DIR"
+    : > "$WORK_DIR/log.md"
+    : > "$WORK_DIR/terminal.log"
+}
+
+teardown_case() {
+    if [ -n "$WORK_ROOT" ] && [ -d "$WORK_ROOT" ]; then
+        rm -rf "$WORK_ROOT"
+    fi
+    WORK_ROOT=""
+    WORK_DIR=""
+}
+
+# Simulate gh pr merge failure handling from run.sh
+# Returns 0 on success, 1 on failure (but flow continues)
+simulate_pr_merge_with_failure_handling() {
+    local PR_NUMBER="$1"
+    local PR_URL="$2"
+    local MERGE_OUTPUT=""
+
+    if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+        log_console "⚠️ PR 合并失败，请手动处理"
+        log_console "PR URL: $PR_URL"
+        log "PR merge failed: $MERGE_OUTPUT"
+        cat >> "$WORK_DIR/log.md" << EOF
+
+---
+
+## ⚠️ PR 合并失败
+
+**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+**PR**: $PR_URL
+**错误输出**:
+\`\`\`
+$MERGE_OUTPUT
+\`\`\`
+
+请手动合并: gh pr merge $PR_NUMBER --merge
+EOF
+        return 1
+    fi
+    return 0
+}
+
+# shellcheck source=/dev/null
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/branch_cleanup.sh"
+
+trap teardown_case EXIT
+
+echo "=== Git Error Handling Tests ==="
+echo ""
+
+# Test 1: gh pr merge failure handling
+setup_case
+echo "Scenario 1: gh pr merge failure logs PR URL and continues"
+MOCK_GH_PR_MERGE_FAIL=1
+
+MERGE_FAILED=0
+simulate_pr_merge_with_failure_handling 123 "https://github.com/test/repo/pull/123" || MERGE_FAILED=1
+
+assert_eq "merge failed but flow continued" "1" "$MERGE_FAILED"
+assert_contains "PR URL logged" "$WORK_DIR/terminal.log" "https://github.com/test/repo/pull/123"
+assert_contains "warning message logged" "$WORK_DIR/terminal.log" "PR 合并失败"
+assert_contains "error section in log.md" "$WORK_DIR/log.md" "PR 合并失败"
+assert_contains "manual command suggested" "$WORK_DIR/log.md" "gh pr merge 123"
+teardown_case
+
+# Test 2: gh pr merge success
+setup_case
+echo "Scenario 2: gh pr merge success works normally"
+MOCK_GH_PR_MERGE_FAIL=0
+
+MERGE_RESULT=0
+simulate_pr_merge_with_failure_handling 456 "https://github.com/test/repo/pull/456" || MERGE_RESULT=1
+
+assert_eq "merge succeeded" "0" "$MERGE_RESULT"
+assert_eq "log.md has no merge errors" "" "$(grep 'PR 合并失败' $WORK_DIR/log.md 2>/dev/null || echo '')"
+teardown_case
+
+# Test 3: branch cleanup checkout failure
+setup_case
+echo "Scenario 3: branch cleanup checkout failure logs warning and continues"
+MOCK_GIT_CHECKOUT_FAIL=1
+
+FOLLOWUP_EXECUTED=0
+cleanup_merged_branch "main" "feature/test-issue"
+FOLLOWUP_EXECUTED=1
+
+assert_contains "checkout warning logged" "$WORK_DIR/terminal.log" "切换到 main 分支失败"
+assert_contains "checkout failure log recorded" "$WORK_DIR/terminal.log" "branch cleanup: checkout main failed"
+assert_eq "flow continues after checkout failure" "1" "$FOLLOWUP_EXECUTED"
+teardown_case
+
+# Test 4: branch cleanup pull failure
+setup_case
+echo "Scenario 4: branch cleanup pull failure logs warning and continues"
+MOCK_GIT_PULL_FAIL=1
+
+FOLLOWUP_EXECUTED=0
+cleanup_merged_branch "main" "feature/test-issue"
+FOLLOWUP_EXECUTED=1
+
+assert_contains "pull warning logged" "$WORK_DIR/terminal.log" "拉取 main 分支最新代码失败"
+
+exec
+/bin/zsh -lc "sed -n '1,260p' lib/branch_cleanup.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+#!/bin/bash
+# Shared helpers for non-fatal post-merge branch cleanup.
+
+# cleanup_merged_branch switches back to the main branch, refreshes it, and
+# deletes the feature branch. Cleanup failures are logged but never returned as
+# fatal so the caller can continue later post-merge steps.
+cleanup_merged_branch() {
+    local main_branch="$1"
+    local branch_name="$2"
+
+    log_console "切换回 $main_branch 分支..."
+    if ! git checkout "$main_branch" 2>/dev/null; then
+        log_console "⚠️  切换到 $main_branch 分支失败，继续执行..."
+        log "branch cleanup: checkout $main_branch failed"
+    fi
+
+    if ! git pull origin "$main_branch" 2>/dev/null; then
+        log_console "⚠️  拉取 $main_branch 分支最新代码失败，继续执行..."
+        log "branch cleanup: git pull $main_branch failed"
+    fi
+
+    if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+        if ! git branch -D "$branch_name" 2>/dev/null; then
+            log_console "⚠️  删除本地分支 $branch_name 失败，可能分支不存在或未合并"
+            log "branch cleanup: git branch -D $branch_name failed"
+        fi
+    fi
+
+    return 0
+}
+
+exec
+/bin/zsh -lc "sed -n '4488,4545p' run.sh" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,240p' lib/git_push.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+- Feedback: $ui_feedback_text
+"
+    fi
+
+    PR_URL=$(gh pr create --title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" --body "$(cat <<EOF
+## Summary
+- Implements #$ISSUE_NUMBER
+- Score: $FINAL_SCORE/100
+- Iterations: $ITERATION
+$subtask_summary$ui_verify_summary
+## Test plan
+- [x] All tests pass
+- [x] Code review completed with score >= $PASSING_SCORE
+
+Closes #$ISSUE_NUMBER
+EOF
+)" 2>&1)
+
+    if echo "$PR_URL" | grep -q "https://github.com"; then
+        PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+        log_console "✅ PR 已创建: $PR_URL"
+
+        # 合并 PR（不删除本地分支，我们自己处理）
+        log_console "合并 PR #$PR_NUMBER..."
+        MERGE_OUTPUT=""
+        if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+            log_console "⚠️ PR 合并失败，请手动处理"
+            log_console "PR URL: $PR_URL"
+            log "PR merge failed: $MERGE_OUTPUT"
+            cat >> "$WORK_DIR/log.md" << EOF
+
+---
+
+## ⚠️ PR 合并失败
+
+**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+**PR**: $PR_URL
+**错误输出**:
+\`\`\`
+$MERGE_OUTPUT
+\`\`\`
+
+请手动合并: gh pr merge $PR_NUMBER --merge
+EOF
+        fi
+
+        # 切换回主分支前，先处理未提交的更改
+        cd "$PROJECT_ROOT"
+        main_branch=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+        [ -z "$main_branch" ] && main_branch="master"
+
+        # 如果有未提交的更改，先 stash
+        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+            log "检测到未提交的更改，暂存..."
+            git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null || true
+        fi
+
+        cleanup_merged_branch "$main_branch" "$BRANCH_NAME"
+
+ succeeded in 0ms:
+#!/bin/bash
+# Shared git push recovery helpers.
+
+# push_branch_with_recovery pushes BRANCH_NAME to origin and handles failures.
+# Required globals: PROJECT_ROOT, BRANCH_NAME, WORK_DIR.
+# Required callbacks: log_console, error.
+push_branch_with_recovery() {
+    local push_output=""
+    local push_exit_code=0
+    local retry_output=""
+    local retry_exit_code=0
+    local stash_output=""
+    local stash_msg=""
+    local stash_before=0
+    local stash_after=0
+    local stash_created=0
+
+    log_console "推送分支 $BRANCH_NAME..."
+
+    push_output=$(git push -u origin "$BRANCH_NAME" 2>&1) || {
+        push_exit_code=$?
+
+        error "git push 失败 (exit code: $push_exit_code)"
+        log_console ""
+        log_console "❌ git push 失败！"
+        log_console ""
+        log_console "错误输出:"
+        log_console "$push_output"
+        log_console ""
+
+        cat >> "$WORK_DIR/log.md" << EOF
+
+---
+
+## ❌ Git Push 失败
+
+**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+**分支**: $BRANCH_NAME
+**错误码**: $push_exit_code
+
+**错误输出**:
+\`\`\`
+$push_output
+\`\`\`
+
+EOF
+
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+            log_console "检测到未提交的更改，尝试 stash 后重试..."
+            stash_msg="autoresearch-push-retry-$(date +%s)"
+            stash_before=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+            stash_output=$(git stash push --include-untracked -m "$stash_msg" 2>&1) || true
+            stash_after=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+
+            if [ "$stash_after" -gt "$stash_before" ] 2>/dev/null; then
+                stash_created=1
+            fi
+
+            if [ $stash_created -eq 1 ]; then
+                log_console "重试 git push..."
+                retry_output=$(git push -u origin "$BRANCH_NAME" 2>&1) || {
+                    retry_exit_code=$?
+                }
+
+                if [ $retry_exit_code -eq 0 ]; then
+                    log_console "✅ Stash 后重试成功！"
+                    git stash pop >/dev/null 2>&1 || true
+                    return 0
+                fi
+
+                git stash pop >/dev/null 2>&1 || true
+                log_console "❌ 重试仍然失败"
+                log_console ""
+
+                cat >> "$WORK_DIR/log.md" << EOF
+
+**重试结果**: 失败 (exit code: $retry_exit_code)
+
+**重试输出**:
+\`\`\`
+$retry_output
+\`\`\`
+
+EOF
+            else
+                log_console "未能创建 stash，跳过重试。"
+
+                cat >> "$WORK_DIR/log.md" << EOF
+
+**Stash 结果**: 未创建 stash，跳过重试
+
+**Stash 输出**:
+\`\`\`
+$stash_output
+\`\`\`
+
+EOF
+            fi
+        fi
+
+        log_console ""
+        log_console "═══════════════════════════════════════════════════════════"
+        log_console "📋 恢复建议："
+        log_console "═══════════════════════════════════════════════════════════"
+        log_console ""
+        log_console "1. 检查网络连接和 GitHub 访问"
+        log_console "   - 确认可以访问 github.com"
+        log_console "   - 检查是否需要 VPN 或代理"
+        log_console ""
+        log_console "2. 检查认证状态"
+        log_console "   - 运行: gh auth status"
+        log_console "   - 如需重新登录: gh auth login"
+        log_console ""
+        log_console "3. 检查分支状态"
+        log_console "   - 当前分支: $BRANCH_NAME"
+        log_console "   - 运行: git status"
+        log_console "   - 运行: git log --oneline -5"
+        log_console ""
+        log_console "4. 手动推送命令"
+        log_console "   cd $PROJECT_ROOT"
+        log_console "   git push -u origin $BRANCH_NAME"
+        log_console ""
+        log_console "5. 如果推送成功，继续后续流程："
+        log_console "   gh pr create --title '<issue-title> (#<issue-number>)'"
+        log_console ""
+        log_console "6. 如果 stash 未自动恢复，运行:"
+        log_console "   git stash list"
+        log_console "   git stash pop"
+        log_console "═══════════════════════════════════════════════════════════"
+        log_console ""
+        log_console "📂 工作目录: $WORK_DIR"
+        log_console "📄 详细日志: $WORK_DIR/log.md"
+        log_console ""
+
+        return 1
+    }
+
+    return 0
+}
+
+codex
+我已经看到一个风险：这份“综合测试”只对 `gh pr merge` 做了本地模拟，但验收里明确要求覆盖 `git push` 失败场景。我再把脚本后半段和实际执行结果核对一下，避免只看文件名误判通过。
+exec
+/bin/zsh -lc "sed -n '260,380p' tests/test_git_error_handling.sh" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+assert_contains "pull warning logged" "$WORK_DIR/terminal.log" "拉取 main 分支最新代码失败"
+assert_contains "pull failure log recorded" "$WORK_DIR/terminal.log" "branch cleanup: git pull main failed"
+assert_eq "flow continues after pull failure" "1" "$FOLLOWUP_EXECUTED"
+teardown_case
+
+# Test 5: branch cleanup delete failure
+setup_case
+echo "Scenario 5: branch cleanup delete failure logs warning and continues"
+MOCK_GIT_BRANCH_DELETE_FAIL=1
+
+FOLLOWUP_EXECUTED=0
+cleanup_merged_branch "main" "feature/test-issue"
+FOLLOWUP_EXECUTED=1
+
+assert_contains "delete warning logged" "$WORK_DIR/terminal.log" "删除本地分支 feature/test-issue 失败"
+assert_contains "delete failure log recorded" "$WORK_DIR/terminal.log" "branch cleanup: git branch -D feature/test-issue failed"
+assert_eq "flow continues after delete failure" "1" "$FOLLOWUP_EXECUTED"
+teardown_case
+
+# Test 6: branch cleanup missing branch skips delete
+setup_case
+echo "Scenario 6: branch cleanup missing branch skips delete without warnings"
+MOCK_BRANCH_EXISTS=0
+
+cleanup_merged_branch "main" "feature/test-issue"
+
+assert_eq "no delete attempted when branch missing" "0" "$(printf "%b" "$MOCK_GIT_LOG" | grep -c "git branch -D feature/test-issue" || true)"
+teardown_case
+
+# Test 7: combined failures don't block flow
+setup_case
+echo "Scenario 7: combined failures (PR merge + branch cleanup) don't block flow"
+MOCK_GH_PR_MERGE_FAIL=1
+MOCK_GIT_CHECKOUT_FAIL=1
+
+FLOW_CONTINUED=0
+
+# PR merge fails
+simulate_pr_merge_with_failure_handling 789 "https://github.com/test/repo/pull/789" || true
+
+# Branch cleanup also fails
+cleanup_merged_branch "main" "feature/test-issue" || true
+
+FLOW_CONTINUED=1
+
+assert_eq "flow continued after multiple failures" "1" "$FLOW_CONTINUED"
+assert_contains "PR merge error in log.md" "$WORK_DIR/log.md" "PR 合并失败"
+assert_contains "checkout error in terminal.log" "$WORK_DIR/terminal.log" "切换到 main 分支失败"
+teardown_case
+
+echo ""
+echo "=== Test Summary ==="
+echo "Total: $TOTAL, Passed: $PASS, Failed: $FAIL"
+
+if [ $FAIL -gt 0 ]; then
+    exit 1
+fi
+
+exit 0
+exec
+/bin/zsh -lc "nl -ba tests/test_git_error_handling.sh | sed -n '1,340p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	#!/bin/bash
+     2	# tests/test_git_error_handling.sh - 综合测试 Git 操作容错
+     3	#
+     4	# Tests verify:
+     5	# 1. gh pr merge 失败时不中断流程，记录日志并输出 PR URL
+     6	# 2. git push 失败时记录详细错误日志
+     7	# 3. branch 清理失败时记录警告日志
+     8	# 4. 错误处理函数返回正确状态
+     9	#
+    10	# Usage: bash tests/test_git_error_handling.sh
+    11	
+    12	set -e
+    13	
+    14	PASS=0
+    15	FAIL=0
+    16	TOTAL=0
+    17	
+    18	WORK_ROOT=""
+    19	WORK_DIR=""
+    20	
+    21	# Mock state variables
+    22	MOCK_GH_PR_MERGE_FAIL=0
+    23	MOCK_GIT_PUSH_FAIL=0
+    24	MOCK_GIT_CHECKOUT_FAIL=0
+    25	MOCK_GIT_PULL_FAIL=0
+    26	MOCK_GIT_BRANCH_DELETE_FAIL=0
+    27	MOCK_BRANCH_EXISTS=1
+    28	MOCK_GH_LOG=""
+    29	MOCK_GIT_LOG=""
+    30	
+    31	# Mock gh command
+    32	gh() {
+    33	    MOCK_GH_LOG="${MOCK_GH_LOG}gh $*\n"
+    34	
+    35	    case "$1" in
+    36	        pr)
+    37	            if [ "$2" = "merge" ]; then
+    38	                if [ "$MOCK_GH_PR_MERGE_FAIL" -eq 1 ]; then
+    39	                    echo "error: merge failed: PR is not mergeable" >&2
+    40	                    return 1
+    41	                fi
+    42	                echo "✓ Merged pull request #$3"
+    43	                return 0
+    44	            fi
+    45	            ;;
+    46	        *)
+    47	            return 0
+    48	            ;;
+    49	    esac
+    50	}
+    51	
+    52	# Mock git command
+    53	git() {
+    54	    MOCK_GIT_LOG="${MOCK_GIT_LOG}git $*\n"
+    55	
+    56	    case "$1" in
+    57	        push)
+    58	            if [ "$MOCK_GIT_PUSH_FAIL" -eq 1 ]; then
+    59	                echo "fatal: unable to access 'https://github.com/': Failed to connect" >&2
+    60	                return 1
+    61	            fi
+    62	            echo "Push successful"
+    63	            return 0
+    64	            ;;
+    65	        checkout)
+    66	            [ "$MOCK_GIT_CHECKOUT_FAIL" -eq 1 ] && return 1
+    67	            return 0
+    68	            ;;
+    69	        pull)
+    70	            [ "$MOCK_GIT_PULL_FAIL" -eq 1 ] && return 1
+    71	            return 0
+    72	            ;;
+    73	        show-ref)
+    74	            [ "$MOCK_BRANCH_EXISTS" -eq 1 ] && return 0
+    75	            return 1
+    76	            ;;
+    77	        branch)
+    78	            if [ "$2" = "-D" ]; then
+    79	                [ "$MOCK_GIT_BRANCH_DELETE_FAIL" -eq 1 ] && return 1
+    80	                return 0
+    81	            fi
+    82	            return 0
+    83	            ;;
+    84	        diff|stash|remote)
+    85	            return 0
+    86	            ;;
+    87	        *)
+    88	            return 0
+    89	            ;;
+    90	    esac
+    91	}
+    92	
+    93	log() {
+    94	    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    95	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+    96	        echo "$msg" >> "$WORK_DIR/terminal.log"
+    97	    fi
+    98	}
+    99	
+   100	log_console() {
+   101	    local msg="$1"
+   102	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+   103	        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$WORK_DIR/terminal.log"
+   104	    fi
+   105	}
+   106	
+   107	error() {
+   108	    local msg="$1"
+   109	    echo "$msg" >&2
+   110	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+   111	        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $msg" >> "$WORK_DIR/terminal.log"
+   112	    fi
+   113	}
+   114	
+   115	assert_eq() {
+   116	    local test_name="$1"
+   117	    local expected="$2"
+   118	    local actual="$3"
+   119	    TOTAL=$((TOTAL + 1))
+   120	    if [ "$expected" = "$actual" ]; then
+   121	        PASS=$((PASS + 1))
+   122	        echo "  PASS: $test_name"
+   123	    else
+   124	        FAIL=$((FAIL + 1))
+   125	        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+   126	    fi
+   127	}
+   128	
+   129	assert_contains() {
+   130	    local test_name="$1"
+   131	    local file="$2"
+   132	    local pattern="$3"
+   133	    TOTAL=$((TOTAL + 1))
+   134	    if grep -q "$pattern" "$file" 2>/dev/null; then
+   135	        PASS=$((PASS + 1))
+   136	        echo "  PASS: $test_name"
+   137	    else
+   138	        FAIL=$((FAIL + 1))
+   139	        echo "  FAIL: $test_name (pattern '$pattern' not found in $file)"
+   140	    fi
+   141	}
+   142	
+   143	reset_state() {
+   144	    MOCK_GH_PR_MERGE_FAIL=0
+   145	    MOCK_GIT_PUSH_FAIL=0
+   146	    MOCK_GIT_CHECKOUT_FAIL=0
+   147	    MOCK_GIT_PULL_FAIL=0
+   148	    MOCK_GIT_BRANCH_DELETE_FAIL=0
+   149	    MOCK_BRANCH_EXISTS=1
+   150	    MOCK_GH_LOG=""
+   151	    MOCK_GIT_LOG=""
+   152	}
+   153	
+   154	setup_case() {
+   155	    reset_state
+   156	    WORK_ROOT=$(mktemp -d)
+   157	    WORK_DIR="$WORK_ROOT/work"
+   158	    mkdir -p "$WORK_DIR"
+   159	    : > "$WORK_DIR/log.md"
+   160	    : > "$WORK_DIR/terminal.log"
+   161	}
+   162	
+   163	teardown_case() {
+   164	    if [ -n "$WORK_ROOT" ] && [ -d "$WORK_ROOT" ]; then
+   165	        rm -rf "$WORK_ROOT"
+   166	    fi
+   167	    WORK_ROOT=""
+   168	    WORK_DIR=""
+   169	}
+   170	
+   171	# Simulate gh pr merge failure handling from run.sh
+   172	# Returns 0 on success, 1 on failure (but flow continues)
+   173	simulate_pr_merge_with_failure_handling() {
+   174	    local PR_NUMBER="$1"
+   175	    local PR_URL="$2"
+   176	    local MERGE_OUTPUT=""
+   177	
+   178	    if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+   179	        log_console "⚠️ PR 合并失败，请手动处理"
+   180	        log_console "PR URL: $PR_URL"
+   181	        log "PR merge failed: $MERGE_OUTPUT"
+   182	        cat >> "$WORK_DIR/log.md" << EOF
+   183	
+   184	---
+   185	
+   186	## ⚠️ PR 合并失败
+   187	
+   188	**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+   189	**PR**: $PR_URL
+   190	**错误输出**:
+   191	\`\`\`
+   192	$MERGE_OUTPUT
+   193	\`\`\`
+   194	
+   195	请手动合并: gh pr merge $PR_NUMBER --merge
+   196	EOF
+   197	        return 1
+   198	    fi
+   199	    return 0
+   200	}
+   201	
+   202	# shellcheck source=/dev/null
+   203	source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/branch_cleanup.sh"
+   204	
+   205	trap teardown_case EXIT
+   206	
+   207	echo "=== Git Error Handling Tests ==="
+   208	echo ""
+   209	
+   210	# Test 1: gh pr merge failure handling
+   211	setup_case
+   212	echo "Scenario 1: gh pr merge failure logs PR URL and continues"
+   213	MOCK_GH_PR_MERGE_FAIL=1
+   214	
+   215	MERGE_FAILED=0
+   216	simulate_pr_merge_with_failure_handling 123 "https://github.com/test/repo/pull/123" || MERGE_FAILED=1
+   217	
+   218	assert_eq "merge failed but flow continued" "1" "$MERGE_FAILED"
+   219	assert_contains "PR URL logged" "$WORK_DIR/terminal.log" "https://github.com/test/repo/pull/123"
+   220	assert_contains "warning message logged" "$WORK_DIR/terminal.log" "PR 合并失败"
+   221	assert_contains "error section in log.md" "$WORK_DIR/log.md" "PR 合并失败"
+   222	assert_contains "manual command suggested" "$WORK_DIR/log.md" "gh pr merge 123"
+   223	teardown_case
+   224	
+   225	# Test 2: gh pr merge success
+   226	setup_case
+   227	echo "Scenario 2: gh pr merge success works normally"
+   228	MOCK_GH_PR_MERGE_FAIL=0
+   229	
+   230	MERGE_RESULT=0
+   231	simulate_pr_merge_with_failure_handling 456 "https://github.com/test/repo/pull/456" || MERGE_RESULT=1
+   232	
+   233	assert_eq "merge succeeded" "0" "$MERGE_RESULT"
+   234	assert_eq "log.md has no merge errors" "" "$(grep 'PR 合并失败' $WORK_DIR/log.md 2>/dev/null || echo '')"
+   235	teardown_case
+   236	
+   237	# Test 3: branch cleanup checkout failure
+   238	setup_case
+   239	echo "Scenario 3: branch cleanup checkout failure logs warning and continues"
+   240	MOCK_GIT_CHECKOUT_FAIL=1
+   241	
+   242	FOLLOWUP_EXECUTED=0
+   243	cleanup_merged_branch "main" "feature/test-issue"
+   244	FOLLOWUP_EXECUTED=1
+   245	
+   246	assert_contains "checkout warning logged" "$WORK_DIR/terminal.log" "切换到 main 分支失败"
+   247	assert_contains "checkout failure log recorded" "$WORK_DIR/terminal.log" "branch cleanup: checkout main failed"
+   248	assert_eq "flow continues after checkout failure" "1" "$FOLLOWUP_EXECUTED"
+   249	teardown_case
+   250	
+   251	# Test 4: branch cleanup pull failure
+   252	setup_case
+   253	echo "Scenario 4: branch cleanup pull failure logs warning and continues"
+   254	MOCK_GIT_PULL_FAIL=1
+   255	
+   256	FOLLOWUP_EXECUTED=0
+   257	cleanup_merged_branch "main" "feature/test-issue"
+   258	FOLLOWUP_EXECUTED=1
+   259	
+   260	assert_contains "pull warning logged" "$WORK_DIR/terminal.log" "拉取 main 分支最新代码失败"
+   261	assert_contains "pull failure log recorded" "$WORK_DIR/terminal.log" "branch cleanup: git pull main failed"
+   262	assert_eq "flow continues after pull failure" "1" "$FOLLOWUP_EXECUTED"
+   263	teardown_case
+   264	
+   265	# Test 5: branch cleanup delete failure
+   266	setup_case
+   267	echo "Scenario 5: branch cleanup delete failure logs warning and continues"
+   268	MOCK_GIT_BRANCH_DELETE_FAIL=1
+   269	
+   270	FOLLOWUP_EXECUTED=0
+   271	cleanup_merged_branch "main" "feature/test-issue"
+   272	FOLLOWUP_EXECUTED=1
+   273	
+   274	assert_contains "delete warning logged" "$WORK_DIR/terminal.log" "删除本地分支 feature/test-issue 失败"
+   275	assert_contains "delete failure log recorded" "$WORK_DIR/terminal.log" "branch cleanup: git branch -D feature/test-issue failed"
+   276	assert_eq "flow continues after delete failure" "1" "$FOLLOWUP_EXECUTED"
+   277	teardown_case
+   278	
+   279	# Test 6: branch cleanup missing branch skips delete
+   280	setup_case
+   281	echo "Scenario 6: branch cleanup missing branch skips delete without warnings"
+   282	MOCK_BRANCH_EXISTS=0
+   283	
+   284	cleanup_merged_branch "main" "feature/test-issue"
+   285	
+   286	assert_eq "no delete attempted when branch missing" "0" "$(printf "%b" "$MOCK_GIT_LOG" | grep -c "git branch -D feature/test-issue" || true)"
+   287	teardown_case
+   288	
+   289	# Test 7: combined failures don't block flow
+   290	setup_case
+   291	echo "Scenario 7: combined failures (PR merge + branch cleanup) don't block flow"
+   292	MOCK_GH_PR_MERGE_FAIL=1
+   293	MOCK_GIT_CHECKOUT_FAIL=1
+   294	
+   295	FLOW_CONTINUED=0
+   296	
+   297	# PR merge fails
+   298	simulate_pr_merge_with_failure_handling 789 "https://github.com/test/repo/pull/789" || true
+   299	
+   300	# Branch cleanup also fails
+   301	cleanup_merged_branch "main" "feature/test-issue" || true
+   302	
+   303	FLOW_CONTINUED=1
+   304	
+   305	assert_eq "flow continued after multiple failures" "1" "$FLOW_CONTINUED"
+   306	assert_contains "PR merge error in log.md" "$WORK_DIR/log.md" "PR 合并失败"
+   307	assert_contains "checkout error in terminal.log" "$WORK_DIR/terminal.log" "切换到 main 分支失败"
+   308	teardown_case
+   309	
+   310	echo ""
+   311	echo "=== Test Summary ==="
+   312	echo "Total: $TOTAL, Passed: $PASS, Failed: $FAIL"
+   313	
+   314	if [ $FAIL -gt 0 ]; then
+   315	    exit 1
+   316	fi
+   317	
+   318	exit 0
+exec
+/bin/zsh -lc 'bash tests/test_git_error_handling.sh' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 102ms:
+codex
+结论已经比较清楚了：脚本能独立运行，也确实用了 mock，但它没有覆盖子任务描述里最关键的 `git push` 失败场景。我再看一下现有 `test_git_push.sh`，确认是不是实现者把已有单测误算进了这个子任务。
+exec
+/bin/zsh -lc "nl -ba tests/CLAUDE.md | sed -n '1,120p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba tests/test_git_push.sh | sed -n '1,340p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	# tests
+     2	
+     3	## 架构约定
+     4	- 存放项目的测试脚本。
+     5	- `test_extract_score.sh`: 测试分数提取逻辑。
+     6	- `test_agent_logic.sh`: 测试 Agent 列表解析和轮转逻辑。
+     7	- `test_archive.sh`: 测试运行归档机制逻辑。
+     8	- `test_context_overflow.sh`: 测试上下文溢出检测与交接逻辑。
+     9	- `test_cleanup.sh`: 测试全局 cleanup、trap 幂等和临时文件/子进程回收逻辑。
+    10	- `test_branch_cleanup.sh`: 测试 post-merge branch cleanup 的非致命失败日志与继续执行行为。
+    11	- `test_git_push.sh`: 测试 git push 失败处理逻辑（set -e 兼容、日志写入、stash 重试）。
+    12	- `test_git_error_handling.sh`: 综合测试 Git 操作容错（gh pr merge 失败、branch cleanup 失败、日志记录正确性）。
+    13	
+    14	## 注意事项
+    15	- 测试脚本应能独立运行，不依赖外部 API。
+    16	- 使用 `assert` 风格的函数进行验证。
+    17	- 遵循项目现有的测试模式。
+    18	- 对 shell 运行时行为的测试，优先抽取 `run.sh` 中的函数做隔离验证，不直接 `source run.sh`。
+    19	- 涉及进程树的测试要允许宿主环境差异；必要时使用 mock 进程树验证递归清理逻辑，而不是依赖平台特定的 `pgrep` 行为。
+    20	- 对 Git/CLI 失败路径，优先 mock `git` 子命令并断言日志、返回码和重试次数，避免依赖真实远端或网络环境。
+
+ succeeded in 0ms:
+     1	#!/bin/bash
+     2	# tests/test_git_push.sh - Unit tests for git push failure handling
+     3	#
+     4	# Tests verify:
+     5	# 1. `git push` first failure doesn't exit due to `set -e`
+     6	# 2. Failure info goes to `WORK_DIR/log.md`
+     7	# 3. Uncommitted changes trigger stash and retry, retry failure still outputs suggestions
+     8	#
+     9	# Usage: bash tests/test_git_push.sh
+    10	
+    11	set -e
+    12	
+    13	PASS=0
+    14	FAIL=0
+    15	TOTAL=0
+    16	
+    17	WORK_ROOT=""
+    18	WORK_DIR=""
+    19	
+    20	# Mock git command
+    21	MOCK_GIT_PUSH_FAIL=0
+    22	MOCK_GIT_PUSH_RETRY_FAIL=0
+    23	MOCK_GIT_HAS_UNCOMMITTED=0
+    24	MOCK_GIT_LOG=""
+    25	
+    26	git() {
+    27	    MOCK_GIT_LOG="${MOCK_GIT_LOG}git $*$'\n'"
+    28	
+    29	    case "$1" in
+    30	        push)
+    31	            if [ $MOCK_GIT_PUSH_FAIL -eq 1 ]; then
+    32	                echo "fatal: unable to access 'https://github.com/': Failed to connect to github.com" >&2
+    33	                return 1
+    34	            fi
+    35	            echo "Push successful"
+    36	            return 0
+    37	            ;;
+    38	        stash)
+    39	            if [ "$2" = "push" ]; then
+    40	                echo "Saved working directory and index state WIP on feature/test"
+    41	                return 0
+    42	            elif [ "$2" = "pop" ]; then
+    43	                echo "Dropped refs/stash@{0}"
+    44	                return 0
+    45	            fi
+    46	            return 0
+    47	            ;;
+    48	        diff)
+    49	            if [ "$2" = "--quiet" ] || [ "$3" = "--quiet" ]; then
+    50	                # Return non-zero if there are uncommitted changes
+    51	                if [ $MOCK_GIT_HAS_UNCOMMITTED -eq 1 ]; then
+    52	                    return 1
+    53	                fi
+    54	                return 0
+    55	            fi
+    56	            return 0
+    57	            ;;
+    58	        *)
+    59	            builtin git "$@"
+    60	            ;;
+    61	    esac
+    62	}
+    63	
+    64	log() {
+    65	    :
+    66	}
+    67	
+    68	log_console() {
+    69	    local msg="$1"
+    70	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+    71	        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" >> "$WORK_DIR/terminal.log"
+    72	    fi
+    73	}
+    74	
+    75	error() {
+    76	    local msg="$1"
+    77	    echo "$msg" >&2
+    78	    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+    79	        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $msg" >> "$WORK_DIR/terminal.log"
+    80	    fi
+    81	}
+    82	
+    83	assert_true() {
+    84	    local test_name="$1"
+    85	    local cmd="$2"
+    86	    TOTAL=$((TOTAL + 1))
+    87	    if eval "$cmd"; then
+    88	        PASS=$((PASS + 1))
+    89	        echo "  PASS: $test_name"
+    90	    else
+    91	        FAIL=$((FAIL + 1))
+    92	        echo "  FAIL: $test_name"
+    93	    fi
+    94	}
+    95	
+    96	assert_eq() {
+    97	    local test_name="$1"
+    98	    local expected="$2"
+    99	    local actual="$3"
+   100	    TOTAL=$((TOTAL + 1))
+   101	    if [ "$expected" = "$actual" ]; then
+   102	        PASS=$((PASS + 1))
+   103	        echo "  PASS: $test_name"
+   104	    else
+   105	        FAIL=$((FAIL + 1))
+   106	        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+   107	    fi
+   108	}
+   109	
+   110	assert_contains() {
+   111	    local test_name="$1"
+   112	    local file="$2"
+   113	    local pattern="$3"
+   114	    TOTAL=$((TOTAL + 1))
+   115	    if grep -q "$pattern" "$file" 2>/dev/null; then
+   116	        PASS=$((PASS + 1))
+   117	        echo "  PASS: $test_name"
+   118	    else
+   119	        FAIL=$((FAIL + 1))
+   120	        echo "  FAIL: $test_name (pattern '$pattern' not found in $file)"
+   121	    fi
+   122	}
+   123	
+   124	reset_state() {
+   125	    MOCK_GIT_PUSH_FAIL=0
+   126	    MOCK_GIT_PUSH_RETRY_FAIL=0
+   127	    MOCK_GIT_HAS_UNCOMMITTED=0
+   128	    MOCK_GIT_LOG=""
+   129	}
+   130	
+   131	setup_case() {
+   132	    reset_state
+   133	    WORK_ROOT=$(mktemp -d)
+   134	    WORK_DIR="$WORK_ROOT/work"
+   135	    mkdir -p "$WORK_DIR"
+   136	    : > "$WORK_DIR/log.md"
+   137	    : > "$WORK_DIR/terminal.log"
+   138	}
+   139	
+   140	teardown_case() {
+   141	    if [ -n "$WORK_ROOT" ] && [ -d "$WORK_ROOT" ]; then
+   142	        rm -rf "$WORK_ROOT"
+   143	    fi
+   144	    WORK_ROOT=""
+   145	    WORK_DIR=""
+   146	}
+   147	
+   148	# Simulate the git push failure handling logic from run.sh
+   149	# Returns 0 on success, 1 on failure
+   150	simulate_push_with_failure_handling() {
+   151	    local BRANCH_NAME="feature/test-issue"
+   152	    local PUSH_OUTPUT
+   153	    local PUSH_EXIT_CODE
+   154	
+   155	    # Capture push output (command substitution doesn't trigger set -e exit)
+   156	    PUSH_OUTPUT=$(git push -u origin "$BRANCH_NAME" 2>&1) || PUSH_EXIT_CODE=$?
+   157	
+   158	    if [ "${PUSH_EXIT_CODE:-0}" -ne 0 ]; then
+   159	        error "git push 失败 (exit code: ${PUSH_EXIT_CODE:-unknown})"
+   160	        log_console ""
+   161	        log_console "❌ git push 失败！"
+   162	        log_console ""
+   163	        log_console "错误输出:"
+   164	        log_console "$PUSH_OUTPUT"
+   165	        log_console ""
+   166	
+   167	        # Record error to log.md
+   168	        cat >> "$WORK_DIR/log.md" << EOF
+   169	
+   170	---
+   171	
+   172	## ❌ Git Push 失败
+   173	
+   174	**时间**: $(date '+%Y-%m-%d %H:%M:%S')
+   175	**分支**: $BRANCH_NAME
+   176	**错误码**: ${PUSH_EXIT_CODE:-unknown}
+   177	
+   178	**错误输出**:
+   179	\`\`\`
+   180	$PUSH_OUTPUT
+   181	\`\`\`
+   182	
+   183	EOF
+   184	
+   185	        # Check for uncommitted changes and retry
+   186	        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+   187	            log_console "检测到未提交的更改，尝试 stash 后重试..."
+   188	            STASH_MSG="autoresearch-push-retry-$(date +%s)"
+   189	            git stash push -m "$STASH_MSG" 2>/dev/null
+   190	
+   191	            log_console "重试 git push..."
+   192	            local RETRY_OUTPUT
+   193	            local RETRY_EXIT_CODE
+   194	            RETRY_OUTPUT=$(git push -u origin "$BRANCH_NAME" 2>&1) || RETRY_EXIT_CODE=$?
+   195	
+   196	            if [ "${RETRY_EXIT_CODE:-0}" -eq 0 ]; then
+   197	                log_console "✅ Stash 后重试成功！"
+   198	                git stash pop 2>/dev/null || true
+   199	                return 0
+   200	            else
+   201	                # Retry still failed, restore stash and output suggestions
+   202	                git stash pop 2>/dev/null || true
+   203	
+   204	                log_console "❌ 重试仍然失败"
+   205	                log_console ""
+   206	
+   207	                # Append retry failure info to log.md
+   208	                cat >> "$WORK_DIR/log.md" << EOF
+   209	
+   210	**重试结果**: 失败 (exit code: ${RETRY_EXIT_CODE:-unknown})
+   211	
+   212	**重试输出**:
+   213	\`\`\`
+   214	$RETRY_OUTPUT
+   215	\`\`\`
+   216	
+   217	EOF
+   218	            fi
+   219	        fi
+   220	
+   221	        # Output recovery suggestions
+   222	        log_console ""
+   223	        log_console "═══════════════════════════════════════════════════════════"
+   224	        log_console "📋 恢复建议："
+   225	        log_console "═══════════════════════════════════════════════════════════"
+   226	        log_console ""
+   227	        log_console "1. 检查网络连接和 GitHub 访问"
+   228	        log_console "2. 检查认证状态: gh auth status"
+   229	        log_console "3. 手动推送: git push -u origin $BRANCH_NAME"
+   230	        log_console "═══════════════════════════════════════════════════════════"
+   231	
+   232	        return 1
+   233	    fi
+   234	
+   235	    return 0
+   236	}
+   237	
+   238	trap teardown_case EXIT
+   239	
+   240	echo "=== Git Push Failure Handling Tests ==="
+   241	echo ""
+   242	
+   243	# Test 1: First failure doesn't exit due to set -e
+   244	setup_case
+   245	echo "Scenario 1: git push failure doesn't exit script (set -e compatible)"
+   246	MOCK_GIT_PUSH_FAIL=1
+   247	
+   248	# This should not exit the script even with set -e
+   249	PUSH_FAILED=0
+   250	simulate_push_with_failure_handling || PUSH_FAILED=1
+   251	
+   252	assert_eq "script continued after push failure" "1" "$PUSH_FAILED"
+   253	assert_contains "error logged to log.md" "$WORK_DIR/log.md" "Git Push 失败"
+   254	assert_contains "error details in log.md" "$WORK_DIR/log.md" "Failed to connect"
+   255	teardown_case
+   256	
+   257	# Test 2: Failure info goes to WORK_DIR/log.md
+   258	setup_case
+   259	echo "Scenario 2: failure info is written to log.md"
+   260	MOCK_GIT_PUSH_FAIL=1
+   261	
+   262	simulate_push_with_failure_handling || true
+   263	
+   264	assert_contains "has section header" "$WORK_DIR/log.md" "❌ Git Push 失败"
+   265	assert_contains "has timestamp" "$WORK_DIR/log.md" "\*\*时间\*\*"
+   266	assert_contains "has branch name" "$WORK_DIR/log.md" "feature/test-issue"
+   267	assert_contains "has error code" "$WORK_DIR/log.md" "\*\*错误码\*\*"
+   268	assert_contains "has error output" "$WORK_DIR/log.md" "Failed to connect"
+   269	teardown_case
+   270	
+   271	# Test 3: Uncommitted changes trigger stash and retry
+   272	setup_case
+   273	echo "Scenario 3: uncommitted changes trigger stash and retry"
+   274	MOCK_GIT_PUSH_FAIL=1
+   275	MOCK_GIT_HAS_UNCOMMITTED=1
+   276	
+   277	simulate_push_with_failure_handling || true
+   278	
+   279	assert_contains "stash attempt logged" "$WORK_DIR/terminal.log" "stash"
+   280	assert_contains "retry attempt logged" "$WORK_DIR/terminal.log" "重试"
+   281	teardown_case
+   282	
+   283	# Test 4: Retry failure still outputs suggestions
+   284	setup_case
+   285	echo "Scenario 4: retry failure still outputs recovery suggestions"
+   286	MOCK_GIT_PUSH_FAIL=1
+   287	MOCK_GIT_HAS_UNCOMMITTED=1
+   288	
+   289	simulate_push_with_failure_handling || true
+   290	
+   291	assert_contains "suggestions in terminal.log" "$WORK_DIR/terminal.log" "恢复建议"
+   292	assert_contains "manual push command suggested" "$WORK_DIR/terminal.log" "git push -u origin"
+   293	assert_contains "retry failure in log.md" "$WORK_DIR/log.md" "重试结果"
+   294	teardown_case
+   295	
+   296	# Test 5: Successful push works normally
+   297	setup_case
+   298	echo "Scenario 5: successful push works normally"
+   299	MOCK_GIT_PUSH_FAIL=0
+   300	
+   301	PUSH_RESULT=0
+   302	simulate_push_with_failure_handling || PUSH_RESULT=1
+   303	
+   304	assert_eq "push succeeded" "0" "$PUSH_RESULT"
+   305	# log.md should be empty (no error logged)
+   306	assert_eq "log.md has no errors" "" "$(grep 'Git Push 失败' $WORK_DIR/log.md 2>/dev/null || echo '')"
+   307	teardown_case
+   308	
+   309	echo ""
+   310	echo "=== Test Summary ==="
+   311	echo "Total: $TOTAL, Passed: $PASS, Failed: $FAIL"
+   312	
+   313	if [ $FAIL -gt 0 ]; then
+   314	    exit 1
+   315	fi
+   316	
+   317	exit 0
+
+codex
+## 审核报告
+
+### 严重问题
+1. `git push` 失败场景没有被这份子任务测试覆盖，核心验收条件未满足。[tests/test_git_error_handling.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_git_error_handling.sh#L21) 虽然定义了 `MOCK_GIT_PUSH_FAIL`，但整份脚本没有任何地方调用 `git push`，也没有 `source` [lib/git_push.sh](/Users/chaoyuepan/ai/autoresearch/lib/git_push.sh#L7) 的 `push_branch_with_recovery`。当前实际覆盖的是 `gh pr merge` 和 `branch cleanup`，不是子任务描述要求的“1) 模拟 git push 失败；3) 验证错误处理函数返回正确状态；4) 验证日志记录正确”这组 `git push` 容错链路。
+
+2. “验证错误处理函数被正确调用”这一条只做了逻辑复制，没有验证生产实现本身。[tests/test_git_error_handling.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_git_error_handling.sh#L173) 里的 `simulate_pr_merge_with_failure_handling` 是测试脚本内自写的模拟函数，而不是对 [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L4513) 中真实逻辑的提取复用。这样即使生产代码回归、测试副本没改，测试仍可能继续通过，不能证明“错误处理函数被正确调用”。
+
+### 一般问题
+1. 这份“综合测试”与现有 [tests/test_branch_cleanup.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_branch_cleanup.sh#L125) 高度重叠，却遗漏了本子任务最关键的 `git push` 失败路径，测试投入和覆盖重点失衡。
+
+### 验收条件检查
+- 测试脚本可独立运行，不依赖真实 Git 操作: 通过
+- 使用 mock 函数模拟 git/gh 命令失败: 部分通过
+- 验证错误处理函数被正确调用: 不通过
+- 验证日志输出包含预期内容: 部分通过
+
+### 总体评价
+**评分: 64/100**
+
+脚本可以独立运行，我也实际执行了 `bash tests/test_git_error_handling.sh`，当前 20/20 通过。但通过的内容主要是 `gh pr merge` 和 `branch cleanup` 的本地模拟，不足以证明 T-004 已达成，因为子任务描述明确要求的 `git push` 失败容错测试没有落在这份实现里。
+
+建议至少补齐两点后再认为达标：
+1. 在 [tests/test_git_error_handling.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_git_error_handling.sh) 中直接覆盖 [lib/git_push.sh](/Users/chaoyuepan/ai/autoresearch/lib/git_push.sh) 的失败路径，断言返回码、日志、恢复建议。
+2. 将 `gh pr merge` 失败处理提取为可复用函数后再测试该函数，避免在测试里复制生产逻辑。
+
+## Learnings
+
+- **模式**: 这个仓库对 Shell 容错路径的测试，倾向于 mock 外部命令并断言日志、返回码、重试行为。
+- **踩坑**: 测试文件存在且能跑通，不代表子任务验收达成；必须核对“测的是否正是要求的那条链路”。
+- **经验**: 对 `run.sh` 内联错误处理，最好先抽成 `lib/` 可复用函数，再测试真实实现，避免测试与生产逻辑双份漂移。
+tokens used
+29,786
+## 审核报告
+
+### 严重问题
+1. `git push` 失败场景没有被这份子任务测试覆盖，核心验收条件未满足。[tests/test_git_error_handling.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_git_error_handling.sh#L21) 虽然定义了 `MOCK_GIT_PUSH_FAIL`，但整份脚本没有任何地方调用 `git push`，也没有 `source` [lib/git_push.sh](/Users/chaoyuepan/ai/autoresearch/lib/git_push.sh#L7) 的 `push_branch_with_recovery`。当前实际覆盖的是 `gh pr merge` 和 `branch cleanup`，不是子任务描述要求的“1) 模拟 git push 失败；3) 验证错误处理函数返回正确状态；4) 验证日志记录正确”这组 `git push` 容错链路。
+
+2. “验证错误处理函数被正确调用”这一条只做了逻辑复制，没有验证生产实现本身。[tests/test_git_error_handling.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_git_error_handling.sh#L173) 里的 `simulate_pr_merge_with_failure_handling` 是测试脚本内自写的模拟函数，而不是对 [run.sh](/Users/chaoyuepan/ai/autoresearch/run.sh#L4513) 中真实逻辑的提取复用。这样即使生产代码回归、测试副本没改，测试仍可能继续通过，不能证明“错误处理函数被正确调用”。
+
+### 一般问题
+1. 这份“综合测试”与现有 [tests/test_branch_cleanup.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_branch_cleanup.sh#L125) 高度重叠，却遗漏了本子任务最关键的 `git push` 失败路径，测试投入和覆盖重点失衡。
+
+### 验收条件检查
+- 测试脚本可独立运行，不依赖真实 Git 操作: 通过
+- 使用 mock 函数模拟 git/gh 命令失败: 部分通过
+- 验证错误处理函数被正确调用: 不通过
+- 验证日志输出包含预期内容: 部分通过
+
+### 总体评价
+**评分: 64/100**
+
+脚本可以独立运行，我也实际执行了 `bash tests/test_git_error_handling.sh`，当前 20/20 通过。但通过的内容主要是 `gh pr merge` 和 `branch cleanup` 的本地模拟，不足以证明 T-004 已达成，因为子任务描述明确要求的 `git push` 失败容错测试没有落在这份实现里。
+
+建议至少补齐两点后再认为达标：
+1. 在 [tests/test_git_error_handling.sh](/Users/chaoyuepan/ai/autoresearch/tests/test_git_error_handling.sh) 中直接覆盖 [lib/git_push.sh](/Users/chaoyuepan/ai/autoresearch/lib/git_push.sh) 的失败路径，断言返回码、日志、恢复建议。
+2. 将 `gh pr merge` 失败处理提取为可复用函数后再测试该函数，避免在测试里复制生产逻辑。
+
+## Learnings
+
+- **模式**: 这个仓库对 Shell 容错路径的测试，倾向于 mock 外部命令并断言日志、返回码、重试行为。
+- **踩坑**: 测试文件存在且能跑通，不代表子任务验收达成；必须核对“测的是否正是要求的那条链路”。
+- **经验**: 对 `run.sh` 内联错误处理，最好先抽成 `lib/` 可复用函数，再测试真实实现，避免测试与生产逻辑双份漂移。

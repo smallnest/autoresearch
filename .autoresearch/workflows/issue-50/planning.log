@@ -1,0 +1,82 @@
+基于代码分析，我已经理解了当前 Git 操作的实现方式和问题所在。现在进行子任务拆分：
+
+---
+
+## 子任务拆分分析
+
+### 问题分析
+
+当前 `run.sh` 中的 Git 操作存在以下问题：
+
+1. **git push** (第 4408 行)：无错误处理，在 `set -e` 下失败会直接 abort
+2. **gh pr merge** (第 4459 行)：无错误处理，失败会直接 abort
+3. **gh pr create**：有基本检查但失败时未记录 PR URL 供用户后续处理
+4. **branch 清理**：已有 `|| true`，但失败时无日志记录
+
+### 拆分原则
+
+- 每个子任务独立可验证
+- 优先级按影响范围排序
+- 遵循现有测试模式
+
+---
+
+```json
+{
+  "issueNumber": 50,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "git push 容错处理",
+      "description": "为 git push -u origin 命令添加错误处理：1) 使用 || { ... } 保护防止 set -e 直接 abort；2) 记录详细错误日志到 log.md；3) 尝试 stash 未提交更改后重试；4) 给出可操作的恢复建议（如手动 push 命令、检查网络/权限等）",
+      "acceptanceCriteria": [
+        "git push 失败时脚本不直接 abort，而是进入错误处理流程",
+        "错误信息被记录到 WORK_DIR/log.md",
+        "控制台输出清晰的错误提示和恢复建议",
+        "尝试 stash 后重试 push（如果有未提交更改）"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "gh pr merge 容错处理",
+      "description": "为 gh pr merge 命令添加错误处理：1) 使用 || { ... } 保护；2) 合并失败时记录 PR URL 到日志和控制台；3) 提示用户可手动处理；4) 合并失败不应阻止后续清理流程",
+      "acceptanceCriteria": [
+        "gh pr merge 失败时脚本不直接 abort",
+        "失败时输出 PR URL 供用户手动合并",
+        "记录合并失败日志到 log.md",
+        "即使合并失败，也能继续执行后续清理流程"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "branch 清理日志优化",
+      "description": "优化 branch 清理流程的日志记录：1) checkout main/pull 失败时记录警告日志；2) branch -D 失败时记录警告日志；3) 确保清理失败不影响主流程（已有 || true，需补充日志）",
+      "acceptanceCriteria": [
+        "checkout main 失败时记录警告日志",
+        "git pull 失败时记录警告日志",
+        "branch -D 失败时记录警告日志",
+        "所有清理操作失败不影响主流程继续执行"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "添加 Git 操作容错测试用例",
+      "description": "在 tests/ 目录下新增 test_git_error_handling.sh，测试 Git 操作失败场景：1) 模拟 git push 失败；2) 模拟 gh pr merge 失败；3) 验证错误处理函数返回正确状态；4) 验证日志记录正确",
+      "acceptanceCriteria": [
+        "测试脚本可独立运行，不依赖真实 Git 操作",
+        "使用 mock 函数模拟 git/gh 命令失败",
+        "验证错误处理函数被正确调用",
+        "验证日志输出包含预期内容"
+      ],
+      "priority": 4,
+      "passes": false
+    }
+  ]
+}
+```
