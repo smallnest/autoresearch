@@ -1203,6 +1203,17 @@ check_dependencies() {
 
  local missing=0
 
+ # 磁盘空间预检
+ local disk_min_mb="${DISK_MIN_MB:-1024}"
+ local available_kb
+ available_kb=$(df -k . 2>/dev/null | awk 'NR==2 {print $4}') || available_kb=0
+ local available_mb=$((available_kb / 1024))
+ log "磁盘空间检查: 可用 ${available_mb}MB, 阈值 ${disk_min_mb}MB"
+ if [ "$available_kb" -gt 0 ] && [ "$available_mb" -lt "$disk_min_mb" ]; then
+     error "磁盘空间不足: 可用 ${available_mb}MB, 最低要求 ${disk_min_mb}MB"
+     missing=1
+ fi
+
  if ! command -v gh &> /dev/null; then
  error "gh (GitHub CLI) 未安装"
  missing=1
@@ -4099,7 +4110,7 @@ MAX_ITERATIONS=${2:-$DEFAULT_MAX_ITERATIONS}
 
 log_console ""
 log_console "  ╔══════════════════════════════════════╗"
-log_console "  ║  autoresearch - 自动化开发工具      ║"
+log_console "  ║  autoresearch - 自动化开发工具       ║"
 log_console "  ╚══════════════════════════════════════╝"
 log_console ""
 log_console "🤖 Issue: #$ISSUE_NUMBER"
@@ -4587,7 +4598,7 @@ if check_score_passed "$FINAL_SCORE"; then
 
     echo ""
     log_console "  ╔══════════════════════════════════════╗"
-    log_console "  ║          处理完成！                  ║"
+    log_console "  ║          处理完成！                   ║"
     log_console "  ╚══════════════════════════════════════╝"
     log_console ""
     log_console "🎉 分支: $BRANCH_NAME"
@@ -4730,7 +4741,7 @@ EOF
 
         log_console ""
         log_console "  ╔══════════════════════════════════════╗"
-        log_console "  ║      全部完成！Issue 已自动处理     ║"
+        log_console "  ║      全部完成！Issue 已自动处理      ║"
         log_console "  ╚══════════════════════════════════════╝"
         log_console ""
         log_console "✅ PR: $PR_URL"
@@ -4747,7 +4758,7 @@ fi
 # 达到最大迭代次数
 log_console ""
 log_console "  ╔══════════════════════════════════════╗"
-log_console "  ║  达到最大迭代次数，需要人工介入     ║"
+log_console "  ║  达到最大迭代次数，需要人工介入       ║"
 log_console "  ╚══════════════════════════════════════╝"
 log_console ""
 log_console "⚠️ 最终评分: $FINAL_SCORE/100"
