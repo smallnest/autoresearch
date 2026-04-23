@@ -1,0 +1,37 @@
+实现完成。以下是变更总结：
+
+## 变更内容
+
+### `run.sh` - `restore_continue_state()` 中的 dirty working tree 检测
+
+1.  **脏文件检测** (checkout 后): 使用 `git status --porcelain` 检测 dirty 文件，如有则自动 `git stash push -u`（包含未跟踪文件），stash 消息格式为 `autoresearch-temp-continue-$ISSUE_NUMBER-$timestamp`。
+
+2.  **Stash 失败降级**: 如果 `git stash` 失败，打印警告但不中断 continue 流程。
+
+3.  **残留 Stash 检测**: 检查是否有匹配 `autoresearch-temp-` 的残留 stash（上次中断遗留），排除本次刚创建的 stash。如有则自动 `git stash pop` 恢复，pop 失败则提示用户手动处理。
+
+4.  **Continue stash 恢复**: 在最终处理阶段（迭代循环结束后），如果有 continue 时创建的 stash，先 `stash pop` 恢复，再执行 `git add -A && commit`。
+
+5.  **新增变量**: `CONTINUE_STASH_REF` 用于跟踪 continue 模式创建的 stash 引用。
+
+### `tests/test_continue_dirty.sh` - 新增单元测试 (18 个用例)
+
+覆盖场景：
+-   干净的工作区不触发 stash
+-   脏文件（未跟踪/已暂存/已修改跟踪文件）自动暂存
+-   暂存消息格式验证
+-   多个脏文件全部被暂存
+-   残留暂存检测和恢复
+-   脏文件 + 残留暂存同时处理
+
+### 验证
+
+-   `bash -n run.sh` 语法检查通过
+-   新测试 18/18 通过
+-   全部现有测试 (371 tests) 通过
+
+## 经验总结
+
+-   **模式**: `git stash push -u` 需要加 `-u` 才能包含未跟踪文件，否则 `git status --porcelain` 检测到的未跟踪文件不会被暂存
+-   **陷阱**: 在创建新暂存后立即检测残留暂存时，会匹配到自己的暂存（都含 `autoresearch-temp-`），需要用 `grep -v` 排除当前暂存引用
+-   **经验**: Shell 测试中涉及 Git 操作时，使用真实的 `git init` 仓库比 mock 更可靠；但要注意暂存的副作用（如 `git stash list` 输出）

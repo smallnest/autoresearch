@@ -1,0 +1,51 @@
+{
+  "issueNumber": 51,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Continue 模式检测 dirty working tree 并处理",
+      "description": "在 restore_continue_state() 中，checkout 分支之后、恢复状态之前，新增 git status --porcelain 检测。如果有未提交的 dirty 文件，提示用户并自动 git stash，恢复状态后 stash pop。需要考虑 stash 失败的降级处理（警告用户但继续）。同时在 continue 开始前检测是否有残留的 stash（通过 stash message 匹配 autoresearch-temp-*），如有则提示用户。",
+      "acceptanceCriteria": [
+        "restore_continue_state() 在 checkout 分支后执行 git status --porcelain 检测",
+        "检测到 dirty 文件时自动 git stash push 并记录 stash message",
+        "stash 失败时打印警告但不中断 continue 流程",
+        "新增对应的 shell 单元测试覆盖 dirty/clean 两种场景",
+        "bash -n run.sh 语法检查通过"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "Continue 模式检测本地分支与 remote tracking branch 的分叉",
+      "description": "在 restore_continue_state() 中，checkout 分支之后，检测本地分支与对应的 remote tracking branch 是否存在分叉（diverged）。通过 git rev-list --left-right --count origin/feature/issue-N...feature/issue-N 检测。如果检测到分叉（双方都有提交），打印警告信息提示用户考虑 rebase，但不自动执行 rebase（安全考虑）。如果是单向落后（remote 领先），提示用户是否 git pull。需要处理 remote tracking branch 不存在的情况（新分支从未 push 过）。",
+      "acceptanceCriteria": [
+        "restore_continue_state() 检测 local 与 remote tracking branch 的分叉状态",
+        "分叉时打印明确的警告信息（包含 ahead/behind commit 数量）",
+        "remote tracking branch 不存在时跳过检测（不报错）",
+        "新增对应的 shell 单元测试覆盖 diverged/ahead/behind/no-remote 四种场景",
+        "bash -n run.sh 语法检查通过"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "Continue 模式校验 tasks.json 的 JSON 有效性",
+      "description": "在 restore_continue_state() 中，恢复 subtask 状态之前，对 tasks.json 进行 JSON 有效性校验。使用 jq . tasks.json 验证 JSON 格式正确，然后检查必要字段（issueNumber, subtasks 数组）是否存在。如果 tasks.json 无效（JSON 解析失败或缺少关键字段），打印警告，建议用户手动检查或重新规划（删除 tasks.json 后重新运行非 continue 模式）。不自动删除或覆盖 tasks.json，保留用户决策权。",
+      "acceptanceCriteria": [
+        "restore_continue_state() 在使用 tasks.json 前先校验 JSON 有效性",
+        "使用 jq 解析验证，捕获 JSON 语法错误",
+        "校验必要字段：issueNumber 和 subtasks 数组存在",
+        "校验失败时打印明确错误信息并给出修复建议（手动修复或重新规划）",
+        "新增对应的 shell 单元测试覆盖 valid/invalid-json/missing-fields 三种场景",
+        "bash -n run.sh 语法检查通过"
+      ],
+      "priority": 3,
+      "type": "code",
+      "passes": true
+    }
+  ]
+}

@@ -19,3 +19,4 @@
 2026-04-22T14:39:55+08:00	49	[hardness engineering] 全局 trap 清理机制	completed	6	false	92	92	feature/issue-49	
 2026-04-23T08:09:39+08:00	60	[enhancement] 上下文溢出时进行智能压缩和摘要	completed	16	false	86	86	feature/issue-60	
 2026-04-23T11:33:02+08:00	50	[hardness engineering] Git 操作容错	completed	11	false	92	92	feature/issue-50	
+2026-04-23T22:35:08+08:00	51	[hardness engineering] Continue 模式 git 状态校验	completed	5	false	88	88	feature/issue-51	
