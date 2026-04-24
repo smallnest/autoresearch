@@ -8,3 +8,154 @@
 body {
   @apply bg-gray-900 text-gray-100;
 }
+
+#root {
+  min-height: 100vh;
+}
+
+.markdown-body {
+  color: rgb(229 231 235);
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  color: rgb(243 244 246);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body h1 {
+  font-size: 1.6rem;
+}
+
+.markdown-body h2 {
+  font-size: 1.3rem;
+}
+
+.markdown-body h3 {
+  font-size: 1.1rem;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body pre {
+  margin-bottom: 1rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5rem;
+}
+
+.markdown-body ul {
+  list-style: disc;
+}
+
+.markdown-body ol {
+  list-style: decimal;
+}
+
+.markdown-body li + li {
+  margin-top: 0.35rem;
+}
+
+.markdown-body a {
+  color: rgb(96 165 250);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.markdown-body a:hover {
+  color: rgb(147 197 253);
+}
+
+.markdown-body code {
+  border: 1px solid rgb(55 65 81);
+  border-radius: 0.375rem;
+  background: rgb(17 24 39);
+  color: rgb(248 250 252);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
+  border: 1px solid rgb(31 41 55);
+  border-radius: 1rem;
+  background: rgb(3 7 18);
+  padding: 1rem;
+}
+
+.markdown-body pre code {
+  border: 0;
+  background: transparent;
+  display: block;
+  line-height: 1.7;
+  padding: 0;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid rgb(59 130 246);
+  border-radius: 0 0.75rem 0.75rem 0;
+  background: rgb(15 23 42);
+  color: rgb(203 213 225);
+  padding: 0.85rem 1rem;
+}
+
+.markdown-comment p:last-child,
+.markdown-comment ul:last-child,
+.markdown-comment ol:last-child,
+.markdown-comment blockquote:last-child,
+.markdown-comment pre:last-child {
+  margin-bottom: 0;
+}
+
+.md-token-keyword {
+  color: rgb(248 113 113);
+}
+
+.md-token-string {
+  color: rgb(134 239 172);
+}
+
+.md-token-number {
+  color: rgb(250 204 21);
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.08) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.5s infinite;
+  content: "";
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}

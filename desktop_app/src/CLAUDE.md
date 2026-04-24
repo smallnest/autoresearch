@@ -57,11 +57,14 @@
 ### 功能实现
 
 - **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+- **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
 - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
 - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
 - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
 - **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
-- **浏览器 fallback**: 非 Tauri 环境使用 mock 数据（5 个示例 issues，其中 2 个标记为已处理）
+- **浏览器 fallback**: 非 Tauri 环境使用 mock issue 列表和 mock issue 详情，保证浏览器模式也能验证详情面板
+- **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
+- **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
 
 ### 样式约定
 
@@ -70,6 +73,10 @@
 - 已处理标记: 绿色主题（`bg-green-900/50 text-green-400`）
 - 搜索框: `bg-gray-800 border-gray-700`，focus 时 `border-blue-600 ring-blue-600`
 - 空状态: 居中显示，灰色图标和文字
+- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+- Markdown 样式: 统一挂在 `.markdown-body`，代码块高亮 token 使用 `.md-token-*` 类名
+- Markdown 渲染: `react-markdown` 通过 Vite/TS alias 指向本地兼容实现 `src/vendor/react-markdown.tsx`，保证离线环境可构建；链接只允许 `http/https/mailto`
+- 骨架屏: 使用 `.skeleton-shimmer` 伪元素实现统一 shimmer 动效，避免在组件内重复写动画
 
 ## DashboardPage 约定
 

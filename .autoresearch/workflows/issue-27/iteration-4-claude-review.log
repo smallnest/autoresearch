@@ -1,0 +1,116 @@
+## 审核报告
+
+### Issue
+- 编号: #27
+- 标题: [desktop-app] Issue 详情查看
+- 迭代次数: 4
+
+---
+
+### 总体评价
+
+**评分: 92/100**
+
+实现质量优秀，完全满足验收条件。代码结构清晰，错误处理完善，测试覆盖充分，遵循项目既有模式。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 实现 `get_issue_detail` Tauri command | ✅ | lib.rs:199-234，接受 `issue_number: i64` 参数 |
+| 正确调用 `gh issue view N --json body,comments` | ✅ | lib.rs:217-224 |
+| 定义 `IssueDetail` 和 `Comment` 结构体 | ✅ | lib.rs:39-52，`GhComment` 和 `IssueDetail` |
+| 包含适当的错误处理 | ✅ | 处理了 gh 未安装、路径无效、Issue 不存在、JSON 解析失败等场景 |
+| Rust 代码通过 `cargo clippy` 检查 | ✅ | 无警告 |
+| Tauri command 可通过前端 Invoke 调用 | ✅ | 已注册在 `generate_handler!` (lib.rs:249) |
+
+---
+
+### 正确性评估 (35%)
+
+**得分: 95/100**
+
+**优点:**
+- 正确实现了 `gh issue view` 命令调用和 JSON 解析
+- 错误处理路径完整：路径验证 → gh 可用性检查 → 命令执行 → stderr 处理 → JSON 解析
+- `map_issue_detail_command_error` 函数友好地将 "not found" 错误映射为用户友好信息
+- 结构体字段使用 `#[serde(rename = "createdAt")]` 正确处理 JSON 驼峰命名
+
+**小问题:**
+- `GhCommentAuthor` 只保留 `login` 字段，gh API 可能返回更多字段（如 `id`），但 serde 默认忽略未知字段，不影响功能
+
+---
+
+### 测试质量评估 (25%)
+
+**得分: 90/100**
+
+**覆盖的测试场景:**
+1. ✅ 成功解析 Issue 详情（含评论）
+2. ✅ 无效 JSON 解析错误
+3. ✅ Issue 不存在错误映射
+4. ✅ 其他 gh 失败错误映射  
+5. ✅ 无效路径拒绝
+
+**测试设计亮点:**
+- 使用辅助函数 `parse_issue_detail` 和 `map_issue_detail_command_error` 解耦测试与外部依赖
+- 错误消息断言包含原始输出便于调试
+
+**可改进:**
+- 可添加空评论数组的边界测试
+- 可添加评论作者为 null 的测试（gh API 可能返回 null）
+
+---
+
+### 代码质量评估 (20%)
+
+**得分: 95/100**
+
+**优点:**
+- 遵循项目既有模式：`Result<T, String>` 错误处理、`map_err` 转换错误
+- 函数职责单一：`parse_issue_detail` 纯解析，`map_issue_detail_command_error` 纯错误映射
+- 结构体 derive 了必要的 trait (`Serialize`, `Deserialize`, `Debug`, `PartialEq`, `Eq`)
+- 测试模块放在文件末尾，符合 clippy `items_after_test_module` 要求
+
+---
+
+### 安全性评估 (10%)
+
+**得分: 95/100**
+
+**优点:**
+- 无用户输入拼接到命令参数（issue_number 通过 `to_string()` 转换，安全）
+- 错误消息不暴露敏感信息
+- 无硬编码敏感数据
+
+---
+
+### 性能评估 (10%)
+
+**得分: 90/100**
+
+**优点:**
+- 使用 `String::from_utf8_lossy` 处理 stdout/stderr，避免 panic
+- 无不必要的内存分配
+
+**可接受:**
+- 每次调用都检查 `gh --version`，可考虑缓存但非必须
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+子任务 T-001 已完成，建议标记为通过并进入下一个子任务 T-002（前端实现 Issue 详情面板 UI）。
+
+---
+
+## Learnings
+
+- **模式**: Tauri 命令中提取纯辅助函数（如 `parse_*`, `map_*_error`）可显著提升可测试性，避免单元测试依赖外部 CLI
+- **踩坑**: gh API 返回的 `author` 字段可能为 null，但在当前实现中 serde 会正确处理
+- **经验**: 使用 `#[serde(rename = "camelCase")]` 处理 JSON 字段名差异已在项目中形成一致模式

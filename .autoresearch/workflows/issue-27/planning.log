@@ -1,0 +1,64 @@
+我来分析 Issue #27 并拆分子任务。
+
+这个 Issue 是关于桌面应用的 Issue 详情查看功能，包含 Rust 后端和前端 UI 两部分工作。
+
+## 分析
+
+### 功能范围
+1. **后端**: Rust Tauri command `get_issue_detail`，调用 `gh issue view N --json body,comments`
+2. **前端 UI**: 
+   - Issue 详情面板/弹窗
+   - Markdown 渲染
+   - 评论列表展示
+   - 加载骨架屏
+
+### 依赖关系
+- Issue #26 (Issue 列表) 需要先完成，本 Issue 在列表基础上增加详情查看
+
+### 拆分建议
+考虑到前后端分离原则，以及每个子任务应能在一个迭代内完成：
+
+1. **T-001**: Rust 后端 Tauri command 实现 - 独立的后端任务，可单独验证
+2. **T-002**: 前端 Issue 详情面板 UI - 整合 Markdown 渲染、评论列表、加载状态于一体的 UI 任务
+
+```json
+{
+  "issueNumber": 27,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现 Rust Tauri command: get_issue_detail",
+      "description": "在 Rust 侧实现 Tauri command `get_issue_detail`，调用 `gh issue view N --json body,comments` 命令获取 Issue 详情数据。需要定义响应数据结构（包含 body、comments 字段），处理命令执行错误，并返回结构化的 JSON 数据给前端。",
+      "acceptanceCriteria": [
+        "实现 `get_issue_detail` Tauri command，接受 issue number 参数",
+        "正确调用 `gh issue view N --json body,comments` 并解析返回结果",
+        "定义 IssueDetail 和 Comment 结构体用于序列化响应数据",
+        "包含适当的错误处理（gh 命令不存在、网络错误、Issue 不存在等）",
+        "Rust 代码通过 `cargo clippy` 检查",
+        "Tauri command 可通过前端 Invoke 调用"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现 Issue 详情面板 UI 组件",
+      "description": "创建 Issue 详情面板组件（右侧面板或弹窗形式），展示 Issue 描述和评论列表。包括：调用 T-001 实现的 Tauri command 获取数据、使用 react-markdown 渲染 Issue 描述、展示评论列表（作者头像、用户名、时间、Markdown 内容）、实现骨架屏加载状态。需要处理加载中、加载失败、空数据等边界状态。",
+      "acceptanceCriteria": [
+        "创建 IssueDetailPanel 组件，支持从 Issue 列表点击后展示详情",
+        "调用 `get_issue_detail` Tauri command 获取数据",
+        "使用 react-markdown 正确渲染 Issue 描述（支持代码高亮、链接等）",
+        "展示评论列表：作者头像、用户名、创建时间、Markdown 内容",
+        "实现骨架屏组件，在数据加载时显示",
+        "处理错误状态和空数据状态",
+        "TypeScript 类型检查通过",
+        "ESLint 检查通过",
+        "在浏览器中验证页面功能正常"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

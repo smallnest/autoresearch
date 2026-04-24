@@ -1,0 +1,6 @@
+[?25l│
+◆  Permission required: bash (git status)
+│  ● Allow once
+│  ○ Always allow: git status*
+│  ○ Reject
+└

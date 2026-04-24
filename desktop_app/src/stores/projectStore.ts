@@ -22,7 +22,7 @@ interface ProjectState {
   isLoading: boolean;
   error: string | null;
   selectProject: () => Promise<void>;
-  loadProject: (path: string) => Promise<void>;
+  loadProject: (_path: string) => Promise<void>;
   loadRecentProjects: () => Promise<void>;
   clearError: () => void;
 }
