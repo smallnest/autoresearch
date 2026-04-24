@@ -11,17 +11,17 @@ function RightPanel() {
 
   return (
     <aside
-      className={`h-screen bg-gray-800 border-l border-gray-700 shrink-0 transition-[width] duration-200 ${
+      className={`h-screen bg-gray-50 border-l border-gray-200 shrink-0 transition-[width] duration-200 ${
         collapsed ? "w-10" : "w-[300px]"
       }`}
     >
-      <div className="h-14 flex items-center justify-between px-3 border-b border-gray-700">
+      <div className="h-14 flex items-center justify-between px-3 border-b border-gray-200">
         {!collapsed && (
-          <span className="text-sm font-medium text-gray-300">Info Panel</span>
+          <span className="text-sm font-medium text-gray-600">Info Panel</span>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+          className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors"
           aria-label={collapsed ? "Expand panel" : "Collapse panel"}
         >
           <svg
@@ -43,7 +43,7 @@ function RightPanel() {
         </button>
       </div>
       {!collapsed && (
-        <div className="p-4 text-sm text-gray-400">
+        <div className="p-4 text-sm text-gray-500">
           <p>Select an item to view details.</p>
         </div>
       )}

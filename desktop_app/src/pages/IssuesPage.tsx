@@ -129,7 +129,7 @@ function LabelBadge({
       onClick={onClick}
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-all ${
         isSelected
-          ? 'ring-2 ring-offset-1 ring-offset-gray-900 ring-blue-500 scale-105'
+          ? 'ring-2 ring-offset-1 ring-offset-white ring-blue-500 scale-105'
           : 'hover:opacity-80'
       }`}
       style={{
@@ -159,8 +159,8 @@ function IssueListItem({
       onClick={onClick}
       className={`p-4 rounded-lg border cursor-pointer transition-all ${
         isSelected
-          ? 'bg-blue-900/30 border-blue-600 shadow-lg shadow-blue-900/20'
-          : 'bg-gray-800/50 border-gray-700 hover:border-gray-600 hover:bg-gray-800'
+          ? 'bg-blue-50 border-blue-300 shadow-sm'
+          : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
       }`}
     >
       <div className="flex items-start gap-3">
@@ -169,8 +169,8 @@ function IssueListItem({
           <div
             className={`w-6 h-6 rounded-full flex items-center justify-center ${
               issue.state === 'open'
-                ? 'bg-green-900/50 text-green-400'
-                : 'bg-purple-900/50 text-purple-400'
+                ? 'bg-green-100 text-green-600'
+                : 'bg-purple-100 text-purple-600'
             }`}
           >
             <IssueIcon className="w-3.5 h-3.5" />
@@ -184,14 +184,14 @@ function IssueListItem({
               #{issue.number}
             </span>
             {isProcessed && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-400 border border-green-700">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                 <ProcessedIcon className="w-3 h-3 mr-1" />
                 已处理
               </span>
             )}
           </div>
 
-          <h3 className="text-sm font-medium text-gray-200 mb-2 truncate">
+          <h3 className="text-sm font-medium text-gray-800 mb-2 truncate">
             {issue.title}
           </h3>
 
@@ -345,8 +345,8 @@ function IssuesPage(): JSX.Element {
     return (
       <div className="p-6">
         <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
-          <IssueIcon className="w-16 h-16 mb-4 text-gray-600" />
-          <h2 className="text-xl font-bold text-gray-300 mb-2">
+          <IssueIcon className="w-16 h-16 mb-4 text-gray-300" />
+          <h2 className="text-xl font-bold text-gray-700 mb-2">
             请先选择项目
           </h2>
           <p className="text-gray-500 text-center max-w-md">
@@ -362,7 +362,7 @@ function IssuesPage(): JSX.Element {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100 mb-1">Issues</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Issues</h1>
           <p className="text-sm text-gray-500">
             管理和追踪 GitHub Issues ({filteredIssues.length} / {issues.length})
           </p>
@@ -372,7 +372,7 @@ function IssuesPage(): JSX.Element {
         <button
           onClick={() => projectPath && loadIssues(projectPath)}
           disabled={isLoading}
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-gray-300 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-700"
+          className="px-4 py-2 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200"
         >
           {isLoading ? (
             <>
@@ -420,12 +420,12 @@ function IssuesPage(): JSX.Element {
 
       {/* Error message */}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm">
+        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
           <div className="flex items-center justify-between">
             <span>{error}</span>
             <button
               onClick={clearError}
-              className="ml-2 text-red-400 hover:text-red-300"
+              className="ml-2 text-red-400 hover:text-red-600"
             >
               <ClearIcon className="w-4 h-4" />
             </button>
@@ -444,7 +444,7 @@ function IssuesPage(): JSX.Element {
                 placeholder="搜索 Issue 标题或编号..."
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className="w-full pl-10 pr-10 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
               />
               {searchQuery && (
                 <button

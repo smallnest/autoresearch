@@ -48,9 +48,9 @@ const navItems = [
 
 function Sidebar() {
   return (
-    <aside className="w-60 h-screen bg-gray-800 border-r border-gray-700 flex flex-col shrink-0">
-      <div className="h-14 flex items-center px-5 border-b border-gray-700">
-        <h1 className="text-lg font-semibold text-gray-100 truncate">Autoresearch</h1>
+    <aside className="w-60 h-screen bg-gray-50 border-r border-gray-200 flex flex-col shrink-0">
+      <div className="h-14 flex items-center px-5 border-b border-gray-200">
+        <h1 className="text-lg font-semibold text-gray-900 truncate">Autoresearch</h1>
       </div>
       <nav className="flex-1 py-2 overflow-y-auto">
         {navItems.map((item) => (
@@ -61,8 +61,8 @@ function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-5 py-2.5 text-sm transition-colors ${
                 isActive
-                  ? "bg-gray-700 text-white"
-                  : "text-gray-400 hover:bg-gray-700/50 hover:text-gray-200"
+                  ? "bg-gray-200 text-gray-900 font-medium"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
               }`
             }
           >

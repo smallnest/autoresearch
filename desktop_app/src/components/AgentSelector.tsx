@@ -75,7 +75,7 @@ function AgentTag({ name, isSelected, onClick }: AgentTagProps) {
       className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
         isSelected
           ? 'bg-blue-600 text-white hover:bg-blue-500'
-          : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-gray-200'
+          : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
       }`}
     >
       {name}
@@ -118,19 +118,19 @@ export default function AgentSelector() {
     <div className="space-y-6">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-gray-300">Selected Agents</h3>
+          <h3 className="text-sm font-medium text-gray-600">Selected Agents</h3>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={selectAll}
-              className="px-3 py-1 text-xs font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded"
+              className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
             >
               Select All
             </button>
             <button
               type="button"
               onClick={clearAll}
-              className="px-3 py-1 text-xs font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded"
+              className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
             >
               Clear All
             </button>
@@ -144,7 +144,7 @@ export default function AgentSelector() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={selected} strategy={verticalListSortingStrategy}>
-              <div className="flex flex-wrap gap-2 p-3 bg-gray-800 rounded-lg border border-gray-700">
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
                 {selected.map((agentId) => (
                   <SortableTag
                     key={agentId}
@@ -157,7 +157,7 @@ export default function AgentSelector() {
             </SortableContext>
           </DndContext>
         ) : (
-          <div className="p-3 bg-gray-800 rounded-lg border border-gray-700 text-gray-500 text-sm">
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-400 text-sm">
             No agents selected. Click below to select.
           </div>
         )}
@@ -165,7 +165,7 @@ export default function AgentSelector() {
 
       {unselected.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-gray-300 mb-3">Available Agents</h3>
+          <h3 className="text-sm font-medium text-gray-600 mb-3">Available Agents</h3>
           <div className="flex flex-wrap gap-2">
             {unselected.map((agentId) => (
               <AgentTag

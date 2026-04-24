@@ -1,20 +1,39 @@
 @import "tailwindcss";
 
-/* Dark theme as default */
+/* Light theme as default */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  @apply bg-gray-900 text-gray-100;
+  @apply bg-gray-50 text-gray-900;
 }
 
 #root {
   min-height: 100vh;
 }
 
+/* Scrollbar styling for light theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(209 213 219);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(156 163 175);
+}
+
 .markdown-body {
-  color: rgb(229 231 235);
+  color: rgb(31 41 55);
   font-size: 0.95rem;
   line-height: 1.75;
 }
@@ -25,7 +44,7 @@ body {
 .markdown-body h4,
 .markdown-body h5,
 .markdown-body h6 {
-  color: rgb(243 244 246);
+  color: rgb(17 24 39);
   font-weight: 700;
   letter-spacing: -0.01em;
   margin-bottom: 0.75rem;
@@ -69,20 +88,20 @@ body {
 }
 
 .markdown-body a {
-  color: rgb(96 165 250);
+  color: rgb(37 99 235);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
 .markdown-body a:hover {
-  color: rgb(147 197 253);
+  color: rgb(29 78 216);
 }
 
 .markdown-body code {
-  border: 1px solid rgb(55 65 81);
+  border: 1px solid rgb(229 231 235);
   border-radius: 0.375rem;
-  background: rgb(17 24 39);
-  color: rgb(248 250 252);
+  background: rgb(249 250 251);
+  color: rgb(17 24 39);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.85em;
   padding: 0.1rem 0.35rem;
@@ -90,9 +109,9 @@ body {
 
 .markdown-body pre {
   overflow-x: auto;
-  border: 1px solid rgb(31 41 55);
-  border-radius: 1rem;
-  background: rgb(3 7 18);
+  border: 1px solid rgb(229 231 235);
+  border-radius: 0.75rem;
+  background: rgb(249 250 251);
   padding: 1rem;
 }
 
@@ -107,8 +126,8 @@ body {
 .markdown-body blockquote {
   border-left: 3px solid rgb(59 130 246);
   border-radius: 0 0.75rem 0.75rem 0;
-  background: rgb(15 23 42);
-  color: rgb(203 213 225);
+  background: rgb(239 246 255);
+  color: rgb(30 64 175);
   padding: 0.85rem 1rem;
 }
 
@@ -121,15 +140,15 @@ body {
 }
 
 .md-token-keyword {
-  color: rgb(248 113 113);
+  color: rgb(185 28 28);
 }
 
 .md-token-string {
-  color: rgb(134 239 172);
+  color: rgb(22 101 52);
 }
 
 .md-token-number {
-  color: rgb(250 204 21);
+  color: rgb(161 98 7);
 }
 
 .skeleton-shimmer {
@@ -143,7 +162,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgb(255 255 255 / 0.08) 50%,
+    rgb(0 0 0 / 0.05) 50%,
     transparent 100%
   );
   animation: skeleton-shimmer 1.5s infinite;

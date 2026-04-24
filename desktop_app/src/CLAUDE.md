@@ -7,7 +7,7 @@
 - **Pages**: Dashboard, Issues, History, Settings — each in src/pages/
 - **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
 - **Styling**: Tailwind CSS v4 via @tailwindcss/vite plugin (no tailwind.config.js)
-- **Theme**: Dark theme by default (bg-gray-900, text-gray-100, gray-800 for panels)
+- **Theme**: Light theme (bg-white, text-gray-900, gray-50 for panels, gray-200 borders)
 
 ## Conventions
 
@@ -68,10 +68,10 @@
 
 ### 样式约定
 
-- Issue 列表项: `bg-gray-800/50 border-gray-700`，选中时 `bg-blue-900/30 border-blue-600`
+- Issue 列表项: `bg-white border-gray-200`，选中时 `bg-blue-50 border-blue-300`
 - 标签徽章: 使用 GitHub label 的 `color` 字段作为背景色，自动计算文字颜色（黑白）
-- 已处理标记: 绿色主题（`bg-green-900/50 text-green-400`）
-- 搜索框: `bg-gray-800 border-gray-700`，focus 时 `border-blue-600 ring-blue-600`
+- 已处理标记: 绿色主题（`bg-green-50 text-green-700`）
+- 搜索框: `bg-white border-gray-200`，focus 时 `border-blue-500 ring-blue-500`
 - 空状态: 居中显示，灰色图标和文字
 - 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
 - Markdown 样式: 统一挂在 `.markdown-body`，代码块高亮 token 使用 `.md-token-*` 类名
@@ -99,7 +99,7 @@
 
 ### 样式约定
 
-- 配置存在：绿色主题（`bg-green-900/50`, `text-green-400`, `border-green-700`）
-- 配置缺失：红色主题（`bg-red-900/50`, `text-red-400`, `border-red-700`）
-- 初始化提示：黄色主题（`bg-yellow-900/30`, `text-yellow-200`）
-- 配置卡片边框：缺失配置时边框变为黄色（`border-yellow-700/50`）
+- 配置存在：绿色主题（`bg-green-50`, `text-green-700`, `border-green-200`）
+- 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+- 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）

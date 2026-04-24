@@ -65,8 +65,8 @@ function ConfigBadge({
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
         exists
-          ? 'bg-green-900/50 text-green-400 border border-green-700'
-          : 'bg-red-900/50 text-red-400 border border-red-700'
+          ? 'bg-green-50 text-green-700 border border-green-200'
+          : 'bg-red-50 text-red-700 border border-red-200'
       }`}
     >
       {exists ? (
@@ -93,7 +93,7 @@ function WelcomeScreen(): JSX.Element {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-6">
       {/* Logo/Icon placeholder */}
-      <div className="w-16 h-16 mb-6 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+      <div className="w-16 h-16 mb-6 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/10">
         <svg
           className="w-8 h-8 text-white"
           fill="none"
@@ -109,21 +109,21 @@ function WelcomeScreen(): JSX.Element {
         </svg>
       </div>
 
-      <h2 className="text-2xl font-bold mb-2 text-gray-100">
+      <h2 className="text-2xl font-bold mb-2 text-gray-900">
         欢迎使用 Autoresearch
       </h2>
-      <p className="text-gray-400 mb-8 text-center max-w-md">
+      <p className="text-gray-500 mb-8 text-center max-w-md">
         选择一个项目目录开始使用自动化研发工作流
       </p>
 
       {/* Error message */}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm max-w-md">
+        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm max-w-md">
           <div className="flex items-center justify-between">
             <span>{error}</span>
             <button
               onClick={clearError}
-              className="ml-2 text-red-400 hover:text-red-300"
+              className="ml-2 text-red-400 hover:text-red-600"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -141,7 +141,7 @@ function WelcomeScreen(): JSX.Element {
       <button
         onClick={selectProject}
         disabled={isLoading}
-        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/20"
+        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/10"
       >
         {isLoading ? (
           <>
@@ -196,28 +196,28 @@ function WelcomeScreen(): JSX.Element {
             {recentProjects.map((recentPath) => (
               <li
                 key={recentPath}
-                className="group flex items-center justify-between p-3 rounded-lg bg-gray-800/50 border border-gray-700 hover:border-gray-600 hover:bg-gray-800 cursor-pointer transition-colors"
+                className="group flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-gray-300 hover:bg-gray-100 cursor-pointer transition-colors"
                 onClick={() => {
                   loadProject(recentPath);
                 }}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-medium text-gray-400">
+                  <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-medium text-gray-500">
                       {getDirName(recentPath).charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-200 truncate">
+                    <p className="text-sm font-medium text-gray-800 truncate">
                       {getDirName(recentPath)}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">
+                    <p className="text-xs text-gray-400 truncate">
                       {formatPath(recentPath)}
                     </p>
                   </div>
                 </div>
                 <svg
-                  className="w-4 h-4 text-gray-600 group-hover:text-gray-400 flex-shrink-0 ml-2"
+                  className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0 ml-2"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -247,11 +247,11 @@ function InitTemplatePrompt({
   onLearnMore: () => void;
 }): JSX.Element {
   return (
-    <div className="p-4 rounded-lg bg-yellow-900/30 border border-yellow-700/50 mb-6">
+    <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 mb-6">
       <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-yellow-900/50 flex items-center justify-center">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
           <svg
-            className="w-4 h-4 text-yellow-400"
+            className="w-4 h-4 text-amber-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -265,22 +265,22 @@ function InitTemplatePrompt({
           </svg>
         </div>
         <div className="flex-1">
-          <h4 className="text-sm font-medium text-yellow-200 mb-1">
+          <h4 className="text-sm font-medium text-amber-800 mb-1">
             项目配置不完整
           </h4>
-          <p className="text-sm text-yellow-400/80 mb-3">
+          <p className="text-sm text-amber-700 mb-3">
             是否从模板初始化？这将创建 .autoresearch/ 目录、program.md 和 agents/ 目录。
           </p>
           <div className="flex gap-2">
             <button
               onClick={onLater}
-              className="px-3 py-1.5 text-sm font-medium text-yellow-300 hover:text-yellow-200 bg-yellow-900/30 hover:bg-yellow-900/50 border border-yellow-700/50 rounded transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition-colors"
             >
               稍后
             </button>
             <button
               onClick={onLearnMore}
-              className="px-3 py-1.5 text-sm font-medium text-gray-900 bg-yellow-500 hover:bg-yellow-400 rounded transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded transition-colors"
             >
               了解
             </button>
@@ -294,16 +294,16 @@ function InitTemplatePrompt({
 // Config complete success notification
 function ConfigCompleteNotification(): JSX.Element {
   return (
-    <div className="p-4 rounded-lg bg-green-900/30 border border-green-700/50 mb-6">
+    <div className="p-4 rounded-lg bg-green-50 border border-green-200 mb-6">
       <div className="flex items-center gap-3">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-900/50 flex items-center justify-center">
-          <CheckIcon className="w-4 h-4 text-green-400" />
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+          <CheckIcon className="w-4 h-4 text-green-600" />
         </div>
         <div>
-          <h4 className="text-sm font-medium text-green-200">
+          <h4 className="text-sm font-medium text-green-800">
             配置完整
           </h4>
-          <p className="text-sm text-green-400/80">
+          <p className="text-sm text-green-600">
             所有配置项已就绪，可以开始使用 Autoresearch
           </p>
         </div>
@@ -352,14 +352,14 @@ function ProjectInfoScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100 mb-1">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
             {getDirName(projectPath)}
           </h1>
           <p className="text-sm text-gray-500">{projectPath}</p>
         </div>
         <button
           onClick={selectProject}
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-700"
+          className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200"
         >
           <svg
             className="w-4 h-4"
@@ -390,11 +390,11 @@ function ProjectInfoScreen({
       {config && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div
-            className={`p-4 rounded-lg bg-gray-800/50 border ${
-              hasMissingConfig ? 'border-yellow-700/50' : 'border-gray-700'
+            className={`p-4 rounded-lg bg-white border ${
+              hasMissingConfig ? 'border-amber-300' : 'border-gray-200'
             }`}
           >
-            <h3 className="text-sm font-medium text-gray-400 mb-3">
+            <h3 className="text-sm font-medium text-gray-500 mb-3">
               配置检测
             </h3>
             <div className="space-y-2">
@@ -413,18 +413,18 @@ function ProjectInfoScreen({
             </div>
           </div>
 
-          <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">
+          <div className="p-4 rounded-lg bg-white border border-gray-200">
+            <h3 className="text-sm font-medium text-gray-500 mb-3">
               项目状态
             </h3>
             <div className="flex items-center gap-2">
               {config.has_autoresearch_dir ? (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/50 text-green-400 border border-green-700">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                   <CheckIcon className="w-3 h-3 mr-1.5" />
                   已配置
                 </span>
               ) : (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/50 text-yellow-400 border border-yellow-700">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
                   <XIcon className="w-3 h-3 mr-1.5" />
                   未配置
                 </span>
@@ -437,14 +437,14 @@ function ProjectInfoScreen({
             </p>
           </div>
 
-          <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">
+          <div className="p-4 rounded-lg bg-white border border-gray-200">
+            <h3 className="text-sm font-medium text-gray-500 mb-3">
               快捷操作
             </h3>
             <div className="space-y-2">
-              <button className="w-full text-left px-3 py-2 rounded bg-gray-700/50 hover:bg-gray-700 text-sm text-gray-300 transition-colors flex items-center gap-2">
+              <button className="w-full text-left px-3 py-2 rounded bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 transition-colors flex items-center gap-2">
                 <svg
-                  className="w-4 h-4 text-gray-500"
+                  className="w-4 h-4 text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -458,9 +458,9 @@ function ProjectInfoScreen({
                 </svg>
                 新建工作流
               </button>
-              <button className="w-full text-left px-3 py-2 rounded bg-gray-700/50 hover:bg-gray-700 text-sm text-gray-300 transition-colors flex items-center gap-2">
+              <button className="w-full text-left px-3 py-2 rounded bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 transition-colors flex items-center gap-2">
                 <svg
-                  className="w-4 h-4 text-gray-500"
+                  className="w-4 h-4 text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -480,9 +480,9 @@ function ProjectInfoScreen({
       )}
 
       {/* Quick Stats Placeholder */}
-      <div className="p-4 rounded-lg bg-gray-800/30 border border-gray-700/50">
-        <h3 className="text-sm font-medium text-gray-400 mb-2">活动概览</h3>
-        <p className="text-gray-500 text-sm">
+      <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
+        <h3 className="text-sm font-medium text-gray-500 mb-2">活动概览</h3>
+        <p className="text-gray-400 text-sm">
           项目活动数据将在后续版本中提供...
         </p>
       </div>
