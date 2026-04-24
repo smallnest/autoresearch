@@ -1,0 +1,1219 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dbd59-fb3b-7d20-aecf-39aedb350a8b
+--------
+user
+审核 Issue #27 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] Issue 详情查看
+
+
+## 子任务审核
+
+子任务进度: 0/2 已完成 | 当前子任务: T-001 - 实现 Rust Tauri command: get_issue_detail
+
+请审核当前子任务的实现：
+
+- **ID**: T-001
+- **标题**: 实现 Rust Tauri command: get_issue_detail
+- **类型**: code
+- **描述**: 在 Rust 侧实现 Tauri command `get_issue_detail`，调用 `gh issue view N --json body,comments` 命令获取 Issue 详情数据。需要定义响应数据结构（包含 body、comments 字段），处理命令执行错误，并返回结构化的 JSON 数据给前端。
+- **验收条件**:
+  - 实现 `get_issue_detail` Tauri command，接受 issue number 参数
+  - 正确调用 `gh issue view N --json body,comments` 并解析返回结果
+  - 定义 IssueDetail 和 Comment 结构体用于序列化响应数据
+  - 包含适当的错误处理（gh 命令不存在、网络错误、Issue 不存在等）
+  - Rust 代码通过 `cargo clippy` 检查
+  - Tauri command 可通过前端 Invoke 调用
+
+
+请针对此子任务的验收条件进行审核。
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+# Issue #27 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 1 - 2026-04-24
+
+- **Agent**: claude
+- **类型**: 初始实现 - 实现 Rust Tauri command: get_issue_detail
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: Tauri 命令使用 `Result<T, String>` 统一错误处理，错误信息应包含上下文便于调试
+- **踩坑**: `IssueDetail` 结构体需要 `Deserialize` trait 才能从 JSON 解析
+- **经验**: 使用 `#[serde(rename = "createdAt")]` 处理 JSON 字段名与 Rust 命名风格的差异
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我在审核 T-001 的实现，先定位 `get_issue_detail` 相关 Rust 代码、命令注册、测试和 lint 入口，确认是否满足验收条件。
+exec
+/bin/zsh -lc "rg --files . | rg \"(Cargo.toml|Cargo.lock|src-tauri|CLAUDE\\.md|progress\\.md)\"" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+./CLAUDE.md
+./lib/CLAUDE.md
+./desktop_app/src/CLAUDE.md
+./desktop_app/CLAUDE.md
+./desktop_app/src-tauri/src/main.rs
+./desktop_app/src-tauri/src/lib.rs
+./desktop_app/src-tauri/icons/128x128@2x.png
+./desktop_app/src-tauri/icons/Square71x71Logo.png
+./desktop_app/src-tauri/icons/Square44x44Logo.png
+./desktop_app/src-tauri/icons/32x32.png
+./desktop_app/src-tauri/icons/Square284x284Logo.png
+./desktop_app/src-tauri/icons/128x128.png
+./desktop_app/src-tauri/icons/Square142x142Logo.png
+./desktop_app/src-tauri/icons/icon.ico
+./desktop_app/src-tauri/icons/Square310x310Logo.png
+./desktop_app/src-tauri/icons/Square89x89Logo.png
+./desktop_app/src-tauri/icons/Square107x107Logo.png
+./desktop_app/src-tauri/icons/StoreLogo.png
+./desktop_app/src-tauri/icons/icon.icns
+./desktop_app/src-tauri/icons/Square150x150Logo.png
+./desktop_app/src-tauri/icons/Square30x30Logo.png
+./desktop_app/src-tauri/icons/icon.png
+./desktop_app/src-tauri/build.rs
+./desktop_app/src-tauri/Cargo.lock
+./desktop_app/src-tauri/capabilities/default.json
+./desktop_app/src-tauri/tauri.conf.json
+./desktop_app/src-tauri/Cargo.toml
+./tests/CLAUDE.md
+
+exec
+/bin/zsh -lc 'rg -n "get_issue_detail|IssueDetail|gh issue view|comments" src src-tauri .' in /Users/chaoyuepan/ai/autoresearch
+ exited 2 in 0ms:
+rg: src: No such file or directory (os error 2)
+rg: src-tauri: No such file or directory (os error 2)
+./run.sh:991:    ISSUE_INFO=$(gh issue view $issue_number --json number,title,body,state,labels 2>&1)
+./docs/autoresearch-promo.html:281:    {icon:'\u{1F504}',title:'Auto PR & Merge',desc:'Creates PR, merges, comments, and closes Issue automatically',color:C.green},
+./desktop_app/src-tauri/src/lib.rs:49:struct IssueDetail {
+./desktop_app/src-tauri/src/lib.rs:51:    comments: Vec<GhComment>,
+./desktop_app/src-tauri/src/lib.rs:184:/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+./desktop_app/src-tauri/src/lib.rs:186:fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+./desktop_app/src-tauri/src/lib.rs:203:    // Execute gh issue view
+./desktop_app/src-tauri/src/lib.rs:208:            "--json", "body,comments",
+./desktop_app/src-tauri/src/lib.rs:220:        return Err(format!("gh issue view failed: {}", stderr.trim()));
+./desktop_app/src-tauri/src/lib.rs:224:    let detail: IssueDetail = serde_json::from_str(&stdout)
+./desktop_app/src-tauri/src/lib.rs:243:            get_issue_detail,
+./desktop_app/pnpm-lock.yaml:1428:  strip-json-comments@3.1.1:
+./desktop_app/pnpm-lock.yaml:1785:      strip-json-comments: 3.1.1
+./desktop_app/pnpm-lock.yaml:2780:  strip-json-comments@3.1.1: {}
+./desktop_app/package-lock.json:925:        "strip-json-comments": "^3.1.1"
+./desktop_app/package-lock.json:4331:    "node_modules/strip-json-comments": {
+./desktop_app/package-lock.json:4333:      "resolved": "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz",
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M desktop_app/src-tauri/src/lib.rs
+?? .autoresearch/workflows/
+
+codex
+已经定位到实现点在 `desktop_app/src-tauri/src/lib.rs`。接下来我读具体实现和 Cargo 配置，重点看数据结构、错误处理、命令注册，以及有没有测试或 clippy 证据。
+exec
+/bin/zsh -lc "sed -n '1,320p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+
+/// Configuration detection result for a project directory.
+#[derive(serde::Serialize)]
+struct ProjectConfig {
+    has_autoresearch_dir: bool,
+    has_program_md: bool,
+    has_agents_dir: bool,
+}
+
+/// A label attached to a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct GhLabel {
+    name: String,
+    color: String,
+}
+
+/// A GitHub Issue returned by `gh issue list`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct GhIssue {
+    number: i64,
+    title: String,
+    labels: Vec<GhLabel>,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    state: String,
+}
+
+/// Author information for a GitHub comment.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct GhCommentAuthor {
+    login: String,
+}
+
+/// A comment on a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct GhComment {
+    id: String,
+    author: GhCommentAuthor,
+    body: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+}
+
+/// Detailed information about a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+struct IssueDetail {
+    body: String,
+    comments: Vec<GhComment>,
+}
+
+/// Result for the list_issues command, including processed status info.
+#[derive(serde::Serialize)]
+struct IssuesResult {
+    issues: Vec<GhIssue>,
+    processed_numbers: Vec<i64>,
+}
+
+/// Opens a native folder selection dialog and returns the selected path.
+#[tauri::command]
+async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let dir = tauri_plugin_dialog::DialogExt::dialog(&app)
+        .file()
+        .set_title("Select Project Directory")
+        .blocking_pick_folder();
+    Ok(dir.map(|p| p.to_string()))
+}
+
+/// Detects whether the given project directory contains autoresearch configuration files.
+#[tauri::command]
+fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> {
+    let base = Path::new(&project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {}", project_path));
+    }
+    Ok(ProjectConfig {
+        has_autoresearch_dir: base.join(".autoresearch").is_dir(),
+        has_program_md: base.join(".autoresearch").join("program.md").is_file(),
+        has_agents_dir: base.join(".autoresearch").join("agents").is_dir(),
+    })
+}
+
+/// Retrieves the most recently opened project path from the Tauri store.
+#[tauri::command]
+async fn get_recent_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+    let value = store
+        .get("recent_project")
+        .and_then(|v| v.as_str().map(String::from));
+    Ok(value)
+}
+
+/// Saves the project path to the Tauri store as the most recent project.
+#[tauri::command]
+async fn save_recent_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+    store.set("recent_project", path);
+    store.save().map_err(|e| e.to_string())
+}
+
+/// Scans `.autoresearch/workflows/issue-*` directories and returns Issue numbers that have been processed.
+fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> {
+    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+    if !workflows_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut numbers = Vec::new();
+    let entries = fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {}", e))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if let Some(suffix) = name_str.strip_prefix("issue-") {
+            if let Ok(num) = suffix.parse::<i64>() {
+                numbers.push(num);
+            }
+        }
+    }
+    numbers.sort();
+    Ok(numbers)
+}
+
+/// Lists GitHub Issues for the repository at `project_path` using `gh issue list`.
+/// Also returns which Issue numbers have already been processed (have workflow directories).
+#[tauri::command]
+fn list_issues(project_path: String) -> Result<IssuesResult, String> {
+    let base = Path::new(&project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {}", project_path));
+    }
+
+    // Check that gh is available
+    let gh_check = Command::new("gh")
+        .args(["--version"])
+        .current_dir(base)
+        .output()
+        .map_err(|_| "gh CLI is not installed or not found in PATH".to_string())?;
+
+    if !gh_check.status.success() {
+        return Err("gh CLI check failed — please ensure gh is installed and accessible".to_string());
+    }
+
+    // Execute gh issue list
+    let output = Command::new("gh")
+        .args([
+            "issue", "list",
+            "--json", "number,title,labels,createdAt,state",
+            "--limit", "100",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gh issue list failed: {}", stderr.trim()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let issues: Vec<GhIssue> = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse gh output: {}. Output: {}", e, stdout))?;
+
+    let processed_numbers = get_processed_issue_numbers(base)?;
+
+    Ok(IssuesResult {
+        issues,
+        processed_numbers,
+    })
+}
+
+/// Returns a list of Issue numbers that have already been processed by autoresearch.
+#[tauri::command]
+fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
+    let base = Path::new(&project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {}", project_path));
+    }
+    get_processed_issue_numbers(base)
+}
+
+/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+#[tauri::command]
+fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+    let base = Path::new(&project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    // Check that gh is available
+    let gh_check = Command::new("gh")
+        .args(["--version"])
+        .current_dir(base)
+        .output()
+        .map_err(|_| "gh CLI is not installed or not found in PATH".to_string())?;
+
+    if !gh_check.status.success() {
+        return Err("gh CLI check failed — please ensure gh is installed and accessible".to_string());
+    }
+
+    // Execute gh issue view
+    let output = Command::new("gh")
+        .args([
+            "issue", "view",
+            &issue_number.to_string(),
+            "--json", "body,comments",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Check for common error patterns
+        if stderr.contains("not found") || stderr.contains("Could not resolve") {
+            return Err(format!("Issue #{issue_number} not found"));
+        }
+        return Err(format!("gh issue view failed: {}", stderr.trim()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let detail: IssueDetail = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))?;
+
+    Ok(detail)
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            select_project_dir,
+            detect_project_config,
+            get_recent_project,
+            save_recent_project,
+            list_issues,
+            check_processed_issues,
+            get_issue_detail,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+exec
+/bin/zsh -lc "sed -n '1,200p' desktop_app/src-tauri/src/main.rs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src-tauri/Cargo.toml" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    desktop_app_lib::run()
+}
+
+ succeeded in 0ms:
+[package]
+name = "desktop_app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "desktop_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-store = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+notify = "8"
+
+
+exec
+/bin/zsh -lc "rg -n \"test|clippy|cargo clippy|get_issue_detail\\(\" desktop_app/src-tauri -g '"'!target'"'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/src-tauri/src/lib.rs:186:fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+
+codex
+实现本体已经存在，但目前还没看到测试，也没看到前端是否已经接入。我要补查调用点并实际跑 `cargo clippy`/测试，确认验收条件是不是只停留在“代码看起来像是完成了”。
+exec
+/bin/zsh -lc "rg -n \"invoke\\(|get_issue_detail\" desktop_app/src desktop_app -g '"'!src-tauri/target'"'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/src-tauri/src/lib.rs:186:fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+desktop_app/src-tauri/src/lib.rs:243:            get_issue_detail,
+
+exec
+/bin/zsh -lc 'cargo clippy --all-targets --all-features' in /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri
+exec
+/bin/zsh -lc 'cargo test' in /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri
+ succeeded in 925ms:
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.46s
+     Running unittests src/lib.rs (target/debug/deps/desktop_app_lib-09179e0bb39fddd2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/desktop_app-b7701fe660b7a4a7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests desktop_app_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+ succeeded in 1523ms:
+    Blocking waiting for file lock on build directory
+warning: variables can be used directly in the `format!` string
+  --> src/lib.rs:76:20
+   |
+76 |         return Err(format!("Path is not a directory: {}", project_path));
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+   = note: `#[warn(clippy::uninlined_format_args)]` on by default
+help: change this to
+   |
+76 -         return Err(format!("Path is not a directory: {}", project_path));
+76 +         return Err(format!("Path is not a directory: {project_path}"));
+   |
+
+warning: variables can be used directly in the `format!` string
+  --> src/lib.rs:89:22
+   |
+89 |         .map_err(|e| format!("Failed to open store: {}", e))?;
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+   |
+89 -         .map_err(|e| format!("Failed to open store: {}", e))?;
+89 +         .map_err(|e| format!("Failed to open store: {e}"))?;
+   |
+
+warning: variables can be used directly in the `format!` string
+   --> src/lib.rs:100:22
+    |
+100 |         .map_err(|e| format!("Failed to open store: {}", e))?;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+100 -         .map_err(|e| format!("Failed to open store: {}", e))?;
+100 +         .map_err(|e| format!("Failed to open store: {e}"))?;
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> src/lib.rs:112:60
+    |
+112 |     let entries = fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {}", e))?;
+    |                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+112 -     let entries = fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {}", e))?;
+112 +     let entries = fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {e}"))?;
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> src/lib.rs:132:20
+    |
+132 |         return Err(format!("Path is not a directory: {}", project_path));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+132 -         return Err(format!("Path is not a directory: {}", project_path));
+132 +         return Err(format!("Path is not a directory: {project_path}"));
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> src/lib.rs:155:22
+    |
+155 |         .map_err(|e| format!("Failed to execute gh: {}", e))?;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+155 -         .map_err(|e| format!("Failed to execute gh: {}", e))?;
+155 +         .map_err(|e| format!("Failed to execute gh: {e}"))?;
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> src/lib.rs:164:22
+    |
+164 |         .map_err(|e| format!("Failed to parse gh output: {}. Output: {}", e, stdout))?;
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+164 -         .map_err(|e| format!("Failed to parse gh output: {}. Output: {}", e, stdout))?;
+164 +         .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))?;
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> src/lib.rs:179:20
+    |
+179 |         return Err(format!("Path is not a directory: {}", project_path));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+179 -         return Err(format!("Path is not a directory: {}", project_path));
+179 +         return Err(format!("Path is not a directory: {project_path}"));
+    |
+
+    Checking desktop_app v0.1.0 (/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri)
+warning: `desktop_app` (lib) generated 8 warnings (run `cargo clippy --fix --lib -p desktop_app` to apply 8 suggestions)
+warning: `desktop_app` (lib test) generated 8 warnings (8 duplicates)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.29s
+
+codex
+`cargo test` 能跑通，但结果是 0 个测试；这对“错误路径”和“解析逻辑”验收基本没有证明力。`cargo clippy` 也已经暴露出 warning，意味着“通过 clippy 检查”这一条不能算完全满足。
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '170,235p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   170	        processed_numbers,
+   171	    })
+   172	}
+   173	
+   174	/// Returns a list of Issue numbers that have already been processed by autoresearch.
+   175	#[tauri::command]
+   176	fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
+   177	    let base = Path::new(&project_path);
+   178	    if !base.is_dir() {
+   179	        return Err(format!("Path is not a directory: {}", project_path));
+   180	    }
+   181	    get_processed_issue_numbers(base)
+   182	}
+   183	
+   184	/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+   185	#[tauri::command]
+   186	fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+   187	    let base = Path::new(&project_path);
+   188	    if !base.is_dir() {
+   189	        return Err(format!("Path is not a directory: {project_path}"));
+   190	    }
+   191	
+   192	    // Check that gh is available
+   193	    let gh_check = Command::new("gh")
+   194	        .args(["--version"])
+   195	        .current_dir(base)
+   196	        .output()
+   197	        .map_err(|_| "gh CLI is not installed or not found in PATH".to_string())?;
+   198	
+   199	    if !gh_check.status.success() {
+   200	        return Err("gh CLI check failed — please ensure gh is installed and accessible".to_string());
+   201	    }
+   202	
+   203	    // Execute gh issue view
+   204	    let output = Command::new("gh")
+   205	        .args([
+   206	            "issue", "view",
+   207	            &issue_number.to_string(),
+   208	            "--json", "body,comments",
+   209	        ])
+   210	        .current_dir(base)
+   211	        .output()
+   212	        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+   213	
+   214	    if !output.status.success() {
+   215	        let stderr = String::from_utf8_lossy(&output.stderr);
+   216	        // Check for common error patterns
+   217	        if stderr.contains("not found") || stderr.contains("Could not resolve") {
+   218	            return Err(format!("Issue #{issue_number} not found"));
+   219	        }
+   220	        return Err(format!("gh issue view failed: {}", stderr.trim()));
+   221	    }
+   222	
+   223	    let stdout = String::from_utf8_lossy(&output.stdout);
+   224	    let detail: IssueDetail = serde_json::from_str(&stdout)
+   225	        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))?;
+   226	
+   227	    Ok(detail)
+   228	}
+   229	
+   230	#[cfg_attr(mobile, tauri::mobile_entry_point)]
+   231	pub fn run() {
+   232	    tauri::Builder::default()
+   233	        .plugin(tauri_plugin_opener::init())
+   234	        .plugin(tauri_plugin_dialog::init())
+   235	        .plugin(tauri_plugin_store::Builder::default().build())
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '235,255p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '1,70p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   235	        .plugin(tauri_plugin_store::Builder::default().build())
+   236	        .invoke_handler(tauri::generate_handler![
+   237	            select_project_dir,
+   238	            detect_project_config,
+   239	            get_recent_project,
+   240	            save_recent_project,
+   241	            list_issues,
+   242	            check_processed_issues,
+   243	            get_issue_detail,
+   244	        ])
+   245	        .run(tauri::generate_context!())
+   246	        .expect("error while running tauri application");
+   247	}
+
+ succeeded in 0ms:
+     1	use std::fs;
+     2	use std::path::Path;
+     3	use std::process::Command;
+     4	
+     5	/// Configuration detection result for a project directory.
+     6	#[derive(serde::Serialize)]
+     7	struct ProjectConfig {
+     8	    has_autoresearch_dir: bool,
+     9	    has_program_md: bool,
+    10	    has_agents_dir: bool,
+    11	}
+    12	
+    13	/// A label attached to a GitHub Issue.
+    14	#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    15	struct GhLabel {
+    16	    name: String,
+    17	    color: String,
+    18	}
+    19	
+    20	/// A GitHub Issue returned by `gh issue list`.
+    21	#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    22	struct GhIssue {
+    23	    number: i64,
+    24	    title: String,
+    25	    labels: Vec<GhLabel>,
+    26	    #[serde(rename = "createdAt")]
+    27	    created_at: String,
+    28	    state: String,
+    29	}
+    30	
+    31	/// Author information for a GitHub comment.
+    32	#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    33	struct GhCommentAuthor {
+    34	    login: String,
+    35	}
+    36	
+    37	/// A comment on a GitHub Issue.
+    38	#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    39	struct GhComment {
+    40	    id: String,
+    41	    author: GhCommentAuthor,
+    42	    body: String,
+    43	    #[serde(rename = "createdAt")]
+    44	    created_at: String,
+    45	}
+    46	
+    47	/// Detailed information about a GitHub Issue.
+    48	#[derive(serde::Serialize, serde::Deserialize, Debug)]
+    49	struct IssueDetail {
+    50	    body: String,
+    51	    comments: Vec<GhComment>,
+    52	}
+    53	
+    54	/// Result for the list_issues command, including processed status info.
+    55	#[derive(serde::Serialize)]
+    56	struct IssuesResult {
+    57	    issues: Vec<GhIssue>,
+    58	    processed_numbers: Vec<i64>,
+    59	}
+    60	
+    61	/// Opens a native folder selection dialog and returns the selected path.
+    62	#[tauri::command]
+    63	async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    64	    let dir = tauri_plugin_dialog::DialogExt::dialog(&app)
+    65	        .file()
+    66	        .set_title("Select Project Directory")
+    67	        .blocking_pick_folder();
+    68	    Ok(dir.map(|p| p.to_string()))
+    69	}
+    70	
+
+codex
+**审核发现**
+
+1. 中等: 没有任何测试覆盖，核心验收条件缺少证明。`cargo test` 在 `desktop_app/src-tauri` 下运行结果是 `0 tests`，而这次实现至少应覆盖 JSON 解析成功、`gh` 不存在、Issue 不存在、命令输出非法 JSON 等路径。当前 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L186) 的 `get_issue_detail` 完全没有配套单元测试或集成测试，这一项不满足“测试质量”与“错误处理验收”的要求。
+
+2. 中等: `cargo clippy` 没有做到干净通过。实际运行 `cargo clippy --all-targets --all-features` 后，[`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L220) 以及同文件多处仍有 `clippy::uninlined_format_args` warning；其中新实现相关代码也在范围内，比如 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L220)。验收条件明确写了“Rust 代码通过 `cargo clippy` 检查”，按常规标准这不能算完成。
+
+**总体评价**
+
+评分: **62/100**
+
+当前实现在功能主路径上基本到位：定义了 [`IssueDetail`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L47) / [`GhComment`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L37) 结构体，使用 `gh issue view <N> --json body,comments`，并在 [`invoke_handler`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L236) 中注册了 `get_issue_detail`，因此“可被前端 invoke”在后端注册层面是满足的。但测试为空、`clippy` 仍有 warning，这两个问题直接导致该子任务目前**未达标**。
+
+**按验收条件逐项审核**
+
+- `get_issue_detail` Tauri command，接受 issue number 参数: 通过
+  见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L186)
+- 调用 `gh issue view N --json body,comments` 并解析返回: 通过
+  见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L204)
+- 定义 `IssueDetail` 和 `Comment` 结构体用于序列化响应: 基本通过
+  实际命名为 `IssueDetail` / `GhComment`，功能上满足，见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L37)
+- 包含适当错误处理: 部分通过
+  有目录校验、`gh` 存在性检查、Issue not found 识别；但没有测试证明这些分支真实可用
+- Rust 代码通过 `cargo clippy` 检查: 不通过
+- Tauri command 可通过前端 Invoke 调用: 通过
+  已注册到 handler，见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L236)
+
+**建议**
+
+先补两类工作再进入下一轮审核：
+1. 为命令执行和 JSON 解析抽出可测试逻辑，至少补 4 个测试场景。
+2. 清理 `cargo clippy --all-targets --all-features` 的 warning，确保无新增 lint 问题。
+tokens used
+20,347
+**审核发现**
+
+1. 中等: 没有任何测试覆盖，核心验收条件缺少证明。`cargo test` 在 `desktop_app/src-tauri` 下运行结果是 `0 tests`，而这次实现至少应覆盖 JSON 解析成功、`gh` 不存在、Issue 不存在、命令输出非法 JSON 等路径。当前 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L186) 的 `get_issue_detail` 完全没有配套单元测试或集成测试，这一项不满足“测试质量”与“错误处理验收”的要求。
+
+2. 中等: `cargo clippy` 没有做到干净通过。实际运行 `cargo clippy --all-targets --all-features` 后，[`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L220) 以及同文件多处仍有 `clippy::uninlined_format_args` warning；其中新实现相关代码也在范围内，比如 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L220)。验收条件明确写了“Rust 代码通过 `cargo clippy` 检查”，按常规标准这不能算完成。
+
+**总体评价**
+
+评分: **62/100**
+
+当前实现在功能主路径上基本到位：定义了 [`IssueDetail`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L47) / [`GhComment`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L37) 结构体，使用 `gh issue view <N> --json body,comments`，并在 [`invoke_handler`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L236) 中注册了 `get_issue_detail`，因此“可被前端 invoke”在后端注册层面是满足的。但测试为空、`clippy` 仍有 warning，这两个问题直接导致该子任务目前**未达标**。
+
+**按验收条件逐项审核**
+
+- `get_issue_detail` Tauri command，接受 issue number 参数: 通过
+  见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L186)
+- 调用 `gh issue view N --json body,comments` 并解析返回: 通过
+  见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L204)
+- 定义 `IssueDetail` 和 `Comment` 结构体用于序列化响应: 基本通过
+  实际命名为 `IssueDetail` / `GhComment`，功能上满足，见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L37)
+- 包含适当错误处理: 部分通过
+  有目录校验、`gh` 存在性检查、Issue not found 识别；但没有测试证明这些分支真实可用
+- Rust 代码通过 `cargo clippy` 检查: 不通过
+- Tauri command 可通过前端 Invoke 调用: 通过
+  已注册到 handler，见 [`lib.rs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L236)
+
+**建议**
+
+先补两类工作再进入下一轮审核：
+1. 为命令执行和 JSON 解析抽出可测试逻辑，至少补 4 个测试场景。
+2. 清理 `cargo clippy --all-targets --all-features` 的 warning，确保无新增 lint 问题。

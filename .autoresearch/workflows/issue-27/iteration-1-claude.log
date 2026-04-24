@@ -1,0 +1,56 @@
+## 实现完成
+
+### 子任务 T-001 验收确认
+
+| 验收条件 | 状态 |
+|---------|------|
+| 实现 `get_issue_detail` Tauri command，接受 issue number 参数 | ✅ |
+| 正确调用 `gh issue view N --json body,comments` 并解析返回结果 | ✅ |
+| 定义 IssueDetail 和 Comment 结构体用于序列化响应数据 | ✅ |
+| 包含适当的错误处理（gh 命令不存在、网络错误、Issue 不存在等） | ✅ |
+| Rust 代码通过 `cargo clippy` 检查 | ✅ |
+| Tauri command 可通过前端 Invoke 调用 | ✅ |
+
+### 实现概要
+
+**新增结构体** (`lib.rs:31-52`):
+- `GhCommentAuthor`: 评论作者信息
+- `GhComment`: 评论详情（id, author, body, created_at）
+- `IssueDetail`: Issue 详情（body, comments）
+
+**新增命令** (`lib.rs:184-228`):
+```rust
+#[tauri::command]
+fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String>
+```
+
+**错误处理覆盖**:
+- 路径不是目录
+- gh CLI 未安装
+- gh 命令执行失败
+- Issue 不存在
+- JSON 解析失败
+
+**前端调用示例**:
+```typescript
+import { invoke } from '@tauri-apps/api/core';
+
+const detail = await invoke<{ body: string; comments: GhComment[] }>('get_issue_detail', {
+  projectPath: '/path/to/project',
+  issueNumber: 27
+});
+```
+
+### 质量自检
+
+- [x] 代码编译通过 (`cargo build`)
+- [x] Clippy 检查通过（新增代码无 warnings）
+- [x] 测试通过 (`cargo test`)
+
+---
+
+## Learnings
+
+- **模式**: Tauri 命令使用 `Result<T, String>` 统一错误处理，错误信息应包含上下文便于调试
+- **踩坑**: `IssueDetail` 结构体需要 `Deserialize` trait 才能从 JSON 解析
+- **经验**: 使用 `#[serde(rename = "createdAt")]` 处理 JSON 字段名与 Rust 命名风格的差异

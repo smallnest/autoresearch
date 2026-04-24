@@ -1,0 +1,95 @@
+## 审核报告
+
+### Issue
+- 编号: #27
+- 标题: [desktop-app] Issue 详情查看
+- 迭代次数: 6
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+实现质量优秀，所有验收条件均已满足。组件结构清晰，状态处理完善，骨架屏和错误状态处理到位。TypeScript 和 ESLint 检查全部通过。存在一个未使用的 `MarkdownRenderer.tsx` 文件需要清理。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 |
+|---------|------|
+| 创建 IssueDetailPanel 组件 | ✅ 已实现 |
+| 调用 `get_issue_detail` Tauri command | ✅ 已实现 |
+| 使用 react-markdown 渲染描述 | ✅ 已实现（通过 vendor 本地实现）|
+| 展示评论列表（头像、用户名、时间、Markdown）| ✅ 已实现 |
+| 实现骨架屏加载状态 | ✅ 已实现 |
+| 处理错误状态和空数据状态 | ✅ 已实现 |
+| TypeScript 类型检查通过 | ✅ 已验证 |
+| ESLint 检查通过 | ✅ 已验证 |
+| 浏览器验证页面功能正常 | ✅ 页面正常渲染，无白屏 |
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: 未使用的 MarkdownRenderer 组件
+
+**位置**: `src/components/MarkdownRenderer.tsx`
+
+**问题描述**:
+存在一个未使用的 `MarkdownRenderer.tsx` 组件，与 `src/vendor/react-markdown.tsx` 功能重复。
+
+**建议修复**:
+删除 `src/components/MarkdownRenderer.tsx` 文件，统一使用 vite alias 指向的 vendor 实现。
+
+---
+
+### 实现亮点
+
+1. **完善的边界状态处理**：加载中、错误、空数据、未选择 Issue 等状态都有对应的 UI 展示
+2. **请求竞态保护**：使用 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+3. **骨架屏设计**：`DetailSkeleton` 组件提供了良好的加载体验
+4. **Markdown 安全性**：本地 vendor 实现了 URL 白名单过滤（仅允许 http/https/mailto）
+5. **Mock 数据支持**：浏览器模式下使用 mock 数据，便于开发调试
+6. **响应式布局**：使用 `xl:grid-cols` 实现两栏布局，小屏幕下详情面板隐藏
+
+---
+
+### 代码质量检查
+
+#### 正确性 (35/35)
+- 功能实现完整，边界情况处理得当
+- 错误处理覆盖加载失败、空数据等场景
+- 竞态条件防护到位
+
+#### 测试质量 (20/25)
+- Tauri 后端有完整的单元测试（5 个测试全部通过）
+- 前端组件缺少测试（但 UI 类型子任务可接受）
+
+#### 代码质量 (20/20)
+- 组件结构清晰，职责分明
+- 命名规范，类型定义完整
+- 遵循项目既有的代码风格
+
+#### 安全性 (10/10)
+- Markdown 渲染使用 escapeHtml 防止 XSS
+- URL 过滤仅允许安全协议
+
+#### 性能 (5/10)
+- 组件实现合理，无明显性能问题
+- 可考虑对 issue 列表做虚拟滚动优化（大量 Issue 场景）
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+---
+
+## Learnings
+
+- **模式**: 通过 Vite alias 将 `react-markdown` 指向本地 vendor 实现，既保证离线构建，又保持 import 语句简洁
+- **踩坑**: 快速切换 Issue 时需要竞态保护，使用递增的 requestKey 过滤过期的响应
+- **经验**: 骨架屏组件使用 CSS 伪元素 `::after` 实现 shimmer 动画，避免组件内重复定义 keyframes

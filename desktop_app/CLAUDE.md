@@ -35,3 +35,8 @@
 - External command JSON output uses `serde_json::from_str()` with explicit error messages
 - Include the raw output in parse error messages for easier debugging
 - Use `#[serde(rename = "camelCase")]` for fields that differ from Rust naming conventions
+
+## Testing Patterns
+- When a Tauri command shells out to `gh`, extract pure helper functions for JSON parsing and stderr-to-user-error mapping so unit tests do not depend on a live GitHub CLI session
+- For backend command tests, cover both success parsing and representative failure modes (invalid input path, malformed JSON, known `gh` stderr patterns such as missing issues)
+- Keep the `#[cfg(test)] mod tests` block at the end of `src-tauri/src/lib.rs` to satisfy clippy's `items_after_test_module` lint

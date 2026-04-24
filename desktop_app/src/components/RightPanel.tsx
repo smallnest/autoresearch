@@ -1,7 +1,13 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 
 function RightPanel() {
   const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
+
+  if (location.pathname === "/issues") {
+    return null;
+  }
 
   return (
     <aside

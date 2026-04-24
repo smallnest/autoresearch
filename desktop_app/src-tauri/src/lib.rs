@@ -28,6 +28,29 @@ struct GhIssue {
     state: String,
 }
 
+/// Author information for a GitHub comment.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct GhCommentAuthor {
+    login: String,
+}
+
+/// A comment on a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct GhComment {
+    id: String,
+    author: GhCommentAuthor,
+    body: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+}
+
+/// Detailed information about a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+struct IssueDetail {
+    body: String,
+    comments: Vec<GhComment>,
+}
+
 /// Result for the list_issues command, including processed status info.
 #[derive(serde::Serialize)]
 struct IssuesResult {
@@ -50,7 +73,7 @@ async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, Str
 fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> {
     let base = Path::new(&project_path);
     if !base.is_dir() {
-        return Err(format!("Path is not a directory: {}", project_path));
+        return Err(format!("Path is not a directory: {project_path}"));
     }
     Ok(ProjectConfig {
         has_autoresearch_dir: base.join(".autoresearch").is_dir(),
@@ -63,7 +86,7 @@ fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> 
 #[tauri::command]
 async fn get_recent_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+        .map_err(|e| format!("Failed to open store: {e}"))?;
     let value = store
         .get("recent_project")
         .and_then(|v| v.as_str().map(String::from));
@@ -74,7 +97,7 @@ async fn get_recent_project(app: tauri::AppHandle) -> Result<Option<String>, Str
 #[tauri::command]
 async fn save_recent_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+        .map_err(|e| format!("Failed to open store: {e}"))?;
     store.set("recent_project", path);
     store.save().map_err(|e| e.to_string())
 }
@@ -86,7 +109,8 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> 
         return Ok(Vec::new());
     }
     let mut numbers = Vec::new();
-    let entries = fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {}", e))?;
+    let entries = fs::read_dir(&workflows_dir)
+        .map_err(|e| format!("Failed to read workflows dir: {e}"))?;
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
@@ -106,7 +130,7 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> 
 fn list_issues(project_path: String) -> Result<IssuesResult, String> {
     let base = Path::new(&project_path);
     if !base.is_dir() {
-        return Err(format!("Path is not a directory: {}", project_path));
+        return Err(format!("Path is not a directory: {project_path}"));
     }
 
     // Check that gh is available
@@ -129,7 +153,7 @@ fn list_issues(project_path: String) -> Result<IssuesResult, String> {
         ])
         .current_dir(base)
         .output()
-        .map_err(|e| format!("Failed to execute gh: {}", e))?;
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -138,7 +162,7 @@ fn list_issues(project_path: String) -> Result<IssuesResult, String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let issues: Vec<GhIssue> = serde_json::from_str(&stdout)
-        .map_err(|e| format!("Failed to parse gh output: {}. Output: {}", e, stdout))?;
+        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))?;
 
     let processed_numbers = get_processed_issue_numbers(base)?;
 
@@ -153,9 +177,60 @@ fn list_issues(project_path: String) -> Result<IssuesResult, String> {
 fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
     let base = Path::new(&project_path);
     if !base.is_dir() {
-        return Err(format!("Path is not a directory: {}", project_path));
+        return Err(format!("Path is not a directory: {project_path}"));
     }
     get_processed_issue_numbers(base)
+}
+
+fn parse_issue_detail(stdout: &str) -> Result<IssueDetail, String> {
+    serde_json::from_str(stdout).map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+}
+
+fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Issue #{issue_number} not found");
+    }
+
+    format!("gh issue view failed: {}", stderr.trim())
+}
+
+/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+#[tauri::command]
+fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+    let base = Path::new(&project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    // Check that gh is available
+    let gh_check = Command::new("gh")
+        .args(["--version"])
+        .current_dir(base)
+        .output()
+        .map_err(|_| "gh CLI is not installed or not found in PATH".to_string())?;
+
+    if !gh_check.status.success() {
+        return Err("gh CLI check failed — please ensure gh is installed and accessible".to_string());
+    }
+
+    // Execute gh issue view
+    let output = Command::new("gh")
+        .args([
+            "issue", "view",
+            &issue_number.to_string(),
+            "--json", "body,comments",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(map_issue_detail_command_error(issue_number, &stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_issue_detail(&stdout)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -165,13 +240,83 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
-        select_project_dir,
-        detect_project_config,
-        get_recent_project,
-        save_recent_project,
-        list_issues,
-        check_processed_issues,
-    ])
+            select_project_dir,
+            detect_project_config,
+            get_recent_project,
+            save_recent_project,
+            list_issues,
+            check_processed_issues,
+            get_issue_detail,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_issue_detail, map_issue_detail_command_error, parse_issue_detail, IssueDetail};
+
+    #[test]
+    fn parse_issue_detail_returns_structured_data() {
+        let detail = parse_issue_detail(
+            r#"{
+                "body": "Issue description",
+                "comments": [
+                    {
+                        "id": "IC_kwDOA",
+                        "author": { "login": "alice" },
+                        "body": "first comment",
+                        "createdAt": "2026-04-24T10:00:00Z"
+                    }
+                ]
+            }"#,
+        )
+        .expect("issue detail should parse");
+
+        assert_eq!(
+            detail,
+            IssueDetail {
+                body: "Issue description".to_string(),
+                comments: vec![super::GhComment {
+                    id: "IC_kwDOA".to_string(),
+                    author: super::GhCommentAuthor {
+                        login: "alice".to_string(),
+                    },
+                    body: "first comment".to_string(),
+                    created_at: "2026-04-24T10:00:00Z".to_string(),
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn parse_issue_detail_reports_invalid_json() {
+        let error = parse_issue_detail("{invalid json").expect_err("invalid json should fail");
+
+        assert!(error.contains("Failed to parse gh output"));
+        assert!(error.contains("{invalid json"));
+    }
+
+    #[test]
+    fn issue_detail_error_maps_missing_issue() {
+        let error =
+            map_issue_detail_command_error(27, "GraphQL: Could not resolve to an issue with the number of 27.");
+
+        assert_eq!(error, "Issue #27 not found");
+    }
+
+    #[test]
+    fn issue_detail_error_preserves_other_gh_failures() {
+        let error = map_issue_detail_command_error(27, "network timeout");
+
+        assert_eq!(error, "gh issue view failed: network timeout");
+    }
+
+    #[test]
+    fn get_issue_detail_rejects_non_directory_path() {
+        let error = get_issue_detail("/path/that/does/not/exist".to_string(), 27)
+            .expect_err("invalid path should fail");
+
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
 }

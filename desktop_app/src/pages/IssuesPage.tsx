@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useProjectStore } from '../stores/projectStore';
+import IssueDetailPanel from '../components/IssueDetailPanel';
 import {
   useIssueStore,
   GhIssue,
@@ -250,12 +251,18 @@ function IssuesPage(): JSX.Element {
     selectedLabel,
     selectedIssueNumber,
     isLoading,
+    detailLoading,
     error,
+    detailError,
+    issueDetail,
     loadIssues,
+    loadIssueDetail,
     setSearchQuery,
     toggleLabelFilter,
     selectIssue,
+    clearIssueDetail,
     clearError,
+    clearDetailError,
   } = useIssueStore();
 
   // Load issues on mount and when project changes
@@ -264,6 +271,12 @@ function IssuesPage(): JSX.Element {
       loadIssues(projectPath);
     }
   }, [projectPath, loadIssues]);
+
+  useEffect(() => {
+    if (projectPath && selectedIssueNumber !== null) {
+      loadIssueDetail(projectPath, selectedIssueNumber);
+    }
+  }, [projectPath, selectedIssueNumber, loadIssueDetail]);
 
   // Get all unique labels from issues
   const allLabels = useMemo(() => {
@@ -303,6 +316,11 @@ function IssuesPage(): JSX.Element {
     return processedNumbers.includes(issueNumber);
   };
 
+  const selectedIssue = useMemo(
+    () => issues.find((issue) => issue.number === selectedIssueNumber) ?? null,
+    [issues, selectedIssueNumber]
+  );
+
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -315,7 +333,12 @@ function IssuesPage(): JSX.Element {
 
   // Handle issue click
   const handleIssueClick = (issueNumber: number) => {
-    selectIssue(selectedIssueNumber === issueNumber ? null : issueNumber);
+    if (selectedIssueNumber === issueNumber) {
+      clearIssueDetail();
+      return;
+    }
+
+    selectIssue(issueNumber);
   };
 
   if (!projectPath) {
@@ -410,89 +433,111 @@ function IssuesPage(): JSX.Element {
         </div>
       )}
 
-      {/* Search bar */}
-      <div className="mb-4">
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="搜索 Issue 标题或编号..."
-            value={searchQuery}
-            onChange={handleSearchChange}
-            className="w-full pl-10 pr-10 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={handleClearSearch}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-            >
-              <ClearIcon className="w-4 h-4" />
-            </button>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <section className="min-w-0">
+          {/* Search bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="搜索 Issue 标题或编号..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                >
+                  <ClearIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Label filters */}
+          {allLabels.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-2">标签过滤:</p>
+              <div className="flex flex-wrap gap-2">
+                {allLabels.map((label) => (
+                  <LabelBadge
+                    key={label.name}
+                    label={label}
+                    isSelected={selectedLabel === label.name}
+                    onClick={() => toggleLabelFilter(label.name)}
+                  />
+                ))}
+              </div>
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* Label filters */}
-      {allLabels.length > 0 && (
-        <div className="mb-4">
-          <p className="text-xs text-gray-500 mb-2">标签过滤:</p>
-          <div className="flex flex-wrap gap-2">
-            {allLabels.map((label) => (
-              <LabelBadge
-                key={label.name}
-                label={label}
-                isSelected={selectedLabel === label.name}
-                onClick={() => toggleLabelFilter(label.name)}
+          {/* Issues list */}
+          <div className="space-y-3">
+            {isLoading && issues.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <svg
+                  className="animate-spin w-8 h-8 text-gray-500 mb-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth={4}
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                <p className="text-sm text-gray-500">加载 Issues 中...</p>
+              </div>
+            ) : filteredIssues.length > 0 ? (
+              filteredIssues.map((issue) => (
+                <IssueListItem
+                  key={issue.number}
+                  issue={issue}
+                  isProcessed={isProcessed(issue.number)}
+                  isSelected={selectedIssueNumber === issue.number}
+                  onClick={() => handleIssueClick(issue.number)}
+                />
+              ))
+            ) : (
+              <EmptyState
+                message={
+                  searchQuery || selectedLabel
+                    ? '没有匹配的 Issues'
+                    : '暂无 Issues'
+                }
               />
-            ))}
+            )}
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* Issues list */}
-      <div className="space-y-3">
-        {isLoading && issues.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <svg
-              className="animate-spin w-8 h-8 text-gray-500 mb-3"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth={4}
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <p className="text-sm text-gray-500">加载 Issues 中...</p>
-          </div>
-        ) : filteredIssues.length > 0 ? (
-          filteredIssues.map((issue) => (
-            <IssueListItem
-              key={issue.number}
-              issue={issue}
-              isProcessed={isProcessed(issue.number)}
-              isSelected={selectedIssueNumber === issue.number}
-              onClick={() => handleIssueClick(issue.number)}
-            />
-          ))
-        ) : (
-          <EmptyState
-            message={
-              searchQuery || selectedLabel
-                ? '没有匹配的 Issues'
-                : '暂无 Issues'
-            }
+        <section
+          className={`min-w-0 ${selectedIssue ? 'block' : 'hidden xl:block'}`}
+        >
+          <IssueDetailPanel
+            issue={selectedIssue}
+            detail={issueDetail}
+            isLoading={detailLoading}
+            error={detailError}
+            onClose={clearIssueDetail}
+            onRetry={() => {
+              clearDetailError();
+              if (projectPath && selectedIssueNumber !== null) {
+                loadIssueDetail(projectPath, selectedIssueNumber);
+              }
+            }}
           />
-        )}
+        </section>
       </div>
     </div>
   );
