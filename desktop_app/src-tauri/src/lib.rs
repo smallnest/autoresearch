@@ -70,17 +70,21 @@ async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, Str
 
 /// Detects whether the given project directory contains autoresearch configuration files.
 #[tauri::command]
-fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> {
-    let base = Path::new(&project_path);
-    if !base.is_dir() {
-        return Err(format!("Path is not a directory: {project_path}"));
-    }
-    let ar = base.join(".autoresearch");
-    Ok(ProjectConfig {
-        has_autoresearch_dir: ar.is_dir(),
-        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
-        has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
+async fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        if !base.is_dir() {
+            return Err(format!("Path is not a directory: {project_path}"));
+        }
+        let ar = base.join(".autoresearch");
+        Ok(ProjectConfig {
+            has_autoresearch_dir: ar.is_dir(),
+            has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+            has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
+        })
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 /// Retrieves the most recently opened project path from the Tauri store.
@@ -128,21 +132,18 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> 
 /// Lists GitHub Issues for the repository at `project_path` using `gh issue list`.
 /// Also returns which Issue numbers have already been processed (have workflow directories).
 #[tauri::command]
-fn list_issues(project_path: String) -> Result<IssuesResult, String> {
-    let base = Path::new(&project_path);
+async fn list_issues(project_path: String) -> Result<IssuesResult, String> {
+    tokio::task::spawn_blocking(move || {
+        list_issues_sync(&project_path)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
+    let base = Path::new(project_path);
     if !base.is_dir() {
         return Err(format!("Path is not a directory: {project_path}"));
-    }
-
-    // Check that gh is available
-    let gh_check = Command::new("gh")
-        .args(["--version"])
-        .current_dir(base)
-        .output()
-        .map_err(|_| "gh CLI is not installed or not found in PATH".to_string())?;
-
-    if !gh_check.status.success() {
-        return Err("gh CLI check failed — please ensure gh is installed and accessible".to_string());
     }
 
     // Execute gh issue list
@@ -175,12 +176,16 @@ fn list_issues(project_path: String) -> Result<IssuesResult, String> {
 
 /// Returns a list of Issue numbers that have already been processed by autoresearch.
 #[tauri::command]
-fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
-    let base = Path::new(&project_path);
-    if !base.is_dir() {
-        return Err(format!("Path is not a directory: {project_path}"));
-    }
-    get_processed_issue_numbers(base)
+async fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        if !base.is_dir() {
+            return Err(format!("Path is not a directory: {project_path}"));
+        }
+        get_processed_issue_numbers(base)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 fn parse_issue_detail(stdout: &str) -> Result<IssueDetail, String> {
@@ -197,21 +202,18 @@ fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
 
 /// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
 #[tauri::command]
-fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
-    let base = Path::new(&project_path);
+async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+    tokio::task::spawn_blocking(move || {
+        get_issue_detail_sync(&project_path, issue_number)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
+    let base = Path::new(project_path);
     if !base.is_dir() {
         return Err(format!("Path is not a directory: {project_path}"));
-    }
-
-    // Check that gh is available
-    let gh_check = Command::new("gh")
-        .args(["--version"])
-        .current_dir(base)
-        .output()
-        .map_err(|_| "gh CLI is not installed or not found in PATH".to_string())?;
-
-    if !gh_check.status.success() {
-        return Err("gh CLI check failed — please ensure gh is installed and accessible".to_string());
     }
 
     // Execute gh issue view
@@ -255,7 +257,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_issue_detail, map_issue_detail_command_error, parse_issue_detail, IssueDetail};
+    use super::{get_issue_detail_sync, map_issue_detail_command_error, parse_issue_detail, IssueDetail};
 
     #[test]
     fn parse_issue_detail_returns_structured_data() {
@@ -315,7 +317,7 @@ mod tests {
 
     #[test]
     fn get_issue_detail_rejects_non_directory_path() {
-        let error = get_issue_detail("/path/that/does/not/exist".to_string(), 27)
+        let error = get_issue_detail_sync("/path/that/does/not/exist", 27)
             .expect_err("invalid path should fail");
 
         assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
