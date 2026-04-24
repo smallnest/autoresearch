@@ -75,10 +75,11 @@ fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> 
     if !base.is_dir() {
         return Err(format!("Path is not a directory: {project_path}"));
     }
+    let ar = base.join(".autoresearch");
     Ok(ProjectConfig {
-        has_autoresearch_dir: base.join(".autoresearch").is_dir(),
-        has_program_md: base.join(".autoresearch").join("program.md").is_file(),
-        has_agents_dir: base.join(".autoresearch").join("agents").is_dir(),
+        has_autoresearch_dir: ar.is_dir(),
+        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+        has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
     })
 }
 

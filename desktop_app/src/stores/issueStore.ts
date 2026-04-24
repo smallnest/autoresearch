@@ -67,127 +67,11 @@ interface IssueState {
   clearDetailError: () => void;
 }
 
-const mockIssues: GhIssue[] = [
-  {
-    number: 1,
-    title: 'Fix login authentication bug',
-    labels: [
-      { name: 'bug', color: 'd73a4a' },
-      { name: 'high-priority', color: 'b60205' },
-    ],
-    createdAt: '2024-01-15T10:30:00Z',
-    state: 'open',
-  },
-  {
-    number: 2,
-    title: 'Add user profile page',
-    labels: [
-      { name: 'feature', color: 'a2eeef' },
-      { name: 'frontend', color: '7057ff' },
-    ],
-    createdAt: '2024-01-16T14:20:00Z',
-    state: 'open',
-  },
-  {
-    number: 3,
-    title: 'Update API documentation',
-    labels: [{ name: 'documentation', color: '0075ca' }],
-    createdAt: '2024-01-17T09:00:00Z',
-    state: 'closed',
-  },
-  {
-    number: 4,
-    title: 'Optimize database queries',
-    labels: [
-      { name: 'performance', color: 'ff7619' },
-      { name: 'backend', color: '0366d6' },
-    ],
-    createdAt: '2024-01-18T16:45:00Z',
-    state: 'open',
-  },
-  {
-    number: 5,
-    title: 'Implement dark mode toggle',
-    labels: [
-      { name: 'feature', color: 'a2eeef' },
-      { name: 'ui', color: '6f42c1' },
-    ],
-    createdAt: '2024-01-19T11:10:00Z',
-    state: 'open',
-  },
-];
+const mockIssues: GhIssue[] = [];
 
-const mockProcessedNumbers: number[] = [1, 3];
+const mockProcessedNumbers: number[] = [];
 
-const mockIssueDetails: Record<number, IssueDetail> = {
-  1: {
-    body: [
-      '# Login flow regression',
-      '',
-      'Users cannot sign in after the last auth refactor.',
-      '',
-      '## Steps',
-      '',
-      '1. Open `/login`',
-      '2. Submit valid credentials',
-      '3. Observe `401` response',
-      '',
-      '```ts',
-      "await api.post('/login', credentials);",
-      '```',
-    ].join('\n'),
-    comments: [
-      {
-        id: 'mock-comment-1',
-        author: { login: 'alice' },
-        body: 'I can reproduce this on the latest main branch.',
-        createdAt: '2024-01-15T12:30:00Z',
-      },
-      {
-        id: 'mock-comment-2',
-        author: { login: 'bob' },
-        body: 'Looks related to [the session middleware](https://example.com).',
-        createdAt: '2024-01-15T13:45:00Z',
-      },
-    ],
-  },
-  2: {
-    body: [
-      'Build the new profile page with:',
-      '',
-      '- avatar',
-      '- activity summary',
-      '- editable bio',
-    ].join('\n'),
-    comments: [],
-  },
-  3: {
-    body: '',
-    comments: [
-      {
-        id: 'mock-comment-3',
-        author: { login: 'docs-bot' },
-        body: 'Documentation has been updated in a follow-up PR.',
-        createdAt: '2024-01-17T10:00:00Z',
-      },
-    ],
-  },
-  4: {
-    body: 'Investigate slow queries in the reporting pipeline.',
-    comments: [],
-  },
-  5: {
-    body: 'Add a theme switch in settings and persist the preference.',
-    comments: [
-      {
-        id: 'mock-comment-4',
-        author: { login: 'designer' },
-        body: '> Keep the toggle visible in both desktop and mobile layouts.',
-        createdAt: '2024-01-19T15:00:00Z',
-      },
-    ],
-  },
-};
+const mockIssueDetails: Record<number, IssueDetail> = {};
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -227,7 +111,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
     try {
       if (isTauri) {
         const result = await tauriInvoke<IssuesResult>('list_issues', {
-          project_path: _projectPath,
+          projectPath: _projectPath,
         });
         set({
           issues: result.issues,
@@ -237,6 +121,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
         set({
           issues: mockIssues,
           processedNumbers: mockProcessedNumbers,
+          error: '浏览器模式不支持获取 GitHub Issues，请通过 tauri dev 运行',
         });
       }
 
@@ -270,8 +155,8 @@ export const useIssueStore = create<IssueState>((set, get) => ({
     try {
       const detail = isTauri
         ? await tauriInvoke<IssueDetail>('get_issue_detail', {
-            project_path: _projectPath,
-            issue_number: _issueNumber,
+            projectPath: _projectPath,
+            issueNumber: _issueNumber,
           })
         : await new Promise<IssueDetail>((resolve, reject) => {
             window.setTimeout(() => {
