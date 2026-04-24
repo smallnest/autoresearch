@@ -321,7 +321,7 @@ function IssuesPage(): JSX.Element {
   }, [issues, searchQuery, selectedLabel]);
 
   // Pagination
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 10;
   const [currentPage, setCurrentPage] = useState(1);
 
   // Reset to page 1 when filters change
