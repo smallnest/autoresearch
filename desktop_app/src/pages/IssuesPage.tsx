@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import IssueDetailPanel from '../components/IssueDetailPanel';
 import {
@@ -320,6 +320,21 @@ function IssuesPage(): JSX.Element {
     });
   }, [issues, searchQuery, selectedLabel]);
 
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedLabel]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredIssues.length / PAGE_SIZE));
+  const pagedIssues = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredIssues.slice(start, start + PAGE_SIZE);
+  }, [filteredIssues, currentPage]);
+
   // Check if an issue is processed
   const isProcessed = (issueNumber: number): boolean => {
     return processedNumbers.includes(issueNumber);
@@ -373,7 +388,7 @@ function IssuesPage(): JSX.Element {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Issues</h1>
           <p className="text-sm text-gray-500">
-            管理和追踪 GitHub Issues ({filteredIssues.length} / {issues.length})
+            管理和追踪 GitHub OPEN Issues ({filteredIssues.length} / {issues.length})
           </p>
         </div>
 
@@ -508,8 +523,8 @@ function IssuesPage(): JSX.Element {
                 </svg>
                 <p className="text-sm text-gray-500">加载 Issues 中...</p>
               </div>
-            ) : filteredIssues.length > 0 ? (
-              filteredIssues.map((issue) => (
+            ) : pagedIssues.length > 0 ? (
+              pagedIssues.map((issue) => (
                 <IssueListItem
                   key={issue.number}
                   issue={issue}
@@ -528,6 +543,48 @@ function IssuesPage(): JSX.Element {
               />
             )}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-xs text-gray-500">
+                第 {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filteredIssues.length)} 条，共 {filteredIssues.length} 条
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  首页
+                </button>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  上一页
+                </button>
+                <span className="px-3 py-1 text-xs text-gray-700 font-medium">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  下一页
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  末页
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section
