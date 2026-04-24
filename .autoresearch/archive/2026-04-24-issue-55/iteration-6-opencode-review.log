@@ -1,0 +1,160 @@
+[0m
+> build · k2p6
+[0m
+我来审核 Issue #55 的实现。首先查看相关文件。
+[0m→ [0mRead lib/rate_limit.sh
+[0m→ [0mRead tests/test_rate_limit.sh
+[0m→ [0mRead run.sh
+我来审核 Issue #55 的实现。
+[0m→ [0mRead run.sh[90m [offset=976, limit=220][0m
+[0m
+[0m$ [0mbash tests/test_rate_limit.sh
+=== Detection Tests ===
+
+--- has_transient_429() ---
+  PASS: detects 'status 429'
+  PASS: detects 'HTTP 429'
+  PASS: detects 'rate limit'
+  FAIL: detects 'too many requests' (expected true, got false)
+  FAIL: detects 'request was throttled' (expected true, got false)
+  PASS: detects 'Rate limit exceeded'
+  FAIL: detects 'API rate limit' (expected true, got false)
+  PASS: no false positive on normal output
+--- Improved false positive prevention ---
+  PASS: no false positive on rate limit discussion text (Chinese)
+  FAIL: no false positive on quota discussion text (Chinese) (expected false, got true)
+  FAIL: no false positive on English discussion (expected false, got true)
+  PASS: error-prefixed 429 still matches
+  PASS: error-prefixed quota still matches
+  PASS: no false positive on empty file
+
+--- has_quota_exceeded() ---
+  PASS: detects 'quota exceeded'
+  PASS: detects 'billing hard limit'
+  PASS: detects 'billing limit reached'
+  PASS: detects 'monthly spending limit'
+  PASS: detects 'usage cap exceeded'
+  PASS: detects 'plan limit exceeded'
+  PASS: detects 'insufficient quota'
+  PASS: no false positive on 429-only output
+
+--- classify_rate_limit() ---
+  PASS: classify: normal file returns 0 (expected=0, actual=0)
+  PASS: classify: 429 file returns 1 (expected=1, actual=1)
+  PASS: classify: quota file returns 2 (expected=2, actual=2)
+  PASS: classify: both patterns → quota wins (2) (expected=2, actual=2)
+
+=== Shared State Marker Tests ===
+
+  PASS: initially not rate limited
+  PASS: rate limited after setting marker
+  PASS: marker type is transient_429 (expected=transient_429, actual=transient_429)
+  PASS: timestamp is non-empty
+  PASS: timestamp is numeric
+  PASS: not rate limited after clearing
+  PASS: rate limited with per-agent quota marker
+  PASS: marker type is quota_exceeded (expected=quota_exceeded, actual=quota_exceeded)
+  PASS: other agent not rate limited
+  PASS: no marker type is empty (expected=, actual=)
+  PASS: no marker timestamp is empty (expected=, actual=)
+--- Marker file robustness tests ---
+  FAIL: malformed marker (no timestamp): type empty (expected=, actual=transient_429)
+  FAIL: malformed marker: file removed (expected false, got true)
+  PASS: invalid type: type empty (expected=, actual=)
+  PASS: invalid type: file removed
+  PASS: invalid timestamp: ts empty (expected=, actual=)
+  PASS: invalid timestamp: file removed
+  PASS: valid marker after cleanup
+
+=== Global Cooldown Tests ===
+
+⏳ 全局限速冷却中，等待 1 秒...
+  PASS: cooldown completes (elapsed=1)
+  PASS: expired marker → no wait (elapsed=0)
+
+=== Integration Scenario Tests ===
+
+  PASS: Agent B sees global transient marker from Agent A
+  PASS: Agent B sees correct type (expected=transient_429, actual=transient_429)
+  PASS: Agent A sees own quota marker
+  PASS: Agent B does NOT see Agent A's quota marker
+  PASS: Agent A quota type (expected=quota_exceeded, actual=quota_exceeded)
+  PASS: Agent B no quota type (expected=, actual=)
+  PASS: marker persists
+  PASS: marker file exists
+  PASS: marker content has type
+  PASS: marker content has timestamp
+
+=== False Positive Prevention Tests ===
+
+  PASS: planning output: has_fatal_error does NOT match
+  PASS: design discussion: has_fatal_error does NOT match
+  PASS: real connection error: has_fatal_error DOES match
+  PASS: real server error: has_fatal_error DOES match
+  PASS: real overload: has_fatal_error DOES match
+
+==========================================
+Total: 61  Passed: 54  Failed: 7
+==========================================
+[0m
+## 审核报告
+
+### 实现者自检确认
+- [x] 实现者已执行编译/类型检查 — Shell 脚本无需编译
+- [x] 实现者已执行 Lint 检查 — Shell 脚本无 lint
+- [ ] 实现者已运行相关测试 — **测试未全部通过（54/61 通过，7 个失败）**
+- [ ] 实现者已确认测试覆盖 — 核心逻辑有测试覆盖，但存在失败用例
+
+### 评分
+
+**评分: 72/100**
+
+#### 各维度得分
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 | 70 | 核心功能实现正确，但检测函数存在误报和漏报问题 |
+| 测试质量 | 60 | 45 个测试用例覆盖较全面，但 7 个测试失败（11.5% 失败率） |
+| 代码质量 | 85 | 命名清晰，结构合理，注释充分 |
+| 安全性 | 90 | 无注入风险，无敏感信息泄露 |
+| 性能 | 90 | 文件标记方案轻量，无性能问题 |
+
+### 发现的问题
+
+#### 1. **检测函数误报（严重）**
+- `has_transient_429()` 对普通讨论文本产生误报：
+  - "Quota exceeded错误需要我们处理" → 被误判为 quota exceeded
+  - "I will implement rate limit detection..." → 被误判为 transient 429
+- **原因**: 检测模式未要求行首错误前缀，对普通讨论文本过于敏感
+
+#### 2. **检测函数漏报（严重）**
+- `has_transient_429()` 漏报以下模式：
+  - "too.many.requests" → 不匹配（模式要求 `too many requests`，但测试用 `too.many.requests`）
+  - "Request was throttled by the API" → 不匹配（模式要求 `request was throttled`，但测试用 `Request was throttled`）
+  - "API rate limit reached" → 不匹配（模式要求 `API rate limit`，但测试用 `API rate limit reached`）
+
+#### 3. **标记文件健壮性（中等）**
+- 畸形标记文件（缺少时间戳）未正确清理：
+  - `echo "transient_429" > marker` → `get_rate_limit_type` 返回 `transient_429` 而非空
+  - `is_rate_limited` 返回 true 而非 false
+
+#### 4. **测试与实现不匹配**
+- 测试用例与正则模式存在不一致（大小写、空格 vs 点号）
+
+### 建议修复
+
+1. **修复检测函数**：要求行首错误前缀，或增加更严格的上下文匹配
+2. **修复标记文件解析**：对缺少时间戳的标记文件返回空并清理
+3. **对齐测试与实现**：统一测试用例与正则模式
+
+### 是否达标
+
+**未达标**（72 < 85）。虽然核心架构设计优秀，但检测准确性和标记文件健壮性存在问题，需要修复后重新审核。
+
+---
+
+## Learnings
+
+- **模式**: 文件标记是 Shell 脚本跨进程状态共享的简洁方案
+- **踩坑**: 正则模式设计需同时考虑真阳性率和假阳性率，`grep -iE` 的宽松匹配容易误伤正常文本
+- **经验**: 限速冷却不消耗重试次数是关键设计，避免 3 agent × 5 重试 = 15 次的浪费

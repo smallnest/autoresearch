@@ -1,0 +1,146 @@
+现在我已掌握完整情况。请允许我整理我的审核意见。
+
+---
+
+## 审核报告 — Issue #55: API 限速全局感知
+
+### 测试执行结果
+
+**7/61 测试失败**，需修复后方可达标。
+
+### 问题清单
+
+#### 问题 1 (严重): `has_transient_429` 正则过度收紧，漏检真实错误
+
+**位置**: `lib/rate_limit.sh:50-56`
+
+**问题描述**: 为防止误报，将 `has_transient_429` 的正则改为要求 `Error:`/`ERROR:` 等前缀，但真实 API 错误输出不一定带这些前缀。以下 3 个测试因此失败：
+
+| 测试 | 输入内容 | 应匹配 | 实际 |
+|---|---|---|---|
+| detects 'too many requests' | `too.many.requests` | true | false |
+| detects 'request was throttled' | `Request was throttled by the API` | true | false |
+| detects 'API rate limit' | `API rate limit reached, backing off` | true | false |
+
+真实场景中，API 错误可能是裸输出如 `too many requests` 或 `request was throttled`，不带 `Error:` 前缀。
+
+**建议修复**: 增加不要求前缀但要求特定 API 错误格式的备选分支，或对 `too.many.requests` / `request.was.throttled` / `API.rate.limit` 这类几乎只出现在错误输出中的模式放宽匹配：
+
+```bash
+local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ].*(status.429|HTTP.429|rate.limit|too.many.requests|request.was.throttled|Rate.limit.exceeded|API.rate.limit)'
+pattern+='|^HTTP/[0-9.]+ 429'
+pattern+='|^status.*429'
+pattern+='|.*429.*(error|Error|ERROR)'
+pattern+='|.*rate.limit.*(error|exceeded|limited)'
+# Add: high-specificity patterns that almost never appear in discussion text
+pattern+='|too.many.requests'
+pattern+='|request.was.throttled'
+```
+
+---
+
+#### 问题 2 (严重): `has_quota_exceeded` 对讨论文本的误报导致 agent 被硬停
+
+**位置**: `lib/rate_limit.sh:60-71`, `run.sh:1059-1066`
+
+**问题描述**: 代码注释称 "false positives are acceptable (only trigger cooldown)"，但 `has_quota_exceeded` 匹配后触发的是 **硬停**（`rl_hard_stop=1`，agent 立即终止），不是冷却。讨论文本如 "Quota exceeded错误需要我们处理" 会误触硬停，这比冷却严重得多。
+
+2 个测试因此失败：
+- `no false positive on quota discussion text (Chinese)` — 期望 false，实际 true
+- `no false positive on English discussion` — 期望 false，实际 true
+
+**建议修复**: 对 `has_quota_exceeded` 也增加 error-context 前缀要求，与 `has_transient_429` 保持一致的防误报策略：
+
+```bash
+has_quota_exceeded() {
+    local log_file="$1"
+    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ].*(quota.exceeded|billing.hard.limit|billing.limit.reached|monthly.spending.limit|usage.cap.exceeded|plan.limit.exceeded|insufficient.quota)'
+    pattern+='|.*quota.exceeded.*(error|limit|reached|this|your)'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+```
+
+---
+
+#### 问题 3 (一般): `get_rate_limit_type()` 未校验/清理畸形标记文件
+
+**位置**: `lib/rate_limit.sh:165-185`
+
+**问题描述**: `get_rate_limit_timestamp()` 会在发现畸形标记时调用 `clear_rate_limit_marker()` 清理，但 `get_rate_limit_type()` 直接 `cut -d' ' -f1` 返回，不校验也不清理。导致 2 个测试失败：
+
+- `malformed marker (no timestamp): type empty` — 期望空，返回 `transient_429`
+- `malformed marker: file removed` — 期望 false，实际 true（因为文件未被清理）
+
+**建议修复**: 在 `get_rate_limit_type()` 中增加与 `get_rate_limit_timestamp()` 一致的校验逻辑：
+
+```bash
+get_rate_limit_type() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+    # ... per-agent check unchanged ...
+    local marker_file="$marker_dir/$RATE_LIMIT_MARKER"
+    if [ -f "$marker_file" ]; then
+        local global_type
+        global_type=$(cut -d' ' -f1 "$marker_file" 2>/dev/null)
+        # Validate type is one of the known values
+        if [ "$global_type" = "transient_429" ] || [ "$global_type" = "quota_exceeded" ]; then
+            echo "$global_type"
+            return
+        fi
+        # Invalid type — clean up
+        clear_rate_limit_marker "$marker_dir"
+    fi
+}
+```
+
+---
+
+#### 问题 4 (一般): 未合并的 git 状态
+
+**位置**: `lib/rate_limit.sh`, `run.sh`
+
+**问题描述**: 两个文件仍处于 `UU`（unmerged）状态，虽然冲突标记已被手动解决，但未执行 `git add` 标记为已解决。这会阻塞后续操作。
+
+**建议修复**: `git add lib/rate_limit.sh run.sh`
+
+---
+
+#### 问题 5 (建议): 混入了不相关变更
+
+**位置**: `run.sh:51` (`MAX_RETRIES` 5→3), `run.sh:4640-4647` (all-agents-skipped 行为变更)
+
+**问题描述**: 两个变更与限速功能无直接关系：
+- `MAX_RETRIES` 从 5 降到 3 — 无注释说明原因
+- 所有 agent 被跳过时从 "标记迭代失败" 改为 "exit 1 硬停" — 行为语义变了
+
+**建议**: 如非限速功能必需，建议拆分到独立 commit 或保留原行为，避免一个 commit 混合多个关注点。
+
+---
+
+### 评分
+
+| 维度 | 得分 | 说明 |
+|---|---|---|
+| 正确性 (35%) | 70 | 核心功能完整，但 has_transient_429 漏检、has_quota_exceeded 误触硬停 |
+| 测试质量 (25%) | 65 | 覆盖面广但 7 个失败，测试与实现不同步 |
+| 代码质量 (20%) | 80 | 结构清晰、注释充分，但有校验不一致和混入变更 |
+| 安全性 (10%) | 95 | 无注入风险，标记文件范围受控 |
+| 性能 (10%) | 95 | 文件标记方案合理，冷却计算高效 |
+
+**总分**: 70×0.35 + 65×0.25 + 80×0.20 + 95×0.10 + 95×0.10 = **76/100**
+
+### 结论
+
+**不达标** (< 85)。主要阻塞项：
+1. 修复 `has_transient_429` 正则，使其能检测裸错误输出
+2. 修复 `has_quota_exceeded` 防误报，或至少确认硬停路径不会误触
+3. 统一 `get_rate_limit_type()` 的标记校验逻辑
+4. 解决 git unmerged 状态
+
+---
+
+## Learnings
+
+- **踩坑**: 防误报收紧正则时，要同步检查所有依赖该检测的下游路径（quota exceeded → 硬停 ≠ 冷却），不能只看检测函数本身的注释
+- **模式**: Shell 脚本中多个相关函数（`get_type`/`get_timestamp`）对同一数据源的校验逻辑必须保持一致，否则畸形数据会在一个路径被清理但在另一个路径泄漏
+- **经验**: `has_fatal_error()` 排除限速模式是正确的设计 — 限速由 `classify_rate_limit()` 优先处理，避免双重触发。但 `classify_rate_limit()` 自身也需要防误报，因为它在 `has_fatal_error()` 之前运行

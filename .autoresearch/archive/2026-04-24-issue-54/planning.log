@@ -1,0 +1,43 @@
+现在我已对代码库有了深入的理解。让我来规划子任务。
+
+根据我的分析，Issue #54 有两个主要方面：
+1. 在 `check_dependencies` 中进行预检磁盘空间检查
+2. 为关键写入操作（tasks.json、log.md）添加错误处理
+
+这是一个健壮性增强功能，结构良好，可以分为2个集中的子任务。
+
+```json
+{
+  "issueNumber": 54,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "在 check_dependencies 中增加磁盘空间预检",
+      "description": "在 check_dependencies() 函数中增加磁盘空间检查逻辑：\n1. 使用 df 检查工作目录所在分区的可用空间\n2. 默认阈值 1GB，通过环境变量 DISK_MIN_MB 可配置\n3. 可用空间不足时输出明确错误信息并 abort（exit 1）\n4. 在 log 中记录检查结果\n5. 编写对应的 shell 测试用例",
+      "acceptanceCriteria": [
+        "check_dependencies 中新增磁盘空间检查，使用 df 命令",
+        "默认阈值 1GB，可通过 DISK_MIN_MB 环境变量配置",
+        "空间不足时输出清晰的错误信息并 exit 1",
+        "日志中记录磁盘空间检查结果（可用空间、阈值）",
+        "tests/ 下有对应的 shell 测试文件覆盖正常/不足/自定义阈值场景"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "关键写入操作增加磁盘错误检查",
+      "description": "为以下关键写入操作增加错误处理，防止磁盘满时 set -e 导致无信息中断：\n1. log.md 的所有 echo >> 写入：封装为安全函数 safe_log_append，失败时仅 stderr 警告不触发 set -e\n2. mark_subtask_passed 中的 mv 操作：增加错误处理，失败时 log 并 return 1\n3. tasks.json 初始创建（planning 阶段的 echo > 操作）：增加写入失败检测\n4. progress.md 的写入操作：封装为安全写入\n5. 编写对应的 shell 测试用例",
+      "acceptanceCriteria": [
+        "log.md 写入封装为安全函数，磁盘满时不触发 set -e 退出",
+        "mark_subtask_passed 中 mv 操作有错误处理，失败时 log 并 return 1",
+        "tasks.json 初始创建有写入失败检测",
+        "progress.md 写入操作有错误处理",
+        "tests/ 下有对应的 shell 测试验证磁盘满时的降级行为"
+      ],
+      "priority": 2,
+      "passes": false
+    }
+  ]
+}
+```

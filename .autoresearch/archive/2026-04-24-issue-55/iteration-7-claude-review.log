@@ -1,0 +1,178 @@
+好的，没有回归问题。现在我已获取足够信息，可以提交审核报告了。
+
+---
+
+## 审核报告 — Issue #55: API 限速全局感知
+
+### 总体评价
+
+**评分: 82/100**
+
+实现总体方向正确，架构设计合理（全局 transient 429 + per-agent quota exceeded），与 `run_with_retry()` 的集成逻辑清晰。但存在 **7 个测试失败**，反映出检测正则的误报/漏报问题以及标记文件的格式校验不完整，需修复后才能达标。
+
+---
+
+### 1. 正确性 (70/100)
+
+#### 问题 1: `has_transient_429()` 正则过严，导致 3 个检测场景漏报
+
+**位置**: `lib/rate_limit.sh:50-56`
+
+**问题**: 为了防误报，`has_transient_429()` 的主模式要求 `^(Error|ERROR|...)` 前缀，但 `too.many.requests`、`request.was.throttled`、`API.rate.limit` 这些子模式只出现在 error-prefixed 分支内。当 agent 输出中这些关键词没有 Error 前缀时（如 `too.many.requests` 独立一行），无法匹配。
+
+**测试失败**:
+- `detects 'too many requests'` → 失败
+- `detects 'request was throttled'` → 失败  
+- `detects 'API rate limit'` → 失败
+
+**建议修复**: 将这些常见模式也加入独立匹配分支，或使用更宽松的上下文（如匹配行首或行内含 error/status 关键词附近）：
+
+```bash
+# 示例：为没有 error 前缀但确实表示 429 的模式增加独立分支
+pattern+='|^too.many.requests'
+pattern+='|^request.was.throttled'
+```
+
+#### 问题 2: `has_quota_exceeded()` 正则过宽，讨论文本产生误报
+
+**位置**: `lib/rate_limit.sh:60-71`
+
+**问题**: `has_quota_exceeded()` 使用宽泛的 `quota.exceeded` 等模式，无上下文约束。agent 讨论/规划文本中提及 "quota exceeded" 就会触发。
+
+**测试失败**:
+- `no false positive on quota discussion text (Chinese)` → 失败
+- `no false positive on English discussion` → 失败
+
+**建议修复**: 与 `has_transient_429()` 一致，增加 error 上下文前缀要求：
+
+```bash
+local pattern='^(Error|ERROR|Fatal)[: ].*quota.exceeded'
+pattern+='|^(Error|ERROR|Fatal)[: ].*billing.hard.limit'
+# ... 或使用更窄的行首匹配
+pattern+='|^quota.exceeded'
+```
+
+#### 问题 3: `get_rate_limit_type()` 缺少格式校验，畸形标记未清理
+
+**位置**: `lib/rate_limit.sh:165-185`
+
+**问题**: `get_rate_limit_type()` 对全局标记只做 `cut -d' ' -f1`，不校验格式完整性。`get_rate_limit_timestamp()` 有格式校验+清理逻辑，但 `get_rate_limit_type()` 没有，导致两者行为不一致。
+
+**测试失败**:
+- `malformed marker (no timestamp): type empty` → 实际返回 `transient_429`
+- `malformed marker: file removed` → 畸形文件未被清理，`is_rate_limited()` 仍返回 true
+
+**建议修复**: `get_rate_limit_type()` 应校验 `type + timestamp` 完整性，与 `get_rate_limit_timestamp()` 一致：
+
+```bash
+get_rate_limit_type() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+    # per-agent quota...
+    
+    local marker_file="$marker_dir/$RATE_LIMIT_MARKER"
+    if [ -f "$marker_file" ]; then
+        local line global_type ts
+        line=$(head -1 "$marker_file" 2>/dev/null)
+        global_type=$(echo "$line" | cut -d' ' -f1 2>/dev/null)
+        ts=$(echo "$line" | cut -d' ' -f2 2>/dev/null)
+        # Validate: must have both valid type and timestamp
+        if [ "$global_type" = "transient_429" ] && [[ "$ts" =~ ^[0-9]+$ ]]; then
+            echo "transient_429"
+            return
+        fi
+        # Malformed — clean up
+        clear_rate_limit_marker "$marker_dir"
+    fi
+}
+```
+
+#### 正面评价
+
+- `classify_rate_limit()` 优先检查 quota exceeded（高优先级），逻辑正确
+- `is_rate_limited()` 正确区分全局 transient 和 per-agent quota
+- `has_fatal_error()` 已移除限速模式，避免与 `classify_rate_limit()` 双重触发
+- cleanup 中清除 stale marker，设计合理
+- `run_with_retry()` 中 transient 429 不消耗重试次数，quota exceeded 硬停，核心流程正确
+
+---
+
+### 2. 测试质量 (85/100)
+
+**测试质量维度已豁免？** 否 — 这是 Shell 脚本逻辑，有完整的测试文件。
+
+**正面**:
+- 61 个测试用例，覆盖检测、标记、冷却、集成场景、误报防护
+- 测试了畸形标记（格式校验）、per-agent 隔离、全局共享
+- `has_fatal_error` 独立验证，确保限速模式移除后仍能捕获真实错误
+
+**问题**:
+- 7 个测试失败（4 个检测问题 + 2 个误报 + 1 个格式校验）— 测试本身正确，暴露了实现 bug
+- 缺少 `set -e` 下 `classify_rate_limit` exit code 传播的测试（`|| rl_type=$?` 模式在 `set -e` 下的行为）
+- 缺少并发 marker 写入的测试（两个 agent 同时写全局标记的竞态）
+
+---
+
+### 3. 代码质量 (90/100)
+
+**正面**:
+- 文件头注释详尽，解释了问题、方案、用法
+- 函数命名清晰：`has_transient_429`、`classify_rate_limit`、`global_rate_limit_wait`
+- 与 `run.sh` 集成干净，侵入性低
+- `lib/CLAUDE.md` 和 `tests/CLAUDE.md` 已更新
+
+**问题**:
+- `get_rate_limit_type()` 和 `get_rate_limit_timestamp()` 对标记文件的校验逻辑不一致（前者无校验，后者有校验+清理）
+- `set_rate_limit_marker()` 中 global marker 写入没有做原子写入（如 `mktemp` + `mv`），极端情况下并发写入可能产生截断
+
+---
+
+### 4. 安全性 (95/100)
+
+- 无注入风险（marker 文件内容由内部函数生成，不接收外部输入）
+- 无敏感信息泄露
+- 文件名中的 agent 名称来自内部硬编码列表，不存在路径遍历风险
+
+**小问题**: `set_rate_limit_marker()` 中 `agent` 变量直接拼入文件名 `.rate_limit_quota_${agent}`，如果 agent 名含路径分隔符可能产生意外。当前 agent 名为 `claude`/`codex`/`opencode`，实际风险极低。
+
+---
+
+### 5. 性能 (95/100)
+
+- 文件标记方案开销极低（读写单行文件）
+- 冷却等待使用 `sleep`，不消耗 CPU
+- `grep -q` 匹配高效
+
+**小问题**: `has_transient_429()` 的正则分支较多，对大日志文件可能稍慢，但 agent 单次输出量有限，实际影响可忽略。
+
+---
+
+### 评分汇总
+
+| 维度 | 得分 | 权重 | 加权 |
+|------|------|------|------|
+| 正确性 | 70 | 35% | 24.5 |
+| 测试质量 | 85 | 25% | 21.25 |
+| 代码质量 | 90 | 20% | 18.0 |
+| 安全性 | 95 | 10% | 9.5 |
+| 性能 | 95 | 10% | 9.5 |
+| **总分** | | | **82.0** |
+
+### 结论: 未达标 (82 < 85)
+
+**必须修复** (阻塞达标):
+1. 修复 `has_transient_429()` 正则，使 `too.many.requests`、`request.was.throttled`、`API.rate.limit` 无 Error 前缀时也能匹配
+2. 收紧 `has_quota_exceeded()` 正则，增加 error 上下文约束，避免讨论文本误报
+3. 为 `get_rate_limit_type()` 增加格式校验（与 `get_rate_limit_timestamp()` 一致），清理畸形标记
+
+**建议改进** (非阻塞):
+4. 考虑 `set_rate_limit_marker()` 的原子写入
+5. 增加 `classify_rate_limit` 在 `set -e` 下的 exit code 传播测试
+
+---
+
+## Learnings
+
+- **模式**: Shell 脚本中检测函数（`has_transient_429`/`has_quota_exceeded`）的防误报策略应统一 — 要么都要求 error 前缀，要么都用行首锚定，不能一个严一个宽
+- **踩坑**: 对同一数据源的多个读取函数（`get_type`/`get_timestamp`）校验逻辑必须一致，否则畸形数据在一个路径被清理但在另一个路径泄漏
+- **经验**: 限速冷却不消耗重试次数是关键设计 — `retry=$((retry - 1))` 配合 `continue` 实现了优雅的"冷却后重试"语义

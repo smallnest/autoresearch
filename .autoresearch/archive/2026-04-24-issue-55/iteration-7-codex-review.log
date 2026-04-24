@@ -1,0 +1,2169 @@
+OpenAI Codex v0.120.0 (research preview)
+--------
+workdir: /Users/smallnest/ai/autoresearch
+model: tencent/hy3-preview:free
+provider: openrouter
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/smallnest/.codex/memories]
+reasoning effort: high
+reasoning summaries: none
+session id: 019dbccb-5654-77d3-962d-11f3889871f4
+--------
+user
+[08:02:13] 执行智能 prompt 裁剪: 保留关键上下文，移除冗余内容
+审核 Issue #55 的实现
+
+项目路径: /Users/smallnest/ai/autoresearch
+项目语言: unknown
+Issue 标题: [hardness engineering] API 限速全局感知
+
+
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+# Issue #55 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 1 - 2026-04-24
+
+- **Agent**: claude
+- **类型**: 初始实现
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+Issue #55 **已经完整实现**，所有 45 个测试全部通过。以下是实现总结：
+### 已实现的功能
+1. **`lib/rate_limit.sh`** — 全局限速感知库
+   - `has_transient_429()` / `has_quota_exceeded()` — 检测两种限速错误
+   - `classify_rate_limit()` — 分类返回 0/1/2 (无/transient 429/quota exceeded)
+   - `set_rate_limit_marker()` / `is_rate_limited()` — 基于 `$WORK_DIR` 文件标记的跨 agent 状态共享
+   - `global_rate_limit_wait()` — 全局冷却（支持剩余时间计算）
+2. **`run.sh` 中的集成**（`run_with_retry()` 函数内）
+   - 每次 agent 调用前检查全局限速标记 → 执行冷却等待
+   - 调用后通过 `classify_rate_limit()` 分类错误
+   - Transient 429 → 全局冷却（不消耗重试次数）
+   - Quota exceeded → 设置标记并立即停止（返回码 3）
+   - `has_fatal_error()` 已移除限速相关模式，避免误判 agent 讨论限速的规划文本
+3. **`tests/test_rate_limit.sh`** — 45 个测试覆盖检测、状态标记、冷却等待、集成场景和误报防护
+4. **配置** — `RATE_LIMIT_COOLDOWN` 环境变量（默认 60 秒）
+### Learnings
+- **模式**: Shell 脚本中跨进程状态共享用文件标记是最简洁的方案
+- **踩坑**: `has_fatal_error()` 必须排除限速相关模式，否则 agent 讨论限速设计的规划文本会触发误报
+- **经验**: 限速冷却不消耗重试次数是关键设计，避免 3 agent × 5 重试 = 15 次的浪费
+
+
+## Iteration 4 - 2026-04-24
+
+- **Agent**: codex
+- **类型**: 上下文溢出交接
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```
+# internal/auth
+
+## Learnings
+
+- **模式**: Shell 脚本中跨进程状态共享最适合用文件标记
+- **踩坑**: `classify_rate_limit` 通过 exit code 返回分类结果
+- **经验**: 限速冷却不消耗重试次数是关键设计
+DESIGNEOF
+
+assert_false "design discussion: has_fatal_error does NOT match" "has_fatal_error_test '$TEST_DIR/design_discussion.log'"
+
+# Verify has_fatal_error still catches real errors
+echo "Error: conne
+
+... (内容过长，已截断)
+
+
+## Iteration 5 - 2026-04-24
+
+- **Agent**: codex
+- **类型**: 上下文溢出交接
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: `git stash` + merge/rebase 操作后必须检查冲突标记残留。在 Shell 脚本中，冲突标记 `<<<<<<<` 会导致语法错误使整个文件不可用
+- **经验**: 合并两边代码时，不应简单选择一方，而应合并各自优点 — 如 per-agent 功能支持 + 原子写入 + 格式校验
+- **模式**: 测试框架应增加 source 失败检测（如 `source lib/xxx.sh || { echo "FATAL: source failed"; exit 1; }`），避免 source 失败后静默跳过所有测试
+
+
+## Iteration 6 - 2026-04-24
+
+- **Agent**: codex
+- **类型**: 上下文溢出交接
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: 防误报收紧正则时，要同步检查所有依赖该检测的下游路径（quota exceeded → 硬停 ≠ 冷却），不能只看检测函数本身的注释
+- **模式**: Shell 脚本中多个相关函数（`get_type`/`get_timestamp`）对同一数据源的校验逻辑必须保持一致，否则畸形数据会在一个路径被清理但在另一个路径泄漏
+- **经验**: `has_fatal_error()` 排除限速模式是正确的设计 — 限速由 `classify_rate_limit()` 优先处理，避免双重触发。但 `classify_rate_limit()` 自身也需要防误报，因为它在 `has_fatal_error()` 之前运行
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我来分析并审核 Issue #55 的实现。首先让我查看项目结构和相关代码文件。
+exec
+/bin/zsh -lc 'ls -la /Users/smallnest/ai/autoresearch/' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+total 464
+drwxr-xr-x@ 21 smallnest  staff     672 Apr 24 07:52 .
+drwxr-xr-x@ 40 smallnest  staff    1280 Apr 22 20:13 ..
+-rw-r--r--@  1 smallnest  staff    8196 Apr 20 07:33 .DS_Store
+drwxr-xr-x@  6 smallnest  staff     192 Apr 24 07:28 .autoresearch
+drwxr-xr-x@  3 smallnest  staff      96 Apr 22 21:27 .claude
+drwxr-xr-x@ 18 smallnest  staff     576 Apr 24 07:54 .git
+-rw-r--r--@  1 smallnest  staff      71 Apr 22 08:52 .gitignore
+drwxr-xr-x   9 smallnest  staff     288 Apr 23 23:55 .history
+-rw-r--r--@  1 smallnest  staff    8760 Apr 24 07:23 CLAUDE.md
+-rw-r--r--@  1 smallnest  staff    1066 Apr 19 23:19 LICENSE
+-rw-r--r--@  1 smallnest  staff    6768 Apr 20 21:09 README.md
+drwxr-xr-x@  5 smallnest  staff     160 Apr 20 07:58 agents
+drwxr-xr-x@ 20 smallnest  staff     640 Apr 22 08:46 desktop_app
+drwxr-xr-x@ 16 smallnest  staff     512 Apr 22 08:46 docs
+-rw-r--r--@  1 smallnest  staff    7256 Apr 19 23:19 issue-selector.md
+drwxr-xr-x@  7 smallnest  staff     224 Apr 24 07:31 lib
+-rw-r--r--@  1 smallnest  staff      91 Apr 22 08:46 package-lock.json
+-rw-r--r--@  1 smallnest  staff   12807 Apr 23 08:10 program.md
+-rwxr-xr-x@  1 smallnest  staff  166190 Apr 24 07:52 run.sh
+drwxr-xr-x@  3 smallnest  staff      96 Apr 20 21:09 tasks
+drwxr-xr-x@ 17 smallnest  staff     544 Apr 24 07:28 tests
+
+exec
+/bin/zsh -lc 'find /Users/smallnest/ai/autoresearch -type f -name "*.sh" | head -20' in /Users/smallnest/ai/autoresearch
+ succeeded in 631ms:
+/Users/smallnest/ai/autoresearch/tests/test_archive.sh
+/Users/smallnest/ai/autoresearch/tests/test_agent_logic.sh
+/Users/smallnest/ai/autoresearch/tests/test_output_validation.sh
+/Users/smallnest/ai/autoresearch/tests/test_git_error_handling.sh
+/Users/smallnest/ai/autoresearch/tests/test_context_overflow.sh
+/Users/smallnest/ai/autoresearch/tests/test_branch_cleanup.sh
+/Users/smallnest/ai/autoresearch/tests/test_extract_score.sh
+/Users/smallnest/ai/autoresearch/tests/test_continue_diverged.sh
+/Users/smallnest/ai/autoresearch/tests/test_cleanup.sh
+/Users/smallnest/ai/autoresearch/tests/test_continue_dirty.sh
+/Users/smallnest/ai/autoresearch/tests/test_disk_space.sh
+/Users/smallnest/ai/autoresearch/tests/test_git_push.sh
+/Users/smallnest/ai/autoresearch/tests/test_trim_prompt.sh
+/Users/smallnest/ai/autoresearch/tests/test_rate_limit.sh
+/Users/smallnest/ai/autoresearch/.history/run_20260423235503.sh
+/Users/smallnest/ai/autoresearch/.history/run_20260423235500.sh
+/Users/smallnest/ai/autoresearch/.history/run_20260423235550.sh
+/Users/smallnest/ai/autoresearch/.history/run_20260423235554.sh
+/Users/smallnest/ai/autoresearch/.history/run_20260423235201.sh
+/Users/smallnest/ai/autoresearch/run.sh
+
+codex
+让我查看相关的实现文件。
+exec
+/bin/zsh -lc 'cat /Users/smallnest/ai/autoresearch/tests/test_rate_limit.sh' in /Users/smallnest/ai/autoresearch
+exec
+/bin/zsh -lc 'cat /Users/smallnest/ai/autoresearch/lib/rate_limit.sh' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+#!/bin/bash
+# tests/test_rate_limit.sh - Unit tests for global rate limit awareness
+#
+# Usage: bash tests/test_rate_limit.sh
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# ==================== Test Framework ====================
+
+PASS=0
+FAIL=0
+TOTAL=0
+
+assert_eq() {
+    local test_name="$1"
+    local expected="$2"
+    local actual="$3"
+    TOTAL=$((TOTAL + 1))
+    if [ "$expected" = "$actual" ]; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name (expected=$expected, actual=$actual)"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name (expected=$expected, actual=$actual)"
+    fi
+}
+
+assert_true() {
+    local test_name="$1"
+    local cmd="$2"
+    TOTAL=$((TOTAL + 1))
+    if eval "$cmd"; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name (expected true, got false)"
+    fi
+}
+
+assert_false() {
+    local test_name="$1"
+    local cmd="$2"
+    TOTAL=$((TOTAL + 1))
+    if ! eval "$cmd"; then
+        PASS=$((PASS + 1))
+        echo "  PASS: $test_name"
+    else
+        FAIL=$((FAIL + 1))
+        echo "  FAIL: $test_name (expected false, got true)"
+    fi
+}
+
+# ==================== Setup ====================
+
+TEST_DIR=$(mktemp -d)
+trap 'rm -rf "$TEST_DIR"' EXIT
+
+# Source the rate limit library
+# shellcheck source=/dev/null
+source "$PROJECT_DIR/lib/rate_limit.sh"
+
+# Override cooldown to 1 second for testing
+RATE_LIMIT_COOLDOWN=1
+
+# ==================== Tests: Detection ====================
+
+echo ""
+echo "=== Detection Tests ==="
+echo ""
+
+# Test has_transient_429 with various patterns
+echo "--- has_transient_429() ---"
+
+# Create test log files with various 429 patterns
+echo "Error: status 429 Too Many Requests" > "$TEST_DIR/429_status.log"
+assert_true "detects 'status 429'" "has_transient_429 '$TEST_DIR/429_status.log'"
+
+echo "HTTP 429: rate_limit_exceeded" > "$TEST_DIR/http_429.log"
+assert_true "detects 'HTTP 429'" "has_transient_429 '$TEST_DIR/http_429.log'"
+
+echo "Error: rate limit exceeded, please retry" > "$TEST_DIR/rate_limit.log"
+assert_true "detects 'rate limit'" "has_transient_429 '$TEST_DIR/rate_limit.log'"
+
+echo "too.many.requests" > "$TEST_DIR/too_many.log"
+assert_true "detects 'too many requests'" "has_transient_429 '$TEST_DIR/too_many.log'"
+
+echo "Request was throttled by the API" > "$TEST_DIR/throttled.log"
+assert_true "detects 'request was throttled'" "has_transient_429 '$TEST_DIR/throttled.log'"
+
+echo "Rate limit exceeded for this endpoint" > "$TEST_DIR/rl_exceeded.log"
+assert_true "detects 'Rate limit exceeded'" "has_transient_429 '$TEST_DIR/rl_exceeded.log'"
+
+echo "API rate limit reached, backing off" > "$TEST_DIR/api_rl.log"
+assert_true "detects 'API rate limit'" "has_transient_429 '$TEST_DIR/api_rl.log'"
+
+# No rate limit
+echo "The code looks good, score 85/100" > "$TEST_DIR/normal.log"
+assert_false "no false positive on normal output" "has_transient_429 '$TEST_DIR/normal.log'"
+
+echo "--- Improved false positive prevention ---"
+
+# Test: Chinese discussion text containing rate limit keywords should NOT match
+echo "我们实现了rate limit检测功能，下一步是添加rate limit处理" > "$TEST_DIR/rate_limit_discussion.log"
+assert_false "no false positive on rate limit discussion text (Chinese)" "has_transient_429 '$TEST_DIR/rate_limit_discussion.log'"
+
+echo "Quota exceeded错误需要我们处理" > "$TEST_DIR/quota_discussion.log"
+assert_false "no false positive on quota discussion text (Chinese)" "has_quota_exceeded '$TEST_DIR/quota_discussion.log'"
+
+# Test: English discussion should NOT match
+echo "I will implement rate limit detection with quota exceeded handling" > "$TEST_DIR/english_discussion.log"
+assert_false "no false positive on English discussion" "has_transient_429 '$TEST_DIR/english_discussion.log'"
+
+# Test: Error-prefixed 429 should still match
+echo "Error: status 429 Too Many Requests" > "$TEST_DIR/429_with_error_prefix.log"
+assert_true "error-prefixed 429 still matches" "has_transient_429 '$TEST_DIR/429_with_error_prefix.log'"
+
+echo "ERROR: quota exceeded for this month" > "$TEST_DIR/quota_with_error_prefix.log"
+assert_true "error-prefixed quota still matches" "has_quota_exceeded '$TEST_DIR/quota_with_error_prefix.log'"
+
+
+# Empty file
+touch "$TEST_DIR/empty.log"
+assert_false "no false positive on empty file" "has_transient_429 '$TEST_DIR/empty.log'"
+
+echo ""
+echo "--- has_quota_exceeded() ---"
+
+echo "Error: quota exceeded for this month" > "$TEST_DIR/quota.log"
+assert_true "detects 'quota exceeded'" "has_quota_exceeded '$TEST_DIR/quota.log'"
+
+echo "billing hard limit has been reached" > "$TEST_DIR/billing.log"
+assert_true "detects 'billing hard limit'" "has_quota_exceeded '$TEST_DIR/billing.log'"
+
+echo "Error: billing limit reached" > "$TEST_DIR/billing_limit.log"
+assert_true "detects 'billing limit reached'" "has_quota_exceeded '$TEST_DIR/billing_limit.log'"
+
+echo "monthly spending limit reached" > "$TEST_DIR/monthly.log"
+assert_true "detects 'monthly spending limit'" "has_quota_exceeded '$TEST_DIR/monthly.log'"
+
+echo "Usage cap exceeded for your plan" > "$TEST_DIR/usage_cap.log"
+assert_true "detects 'usage cap exceeded'" "has_quota_exceeded '$TEST_DIR/usage_cap.log'"
+
+echo "Plan limit exceeded" > "$TEST_DIR/plan_limit.log"
+assert_true "detects 'plan limit exceeded'" "has_quota_exceeded '$TEST_DIR/plan_limit.log'"
+
+echo "insufficient quota" > "$TEST_DIR/insufficient.log"
+assert_true "detects 'insufficient quota'" "has_quota_exceeded '$TEST_DIR/insufficient.log'"
+
+# No quota exceeded
+echo "status 429 rate limited" > "$TEST_DIR/only_429.log"
+assert_false "no false positive on 429-only output" "has_quota_exceeded '$TEST_DIR/only_429.log'"
+
+echo ""
+echo "--- classify_rate_limit() ---"
+
+# No rate limit → return 0
+classify_rate_limit "$TEST_DIR/normal.log"
+assert_eq "classify: normal file returns 0" "0" "$?"
+
+# Transient 429 → return 1
+rl_code=0
+classify_rate_limit "$TEST_DIR/429_status.log" || rl_code=$?
+assert_eq "classify: 429 file returns 1" "1" "$rl_code"
+
+# Quota exceeded → return 2
+rl_code=0
+classify_rate_limit "$TEST_DIR/quota.log" || rl_code=$?
+assert_eq "classify: quota file returns 2" "2" "$rl_code"
+
+# Priority: quota exceeded wins over 429
+cat > "$TEST_DIR/both.log" << 'EOF'
+status 429 and quota exceeded
+EOF
+rl_code=0
+classify_rate_limit "$TEST_DIR/both.log" || rl_code=$?
+assert_eq "classify: both patterns → quota wins (2)" "2" "$rl_code"
+
+# ==================== Tests: Shared State Marker ====================
+
+echo ""
+echo "=== Shared State Marker Tests ==="
+echo ""
+
+# Use a sub-directory as WORK_DIR
+MARKER_DIR="$TEST_DIR/workdir"
+mkdir -p "$MARKER_DIR"
+
+# Initially not rate limited
+assert_false "initially not rate limited" "is_rate_limited '$MARKER_DIR'"
+
+# Set transient marker
+set_rate_limit_marker "$MARKER_DIR" "transient_429"
+assert_true "rate limited after setting marker" "is_rate_limited '$MARKER_DIR'"
+
+rl_type=$(get_rate_limit_type "$MARKER_DIR")
+assert_eq "marker type is transient_429" "transient_429" "$rl_type"
+
+# Timestamp should be a valid epoch
+rl_ts=$(get_rate_limit_timestamp "$MARKER_DIR")
+assert_true "timestamp is non-empty" "[ -n '$rl_ts' ]"
+assert_true "timestamp is numeric" "[ '$rl_ts' -gt 0 ] 2>/dev/null"
+
+# Clear marker
+clear_rate_limit_marker "$MARKER_DIR"
+assert_false "not rate limited after clearing" "is_rate_limited '$MARKER_DIR'"
+
+# Set per-agent quota exceeded marker
+set_rate_limit_marker "$MARKER_DIR" "quota_exceeded" "test_agent"
+assert_true "rate limited with per-agent quota marker" "is_rate_limited '$MARKER_DIR' test_agent"
+rl_type=$(get_rate_limit_type "$MARKER_DIR" test_agent)
+assert_eq "marker type is quota_exceeded" "quota_exceeded" "$rl_type"
+# Other agent should NOT see this marker
+assert_false "other agent not rate limited" "is_rate_limited '$MARKER_DIR' other_agent"
+
+# Clear per-agent marker
+clear_rate_limit_marker "$MARKER_DIR" "test_agent"
+
+# Get type on no marker returns empty
+rl_type=$(get_rate_limit_type "$MARKER_DIR" test_agent)
+assert_eq "no marker type is empty" "" "$rl_type"
+
+rl_ts=$(get_rate_limit_timestamp "$MARKER_DIR")
+assert_eq "no marker timestamp is empty" "" "$rl_ts"
+
+echo "--- Marker file robustness tests ---"
+
+# Test malformed marker: missing timestamp
+echo "transient_429" > "$MARKER_DIR/$RATE_LIMIT_MARKER"
+rl_type=$(get_rate_limit_type "$MARKER_DIR")
+assert_eq "malformed marker (no timestamp): type empty" "" "$rl_type"
+assert_false "malformed marker: file removed" "is_rate_limited '$MARKER_DIR'"
+
+# Test malformed marker: invalid type
+echo "invalid_type 123456" > "$MARKER_DIR/$RATE_LIMIT_MARKER"
+rl_type=$(get_rate_limit_type "$MARKER_DIR")
+assert_eq "invalid type: type empty" "" "$rl_type"
+assert_false "invalid type: file removed" "is_rate_limited '$MARKER_DIR'"
+
+# Test malformed marker: invalid timestamp
+echo "transient_429 abc" > "$MARKER_DIR/$RATE_LIMIT_MARKER"
+rl_ts=$(get_rate_limit_timestamp "$MARKER_DIR")
+assert_eq "invalid timestamp: ts empty" "" "$rl_ts"
+assert_false "invalid timestamp: file removed" "is_rate_limited '$MARKER_DIR'"
+
+# Test valid marker works after cleanup
+set_rate_limit_marker "$MARKER_DIR" "transient_429"
+assert_true "valid marker after cleanup" "is_rate_limited '$MARKER_DIR'"
+clear_rate_limit_marker "$MARKER_DIR"
+
+
+# ==================== Tests: Global Cooldown ====================
+
+echo ""
+echo "=== Global Cooldown Tests ==="
+echo ""
+
+# Test that global_rate_limit_wait respects remaining time
+# Set marker with timestamp 1 second ago
+set_rate_limit_marker "$MARKER_DIR" "transient_429"
+
+# With RATE_LIMIT_COOLDOWN=1, the wait should be very brief
+start_time=$(date +%s)
+global_rate_limit_wait "$MARKER_DIR" "$RATE_LIMIT_COOLDOWN"
+end_time=$(date +%s)
+elapsed=$((end_time - start_time))
+# Should have waited at most 1-2 seconds (may already have elapsed)
+assert_true "cooldown completes (elapsed=$elapsed)" "[ $elapsed -le 3 ]"
+
+clear_rate_limit_marker "$MARKER_DIR"
+
+# Test that expired marker results in no wait
+# Set marker with a very old timestamp (simulate)
+echo "transient_429 1000000000" > "$MARKER_DIR/$RATE_LIMIT_MARKER"
+start_time=$(date +%s)
+global_rate_limit_wait "$MARKER_DIR" "$RATE_LIMIT_COOLDOWN"
+end_time=$(date +%s)
+elapsed=$((end_time - start_time))
+assert_true "expired marker → no wait (elapsed=$elapsed)" "[ $elapsed -le 1 ]"
+
+clear_rate_limit_marker "$MARKER_DIR"
+
+# ==================== Tests: Integration Scenario ====================
+
+echo ""
+echo "=== Integration Scenario Tests ==="
+echo ""
+
+# Scenario 1: transient 429 is global — Agent B sees Agent A's marker
+set_rate_limit_marker "$MARKER_DIR" "transient_429"
+assert_true "Agent B sees global transient marker from Agent A" "is_rate_limited '$MARKER_DIR' agent_b"
+rl_type=$(get_rate_limit_type "$MARKER_DIR" agent_b)
+assert_eq "Agent B sees correct type" "transient_429" "$rl_type"
+clear_rate_limit_marker "$MARKER_DIR"
+
+# Scenario 2: quota exceeded is per-agent — Agent B does NOT see Agent A's quota
+set_rate_limit_marker "$MARKER_DIR" "quota_exceeded" "agent_a"
+assert_true "Agent A sees own quota marker" "is_rate_limited '$MARKER_DIR' agent_a"
+assert_false "Agent B does NOT see Agent A's quota marker" "is_rate_limited '$MARKER_DIR' agent_b"
+rl_type=$(get_rate_limit_type "$MARKER_DIR" agent_a)
+assert_eq "Agent A quota type" "quota_exceeded" "$rl_type"
+rl_type=$(get_rate_limit_type "$MARKER_DIR" agent_b)
+assert_eq "Agent B no quota type" "" "$rl_type"
+clear_rate_limit_marker "$MARKER_DIR" "agent_a"
+
+# Scenario 3: Marker file persistence across operations
+set_rate_limit_marker "$MARKER_DIR" "transient_429"
+assert_true "marker persists" "is_rate_limited '$MARKER_DIR'"
+# Verify file exists and has expected format
+assert_true "marker file exists" "[ -f '$MARKER_DIR/$RATE_LIMIT_MARKER' ]"
+marker_content=$(cat "$MARKER_DIR/$RATE_LIMIT_MARKER")
+assert_true "marker content has type" "echo '$marker_content' | grep -q 'transient_429'"
+assert_true "marker content has timestamp" "echo '$marker_content' | grep -qE '[0-9]+'"
+clear_rate_limit_marker "$MARKER_DIR"
+
+# ==================== Tests: False Positive Prevention ====================
+
+echo ""
+echo "=== False Positive Prevention Tests ==="
+echo ""
+
+# Verify that agent output DISCUSSING rate limits (not actual errors) does NOT trigger
+# has_fatal_error.  This was the root cause of the issue-55 terminal.log failure where
+# has_fatal_error() in run.sh matched planning text containing "RATE_LIMIT_MAX_BACKOFF",
+# "rate limit", "quota exceeded", etc. — those patterns are now removed from has_fatal_error()
+# since classify_rate_limit() handles them first in run_with_retry().
+
+# Simulate agent planning output that mentions rate limit concepts (from actual terminal.log)
+cat > "$TEST_DIR/planning_output.log" << 'PLANEOF'
+Here is the task breakdown:
+
+{
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rate limit detection",
+      "description": "Implement RATE_LIMIT_MAX_BACKOFF environment variable (default 300s)",
+      "acceptanceCriteria": [
+        "Detect transient 429 and quota exceeded patterns",
+        "Non-rate-limit errors still use annealing_delay()",
+        "New test: tests/test_rate_limit_backoff.sh validates backoff logic"
+      ]
+    }
+  ]
+}
+PLANEOF
+
+# classify_rate_limit WILL match "rate limit" and "quota exceeded" in planning text because
+# it uses broad grep patterns. In run_with_retry(), this would trigger the rate limit path,
+# which does global cooldown then retries without consuming a retry slot. This is acceptable
+# behavior — a brief cooldown is better than burning all retries as "fatal error".
+# The key fix is that has_fatal_error() no longer contains rate limit patterns, so after
+# classify_rate_limit processes the output, run_with_retry won't ALSO fail via has_fatal_error.
+
+# Verify that has_fatal_error does NOT match planning text (the core fix)
+# We extract has_fatal_error from run.sh to test it in isolation
+has_fatal_error_test() {
+    local log_file="$1"
+    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
+    pattern+='|^(timeout|authentication|unauthorized|API.key).*error'
+    pattern+='|context.length.exceeded'
+    pattern+='|maximum.context.length'
+    pattern+='|token.limit.exceeded'
+    pattern+='|model.is.overloaded'
+    pattern+='|server.error'
+    pattern+='|service.unavailable'
+    pattern+='|internal.server.error'
+    pattern+='|connection.refused'
+    pattern+='|network.error'
+    pattern+='|DNS.resolution'
+    pattern+='|Timed.out'
+    pattern+='|Command.timed.out'
+    grep -qE "$pattern" "$log_file" 2>/dev/null
+}
+
+assert_false "planning output: has_fatal_error does NOT match" "has_fatal_error_test '$TEST_DIR/planning_output.log'"
+
+# Simulate agent output discussing rate limit design (from terminal.log iteration 1)
+cat > "$TEST_DIR/design_discussion.log" << 'DESIGNEOF'
+## Implementation Plan
+
+- **`run.sh`** — 在 `run_with_retry()` 中集成：
+- 每次调用前检查全局标记（其他 agent 的限速状态）
+- 调用后分类错误：429 → 全局冷却（不消耗重试次数），quota exceeded → 立即停止（返回码 3）
+- 新增 `RATE_LIMIT_COOLDOWN` 环境变量（默认 60 秒）
+
+## Learnings
+
+- **模式**: Shell 脚本中跨进程状态共享最适合用文件标记
+- **踩坑**: `classify_rate_limit` 通过 exit code 返回分类结果
+- **经验**: 限速冷却不消耗重试次数是关键设计
+DESIGNEOF
+
+assert_false "design discussion: has_fatal_error does NOT match" "has_fatal_error_test '$TEST_DIR/design_discussion.log'"
+
+# Verify has_fatal_error still catches real errors
+echo "Error: connection refused" > "$TEST_DIR/real_conn_error.log"
+assert_true "real connection error: has_fatal_error DOES match" "has_fatal_error_test '$TEST_DIR/real_conn_error.log'"
+
+echo "Error: server error 500" > "$TEST_DIR/real_server_error.log"
+assert_true "real server error: has_fatal_error DOES match" "has_fatal_error_test '$TEST_DIR/real_server_error.log'"
+
+echo "Fatal: model is overloaded" > "$TEST_DIR/real_overload.log"
+assert_true "real overload: has_fatal_error DOES match" "has_fatal_error_test '$TEST_DIR/real_overload.log'"
+
+# ==================== Summary ====================
+
+echo ""
+echo "=========================================="
+echo "Total: $TOTAL  Passed: $PASS  Failed: $FAIL"
+echo "=========================================="
+
+if [ "$FAIL" -gt 0 ]; then
+    exit 1
+fi
+
+ succeeded in 0ms:
+#!/bin/bash
+# lib/rate_limit.sh - Per-agent rate limit awareness for multi-agent retry coordination
+#
+# Problem: Each agent retries independently (5×), so a single rate limit event can
+# burn 15 retries (3 agents × 5), wasting time and quota.
+#
+# Solution:
+#   1. Detect rate limit errors (transient 429 vs quota exceeded)
+#   2. Write a per-agent marker file so only the affected agent is blocked
+#   3. Global cooldown (sleep) instead of per-agent retries for transient 429
+#   4. Quota exceeded → hard stop for the affected agent only (other agents use different LLMs)
+#
+# Marker files:
+#   .rate_limit_state              — global transient 429 marker (all agents share API endpoint)
+#   .rate_limit_quota_<agent>      — per-agent quota exceeded marker (different LLMs, independent)
+#
+# Usage in run.sh:
+#   source "$SCRIPT_DIR/lib/rate_limit.sh"
+#   RATE_LIMIT_COOLDOWN=${RATE_LIMIT_COOLDOWN:-60}
+#
+#   # Inside run_with_retry, before agent call:
+#   if is_rate_limited "$WORK_DIR" "$agent"; then
+#       ...
+#   fi
+#
+#   # After agent call:
+#   classify_rate_limit "$log_file"
+#   local rl_type=$?
+#   if [ "$rl_type" -eq 2 ]; then
+#       set_rate_limit_marker "$WORK_DIR" "quota_exceeded" "$agent"
+#       return 3
+#   elif [ "$rl_type" -eq 1 ]; then
+#       set_rate_limit_marker "$WORK_DIR" "transient_429"
+#       global_rate_limit_wait "$WORK_DIR" "$RATE_LIMIT_COOLDOWN"
+#       clear_rate_limit_marker "$WORK_DIR" ""
+#   fi
+
+# ==================== Configuration ====================
+
+# Default cooldown in seconds; override via RATE_LIMIT_COOLDOWN env var
+RATE_LIMIT_COOLDOWN="${RATE_LIMIT_COOLDOWN:-60}"
+
+# ==================== Detection ====================
+
+# Detect transient 429 (rate limited but retryable).
+# Returns 0 if a transient 429 pattern is found.
+has_transient_429() {
+    local log_file="$1"
+    # Improved: match only error-context lines to avoid false positives on discussion text
+    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ].*(status.429|HTTP.429|rate.limit|too.many.requests|request.was.throttled|Rate.limit.exceeded|API.rate.limit)'
+    pattern+='|^HTTP/[0-9.]+ 429'
+    pattern+='|^status.*429'
+    pattern+='|.*429.*(error|Error|ERROR)'
+    pattern+='|.*rate.limit.*(error|exceeded|limited)'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+
+# Detect quota exceeded (non-retryable, should hard-stop the affected agent).
+# Returns 0 if a quota exceeded pattern is found.
+has_quota_exceeded() {
+    local log_file="$1"
+    # Broad patterns: false positives are acceptable (only trigger cooldown)
+    local pattern='quota.exceeded'
+    pattern+='|billing.hard.limit'
+    pattern+='|billing.limit.reached'
+    pattern+='|monthly.spending.limit'
+    pattern+='|usage.cap.exceeded'
+    pattern+='|plan.limit.exceeded'
+    pattern+='|insufficient.quota'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+
+# Classify the rate limit type from a log file.
+# Returns:
+#   0 = no rate limit detected
+#   1 = transient 429 (retryable with cooldown)
+#   2 = quota exceeded (hard stop for this agent)
+classify_rate_limit() {
+    local log_file="$1"
+
+    # Check quota exceeded first (higher severity)
+    if has_quota_exceeded "$log_file"; then
+        return 2
+    fi
+
+    # Check transient 429
+    if has_transient_429 "$log_file"; then
+        return 1
+    fi
+
+    return 0
+}
+
+# ==================== Shared State (file-based marker) ====================
+
+# Global marker for transient 429 (all agents share the same API endpoint)
+RATE_LIMIT_MARKER=".rate_limit_state"
+
+# Set the rate limit marker with type and timestamp.
+# Usage: set_rate_limit_marker "$WORK_DIR" "transient_429" ["agent_name"]
+#   - transient_429: global marker (no agent needed)
+#   - quota_exceeded: per-agent marker (agent name required)
+set_rate_limit_marker() {
+    local marker_dir="$1"
+    local rl_type="$2"  # "transient_429" or "quota_exceeded"
+    local agent="${3:-}"
+
+    if [ "$rl_type" = "quota_exceeded" ] && [ -n "$agent" ]; then
+        # Per-agent quota marker
+        local marker_file="$marker_dir/.rate_limit_quota_${agent}"
+        echo "quota_exceeded $(date +%s)" > "$marker_file"
+    else
+        # Global transient marker
+        local marker_file="$marker_dir/$RATE_LIMIT_MARKER"
+        echo "${rl_type} $(date +%s)" > "$marker_file"
+    fi
+}
+
+# Clear the rate limit marker.
+# Usage: clear_rate_limit_marker "$WORK_DIR" ["agent_name"]
+#   - With agent: clear per-agent quota marker
+#   - Without agent: clear global transient marker
+clear_rate_limit_marker() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+    if [ -n "$agent" ]; then
+        rm -f "$marker_dir/.rate_limit_quota_${agent}" 2>/dev/null || true
+    else
+        rm -f "$marker_dir/$RATE_LIMIT_MARKER" 2>/dev/null || true
+    fi
+}
+
+# Check if currently rate limited for a specific agent.
+# Usage: is_rate_limited "$WORK_DIR" "$agent"
+# Returns 0 if rate limited, 1 otherwise.
+# Global marker only counts for transient_429 (shared API endpoint).
+# Quota exceeded is per-agent (different LLMs).
+is_rate_limited() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+
+    # Check per-agent quota exceeded marker first (specific to this agent)
+    if [ -n "$agent" ] && [ -f "$marker_dir/.rate_limit_quota_${agent}" ]; then
+        return 0
+    fi
+
+    # Check global marker — only transient_429 is truly global
+    local marker_file="$marker_dir/$RATE_LIMIT_MARKER"
+    if [ -f "$marker_file" ]; then
+        local global_type
+        global_type=$(cut -d' ' -f1 "$marker_file" 2>/dev/null)
+        if [ "$global_type" = "transient_429" ]; then
+            return 0
+        fi
+        # Legacy: global marker with quota_exceeded type — treat as stale, ignore
+        # Quota is per-agent, global quota marker is meaningless
+    fi
+
+    return 1
+}
+
+# Get the rate limit type for a specific agent.
+# Usage: get_rate_limit_type "$WORK_DIR" ["agent_name"]
+# Prints "transient_429", "quota_exceeded", or "" if no marker.
+get_rate_limit_type() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+
+    # Check per-agent quota marker first (higher severity)
+    if [ -n "$agent" ] && [ -f "$marker_dir/.rate_limit_quota_${agent}" ]; then
+        echo "quota_exceeded"
+        return
+    fi
+
+    # Check global transient marker
+    local marker_file="$marker_dir/$RATE_LIMIT_MARKER"
+    if [ -f "$marker_file" ]; then
+        local global_type
+        global_type=$(cut -d' ' -f1 "$marker_file" 2>/dev/null)
+        if [ "$global_type" = "transient_429" ]; then
+            echo "transient_429"
+            return
+        fi
+    fi
+}
+
+# Get the timestamp (epoch seconds) when rate limit was detected.
+# Prints the timestamp or "" if no marker.
+get_rate_limit_timestamp() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+
+    # Check per-agent quota marker first
+    if [ -n "$agent" ] && [ -f "$marker_dir/.rate_limit_quota_${agent}" ]; then
+        cut -d' ' -f2 "$marker_dir/.rate_limit_quota_${agent}" 2>/dev/null
+        return
+    fi
+
+    # Check global transient marker
+    local marker_file="$marker_dir/$RATE_LIMIT_MARKER"
+    if [ -f "$marker_file" ]; then
+        local line ts
+        line=$(head -1 "$marker_file" 2>/dev/null)
+        ts=$(echo "$line" | cut -d' ' -f2 2>/dev/null)
+        # Validate timestamp is a valid number
+        if [[ "$ts" =~ ^[0-9]+$ ]]; then
+            echo "$ts"
+        else
+            clear_rate_limit_marker "$marker_dir"
+            echo ""
+        fi
+    fi
+}
+
+# ==================== Global Cooldown ====================
+
+# Wait for the global rate limit cooldown.
+# If the marker was set recently, sleeps only the remaining time.
+# Usage: global_rate_limit_wait "$WORK_DIR" [cooldown_seconds] ["agent_name"]
+global_rate_limit_wait() {
+    local marker_dir="$1"
+    local cooldown="${2:-$RATE_LIMIT_COOLDOWN}"
+    local agent="${3:-}"
+
+    local now
+    now=$(date +%s)
+
+    local timestamp
+    timestamp=$(get_rate_limit_timestamp "$marker_dir" "$agent")
+
+    local remaining=$cooldown
+    if [ -n "$timestamp" ] && [ "$timestamp" -gt 0 ] 2>/dev/null; then
+        local elapsed=$((now - timestamp))
+        remaining=$((cooldown - elapsed))
+    fi
+
+    if [ "$remaining" -le 0 ]; then
+        return 0
+    fi
+
+    echo "⏳ 全局限速冷却中，等待 ${remaining} 秒..."
+    sleep "$remaining"
+}
+
+codex
+让我查看 `run.sh` 中的集成实现，特别是 `run_with_retry` 函数。
+exec
+/bin/zsh -lc 'ls -la /Users/smallnest/ai/autoresearch/lib/' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+total 64
+drwxr-xr-x@  7 smallnest  staff   224 Apr 24 07:31 .
+drwxr-xr-x@ 21 smallnest  staff   672 Apr 24 07:52 ..
+-rw-r--r--@  1 smallnest  staff   886 Apr 24 04:54 CLAUDE.md
+-rw-r--r--@  1 smallnest  staff  1608 Apr 19 23:19 agent_logic.sh
+-rw-r--r--@  1 smallnest  staff  1182 Apr 23 22:09 branch_cleanup.sh
+-rw-r--r--@  1 smallnest  staff  4637 Apr 23 22:09 git_push.sh
+-rw-r--r--@  1 smallnest  staff  8266 Apr 24 07:31 rate_limit.sh
+
+exec
+/bin/zsh -lc "grep -n \"rate_limit\\|run_with_retry\\|has_fatal_error\\|classify_rate_limit\" /Users/smallnest/ai/autoresearch/run.sh | head -50" in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+89:RATE_LIMIT_LIB="$SCRIPT_DIR/lib/rate_limit.sh"
+324:has_fatal_error() {
+328:    # are intentionally excluded here — they are handled by classify_rate_limit() in
+329:    # run_with_retry() which runs BEFORE this check.  Including them causes false positives
+891:        clear_rate_limit_marker "$WORK_DIR"
+976:run_with_retry() {
+990:        if [ -n "$WORK_DIR" ] && is_rate_limited "$WORK_DIR" "$agent"; then
+992:            existing_type=$(get_rate_limit_type "$WORK_DIR" "$agent")
+996:                clear_rate_limit_marker "$WORK_DIR" "$agent"
+1001:                global_rate_limit_wait "$WORK_DIR" "$RATE_LIMIT_COOLDOWN"
+1002:                clear_rate_limit_marker "$WORK_DIR"
+1058:        classify_rate_limit "$log_file" || rl_type=$?
+1063:                set_rate_limit_marker "$WORK_DIR" "quota_exceeded" "$agent"
+1071:                set_rate_limit_marker "$WORK_DIR" "transient_429"
+1073:            global_rate_limit_wait "$WORK_DIR" "$RATE_LIMIT_COOLDOWN"
+1074:            clear_rate_limit_marker "$WORK_DIR"
+1107:        if has_fatal_error "$log_file"; then
+1168:        clear_rate_limit_marker "$WORK_DIR" "$agent"
+2310:    run_with_retry "$first_agent" "$prompt" "$log_file" || agent_ret=$?
+2461:    run_with_retry codex "$prompt" "$log_file" || agent_ret=$?
+2567:    run_with_retry claude "$prompt" "$log_file" || agent_ret=$?
+2673:    run_with_retry opencode "$prompt" "$log_file" || agent_ret=$?
+2740:    run_with_retry opencode "$prompt" "$log_file" || agent_ret=$?
+2866:    run_with_retry claude "$prompt" "$log_file" || agent_ret=$?
+2964:    run_with_retry codex "$prompt" "$log_file" || agent_ret=$?
+
+codex
+让我查看 `run.sh` 中关键函数的具体实现，特别是 `run_with_retry` 和 `has_fatal_error`。
+exec
+/bin/zsh -lc "sed -n '320,360p' /Users/smallnest/ai/autoresearch/run.sh" in /Users/smallnest/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '970,1110p' /Users/smallnest/ai/autoresearch/run.sh" in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+    echo $delay
+}
+
+# 检测 Agent 输出是否包含致命错误（区分代码讨论中的 "error" 与真正的运行时错误）
+has_fatal_error() {
+    local log_file="$1"
+    # 仅匹配行首的错误模式，避免误判代码中讨论 "error handling" 等正常内容
+    # Rate limit patterns (rate.limit, too.many.requests, quota.exceeded, billing.hard.limit)
+    # are intentionally excluded here — they are handled by classify_rate_limit() in
+    # run_with_retry() which runs BEFORE this check.  Including them causes false positives
+    # when agent output discusses rate limit topics in code/planning text.
+    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
+    pattern+='|^(timeout|authentication|unauthorized|API.key).*error'
+    pattern+='|context.length.exceeded'
+    pattern+='|maximum.context.length'
+    pattern+='|token.limit.exceeded'
+    pattern+='|model.is.overloaded'
+    pattern+='|server.error'
+    pattern+='|service.unavailable'
+    pattern+='|internal.server.error'
+    pattern+='|connection.refused'
+    pattern+='|network.error'
+    pattern+='|DNS.resolution'
+    pattern+='|Timed.out'
+    pattern+='|Command.timed.out'
+    grep -qE "$pattern" "$log_file" 2>/dev/null
+}
+
+# 检测 Agent 输出是否包含 API/网络级别的失败（区分于可恢复的内容错误）
+has_api_failure() {
+    local log_file="$1"
+    # 这些模式表示 API 调用本身失败，而非代码内容问题
+    local pattern='status.4[0-9][0-9]'
+    pattern+='|status.5[0-9][0-9]'
+    pattern+='|HTTP.4[0-9][0-9]'
+    pattern+='|HTTP.5[0-9][0-9]'
+    pattern+='|curl.*error'
+    pattern+='|fetch.failed'
+    pattern+='|request.failed'
+    pattern+='|response.is.empty'
+    pattern+='|no.response.received'
+
+ succeeded in 0ms:
+LAST_COMMAND=""
+trap 'LAST_COMMAND="$BASH_COMMAND"' DEBUG
+trap 'cleanup EXIT' EXIT
+trap 'cleanup INT; trap - EXIT; exit 130' INT
+trap 'cleanup TERM; trap - EXIT; exit 143' TERM
+
+run_with_retry() {
+    local agent=$1
+    local prompt="$2"
+    local log_file="$3"
+    local retry=0
+    local success=0
+    local skip_agent=0
+    local rl_hard_stop=0
+
+    while [ $retry -lt $MAX_RETRIES ]; do
+        retry=$((retry + 1))
+
+        # Before each attempt, check if a previous agent hit a rate limit.
+        # If so, handle accordingly instead of per-agent backoff.
+        if [ -n "$WORK_DIR" ] && is_rate_limited "$WORK_DIR" "$agent"; then
+            local existing_type
+            existing_type=$(get_rate_limit_type "$WORK_DIR" "$agent")
+            if [ "$existing_type" = "quota_exceeded" ]; then
+                # Per-agent quota exceeded — this agent should stop immediately
+                log_console "🛑 $agent 检测到 quota exceeded 标记，立即停止"
+                clear_rate_limit_marker "$WORK_DIR" "$agent"
+                rl_hard_stop=1
+                break
+            elif [ "$existing_type" = "transient_429" ]; then
+                log_console "⏳ 检测到全局限速状态 (transient 429)，执行全局冷却"
+                global_rate_limit_wait "$WORK_DIR" "$RATE_LIMIT_COOLDOWN"
+                clear_rate_limit_marker "$WORK_DIR"
+                # 不消耗重试次数，继续重试
+                retry=$((retry - 1))
+                continue
+            fi
+        fi
+
+        if [ $retry -gt 1 ]; then
+            local delay
+            delay=$(annealing_delay $retry)
+            log_console "重试 $retry/$MAX_RETRIES，等待 ${delay} 秒..."
+            sleep $delay
+        fi
+
+        log_console "调用 $agent (尝试 $retry/$MAX_RETRIES)..."
+
+        # Truncate log file before each attempt so we only capture this attempt's output
+        : > "$log_file"
+
+        local exit_code=1
+
+        # 启动等待动画
+        start_spinner "$agent 正在工作中..."
+
+        if [ "$agent" = "codex" ]; then
+            timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+        elif [ "$agent" = "opencode" ]; then
+            timeout_wrapper "$AGENT_TIMEOUT" opencode run "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+        else
+            timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+        fi
+
+        # 停止等待动画
+        stop_spinner
+
+        # Check for context overflow first (non-retryable)
+        if detect_context_overflow "$log_file"; then
+            log_console "检测到上下文溢出，停止重试"
+            break
+        fi
+
+        # Check for MiniMax tool_call format errors (non-retryable: model bug, skip this agent)
+        if has_toolcall_format_error "$log_file"; then
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+            log_console "⚠️ $agent 遇到 MiniMax tool_call 格式错误，终止并跳过此 agent"
+            if [ -n "$error_tail" ]; then
+                log_console "错误信息:"
+                echo "$error_tail" | while read -r line; do log_console "  $line"; done
+            fi
+            skip_agent=1
+            break
+        fi
+
+        # Classify rate limit errors (transient 429 vs quota exceeded)
+        local rl_type=0
+        classify_rate_limit "$log_file" || rl_type=$?
+        if [ "$rl_type" -eq 2 ]; then
+            # Quota exceeded — hard stop, write marker for other agents
+            log_console "🛑 $agent 检测到 quota exceeded，设置限速标记并停止"
+            if [ -n "$WORK_DIR" ]; then
+                set_rate_limit_marker "$WORK_DIR" "quota_exceeded" "$agent"
+            fi
+            rl_hard_stop=1
+            break
+        elif [ "$rl_type" -eq 1 ]; then
+            # Transient 429 — set global marker and do coordinated cooldown
+            log_console "⚠️ $agent 检测到 rate limit (transient 429)，设置全局限速标记"
+            if [ -n "$WORK_DIR" ]; then
+                set_rate_limit_marker "$WORK_DIR" "transient_429"
+            fi
+            global_rate_limit_wait "$WORK_DIR" "$RATE_LIMIT_COOLDOWN"
+            clear_rate_limit_marker "$WORK_DIR"
+            # Continue retrying after cooldown (don't consume a retry slot)
+            retry=$((retry - 1))
+            continue
+        fi
+
+        # Check for non-zero exit code from the agent
+        if [ $exit_code -ne 0 ]; then
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+
+            # Timeout exit code 124 is retryable
+            if [ $exit_code -eq 124 ]; then
+                log_console "⏱️ $agent 调用超时 (超时限制: ${AGENT_TIMEOUT}s)，将重试"
+                continue
+            fi
+
+            # Special handling for Codex invalid tool call: trim prompt and retry
+            if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
+                log_console "⚠️ Codex 生成无效 tool call 参数，裁剪 prompt 重试"
+                prompt=$(trim_prompt_for_codex_retry "$prompt")
+                continue
+            fi
+
+            log_console "❌ $agent 调用失败 (退出码: $exit_code)"
+            if [ -n "$error_tail" ]; then
+                log_console "错误信息:"
+                echo "$error_tail" | while read -r line; do log_console "  $line"; done
+            fi
+            continue
+        fi
+
+        # Check for fatal errors in output
+        if has_fatal_error "$log_file"; then
+            local error_tail
+            error_tail=$(tail -10 "$log_file" 2>/dev/null)
+
+
+codex
+现在让我运行测试来验证实现，并更详细地检查代码质量。
+exec
+/bin/zsh -lc 'grep -n "source.*rate_limit" /Users/smallnest/ai/autoresearch/run.sh' in /Users/smallnest/ai/autoresearch
+ exited 1 in 0ms:
+exec
+/bin/zsh -lc 'cd /Users/smallnest/ai/autoresearch && bash tests/test_rate_limit.sh 2>&1' in /Users/smallnest/ai/autoresearch
+ exited 1 in 1229ms:
+  PASS: invalid type: type empty (expected=, actual=)
+  PASS: invalid type: file removed
+  PASS: invalid timestamp: ts empty (expected=, actual=)
+  PASS: invalid timestamp: file removed
+  PASS: valid marker after cleanup
+
+=== Global Cooldown Tests ===
+
+⏳ 全局限速冷却中，等待 1 秒...
+  PASS: cooldown completes (elapsed=1)
+  PASS: expired marker → no wait (elapsed=0)
+
+=== Integration Scenario Tests ===
+
+  PASS: Agent B sees global transient marker from Agent A
+  PASS: Agent B sees correct type (expected=transient_429, actual=transient_429)
+  PASS: Agent A sees own quota marker
+  PASS: Agent B does NOT see Agent A's quota marker
+  PASS: Agent A quota type (expected=quota_exceeded, actual=quota_exceeded)
+  PASS: Agent B no quota type (expected=, actual=)
+  PASS: marker persists
+  PASS: marker file exists
+  PASS: marker content has type
+  PASS: marker content has timestamp
+
+=== False Positive Prevention Tests ===
+
+  PASS: planning output: has_fatal_error does NOT match
+  PASS: design discussion: has_fatal_error does NOT match
+  PASS: real connection error: has_fatal_error DOES match
+  PASS: real server error: has_fatal_error DOES match
+  PASS: real overload: has_fatal_error DOES match
+
+==========================================
+Total: 61  Passed: 54  Failed: 7
+==========================================
+
+codex
+测试发现有 7 个失败用例，让我详细分析这些失败的根本原因，并审核整体实现。
+exec
+/bin/zsh -lc 'cat -n /Users/smallnest/ai/autoresearch/lib/rate_limit.sh | head -80' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+     1	#!/bin/bash
+     2	# lib/rate_limit.sh - Per-agent rate limit awareness for multi-agent retry coordination
+     3	#
+     4	# Problem: Each agent retries independently (5×), so a single rate limit event can
+     5	# burn 15 retries (3 agents × 5), wasting time and quota.
+     6	#
+     7	# Solution:
+     8	#   1. Detect rate limit errors (transient 429 vs quota exceeded)
+     9	#   2. Write a per-agent marker file so only the affected agent is blocked
+    10	#   3. Global cooldown (sleep) instead of per-agent retries for transient 429
+    11	#   4. Quota exceeded → hard stop for the affected agent only (other agents use different LLMs)
+    12	#
+    13	# Marker files:
+    14	#   .rate_limit_state              — global transient 429 marker (all agents share API endpoint)
+    15	#   .rate_limit_quota_<agent>      — per-agent quota exceeded marker (different LLMs, independent)
+    16	#
+    17	# Usage in run.sh:
+    18	#   source "$SCRIPT_DIR/lib/rate_limit.sh"
+    19	#   RATE_LIMIT_COOLDOWN=${RATE_LIMIT_COOLDOWN:-60}
+    20	#
+    21	#   # Inside run_with_retry, before agent call:
+    22	#   if is_rate_limited "$WORK_DIR" "$agent"; then
+    23	#       ...
+    24	#   fi
+    25	#
+    26	#   # After agent call:
+    27	#   classify_rate_limit "$log_file"
+    28	#   local rl_type=$?
+    29	#   if [ "$rl_type" -eq 2 ]; then
+    30	#       set_rate_limit_marker "$WORK_DIR" "quota_exceeded" "$agent"
+    31	#       return 3
+    32	#   elif [ "$rl_type" -eq 1 ]; then
+    33	#       set_rate_limit_marker "$WORK_DIR" "transient_429"
+    34	#       global_rate_limit_wait "$WORK_DIR" "$RATE_LIMIT_COOLDOWN"
+    35	#       clear_rate_limit_marker "$WORK_DIR" ""
+    36	#   fi
+    37	
+    38	# ==================== Configuration ====================
+    39	
+    40	# Default cooldown in seconds; override via RATE_LIMIT_COOLDOWN env var
+    41	RATE_LIMIT_COOLDOWN="${RATE_LIMIT_COOLDOWN:-60}"
+    42	
+    43	# ==================== Detection ====================
+    44	
+    45	# Detect transient 429 (rate limited but retryable).
+    46	# Returns 0 if a transient 429 pattern is found.
+    47	has_transient_429() {
+    48	    local log_file="$1"
+    49	    # Improved: match only error-context lines to avoid false positives on discussion text
+    50	    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ].*(status.429|HTTP.429|rate.limit|too.many.requests|request.was.throttled|Rate.limit.exceeded|API.rate.limit)'
+    51	    pattern+='|^HTTP/[0-9.]+ 429'
+    52	    pattern+='|^status.*429'
+    53	    pattern+='|.*429.*(error|Error|ERROR)'
+    54	    pattern+='|.*rate.limit.*(error|exceeded|limited)'
+    55	    grep -qiE "$pattern" "$log_file" 2>/dev/null
+    56	}
+    57	
+    58	# Detect quota exceeded (non-retryable, should hard-stop the affected agent).
+    59	# Returns 0 if a quota exceeded pattern is found.
+    60	has_quota_exceeded() {
+    61	    local log_file="$1"
+    62	    # Broad patterns: false positives are acceptable (only trigger cooldown)
+    63	    local pattern='quota.exceeded'
+    64	    pattern+='|billing.hard.limit'
+    65	    pattern+='|billing.limit.reached'
+    66	    pattern+='|monthly.spending.limit'
+    67	    pattern+='|usage.cap.exceeded'
+    68	    pattern+='|plan.limit.exceeded'
+    69	    pattern+='|insufficient.quota'
+    70	    grep -qiE "$pattern" "$log_file" 2>/dev/null
+    71	}
+    72	
+    73	# Classify the rate limit type from a log file.
+    74	# Returns:
+    75	#   0 = no rate limit detected
+    76	#   1 = transient 429 (retryable with cooldown)
+    77	#   2 = quota exceeded (hard stop for this agent)
+    78	classify_rate_limit() {
+    79	    local log_file="$1"
+    80	
+
+exec
+/bin/zsh -lc 'cd /Users/smallnest/ai/autoresearch && bash -x tests/test_rate_limit.sh 2>&1 | grep -A2 "FAIL:"' in /Users/smallnest/ai/autoresearch
+ succeeded in 1237ms:
++ echo '  FAIL: detects '\''too many requests'\'' (expected true, got false)'
+  FAIL: detects 'too many requests' (expected true, got false)
++ echo 'Request was throttled by the API'
++ assert_true 'detects '\''request was throttled'\''' 'has_transient_429 '\''/var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/throttled.log'\'''
+--
++ echo '  FAIL: detects '\''request was throttled'\'' (expected true, got false)'
+  FAIL: detects 'request was throttled' (expected true, got false)
++ echo 'Rate limit exceeded for this endpoint'
++ assert_true 'detects '\''Rate limit exceeded'\''' 'has_transient_429 '\''/var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/rl_exceeded.log'\'''
+--
++ echo '  FAIL: detects '\''API rate limit'\'' (expected true, got false)'
+  FAIL: detects 'API rate limit' (expected true, got false)
++ echo 'The code looks good, score 85/100'
++ assert_false 'no false positive on normal output' 'has_transient_429 '\''/var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/normal.log'\'''
+--
++ echo '  FAIL: no false positive on quota discussion text (Chinese) (expected false, got true)'
+  FAIL: no false positive on quota discussion text (Chinese) (expected false, got true)
++ echo 'I will implement rate limit detection with quota exceeded handling'
++ assert_false 'no false positive on English discussion' 'has_transient_429 '\''/var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/english_discussion.log'\'''
+--
++ echo '  FAIL: no false positive on English discussion (expected false, got true)'
+  FAIL: no false positive on English discussion (expected false, got true)
++ echo 'Error: status 429 Too Many Requests'
++ assert_true 'error-prefixed 429 still matches' 'has_transient_429 '\''/var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/429_with_error_prefix.log'\'''
+--
++ echo '  FAIL: malformed marker (no timestamp): type empty (expected=, actual=transient_429)'
+  FAIL: malformed marker (no timestamp): type empty (expected=, actual=transient_429)
++ assert_false 'malformed marker: file removed' 'is_rate_limited '\''/var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/workdir'\'''
++ local 'test_name=malformed marker: file removed'
+--
++ echo '  FAIL: malformed marker: file removed (expected false, got true)'
+  FAIL: malformed marker: file removed (expected false, got true)
++ echo 'invalid_type 123456'
+++ get_rate_limit_type /var/folders/vf/hdgvvdc13tbbvslw23c3tv880000gn/T/tmp.bKvBE4EhyK/workdir
+
+codex
+让我检查 `run.sh` 是否正确集成了限速库，并查看整体实现。
+exec
+/bin/zsh -lc "sed -n '85,95p' /Users/smallnest/ai/autoresearch/run.sh" in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+fi
+# shellcheck source=/dev/null
+source "$BRANCH_CLEANUP_LIB"
+
+RATE_LIMIT_LIB="$SCRIPT_DIR/lib/rate_limit.sh"
+if [ ! -f "$RATE_LIMIT_LIB" ]; then
+    echo "ERROR: 缺少 rate limit 逻辑文件: $RATE_LIMIT_LIB" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$RATE_LIMIT_LIB"
+
+exec
+/bin/zsh -lc "grep -c \"source.*rate_limit\\|\\. rate_limit\" /Users/smallnest/ai/autoresearch/run.sh" in /Users/smallnest/ai/autoresearch
+ exited 1 in 0ms:
+0
+
+codex
+让我查看 Issue #55 的具体内容和项目中的相关文档。
+exec
+/bin/zsh -lc 'cat /Users/smallnest/ai/autoresearch/progress.md 2>/dev/null | head -100' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "cd /Users/smallnest/ai/autoresearch && git log --oneline --all --grep=\"rate limit\\|#55\" | head -20" in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+13fc919 index on feature/issue-55: 6e0881b fix: 全面修复脚本健壮性问题 — agent 失败容错、rate limit 隔离、set-e 防护
+e0d74fa untracked files on feature/issue-55: 6e0881b fix: 全面修复脚本健壮性问题 — agent 失败容错、rate limit 隔离、set-e 防护
+6e0881b fix: 全面修复脚本健壮性问题 — agent 失败容错、rate limit 隔离、set-e 防护
+d17d66a feat: implement issue #55 - [hardness engineering] API 限速全局感知
+
+codex
+让我查看项目的 CLAUDE.md 和测试文件更多细节，以便全面审核。
+exec
+/bin/zsh -lc 'cat /Users/smallnest/ai/autoresearch/lib/CLAUDE.md' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+# lib
+
+## 架构约定
+- 存放共享的 Shell 脚本和逻辑库。
+- `agent_logic.sh`: 包含 Agent 列表解析、审核者轮转等核心共享函数。
+- `git_push.sh`: 包含 `git push` 容错与恢复建议逻辑，供 `run.sh` 和测试复用。
+- `branch_cleanup.sh`: 包含 PR 合并后的 branch 清理容错逻辑，要求失败只记录告警，不影响后续 comment/close 流程。
+- `rate_limit.sh`: 包含全局限速感知逻辑（transient 429 vs quota exceeded 检测、文件标记共享状态、全局冷却等待），供 `run_with_retry()` 调用。
+
+## 注意事项
+- 脚本应保持 POSIX 兼容性或明确使用 bash。
+- 修改共享逻辑时，必须确保不破坏现有 Agent 的调用约定。
+- 对 `set -e` 敏感的命令失败路径，优先封装到共享函数中，并在函数内部使用 `cmd || { ... }` 或 `if ! cmd; then ... fi` 保护。
+
+exec
+/bin/zsh -lc 'cd /Users/smallnest/ai/autoresearch && git show d17d66a --stat' in /Users/smallnest/ai/autoresearch
+ succeeded in 0ms:
+commit d17d66a682b854978e4c347cd98fc0091ac4f23b
+Author: smallnest <smallnest@gmail.com>
+Date:   Fri Apr 24 04:54:53 2026 +0800
+
+    feat: implement issue #55 - [hardness engineering] API 限速全局感知
+    
+    Add global rate limit awareness to prevent burning retries across agents:
+    
+    - lib/rate_limit.sh: shared library for rate limit detection and coordination
+      - Distinguish transient 429 (retryable with cooldown) from quota exceeded (hard stop)
+      - File-based marker in $WORK_DIR for cross-agent state sharing
+      - Global cooldown (default 60s) instead of per-agent backoff
+    
+    - run.sh integration in run_with_retry():
+      - Check shared marker before each agent call (respect other agents' rate limits)
+      - Classify errors after each call (429 → global cooldown, quota → hard stop)
+      - Return code 3 for quota exceeded to signal upstream
+      - Rate limit cooldown does not consume retry slots
+    
+    - tests/test_rate_limit.sh: 40 tests covering detection, marker state, and cooldown
+
+ lib/CLAUDE.md            |   1 +
+ lib/rate_limit.sh        | 168 +++++++++++++++++++++++++++++
+ run.sh                   |  55 +++++++++-
+ tests/CLAUDE.md          |   1 +
+ tests/test_rate_limit.sh | 275 +++++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 499 insertions(+), 1 deletion(-)
+
+codex
+现在我已经完成了对 Issue #55 实现的全面审核。让我整理审核报告。
+
+---
+
+## 审核报告：Issue #55 - [hardness engineering] API 限速全局感知
+
+### 实现概述
+
+Issue #55 已在项目中实现，包含以下核心组件：
+
+1. **`lib/rate_limit.sh`** — 全局限速感知库（168 行）
+   - `has_transient_429()` / `has_quota_exceeded()` — 检测两种限速错误
+   - `classify_rate_limit()` — 分类返回 0/1/2
+   - `set_rate_limit_marker()` / `is_rate_limited()` / `clear_rate_limit_marker()` — 基于文件标记的跨 agent 状态共享
+   - `get_rate_limit_type()` / `get_rate_limit_timestamp()` — 获取标记信息
+   - `global_rate_limit_wait()` — 全局冷却（支持剩余时间计算）
+
+2. **`run.sh` 中的集成**（`run_with_retry()` 函数）
+   - 每次 agent 调用前检查全局限速标记 → 执行冷却等待
+   - 调用后通过 `classify_rate_limit()` 分类错误
+   - Transient 429 → 全局冷却（不消耗重试次数）
+   - Quota exceeded → 设置标记并立即停止（返回码 3）
+   - `has_fatal_error()` 已移除限速相关模式，避免误判
+
+3. **`tests/test_rate_limit.sh`** — 61 个测试用例
+   - 当前状态：54 通过，7 失败
+
+---
+
+### 问题发现
+
+#### 1. 正确性 (35%) — 检测逻辑存在缺陷
+
+**问题 1：`has_transient_429()` 检测不完整**
+
+当前正则表达式要求过高，导致某些常见的 rate limit 错误无法被检测：
+
+```bash
+# 当前 pattern 要求：
+# ① 行首是 Error/ERROR/Fatal 等 + 包含关键词
+# ② 或行首是 HTTP/x.x 429
+# ③ 或行首是 status.*429
+# ④ 或包含 429 + error
+# ⑤ 或包含 rate.limit + error/exceeded/limited
+
+# 但以下合法错误无法匹配：
+echo "too.many.requests"              # 不包含 429 或 rate.limit
+echo "request.was.throttled"          # 不在第一个多选分支（要求行首错误前缀）
+echo "API rate limit"                 # 包含 rate.limit 但不含 error/exceeded/limited
+```
+
+测试失败验证：
+- `detects 'too many requests'` — FAIL
+- `detects 'request was throttled'` — FAIL  
+- `detects 'API rate limit'` — FAIL
+
+**问题 2：`has_quota_exceeded()` 误报率高**
+
+Pattern 过于宽泛，会匹配讨论文本：
+
+```bash
+# 测试文件内容：
+echo "Quota exceeded错误需要我们处理" > quota_discussion.log
+# 包含 "quota.exceeded"，导致误报
+
+echo "I will implement rate limit detection with quota exceeded handling"
+# 包含 "quota.exceeded"，导致误报
+```
+
+测试失败验证：
+- `no false positive on quota discussion text (Chinese)` — FAIL
+- `no false positive on English discussion` — FAIL
+
+**问题 3：畸形 marker 文件处理不当**
+
+当 marker 文件格式不正确（只有类型没有时间戳）时，`get_rate_limit_type()` 仍返回类型，但 `get_rate_limit_timestamp()` 会清理。测试期望类型应为空。
+
+测试失败验证：
+- `malformed marker (no timestamp): type empty` — FAIL
+- `malformed marker: file removed` — FAIL
+
+#### 2. 测试质量 (25%) — 存在失败用例
+
+- 测试覆盖较全面（检测、状态管理、冷却、集成、误报防护）
+- **但 7 个测试失败**，说明实现与预期行为不一致
+- 测试框架本身没有问题，问题在于被测试的代码
+
+#### 3. 代码质量 (20%) — 结构清晰但有改进空间
+
+**优点：**
+- 模块划分清晰，函数职责单一
+- 文件标记方案简单有效
+- 注释较为完整
+
+**待改进：**
+- `has_transient_429()` 的正则表达式过于复杂，难以维护
+- 函数参数校验不够（如 `get_rate_limit_timestamp()` 对参数校验不一致）
+
+#### 4. 安全性 (10%) — 无重大问题
+
+- Shell 脚本无输入注入风险（文件路径由内部生成）
+- 无敏感信息泄露（marker 文件仅包含类型和时间戳）
+- `grep` 使用 `2>/dev/null` 避免错误信息泄露
+
+#### 5. 性能 (10%) — 无显著问题
+
+- 文件标记读取高效
+- `grep -qiE` 对于日志文件大小是可接受的
+- 无不必要的内存分配
+
+---
+
+### 评分
+
+| 维度 | 权重 | 得分 | 说明 |
+|------|------|------|------|
+| 正确性 | 35% | 20/35 | 检测逻辑不完整，存在误报和漏报 |
+| 测试质量 | 25% | 18/25 | 测试覆盖全面，但 7 个失败用例 |
+| 代码质量 | 20% | 15/20 | 结构清晰，但正则维护和参数校验待改进 |
+| 安全性 | 10% | 8/10 | 无明显安全问题 |
+| 性能 | 10% | 8/10 | 无明显性能问题 |
+
+**加权总分计算：**
+- 正确性：20 ÷ 35 × 35 = 20
+- 测试质量：18 ÷ 25 × 25 = 18
+- 代码质量：15 ÷ 20 × 20 = 15
+- 安全性：8 ÷ 10 × 10 = 8
+- 性能：8 ÷ 10 × 10 = 8
+
+**评分: 69/100**
+
+---
+
+### 改进建议
+
+#### 优先级 P0（必须修复）
+
+1. **修复 `has_transient_429()` 检测逻辑**
+
+建议简化正则表达式，使其能匹配常见的 rate limit 错误格式：
+
+```bash
+has_transient_429() {
+    local log_file="$1"
+    # 简化：匹配任何包含关键模式的行，不要求行首错误前缀
+    local pattern='status.*429'
+    pattern+='|HTTP.*429'
+    pattern+='|too.many.requests'
+    pattern+='|rate.limit'
+    pattern+='|request.was.throttled'
+    pattern+='|Rate limit exceeded'
+    pattern+='|API rate limit'
+    pattern+='|request.*throttled'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+```
+
+2. **修复 `has_quota_exceeded()` 误报问题**
+
+添加行首锚定或上下文要求，避免匹配讨论文本：
+
+```bash
+has_quota_exceeded() {
+    local log_file="$1"
+    # 要求行首是错误上下文，或整行就是错误信息
+    local pattern='^(Error|ERROR|Fatal|Exception)[: ].*quota.exceeded'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*billing.hard.limit'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*billing.limit.reached'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*monthly.spending.limit'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*usage.cap.exceeded'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*plan.limit.exceeded'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*insufficient.quota'
+    # 也允许没有前缀但包含这些关键词的行（兼容性）
+    pattern+='|quota.exceeded'
+    pattern+='|billing.hard.limit'
+    pattern+='|insufficient.quota'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+```
+
+3. **修复畸形 marker 处理**
+
+`get_rate_limit_type()` 应在文件格式校验失败时返回空：
+
+```bash
+get_rate_limit_type() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+
+    if [ -n "$agent" ] && [ -f "$marker_dir/.rate_limit_quota_${agent}" ]; then
+        local line type ts
+        line=$(head -1 "$marker_dir/.rate_limit_quota_${agent}" 2>/dev/null)
+        type=$(echo "$line" | cut -d' ' -f1 2>/dev/null)
+        ts=$(echo "$line" | cut -d' ' -f2 2>/dev/null)
+        # 校验格式
+        if [ "$type" = "quota_exceeded" ] && [[ "$ts" =~ ^[0-9]+$ ]]; then
+            echo "quota_exceeded"
+        fi
+        return
+    fi
+    # ... 全局 marker 类似处理
+}
+```
+
+#### 优先级 P1（建议改进）
+
+1. **统一正则表达式风格**：考虑将检测模式提取为配置文件或常量，便于维护
+2. **增加日志记录**：在 `classify_rate_limit()` 中增加日志，便于调试
+3. **参数校验**：为所有公共函数增加参数非空校验
+
+---
+
+### 达标判定
+
+**当前评分: 69/100 — 未达标**（需要 ≥ 85 分）
+
+主要原因：
+1. 核心检测函数存在漏报（无法检测某些合法的 rate limit 错误）
+2. 存在误报问题（讨论文本会被误判为限速错误）
+3. 测试失败表明实现与预期行为不一致
+
+修复上述 P0 问题后，预计评分可提升至 **88-92/100**，达到达标水平。
+
+---
+
+## Learnings
+
+- **模式**: Shell 脚本中跨进程状态共享用文件标记是最简洁的方案，但需注意文件格式校验
+- **踩坑**: 正则表达式设计时需平衡「检测完整性」与「误报率」，要求行首错误前缀可防误报但会漏报
+- **经验**: 限速检测函数应独立于 `has_fatal_error()` 运行（已在 `run_with_retry()` 中正确实现），但检测逻辑本身需完善
+- **经验**: 测试失败是发现实现 bug 的有效手段，不应忽略失败的测试用例
+
+---
+
+### 建议更新 `lib/CLAUDE.md`
+
+```markdown
+# lib/CLAUDE.md 补充
+
+## rate_limit.sh 注意事项
+- `has_transient_429()` 和 `has_quota_exceeded()` 的正则表达式需定期审查，避免漏报/误报
+- 检测函数 intentionally 宽松（false positives 可接受），因为限速冷却代价小
+- 但漏报（false negatives）更严重，会导致无谓重试
+- Marker 文件格式：`类型 时间戳`（空格分隔），读取时需校验两部分都存在且格式正确
+- `classify_rate_limit()` 在 `has_fatal_error()` 之前运行，避免双重触发
+```
+tokens used
+272,079
+现在我已经完成了对 Issue #55 实现的全面审核。让我整理审核报告。
+
+---
+
+## 审核报告：Issue #55 - [hardness engineering] API 限速全局感知
+
+### 实现概述
+
+Issue #55 已在项目中实现，包含以下核心组件：
+
+1. **`lib/rate_limit.sh`** — 全局限速感知库（168 行）
+   - `has_transient_429()` / `has_quota_exceeded()` — 检测两种限速错误
+   - `classify_rate_limit()` — 分类返回 0/1/2
+   - `set_rate_limit_marker()` / `is_rate_limited()` / `clear_rate_limit_marker()` — 基于文件标记的跨 agent 状态共享
+   - `get_rate_limit_type()` / `get_rate_limit_timestamp()` — 获取标记信息
+   - `global_rate_limit_wait()` — 全局冷却（支持剩余时间计算）
+
+2. **`run.sh` 中的集成**（`run_with_retry()` 函数）
+   - 每次 agent 调用前检查全局限速标记 → 执行冷却等待
+   - 调用后通过 `classify_rate_limit()` 分类错误
+   - Transient 429 → 全局冷却（不消耗重试次数）
+   - Quota exceeded → 设置标记并立即停止（返回码 3）
+   - `has_fatal_error()` 已移除限速相关模式，避免误判
+
+3. **`tests/test_rate_limit.sh`** — 61 个测试用例
+   - 当前状态：54 通过，7 失败
+
+---
+
+### 问题发现
+
+#### 1. 正确性 (35%) — 检测逻辑存在缺陷
+
+**问题 1：`has_transient_429()` 检测不完整**
+
+当前正则表达式要求过高，导致某些常见的 rate limit 错误无法被检测：
+
+```bash
+# 当前 pattern 要求：
+# ① 行首是 Error/ERROR/Fatal 等 + 包含关键词
+# ② 或行首是 HTTP/x.x 429
+# ③ 或行首是 status.*429
+# ④ 或包含 429 + error
+# ⑤ 或包含 rate.limit + error/exceeded/limited
+
+# 但以下合法错误无法匹配：
+echo "too.many.requests"              # 不包含 429 或 rate.limit
+echo "request.was.throttled"          # 不在第一个多选分支（要求行首错误前缀）
+echo "API rate limit"                 # 包含 rate.limit 但不含 error/exceeded/limited
+```
+
+测试失败验证：
+- `detects 'too many requests'` — FAIL
+- `detects 'request was throttled'` — FAIL  
+- `detects 'API rate limit'` — FAIL
+
+**问题 2：`has_quota_exceeded()` 误报率高**
+
+Pattern 过于宽泛，会匹配讨论文本：
+
+```bash
+# 测试文件内容：
+echo "Quota exceeded错误需要我们处理" > quota_discussion.log
+# 包含 "quota.exceeded"，导致误报
+
+echo "I will implement rate limit detection with quota exceeded handling"
+# 包含 "quota.exceeded"，导致误报
+```
+
+测试失败验证：
+- `no false positive on quota discussion text (Chinese)` — FAIL
+- `no false positive on English discussion` — FAIL
+
+**问题 3：畸形 marker 文件处理不当**
+
+当 marker 文件格式不正确（只有类型没有时间戳）时，`get_rate_limit_type()` 仍返回类型，但 `get_rate_limit_timestamp()` 会清理。测试期望类型应为空。
+
+测试失败验证：
+- `malformed marker (no timestamp): type empty` — FAIL
+- `malformed marker: file removed` — FAIL
+
+#### 2. 测试质量 (25%) — 存在失败用例
+
+- 测试覆盖较全面（检测、状态管理、冷却、集成、误报防护）
+- **但 7 个测试失败**，说明实现与预期行为不一致
+- 测试框架本身没有问题，问题在于被测试的代码
+
+#### 3. 代码质量 (20%) — 结构清晰但有改进空间
+
+**优点：**
+- 模块划分清晰，函数职责单一
+- 文件标记方案简单有效
+- 注释较为完整
+
+**待改进：**
+- `has_transient_429()` 的正则表达式过于复杂，难以维护
+- 函数参数校验不够（如 `get_rate_limit_timestamp()` 对参数校验不一致）
+
+#### 4. 安全性 (10%) — 无重大问题
+
+- Shell 脚本无输入注入风险（文件路径由内部生成）
+- 无敏感信息泄露（marker 文件仅包含类型和时间戳）
+- `grep` 使用 `2>/dev/null` 避免错误信息泄露
+
+#### 5. 性能 (10%) — 无显著问题
+
+- 文件标记读取高效
+- `grep -qiE` 对于日志文件大小是可接受的
+- 无不必要的内存分配
+
+---
+
+### 评分
+
+| 维度 | 权重 | 得分 | 说明 |
+|------|------|------|------|
+| 正确性 | 35% | 20/35 | 检测逻辑不完整，存在误报和漏报 |
+| 测试质量 | 25% | 18/25 | 测试覆盖全面，但 7 个失败用例 |
+| 代码质量 | 20% | 15/20 | 结构清晰，但正则维护和参数校验待改进 |
+| 安全性 | 10% | 8/10 | 无明显安全问题 |
+| 性能 | 10% | 8/10 | 无明显性能问题 |
+
+**加权总分计算：**
+- 正确性：20 ÷ 35 × 35 = 20
+- 测试质量：18 ÷ 25 × 25 = 18
+- 代码质量：15 ÷ 20 × 20 = 15
+- 安全性：8 ÷ 10 × 10 = 8
+- 性能：8 ÷ 10 × 10 = 8
+
+**评分: 69/100**
+
+---
+
+### 改进建议
+
+#### 优先级 P0（必须修复）
+
+1. **修复 `has_transient_429()` 检测逻辑**
+
+建议简化正则表达式，使其能匹配常见的 rate limit 错误格式：
+
+```bash
+has_transient_429() {
+    local log_file="$1"
+    # 简化：匹配任何包含关键模式的行，不要求行首错误前缀
+    local pattern='status.*429'
+    pattern+='|HTTP.*429'
+    pattern+='|too.many.requests'
+    pattern+='|rate.limit'
+    pattern+='|request.was.throttled'
+    pattern+='|Rate limit exceeded'
+    pattern+='|API rate limit'
+    pattern+='|request.*throttled'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+```
+
+2. **修复 `has_quota_exceeded()` 误报问题**
+
+添加行首锚定或上下文要求，避免匹配讨论文本：
+
+```bash
+has_quota_exceeded() {
+    local log_file="$1"
+    # 要求行首是错误上下文，或整行就是错误信息
+    local pattern='^(Error|ERROR|Fatal|Exception)[: ].*quota.exceeded'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*billing.hard.limit'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*billing.limit.reached'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*monthly.spending.limit'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*usage.cap.exceeded'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*plan.limit.exceeded'
+    pattern+='|^(Error|ERROR|Fatal|Exception)[: ].*insufficient.quota'
+    # 也允许没有前缀但包含这些关键词的行（兼容性）
+    pattern+='|quota.exceeded'
+    pattern+='|billing.hard.limit'
+    pattern+='|insufficient.quota'
+    grep -qiE "$pattern" "$log_file" 2>/dev/null
+}
+```
+
+3. **修复畸形 marker 处理**
+
+`get_rate_limit_type()` 应在文件格式校验失败时返回空：
+
+```bash
+get_rate_limit_type() {
+    local marker_dir="$1"
+    local agent="${2:-}"
+
+    if [ -n "$agent" ] && [ -f "$marker_dir/.rate_limit_quota_${agent}" ]; then
+        local line type ts
+        line=$(head -1 "$marker_dir/.rate_limit_quota_${agent}" 2>/dev/null)
+        type=$(echo "$line" | cut -d' ' -f1 2>/dev/null)
+        ts=$(echo "$line" | cut -d' ' -f2 2>/dev/null)
+        # 校验格式
+        if [ "$type" = "quota_exceeded" ] && [[ "$ts" =~ ^[0-9]+$ ]]; then
+            echo "quota_exceeded"
+        fi
+        return
+    fi
+    # ... 全局 marker 类似处理
+}
+```
+
+#### 优先级 P1（建议改进）
+
+1. **统一正则表达式风格**：考虑将检测模式提取为配置文件或常量，便于维护
+2. **增加日志记录**：在 `classify_rate_limit()` 中增加日志，便于调试
+3. **参数校验**：为所有公共函数增加参数非空校验
+
+---
+
+### 达标判定
+
+**当前评分: 69/100 — 未达标**（需要 ≥ 85 分）
+
+主要原因：
+1. 核心检测函数存在漏报（无法检测某些合法的 rate limit 错误）
+2. 存在误报问题（讨论文本会被误判为限速错误）
+3. 测试失败表明实现与预期行为不一致
+
+修复上述 P0 问题后，预计评分可提升至 **88-92/100**，达到达标水平。
+
+---
+
+## Learnings
+
+- **模式**: Shell 脚本中跨进程状态共享用文件标记是最简洁的方案，但需注意文件格式校验
+- **踩坑**: 正则表达式设计时需平衡「检测完整性」与「误报率」，要求行首错误前缀可防误报但会漏报
+- **经验**: 限速检测函数应独立于 `has_fatal_error()` 运行（已在 `run_with_retry()` 中正确实现），但检测逻辑本身需完善
+- **经验**: 测试失败是发现实现 bug 的有效手段，不应忽略失败的测试用例
+
+---
+
+### 建议更新 `lib/CLAUDE.md`
+
+```markdown
+# lib/CLAUDE.md 补充
+
+## rate_limit.sh 注意事项
+- `has_transient_429()` 和 `has_quota_exceeded()` 的正则表达式需定期审查，避免漏报/误报
+- 检测函数 intentionally 宽松（false positives 可接受），因为限速冷却代价小
+- 但漏报（false negatives）更严重，会导致无谓重试
+- Marker 文件格式：`类型 时间戳`（空格分隔），读取时需校验两部分都存在且格式正确
+- `classify_rate_limit()` 在 `has_fatal_error()` 之前运行，避免双重触发
+```

@@ -1,0 +1,45 @@
+我现在对代码库有了全面的了解。让我来分析这个问题并规划子任务。
+
+这个问题是关于实现API速率限制的全局感知，它包含三个主要部分：
+1. 检测速率限制错误并应用全局冷却，而不是独立重试
+2. 通过文件标记在代理之间共享速率限制状态
+3. 区分瞬态429（可重试）和配额超出（应立即停止）
+
+```json
+{
+  "issueNumber": 55,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现 429/quota 错误分类检测函数",
+      "description": "在 run.sh 中新增错误分类函数，将当前 has_fatal_error() 中混在一起的 rate limit 相关错误拆分为两类：1) transient 429（too_many_requests, rate.limit, model.is.overloaded, server.error）— 可重试；2) quota exceeded（quota.exceeded, billing.hard.limit, insufficient_quota）— 应立即停止。函数从 agent 日志文件中检测错误类型并返回分类结果（transient/quota_exceeded/none）。同步修改 run_with_retry() 中的错误检测逻辑，用新分类替代原有的通用 has_fatal_error/has_api_failure 匹配。",
+      "acceptanceCriteria": [
+        "新增 classify_api_error() 函数，能从日志内容中区分 transient 429 和 quota exceeded 两类错误",
+        "run_with_retry() 内部使用新分类函数替代原有的 has_fatal_error/has_api_failure 通用匹配来处理 rate limit 相关错误",
+        "transient 429 错误触发带全局冷却的重试，quota exceeded 错误立即终止当前 agent 调用（不消耗剩余重试次数）",
+        "新增 tests/test_rate_limit.sh 测试文件，覆盖：transient 429 检测、quota exceeded 检测、非 rate-limit 错误不受影响",
+        "已有测试 tests/test_extract_score.sh、tests/test_agent_logic.sh 等仍全部通过"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现跨 agent 全局限速状态共享和全局冷却机制",
+      "description": "在 WORK_DIR 下新增限速状态文件（如 .rate_limit_state），记录最近一次 rate limit 错误的时间戳、冷却时长和错误分类。当任一 agent 遇到 transient 429 时：1) 将限速状态写入文件；2) 执行全局冷却 sleep（默认 60 秒，可通过 RATE_LIMIT_COOLDOWN 环境变量配置）；3) 后续 agent 在调用前检查该文件，若尚在冷却期则等待。当遇到 quota exceeded 时：1) 写入状态文件标记不可恢复；2) 跳过所有后续 agent 调用；3) 在 run.sh 主循环中检查该标记，提前终止整个运行。修改 run_with_retry()、run_review_and_fix() 和主迭代循环以集成此机制。",
+      "acceptanceCriteria": [
+        "新增 write_rate_limit_state()、read_rate_limit_state()、check_rate_limit_cooldown() 等函数管理全局限速状态",
+        "状态文件记录：错误类型（transient/quota_exceeded）、时间戳、冷却时长",
+        "transient 429 触发时写入状态并执行全局冷却（默认 60s），冷却时长通过 RATE_LIMIT_COOLDOWN 环境变量可配",
+        "quota exceeded 触发时写入不可恢复标记，run.sh 主循环检测到后提前终止运行并记录原因到 log.md",
+        "agent 调用前自动检查冷却状态，若在冷却期内则等待至冷却结束",
+        "冷却完成后自动清除状态文件",
+        "新增测试覆盖：状态写入/读取、冷却等待、quota exceeded 提前终止、冷却完成自动清理",
+        "已有测试全部通过"
+      ],
+      "priority": 2,
+      "passes": false
+    }
+  ]
+}
+```
