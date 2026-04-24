@@ -173,7 +173,11 @@ function IssueListItem({
                 : 'bg-purple-100 text-purple-600'
             }`}
           >
-            <IssueIcon className="w-3.5 h-3.5" />
+            {issue.state === 'open' ? (
+              <IssueIcon className="w-3.5 h-3.5" />
+            ) : (
+              <CheckIcon className="w-3.5 h-3.5" />
+            )}
           </div>
         </div>
 
@@ -183,6 +187,11 @@ function IssueListItem({
             <span className="text-xs text-gray-500 font-mono">
               #{issue.number}
             </span>
+            {issue.state !== 'open' && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                closed
+              </span>
+            )}
             {isProcessed && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                 <ProcessedIcon className="w-3 h-3 mr-1" />
