@@ -265,25 +265,46 @@ handle_context_overflow() {
         return 1
     fi
 
-    # 渐进式压缩：第一轮正常压缩，如果压缩后仍有大量日志则加大压缩力度
+    # 第一次溢出就充分压缩，确保后续还有 2 次重试空间
     local original_keep=$CONTEXT_KEEP_RECENT
     local compress_round=0
-    local max_compress_rounds=3
+    local max_compress_rounds=5
     while [ $compress_round -lt $max_compress_rounds ]; do
         compress_round=$((compress_round + 1))
         compress_context "$WORK_DIR"
 
-        # 检查是否还有大量日志需要压缩
-        local remaining_logs
-        remaining_logs=$(ls -1 "$WORK_DIR"/iteration-*-*.log 2>/dev/null | wc -l | tr -d ' ')
-        if [ "$remaining_logs" -le "$CONTEXT_KEEP_RECENT" ]; then
+        # 基于剩余日志实际大小估算是否仍在阈值以上
+        local remaining_size=0
+        while IFS= read -r f; do
+            remaining_size=$(( remaining_size + $(wc -c < "$f" 2>/dev/null || echo 0) ))
+        done < <(ls -1 "$WORK_DIR"/iteration-*-*.log 2>/dev/null | sort -t'-' -k2 -n)
+        local remaining_tokens=$(( remaining_size / 3 ))
+
+        if [ "$remaining_tokens" -lt "$CONTEXT_COMPRESS_THRESHOLD" ]; then
+            log_console "📦 溢出压缩后剩余估算 $remaining_tokens tokens < $CONTEXT_COMPRESS_THRESHOLD，压缩充足"
             break
         fi
 
-        # 加大压缩力度：减少保留数量
+        # 仍在阈值以上：加大压缩力度
         CONTEXT_KEEP_RECENT=$((CONTEXT_KEEP_RECENT - 1))
         if [ "$CONTEXT_KEEP_RECENT" -lt 1 ]; then
             CONTEXT_KEEP_RECENT=1
+            # 保留数已到最小但仍然超限，截断剩余摘要以进一步缩减
+            for sf in "$WORK_DIR"/summaries/*.summary.md; do
+                [ -f "$sf" ] && head -c 2000 "$sf" > "$sf.tmp" && mv "$sf.tmp" "$sf"
+            done
+            # 再做一轮检查
+            remaining_size=0
+            while IFS= read -r f; do
+                remaining_size=$(( remaining_size + $(wc -c < "$f" 2>/dev/null || echo 0) ))
+            done < <(ls -1 "$WORK_DIR"/iteration-*-*.log 2>/dev/null | sort -t'-' -k2 -n)
+            remaining_tokens=$(( remaining_size / 3 ))
+            if [ "$remaining_tokens" -lt "$CONTEXT_COMPRESS_THRESHOLD" ]; then
+                log_console "📦 摘要截断后剩余估算 $remaining_tokens tokens < $CONTEXT_COMPRESS_THRESHOLD"
+                break
+            fi
+            log_console "⚠️ 溢出压缩后仍超限 ($remaining_tokens >= $CONTEXT_COMPRESS_THRESHOLD)，依赖 prompt 裁剪兜底"
+            break
         fi
     done
     CONTEXT_KEEP_RECENT=$original_keep
