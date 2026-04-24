@@ -146,7 +146,7 @@ function IssueDetailPanel({
             #{issue.number} {issue.title}
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            {issue.state === 'open' ? 'Open' : 'Closed'} · 创建于{' '}
+            {issue.state === 'OPEN' ? 'Open' : 'Closed'} · 创建于{' '}
             {formatDateTime(issue.createdAt)}
           </p>
         </div>

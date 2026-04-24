@@ -168,12 +168,12 @@ function IssueListItem({
         <div className="flex-shrink-0 mt-0.5">
           <div
             className={`w-6 h-6 rounded-full flex items-center justify-center ${
-              issue.state === 'open'
+              issue.state === 'OPEN'
                 ? 'bg-green-100 text-green-600'
                 : 'bg-purple-100 text-purple-600'
             }`}
           >
-            {issue.state === 'open' ? (
+            {issue.state === 'OPEN' ? (
               <IssueIcon className="w-3.5 h-3.5" />
             ) : (
               <CheckIcon className="w-3.5 h-3.5" />
@@ -187,7 +187,7 @@ function IssueListItem({
             <span className="text-xs text-gray-500 font-mono">
               #{issue.number}
             </span>
-            {issue.state !== 'open' && (
+            {issue.state !== 'OPEN' && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
                 closed
               </span>
