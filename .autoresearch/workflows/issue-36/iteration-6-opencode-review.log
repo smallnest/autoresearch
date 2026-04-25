@@ -1,0 +1,512 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore project structure[90m Explore Agent[0m
+[0m• [0mFind T-003 implementation files[90m Explore Agent[0m
+[0m✓ [0mExplore project structure[90m Explore Agent[0m
+[0m✓ [0mFind T-003 implementation files[90m Explore Agent[0m
+[0m→ [0mRead .autoresearch/workflows/issue-36
+[0m✱ [0mGlob ".autoresearch/workflows/issue-36/iteration-*"[90m in . · 8 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-36/iteration-6-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-36/iteration-5-claude-review.log[90m [limit=80][0m
+[0m→ [0mRead .autoresearch/workflows/issue-36/log.md
+[0m→ [0mRead .autoresearch/workflows/issue-36/progress.md
+[0m✗ [0mread failed
+[91m[1mError: [0mFile not found: /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-36/last_score
+
+Did you mean one of these?
+/Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-36/.last_score
+[0m→ [0mRead .autoresearch/workflows/issue-36/tasks.json
+[0m→ [0mRead desktop_app/src/components/HistoryDetailPanel.tsx
+[0m→ [0mRead desktop_app/src/stores/historyDetailStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+Now let me examine the key source files that would be involved in T-003 implementation:
+[0m✱ [0mGrep "save_file|export|dialog"[90m in desktop_app/src-tauri/src/lib.rs · 3 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs
+[0m✱ [0mGlob "desktop_app/tests/historyDetail*"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "export_log|exportLog|save_log|saveLog|export_history|save.*dialog|save_file"[90m in desktop_app · 0 matches[0m
+[0m✱ [0mGrep "导出|export"[90m in desktop_app/src · 154 matches[0m
+Let me now check for any existing test files related to the detail store and the iteration logs:
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch status --short desktop_app/
+M desktop_app/src-tauri/src/lib.rs
+ M desktop_app/src/pages/HistoryPage.tsx
+ M desktop_app/src/stores/historyStore.ts
+?? desktop_app/src/components/HistoryDetailPanel.tsx
+?? desktop_app/src/stores/historyDetailStore.ts
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch log --oneline -10
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+c190f24 Merge pull request #79 from smallnest/feature/issue-34
+c78e166 feat: implement issue #34 - [desktop-app] 配置文件编辑器
+33ed825 Merge pull request #78 from smallnest/feature/issue-33
+a303498 feat: implement issue #33 - [desktop-app] 评分趋势折线图
+f1aadaf Merge pull request #77 from smallnest/feature/issue-73
+ae6246d feat: implement issue #73 - [desktop-app] 项目配置模板初始化
+1be412f Merge pull request #76 from smallnest/feature/issue-74
+53e0316 feat: implement issue #74 - [desktop-app] UI 全面中文化
+[0m
+Let me verify if there are any uncommitted changes that might contain T-003 implementation:
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff HEAD -- desktop_app/ 2>/dev/null | head -200
+diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+index f708c13..f2fd40f 100644
+--- a/desktop_app/src-tauri/src/lib.rs
++++ b/desktop_app/src-tauri/src/lib.rs
+@@ -2037,6 +2037,314 @@ async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String>
+         .map_err(|e| format!("Task join error: {e}"))?
+ }
+ 
++// ========================================
++// History detail types and commands
++// ========================================
++
++/// Summary of one iteration within a history detail view.
++#[derive(serde::Serialize, Debug, Clone)]
++struct IterationSummary {
++    /// Iteration number (1-based).
++    iteration: i32,
++    /// Agent name extracted from the log filename (e.g. "claude", "codex").
++    agent: String,
++    /// Review score (0–100), `None` if not reviewed yet.
++    score: Option<i32>,
++    /// Short summary extracted from the review text.
++    review_summary: Option<String>,
++}
++
++/// Full detail for one processed Issue, returned by `get_history_detail`.
++#[derive(serde::Serialize, Debug, Clone)]
++struct HistoryDetail {
++    issue_number: i64,
++    title: String,
++    status: HistoryRunStatus,
++    final_score: Option<i32>,
++    total_iterations: Option<i32>,
++    start_time: Option<String>,
++    end_time: Option<String>,
++    /// Iteration summaries ordered by iteration number ascending.
++    iterations: Vec<IterationSummary>,
++}
++
++/// Reads all iteration log filenames and builds per-iteration summaries with
++/// agent name, score and review summary.
++fn build_iteration_summaries(workflow_dir: &Path) -> Vec<IterationSummary> {
++    let entries = match fs::read_dir(workflow_dir) {
++        Ok(e) => e,
++        Err(_) => return Vec::new(),
++    };
++
++    // Collect review logs grouped by iteration number, keeping the
++    // lexicographically last filename per iteration (same tie-break rule as
++    // `build_score_history`).
++    let mut review_by_iter: std::collections::BTreeMap<i32, std::path::PathBuf> =
++        std::collections::BTreeMap::new();
++
++    // Collect all iteration-* log filenames to discover agent names.
++    // Prefer implementation agent over review agent.
++    let mut impl_agent_by_iter: std::collections::BTreeMap<i32, String> =
++        std::collections::BTreeMap::new();
++    let mut review_agent_by_iter: std::collections::BTreeMap<i32, String> =
++        std::collections::BTreeMap::new();
++
++    for entry in entries.flatten() {
++        let path = entry.path();
++        let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
++            continue;
++        };
++
++        if !name.starts_with("iteration-") {
++            continue;
++        }
++
++        let Some(iteration) = iteration_number(&name) else {
++            continue;
++        };
++
++        let is_review = name.ends_with("-review.log");
++
++        // Extract agent name from pattern: iteration-N-<agent>-*.log
++        if let Some(after_prefix) = name.strip_prefix(&format!("iteration-{iteration}-")) {
++            let agent = if let Some(before_dash) = after_prefix.find('-') {
++                after_prefix[..before_dash].to_string()
++            } else if after_prefix.ends_with(".log") {
++                // Pattern: iteration-N-<agent>.log (no trailing segment)
++                after_prefix.trim_end_matches(".log").to_string()
++            } else {
++                continue;
++            };
++
++            if is_review {
++                review_agent_by_iter.entry(iteration).or_insert(agent);
++            } else {
++                impl_agent_by_iter.entry(iteration).or_insert(agent);
++            }
++        }
++
++        if name.ends_with("-review.log") {
++            let replace = review_by_iter
++                .get(&iteration)
++                .and_then(|existing| existing.file_name())
++                .map(|current| name.as_str() > current.to_string_lossy().as_ref())
++                .unwrap_or(true);
++
++            if replace {
++                review_by_iter.insert(iteration, path);
++            }
++        }
++    }
++
++    review_by_iter
++        .into_iter()
++        .map(|(iteration, path)| {
++            let content = fs::read_to_string(&path).unwrap_or_default();
++            let score = extract_score(&content);
++            let review_summary = if content.is_empty() {
++                None
++            } else {
++                extract_review_summary(&content)
++            };
++            let agent = impl_agent_by_iter
++                .remove(&iteration)
++                .or_else(|| review_agent_by_iter.remove(&iteration))
++                .unwrap_or_else(|| "unknown".to_string());
++
++            IterationSummary {
++                iteration,
++                agent,
++                score,
++                review_summary,
++            }
++        })
++        .collect()
++}
++
++/// Returns the full history detail for a given processed Issue.
++fn get_history_detail_sync(
++    project_path: &Path,
++    issue_number: i64,
++) -> Result<HistoryDetail, String> {
++    let workflows_dir = project_path.join(".autoresearch").join("workflows");
++    let issue_dir = workflows_dir.join(format!("issue-{issue_number}"));
++
++    if !issue_dir.is_dir() {
++        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
++    }
++
++    let log_content = fs::read_to_string(issue_dir.join("log.md")).unwrap_or_default();
++    let title = extract_history_title(&log_content);
++    let start_time = extract_field(&log_content, "开始时间");
++    let end_time = extract_history_end_time(&log_content);
++    let total_iterations = extract_total_iterations(&log_content);
++    let final_score = extract_history_final_score(&log_content);
++    let status = determine_history_status(&log_content, &final_score);
++    let iterations = build_iteration_summaries(&issue_dir);
++
++    Ok(HistoryDetail {
++        issue_number,
++        title,
++        status,
++        final_score,
++        total_iterations,
++        start_time,
++        end_time,
++        iterations,
++    })
++}
++
++/// Returns the full history detail for a processed Issue.
++#[tauri::command]
++async fn get_history_detail(
++    project_path: String,
++    issue_number: i64,
++) -> Result<HistoryDetail, String> {
++    let path = project_path.clone();
++    tokio::task::spawn_blocking(move || get_history_detail_sync(Path::new(&path), issue_number))
++        .await
++        .map_err(|e| format!("Task join error: {e}"))?
++}
++
++/// Returns the full log content for a specific iteration of a processed Issue.
++///
++/// The iteration log is identified by matching `iteration-N-*-review.log`
++/// (review log preferred) or `iteration-N-*.log` (implementation log) files.
++fn get_iteration_log_sync(
++    project_path: &Path,
++    issue_number: i64,
++    iteration: i32,
++) -> Result<String, String> {
++    let issue_dir = project_path
++        .join(".autoresearch")
++        .join("workflows")
++        .join(format!("issue-{issue_number}"));
++
++    if !issue_dir.is_dir() {
++        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
++    }
++
++    let entries =
++        fs::read_dir(&issue_dir).map_err(|e| format!("Failed to read workflow dir: {e}"))?;
++
++    // Prefer review log, then fall back to any iteration log.
++    let mut review_log: Option<std::path::PathBuf> = None;
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch grep -l "导出日志\|exportLog\|export_log\|saveLog\|save_log\|save.*dialog.*file\|file.*save.*dialog" 2>/dev/null || echo "No matches found"
+No matches found
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff HEAD -- desktop_app/ 2>/dev/null | wc -l
+959
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff HEAD -- desktop_app/ 2>/dev/null | grep -i "导出\|export.*log\|save.*log\|save.*dialog\|download" || echo "NO EXPORT/SAVE CODE FOUND"
+NO EXPORT/SAVE CODE FOUND
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff HEAD -- desktop_app/src/pages/HistoryPage.tsx 2>/dev/null | head -100
+diff --git a/desktop_app/src/pages/HistoryPage.tsx b/desktop_app/src/pages/HistoryPage.tsx
+index 75dab96..373de45 100644
+--- a/desktop_app/src/pages/HistoryPage.tsx
++++ b/desktop_app/src/pages/HistoryPage.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useMemo } from 'react';
++import { useEffect, useMemo, useState, useCallback, type JSX } from 'react';
+ import { useProjectStore } from '../stores/projectStore';
+ import {
+   useHistoryStore,
+@@ -8,6 +8,8 @@ import {
+   StatusFilter,
+   SortOrder,
+ } from '../stores/historyStore';
++import { useHistoryDetailStore } from '../stores/historyDetailStore';
++import HistoryDetailPanel from '../components/HistoryDetailPanel';
+ 
+ // ---------------------------------------------------------------------------
+ // Status helpers
+@@ -62,7 +64,7 @@ function formatTime(iso: string | null): string {
+ // Sub-components
+ // ---------------------------------------------------------------------------
+ 
+-function StatusBadge({ status }: { status: RunStatus }) {
++function StatusBadge({ status }: { status: RunStatus }): JSX.Element {
+   return (
+     <span
+       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${STATUS_BADGE_CLASS[status]}`}
+@@ -73,9 +75,44 @@ function StatusBadge({ status }: { status: RunStatus }) {
+   );
+ }
+ 
+-function HistoryListItem({ entry }: { entry: HistoryEntry }) {
++function ChevronRight({ className }: { className?: string }): JSX.Element {
+   return (
+-    <div className="p-4 rounded-lg border bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
++    <svg
++      className={className}
++      fill="none"
++      stroke="currentColor"
++      viewBox="0 0 24 24"
++      aria-hidden="true"
++    >
++      <path
++        strokeLinecap="round"
++        strokeLinejoin="round"
++        strokeWidth={2}
++        d="M9 5l7 7-7 7"
++      />
++    </svg>
++  );
++}
++
++function HistoryListItem({
++  entry,
++  isSelected,
++  onClick,
++}: {
++  entry: HistoryEntry;
++  isSelected: boolean;
++  onClick: () => void;
++}): JSX.Element {
++  return (
++    <button
++      type="button"
++      onClick={onClick}
++      className={`w-full text-left p-4 rounded-lg border transition-all ${
++        isSelected
++          ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
++          : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
++      }`}
++    >
+       <div className="flex items-start justify-between gap-3">
+         <div className="flex-1 min-w-0">
+           <div className="flex items-center gap-2 mb-1">
+@@ -88,7 +125,7 @@ function HistoryListItem({ entry }: { entry: HistoryEntry }) {
+             {entry.title}
+           </h3>
+         </div>
+-        <div className="flex-shrink-0 text-right">
++        <div className="flex-shrink-0 flex items-center gap-2">
+           {entry.final_score != null ? (
+             <span className="text-sm font-semibold text-gray-700">
+               {entry.final_score}/100
+@@ -96,6 +133,7 @@ function HistoryListItem({ entry }: { entry: HistoryEntry }) {
+           ) : (
+             <span className="text-sm text-gray-400">-</span>
+           )}
++          <ChevronRight className="w-4 h-4 text-gray-300" />
+         </div>
+       </div>
+       <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+@@ -104,11 +142,11 @@ function HistoryListItem({ entry }: { entry: HistoryEntry }) {
+           <span>{entry.total_iterations} 次迭代</span>
+         )}
+       </div>
+-    </div>
++    </button>
+   );
+ }
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff HEAD -- desktop_app/src/stores/historyStore.ts 2>/dev/null | head -60
+diff --git a/desktop_app/src/stores/historyStore.ts b/desktop_app/src/stores/historyStore.ts
+index d1ad1b6..b3f085b 100644
+--- a/desktop_app/src/stores/historyStore.ts
++++ b/desktop_app/src/stores/historyStore.ts
+@@ -26,6 +26,36 @@ export interface HistoryEntry {
+   end_time: string | null;
+ }
+ 
++/** Mirrors Rust `IterationSummary`. */
++export interface IterationSummary {
++  iteration: number;
++  agent: string;
++  score: number | null;
++  review_summary: string | null;
++}
++
++/** Mirrors Rust `HistoryDetail`. */
++export interface HistoryDetail {
++  issue_number: number;
++  title: string;
++  status: RunStatus;
++  final_score: number | null;
++  total_iterations: number | null;
++  start_time: string | null;
++  end_time: string | null;
++  iterations: IterationSummary[];
++}
++
++/** Mirrors Rust `SubtaskStatus` enum variants. */
++export type SubtaskStatus = 'Pending' | 'Passing' | 'Failing';
++
++/** Mirrors Rust `SubtaskStatusEntry`. */
++export interface SubtaskStatusEntry {
++  id: string;
++  title: string;
++  status: SubtaskStatus;
++}
++
+ // ---------------------------------------------------------------------------
+ // Pure helpers
+ // ---------------------------------------------------------------------------
+[0m
+Let me check the HistoryPage.tsx diff for any export-related changes:
+Now I have a complete picture. Here is my review report:
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #36
+- 子任务: **T-003 - 日志导出功能与最终验证**
+- 类型: UI
+- 迭代: 6 (审核 - OpenCode)
+
+### 总体评价
+
+**评分: 10/100** — 不合格
+
+T-003 子任务**完全未实现**。经过全面代码审查（包括 `HistoryDetailPanel.tsx` (475行)、`historyDetailStore.ts` (228行)、`HistoryPage.tsx`、`historyStore.ts`、Rust `lib.rs` (4290行) 及所有 12 个测试文件），未发现任何日志导出、文件保存对话框、或纯文本导出相关代码。
+
+Git diff 共 959 行，仅包含 T-001 (Rust 后端 API: `get_history_detail` / `get_iteration_log` / `get_subtask_status`) 和 T-002 (前端 HistoryDetailPanel / historyDetailStore / HistoryPage 交互) 的实现，零行涉及 T-003。
+
+迭代 6 的审核日志 (`iteration-6-opencode-review.log`, 9 行) 显示审核 Agent 仅完成了项目探索阶段即中止，未产出有效审核结论或实现代码。
+
+---
+
+### 致命问题 (必须修复)
+
+#### 问题 1: T-003 完全未实现 — 所有 6 项验收条件均不满足
+
+**验收条件对照:**
+
+| # | 验收条件 | 状态 | 证据 |
+|---|---------|------|------|
+| 1 | 详情面板中有"导出日志"按钮 | ❌ 未实现 | `HistoryDetailPanel.tsx:401-473` 渲染的输出中无任何导出按钮 |
+| 2 | 点击按钮弹出 Tauri 文件保存对话框 | ❌ 未实现 | 整个 `desktop_app/` 目录无 `save_file` 或 dialog save 调用；Rust `lib.rs` 仅注册了 `tauri_plugin_dialog::init()` (line 2396)，但未使用其 file save API |
+| 3 | 导出的文本文件包含完整日志内容，带时间戳和迭代分隔标记 | ❌ 未实现 | 无任何日志聚合/格式化/导出逻辑 |
+| 4 | 导出格式为纯文本（.txt） | ❌ 未实现 | 无导出格式处理 |
+| 5 | Typecheck/lint 全部通过 | ⚠️ 无法验证 | 现有代码可编译通过，但不包含 T-003 实现 |
+| 6 | 浏览器中验证所有功能正常工作 | ❌ 无法验证 | 功能不存在，无法验证 |
+
+---
+
+### 严重问题
+
+#### 问题 2: Tauri capabilities 未配置文件保存权限
+
+**位置**: `desktop_app/src-tauri/capabilities/default.json:1-13`
+
+当前配置仅包含 `dialog:default` 和 `dialog:allow-open`，缺少 `dialog:allow-save` 权限。即使后续实现导出功能，也需要更新此配置。
+
+#### 问题 3: `historyDetailStore` 缺少导出状态管理
+
+**位置**: `desktop_app/src/stores/historyDetailStore.ts:66-84`
+
+当前 `HistoryDetailState` 接口缺少导出相关状态（如 `isExporting`, `exportError`）和 `exportLog` 动作。store 中有完整的日志数据（`iterationLogs: Record<number, string>`），但无任何消费这些数据用于导出的逻辑。
+
+#### 问题 4: 无测试覆盖
+
+T-003 对应的测试文件 `desktop_app/tests/historyDetailExport.test.mjs` 不存在。仓库现有的 12 个测试文件中，`historyStore.test.mjs` 和 `historyDetailStore.test.mjs` (不存在) 均不包含导出相关测试。
+
+---
+
+### 建议改进
+
+- 实现日志导出时建议复用 store 中已有的 `iterationLogs`（缓存）和 `detail.iterations` (元数据)，避免重复请求后端。
+- 建议在 Rust 后端实现 `export_history_log` Tauri 命令，而非在前端拼接文本，以确保时间戳格式一致性。
+- 建议在 `HistoryDetailPanel.tsx` 的 header 区域添加"导出日志"按钮，位于 `BackIcon` 和 `CloseIcon` 之间。
+- 建议同步更新 `capabilities/default.json` 添加 `dialog:allow-save` 权限。
+
+---
+
+### 评分明细
+
+| 维度 | 权重 | 得分 | 说明 |
+|------|------|------|------|
+| 正确性 | 35% | 10/100 | 功能完全未实现，6 项验收条件均不满足 |
+| 测试质量 | 25% | 10/100 | 无对应测试文件，功能不存在无法测试 |
+| 代码质量 | 20% | 10/100 | 无实现代码可供评审 |
+| 安全性 | 10% | 100/100 | 无代码即无安全风险 |
+| 性能 | 10% | 100/100 | 无代码即无性能问题 |
+
+**总分**: 10 × 0.35 + 10 × 0.25 + 10 × 0.20 + 100 × 0.10 + 100 × 0.10 = **28/100**
+
+---
+
+### 审核结论
+
+- [x] **阻塞** — T-003 需要从零实现。建议下一个迭代（迭代 7）由实现 Agent 完成日志导出功能的全部开发工作。
+
+---
+
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查 — N/A（功能未实现）
+- [ ] 实现者已执行 Lint 检查 — N/A
+- [ ] 实现者已运行相关测试 — N/A
+- [ ] 实现者已确认测试覆盖 — N/A
+
+---
+
+## Learnings
+
+- **模式**: 日志导出功能需要三层配合：Rust 端新建 `export_history_log` Tauri 命令（聚合 `iterationLogs` + `detail` 数据 + 格式化 + 调用 `tauri_plugin_dialog` save_file）；前端 `historyDetailStore` 添加 `exportLog` action；`HistoryDetailPanel.tsx` header 添加"导出日志"按钮。
+- **模式**: Tauri 文件保存对话框需要 `dialog:allow-save` capability 权限，当前仅有 `dialog:allow-open`。
+- **经验**: `historyDetailStore` 已将日志缓存在 `iterationLogs: Record<number, string>` 中，`detail.iterations` 包含每轮迭代的元数据（agent、score、review_summary），导出功能可直接消费这些已有数据，无需额外后端请求。
+- **踩坑**: 迭代 6 的 OpenCode 审核 Agent 在探索阶段后即中止，未产出有效审核结论。后续迭代需确保 Agent 能完整执行审核任务。

@@ -1,0 +1,127 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 36 workflow[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 36 workflow[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=100][0m
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+Now let me read the actual implementation code to review it thoroughly.
+[0m✱ [0mGrep "fn get_history_detail|fn get_iteration_log|fn get_subtask_status|struct HistoryDetail|struct IterationSummary|struct SubtaskStatusEntry|fn build_iteration_summaries|fn get_history_detail_sync|fn get_iteration_log_sync|fn get_subtask_status_sync"[90m in desktop_app/src-tauri/src · 18 matches[0m
+Now let me read the specific implementation sections and tests for the T-001 commands.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2040, limit=350][0m
+[0m✱ [0mGrep "fn extract_history_title|fn extract_field|fn extract_history_end_time|fn extract_total_iterations|fn extract_history_final_score|fn determine_history_status|fn extract_score|fn extract_review_summary|fn extract_iteration_numbers|fn read_last_score|fn current_iteration_has_review_or_hard_gate|fn parse_tasks_json|fn iteration_number|struct SubtaskStatus|struct TaskItem"[90m in desktop_app/src-tauri/src/lib.rs · 34 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=250, offset=326][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=200, offset=472][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=200, offset=1370][0m
+[0m✱ [0mGrep "struct TasksFile|struct TasksFileSubtask|struct SubtaskInfo|enum SubtaskStatus|enum HistoryRunStatus|struct HistoryEntry|fn extract_history"[90m in desktop_app/src-tauri/src/lib.rs · 9 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=100, offset=167][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=200, offset=1820][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=100, offset=2390][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=250, offset=4120][0m
+[0m✱ [0mGrep "fn setup_history_detail_issue"[90m in desktop_app/src-tauri/src/lib.rs · 1 match[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=30, offset=4102][0m
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=60, offset=267][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=30, offset=687][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=30, offset=2020][0m
+Now let me read the summary regex patterns I missed and the `extract_iteration_numbers` function.
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs
+Now I have all the information needed for a thorough review. Let me present my findings.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #36
+- 子任务: T-001 - Backend: 添加历史详情数据接口
+- 迭代次数: 1 (Claude 实现)
+
+### 总体评价
+**评分: 86/100**
+
+T-001 实现基本符合验收条件。三个 Tauri 命令均已正确注册到 `invoke_handler`，Rust 代码编译通过、clippy 无警告、所有测试通过。实现复用了现有的辅助函数（`extract_score`、`extract_review_summary`、`parse_tasks_json` 等），与项目既有模式一致。
+
+存在以下问题需要关注：
+
+---
+
+### 一般问题 (建议修复)
+
+#### 1. 硬编码评分阈值 85 未使用 `get_passing_score()`
+
+**位置**: `lib.rs:2312` (`get_subtask_status_sync`)
+
+```rust
+let current_failed = current_iteration_has_review_or_hard_gate(&issue_dir, current_iteration)
+    || last_score.is_some_and(|score| score < 85);  // ← 硬编码 85
+```
+
+项目已有 `get_passing_score()` 函数（`lib.rs:585`）从 `PASSING_SCORE` 环境变量读取阈值，但此处（以及已有的 `build_subtask_infos`，行 597）直接硬编码了 `85`。如果用户通过环境变量修改了通过线，`Failing` 状态的判定将不一致。
+
+**建议**: 将 `< 85` 改为 `< get_passing_score()`。但由于 `build_subtask_infos` 也存在同样问题，建议单独开 Issue 统一修复，而非在此子任务中引入不一致的局部修复。
+
+#### 2. `get_subtask_status_sync` 与 `build_subtask_infos` 逻辑重复
+
+**位置**: `lib.rs:2295-2334` vs `lib.rs:592-619`
+
+两个函数的核心逻辑（三态判定）完全相同，仅返回类型不同（`Vec<SubtaskStatusEntry>` vs `Vec<SubtaskInfo>`）。虽然类型差异使直接复用稍显繁琐，但核心判定逻辑可提取为共享辅助函数。
+
+**建议**: 提取共享的 `enum SubtaskStatus { Pending, Passing, Failing }` 构建逻辑，两处共用，减少未来维护成本。
+
+---
+
+### 建议改进 (可选)
+
+#### 3. 缺少 `Failing` 子任务状态的测试覆盖
+
+**位置**: 测试 `get_subtask_status_parses_tasks` (行 4246)
+
+当前测试仅验证了 `Passing` 和 `Pending` 状态（因为没有 review/hard-gate 文件），未覆盖 `Failing` 路径。
+
+**建议**: 增加一个测试，写入低分 review log 或 `.last_score` 文件 + review log，验证当前未通过的子任务被标记为 `Failing`。
+
+#### 4. `get_history_detail_sync` 在 `log.md` 缺失时静默降级
+
+**位置**: `lib.rs:2176`
+
+```rust
+let log_content = fs::read_to_string(issue_dir.join("log.md")).unwrap_or_default();
+```
+
+当 `log.md` 不存在时返回空的 `HistoryDetail`（空 title、无 score），这与 `list_history_sync` 中遇到缺失 `log.md` 时创建带 `InProgress` 状态的 `HistoryEntry` 的行为不一致。虽非 bug，但可能让前端收到一个看似合法但字段全空的结果。
+
+**建议**: 考虑在 `log.md` 缺失时返回错误，或至少设置 `status: InProgress`，与 `list_history_sync` 保持一致。
+
+#### 5. `get_iteration_log_sync` 中实现日志选择策略与 review 日志不一致
+
+**位置**: `lib.rs:2252-2257`
+
+```rust
+} else if name.ends_with(".log") {
+    let replace = impl_log.is_none();  // ← 取第一个，非字典序最后一个
+```
+
+Review log 使用字典序最后（consistent tie-break），但 impl log 取第一个。对于同迭代通常只有单个 impl log 的场景，这不构成实际 bug，但策略不一致。
+
+---
+
+### 审核结论
+- [x] **通过** — 评分 86/100 ≥ 85 达标
+
+子任务 T-001 的核心功能完整、错误处理充分、测试覆盖良好（7 个新增测试，共 95 个）。上述问题均属于可后续改进的非阻塞项。建议在进行 T-002/T-003 之前合并，不阻塞进度。
+
+### 实现者自检确认
+- [x] 编译/类型检查: `cargo build` 和 `npx tsc --noEmit` 均通过
+- [x] Lint 检查: `cargo clippy -- -D warnings` 通过，`cargo fmt` 已应用
+- [x] 测试: 95/95 Rust 测试全部通过
+- [x] 测试覆盖: 7 个新测试覆盖 happy path、错误路径、边界情况
+
+---
+
+## Learnings
+
+- **模式**: 新增 Tauri 命令时，同步函数 + `tokio::task::spawn_blocking` + async command wrapper 是项目标准模式，三个新命令均正确遵循。
+- **模式**: `build_iteration_summaries` 的 agent 提取逻辑（impl agent 优先于 review agent，`or_insert` 取第一个）与 `build_score_history` 的 review log 字典序决胜规则共用同一套约束。
+- **经验**: `get_subtask_status_sync` 与已有的 `build_subtask_infos` 高度重复。后续 Issue 如需调整子任务状态判定逻辑，必须同时修改两处，增加了维护负担。建议重构为共享辅助函数。
+- **踩坑**: `PASSING_SCORE` 环境变量虽然通过 `get_passing_score()` 暴露了，但 `build_subtask_infos` 和新增的 `get_subtask_status_sync` 都硬编码了 `85`，说明这个接口的可发现性不够——后续实现者容易忽略已有抽象。

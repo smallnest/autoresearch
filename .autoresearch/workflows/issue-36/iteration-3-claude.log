@@ -1,0 +1,46 @@
+## 实现总结
+
+### 新创建的文件
+
+1.  **`desktop_app/src/stores/historyDetailStore.ts`** — 详情数据存储
+    -   遵循 `createHistoryDetailStore(overrides)` 工厂模式，注入 `isTauri`/`invoke`
+    -   `loadDetail()`: 调用 `get_history_detail` + `get_subtask_status` 并行加载，然后自动加载第一个迭代的日志
+    -   `loadIterationLog()`: 调用 `get_iteration_log`，已加载的迭代不重复请求
+    -   `selectIteration()`: 切换选中的迭代标签页
+    -   `clearDetail()`: 重置所有状态
+    -   包含模拟数据用于浏览器回退
+
+2.  **`desktop_app/src/components/HistoryDetailPanel.tsx`** — 详情面板组件
+    -   **StatusBadge**: 状态徽章（复用 HistoryPage 的样式）
+    -   **SubtaskProgressView**: 子任务进度可视化（进度条 + 列表）
+    -   **IterationTabView**: 迭代标签页切换器，显示迭代编号和分数
+    -   **IterationSummaryCard**: 当前迭代的 Agent、评分、review 摘要
+    -   **IterationLogContent**: 迭代日志内容查看器
+    -   **HistoryDetailPanel**: 主面板，包含头部（返回/关闭按钮）、Issue 信息、子任务进度、迭代日志区域
+    -   加载中状态有骨架屏，错误状态有重试按钮
+
+### 修改的文件
+
+3.  **`desktop_app/src/pages/HistoryPage.tsx`** — 集成详情面板
+    -   `HistoryListItem` 改为 `<button>`，添加 `onClick` 处理和选中高亮样式
+    -   选中条目时显示右侧详情面板（50/50 布局）
+    -   添加 `ChevronRight` 图标指示可点击
+    -   `handleCloseDetail` 清除选中状态并重置存储
+
+### 验收标准检查
+
+-   [x] 点击历史记录条目可展开详情面板
+-   [x] 详情面板展示该 Issue 的所有迭代日志，按迭代编号标签页切换
+-   [x] 每次迭代的评分和 review 反馈正确展示
+-   [x] 子任务完成情况以可视化方式展示（进度条 + 列表）
+-   [x] 详情面板有关闭/返回按钮
+-   [x] TypeScript 类型检查通过 (`tsc --noEmit` 无错误)
+-   [x] Vite 构建成功
+
+## 经验总结
+
+-   **模式**: Store 工厂函数 `createXxxStore(overrides)` 注入 `isTauri`/`invoke` 依赖，遵循项目既有的 `createHistoryStore`、`createIterationStore` 模式
+-   **模式**: 浏览器回退在 `isTauri: false` 时提供模拟数据，保证浏览器模式可验证 UI
+-   **踩坑**: JSX.Element 返回类型不允许 `null`，条件返回空组件需用 `JSX.Element | null` 类型注解
+-   **经验**: T-001 的后端接口（`get_history_detail`, `get_iteration_log`, `get_subtask_status`）已在 T-001 中就绪且有测试覆盖，前端可直接消费
+-   **经验**: 详情面板采用列表/详情分栏布局（选中时 50/50），与 IssuesPage 的详情面板模式一致

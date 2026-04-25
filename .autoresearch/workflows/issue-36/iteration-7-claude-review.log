@@ -1,0 +1,125 @@
+现在我完全明白了。这是我的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #36
+- 标题: [desktop-app] 历史详情查看与日志导出
+- 迭代次数: 7
+- 子任务: T-003 — 日志导出功能与最终验证
+
+---
+
+### 总体评价
+
+**评分: 10/100**
+
+T-003 的核心功能（日志导出）**完全未实现**。6 轮迭代过后，代码中不存在任何导出相关代码——后端无 `export_history_log` 命令，前端无导出按钮，无 `exportLog` action。迭代 6 的 opencode agent 在探索阶段即中止（日志截断），未产出有效审核。当前仅有 T-001 和 T-002 已完成。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 日志导出功能完全缺失
+
+**位置**: 跨越 3 个文件
+
+**问题描述**:
+T-003 要求的所有验收条件均未满足：
+
+| 验收条件 | 状态 |
+|---|---|
+| 详情面板中有"导出日志"按钮 | **不存在** |
+| 点击按钮弹出 Tauri 文件保存对话框 | **不存在** |
+| 导出的文本文件包含完整日志，带时间戳和迭代分隔标记 | **不存在** |
+| 导出格式为纯文本 (.txt) | **不存在** |
+| Typecheck/lint 全部通过 | **通过** |
+| 浏览器中验证功能正常 | **无法验证** |
+
+**原因**: 核心需求完全未实现，不可发布。
+
+#### 问题 2: `dialog:allow-save` capability 缺失
+
+**位置**: `desktop_app/src-tauri/capabilities/default.json:9-10`
+
+**问题描述**:
+当前只有 `dialog:allow-open`，没有 `dialog:allow-save`。即使实现了导出命令，Tauri 的文件保存对话框也会因权限不足而失败。
+
+**建议修复**:
+```json
+"dialog:default",
+"dialog:allow-open",
+"dialog:allow-save"
+```
+
+---
+
+### 需要实现的代码
+
+**1. 后端 (`lib.rs`)** — 新增 `export_history_log` 命令：
+- 接收 `projectPath` 和 `issueNumber`
+- 读取所有迭代日志文件
+- 格式化为带时间戳和迭代分隔的纯文本
+- 调用 Tauri `save_file` 对话框
+- 写入到用户选择的路径
+
+**2. Store (`historyDetailStore.ts`)** — 新增 `exportLog` action：
+- 调用后端 `export_history_log` 命令
+- 处理加载/成功/错误状态
+
+**3. UI (`HistoryDetailPanel.tsx`)** — 在 header 添加"导出日志"按钮：
+- 点击触发 store 的 exportLog action
+- 显示导出进度/结果
+
+**4. 权限** — `capabilities/default.json` 添加 `"dialog:allow-save"`
+
+---
+
+### 正面评价（T-001/T-002 已完成部分）
+
+- T-001 后端接口完整，8 个 Rust 测试通过
+- T-002 前端详情面板功能完整：迭代 tab 切换、日志展示、子任务进度、骨架屏、错误处理
+- `historyDetailStore` 的 DI 工厂模式便于测试
+- 89 个前端测试全部通过
+- Typecheck 无错误
+
+---
+
+### 评分计算
+
+| 维度 | 得分 | 说明 |
+|---|---|---|
+| 正确性 (35%) | 10 | 核心功能完全未实现 |
+| 测试质量 (25%) | 70 | T-001/T-002 有测试，T-003 无代码也无测试 |
+| 代码质量 (20%) | 80 | 已有代码质量好，但 T-003 无代码可评 |
+| 安全性 (10%) | 90 | 无新增安全风险 |
+| 性能 (10%) | 90 | 无新增性能问题 |
+
+**总分** = 10×0.35 + 70×0.25 + 80×0.20 + 90×0.10 + 90×0.10 = **42.5 → 42/100**
+
+（注：正确性权重最大且为 10 分，严重拖低总分）
+
+---
+
+### 审核结论
+
+- [x] **阻塞** - 核心功能完全未实现，需要从零开始实现 T-003
+
+**下一步行动**:
+实现者需要完成 T-003 的全部工作：
+1. 在 `lib.rs` 添加 `export_history_log` Tauri 命令并注册到 invoke_handler
+2. 在 `capabilities/default.json` 添加 `dialog:allow-save` 权限
+3. 在 `historyDetailStore.ts` 添加 `exportLog` action
+4. 在 `HistoryDetailPanel.tsx` header 添加"导出日志"按钮
+5. 实现 Tauri 文件保存对话框 → 格式化日志内容 → 写入 .txt 文件
+6. 验证 typecheck/lint 通过
+
+---
+
+## Learnings
+
+- **踩坑**: 迭代 6 的 opencode agent 在探索阶段后即中止（日志截断），未产出有效审核结论。自动审核流程应检测 agent 是否完整执行了审核任务。
+- **经验**: T-003 需要三层实现：Rust 后端命令 + Tauri 权限 + 前端 store/UI。如果只实现了一两层会导致功能不可用。
+- **模式**: Tauri 文件保存对话框需要 `dialog:allow-save` capability 权限，当前只有 `dialog:allow-open`，实现导出功能时必须同时更新权限配置。

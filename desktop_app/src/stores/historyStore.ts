@@ -26,6 +26,36 @@ export interface HistoryEntry {
   end_time: string | null;
 }
 
+/** Mirrors Rust `IterationSummary`. */
+export interface IterationSummary {
+  iteration: number;
+  agent: string;
+  score: number | null;
+  review_summary: string | null;
+}
+
+/** Mirrors Rust `HistoryDetail`. */
+export interface HistoryDetail {
+  issue_number: number;
+  title: string;
+  status: RunStatus;
+  final_score: number | null;
+  total_iterations: number | null;
+  start_time: string | null;
+  end_time: string | null;
+  iterations: IterationSummary[];
+}
+
+/** Mirrors Rust `SubtaskStatus` enum variants. */
+export type SubtaskStatus = 'Pending' | 'Passing' | 'Failing';
+
+/** Mirrors Rust `SubtaskStatusEntry`. */
+export interface SubtaskStatusEntry {
+  id: string;
+  title: string;
+  status: SubtaskStatus;
+}
+
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------

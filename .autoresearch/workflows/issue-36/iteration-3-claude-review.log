@@ -1,0 +1,101 @@
+## 审核报告
+
+### Issue
+- 编号: #36
+- 子任务: T-002 - Frontend: 历史详情面板与迭代日志展示
+- 迭代次数: 3（iteration-3 review log 为空，未产生有效输出）
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-002 子任务**完全未实现**。没有任何前端组件代码被创建或修改。iteration-3 的 review log 为空文件（0 bytes），表明该迭代的 agent 未能产出任何有效工作。
+
+---
+
+### 致命问题 (未实现)
+
+#### 问题 1: 历史详情面板完全缺失
+
+**位置**: `desktop_app/src/pages/HistoryPage.tsx`
+
+**问题描述**:
+`HistoryPage.tsx` 中的 `HistoryListItem` 组件没有点击处理器，不存在详情面板导航或展开逻辑。整个 T-002 子任务要求的以下功能均不存在：
+
+```tsx
+// 当前 HistoryListItem - 无 onClick、无详情导航
+function HistoryListItem({ entry }: { entry: HistoryEntry }) {
+  return (
+    <div className="p-4 rounded-lg border ...">
+      {/* 纯展示卡片，无可交互的详情入口 */}
+    </div>
+  );
+}
+```
+
+**验收条件逐项检查**:
+- ❌ 点击历史记录条目可展开详情面板 — 无点击处理
+- ❌ 详情面板展示该 Issue 的所有迭代日志，按迭代编号 tab 切换 — 无组件
+- ❌ 每次迭代的评分和 review 反馈正确展示 — 无组件
+- ❌ 子任务完成情况以可视化方式展示 — 无组件
+- ❌ 详情面板有关闭/返回按钮 — 无组件
+- ❌ 浏览器中正常渲染无报错 — 无实现可验证
+
+#### 问题 2: 缺少 historyDetailStore
+
+**位置**: `desktop_app/src/stores/`
+
+**问题描述**:
+无 `historyDetailStore.ts` 或等效 store。现有 `historyStore.ts` 仅包含列表相关状态（`entries`, `statusFilter`, `sortOrder`），不包含详情数据加载逻辑（`loadDetail`, `loadIterationLog`, `loadSubtaskStatus` 等）。
+
+T-001 中添加的类型定义（`HistoryDetail`, `IterationSummary`, `SubtaskStatusEntry`）虽然存在于 `historyStore.ts`，但**没有任何组件或 store 消费它们**。
+
+#### 问题 3: 缺少所有必要的前端组件
+
+**位置**: `desktop_app/src/components/` 和 `desktop_app/src/pages/`
+
+**问题描述**:
+以下组件均不存在：
+- `HistoryDetailPanel` — 主详情面板
+- `IterationTabView` — 迭代 tab 切换器
+- `SubtaskProgressView` — 子任务进度可视化
+- `IterationLogViewer` — 迭代日志查看器
+
+---
+
+### Git Diff 确认
+
+```
+ desktop_app/src-tauri/src/lib.rs       | 522 ++++++ (T-001 后端)
+ desktop_app/src/stores/historyStore.ts |  30 ++ (T-001 类型定义)
+ run.sh                                 |   2 +-  (无关)
+ 3 files changed, 549 insertions(+), 5 deletions(-)
+```
+
+**0 个前端组件文件被修改或创建。** 全部改动属于 T-001（后端）的工作范围。
+
+---
+
+### 审核结论
+
+- [x] **阻塞** — 子任务完全未实现
+
+**下一步行动**:
+需要完整实现 T-002 的所有前端组件：
+
+1. **创建 `historyDetailStore.ts`** — 管理详情数据加载（调用 `get_history_detail`, `get_iteration_log`, `get_subtask_status`），遵循 `createHistoryStore(overrides)` 工厂模式
+2. **创建 `HistoryDetailPanel` 组件** — 展示 Issue 基本信息、迭代列表、子任务进度，含关闭/返回按钮
+3. **创建迭代 Tab 切换** — 按迭代编号 tab 显示日志内容
+4. **创建子任务进度可视化** — 进度条或列表展示
+5. **修改 `HistoryListItem`** — 添加 `onClick` 处理器，触发详情面板导航/展开
+6. **添加浏览器 fallback mock 数据** — 遵循项目约定
+
+---
+
+## Learnings
+
+- **经验**: iteration-3 的 claude review log 为空文件，agent 未能产生有效输出。后续迭代应确认 agent 是否成功执行，避免空转。
+- **经验**: T-001 的后端接口（`get_history_detail`, `get_iteration_log`, `get_subtask_status`）已就绪且有测试覆盖，T-002 实现者可直接消费这些接口。
+- **模式**: 前端 store 应遵循 `createXxxStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖以便测试。
