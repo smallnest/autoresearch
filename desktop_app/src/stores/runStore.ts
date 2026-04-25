@@ -4,7 +4,7 @@ import { useAgentStore } from './agentStore.ts';
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-const MAX_OUTPUT_LINES = 2000;
+const MAX_OUTPUT_LINES = 5000;
 
 type RunLifecycleStatus = 'idle' | 'running' | 'stopping' | 'finished' | 'error';
 type BackendRunStatus = 'Idle' | 'Running';
