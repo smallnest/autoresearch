@@ -2390,6 +2390,8 @@ run_review_and_fix() {
         return
     fi
 
+    log_console "$agent_name 修复完成"
+
     # 硬门禁检查：修复后先跑 build → lint → test
     if [ $FEATURE_HARD_GATE -eq 1 ] && ! run_hard_gate_checks "$ITERATION"; then
         log_console "❌ 硬门禁检查未通过"
