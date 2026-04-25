@@ -1,0 +1,55 @@
+## 实现总结
+
+子任务 T-001 已完成。以下是实现的详细内容：
+
+### 1. Cargo.toml 更新
+添加了 `nix` crate 作为 Unix 平台的进程组管理依赖：
+```toml
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["process", "signal"] }
+```
+
+### 2. ProcessState 结构体
+```rust
+struct ProcessState {
+    pid: u32,  // Unix 下为进程组 leader 的 PID
+}
+```
+
+### 3. 全局进程状态管理
+使用 `Mutex<Option<ProcessState>>` 实现线程安全的全局状态：
+```rust
+static PROCESS_STATE: Mutex<Option<ProcessState>> = Mutex::new(None);
+```
+
+### 4. Tauri Commands 实现
+- **`start_run`**: 启动 run.sh 进程
+  - 参数：`project_path`, `StartRunParams` (issue_number, max_iter, agents, passing_score, continue_mode)
+  - CLI 参数映射：`-c` (continue_mode), `-a agents` (agents), issue_number, max_iter
+  - 环境变量：`PASSING_SCORE`
+  - Unix 下使用 `process_group(0)` 设置进程组
+  - stdout/stderr 通过 `run-output` event 实时推送
+  - 进程退出时发送 `run-exit` event
+
+- **`stop_run`**: 停止进程
+  - Unix 下使用 `nix::sys::signal::kill` 发送 SIGTERM 给整个进程组
+
+- **`is_run_active`**: 检查是否有进程在运行
+
+### 5. 跨平台支持
+- Unix: 使用 `std::process::Command` + `process_group(0)` + `nix` 进行进程组管理
+- Windows: 使用 `tokio::process::Command`（进程组管理需要 job objects，暂未实现）
+
+### 验证结果
+- `cargo clippy -- -D warnings` ✅ 通过
+- `cargo test` ✅ 5 个测试全部通过
+- `cargo fmt` ✅ 已格式化
+
+---
+
+## Learnings
+
+- **模式**: 使用 `static Mutex<Option<T>>` 模式管理 Tauri 应用中的全局进程状态，简单且线程安全
+- **踩坑**: `std::process::Child::wait()` 是同步方法，在异步上下文中需要使用 `tokio::task::spawn_blocking` 包装
+- **经验**: Unix 下 `process_group(0)` 使进程成为自己的进程组 leader，这样 `kill(-pid)` 可以终止整个进程树（包括子进程）
+- **跨平台**: Windows 的进程组管理需要 Job Objects，比 Unix 复杂得多，本实现暂时返回错误提示

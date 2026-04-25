@@ -1,0 +1,154 @@
+现在我有足够的信息来完成审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #28
+- 标题: [desktop-app] run.sh 进程管理（启动/停止）
+- 迭代次数: 3 (本次为审核)
+- 子任务: T-001 - Rust 后端进程管理命令实现
+
+---
+
+### 总体评价
+
+**评分: 72/100**
+
+实现基本符合需求，核心功能都已实现，但存在测试覆盖不足和代码冗余问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少进程管理功能的单元测试
+
+**位置**: `src-tauri/src/lib.rs:593-660`
+
+**问题描述**:
+验收条件要求"相关单元测试通过"，但当前测试只覆盖了 `parse_issue_detail` 和 `get_issue_detail_sync` 相关功能，没有针对 `start_run`、`stop_run` 和 `get_run_status` 的测试。
+
+**建议修复**:
+提取可测试的纯函数进行单元测试。例如参数构建逻辑可以单独测试：
+
+```rust
+#[cfg(test)]
+mod tests {
+    // ... existing tests ...
+
+    #[test]
+    fn start_run_request_builds_correct_args() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: Some(10),
+            agents: Some("claude,codex".to_string()),
+            passing_score: Some(90),
+            continue_mode: Some(true),
+        };
+
+        let args = build_run_args(&request);
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"/test/project".to_string()));
+        assert!(args.contains(&"-a".to_string()));
+        assert!(args.contains(&"claude,codex".to_string()));
+        assert!(args.contains(&"-c".to_string()));
+        assert!(args.contains(&"42".to_string()));
+        assert!(args.contains(&"10".to_string()));
+    }
+
+    #[test]
+    fn run_status_is_idle_when_no_process() {
+        let state = RunProcessState::default();
+        assert!(state.process.is_none());
+    }
+}
+```
+
+**原因**: 测试覆盖率是代码质量的重要指标，缺少测试可能导致回归问题无法及时发现。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 2: `killed_by_stop` 字段未被使用
+
+**位置**: `src-tauri/src/lib.rs:29`
+
+**问题描述**:
+`RunProcessState` 结构体中的 `killed_by_stop` 字段被设置但从未被读取，与静态变量 `WAS_KILLED` 功能重复。
+
+**代码片段**:
+```rust
+struct RunProcessState {
+    process: Option<RunProcess>,
+    /// Flag to track if stop_run was called, to avoid duplicate exit events.
+    killed_by_stop: bool,  // 从未被读取
+}
+```
+
+**建议修复**:
+删除冗余字段，只保留 `WAS_KILLED` 静态变量：
+
+```rust
+struct RunProcessState {
+    process: Option<RunProcess>,
+    // 删除 killed_by_stop 字段
+}
+```
+
+同时删除相关的设置代码（第415、496、520行）。
+
+**原因**: 冗余代码增加维护负担，可能导致后续开发者困惑。
+
+---
+
+#### 问题 3: run.sh 路径定位逻辑的假设可能不成立
+
+**位置**: `src-tauri/src/lib.rs:342-348`
+
+**问题描述**:
+当前实现假设 `project_path.parent()` 是 autoresearch 根目录，这对于某些项目布局可能不成立。
+
+**代码片段**:
+```rust
+let autoresearch_root = project_path
+    .parent()
+    .ok_or("Cannot determine autoresearch root directory")?;
+let run_sh_path = autoresearch_root.join("run.sh");
+```
+
+**建议修复**:
+考虑使用更可靠的方式定位 run.sh，例如：
+1. 基于可执行文件位置（`std::env::current_exe()` 向上查找）
+2. 通过环境变量或配置文件指定路径
+3. 在 Tauri 配置中添加路径配置项
+
+**原因**: 当前假设在某些场景下会失败（例如用户选择任意目录作为项目路径）。
+
+---
+
+### 建议改进 (可选)
+
+- 考虑添加进程启动超时机制，避免长时间等待
+- 可以添加日志记录进程启动/停止事件，便于调试
+- 考虑支持 `stop_run` 时传入信号类型（SIGTERM/SIGKILL）
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 添加进程管理相关的单元测试（至少覆盖参数构建和状态管理逻辑）
+2. 删除冗余的 `killed_by_stop` 字段
+
+---
+
+## Learnings
+
+- **模式**: Tauri 异步命令使用 `tokio::process::Command` 处理子进程，stdout/stderr 通过 `BufReader::lines()` 异步读取
+- **踩坑**: 静态变量和结构体字段同时维护相同状态容易产生冗余，应选择一种方式统一管理
+- **经验**: 进程组管理通过 `pre_exec` 设置 pgid，停止时使用 `killpg` 发送信号给整个进程组，避免僵尸进程

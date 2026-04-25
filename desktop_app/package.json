@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/runStore.test.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

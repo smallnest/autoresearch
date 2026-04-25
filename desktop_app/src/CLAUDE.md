@@ -23,6 +23,12 @@
 - Tailwind CSS v4: utility-first styling via @tailwindcss/vite
 - zustand: global state management, stores in `src/stores/`
 
+## Testing
+
+- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
+- When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
+
 ## State Management (Zustand)
 
 - Stores are in `src/stores/` directory
@@ -36,6 +42,7 @@
 - Import `invoke` from `@tauri-apps/api/core` to call Rust commands
 - Commands return `Promise<T>` and can throw errors
 - Pattern: `await invoke<ReturnType>('command_name', { args })`
+- Tauri event subscriptions should be centralized in a store when multiple UI components need the same lifecycle state; `run-output` / `run-exit` are handled in `src/stores/runStore.ts`
 
 ## Pitfalls
 
@@ -58,13 +65,17 @@
 
 - **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
 - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+- **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
 - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
 - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
 - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
 - **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
 - **浏览器 fallback**: 非 Tauri 环境使用 mock issue 列表和 mock issue 详情，保证浏览器模式也能验证详情面板
+- **运行 fallback**: 非 Tauri 环境禁用启动/停止按钮，并明确提示“浏览器模式不支持运行任务”
 - **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
 - **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+- **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
 
 ### 样式约定
 
