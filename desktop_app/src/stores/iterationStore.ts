@@ -12,6 +12,12 @@ export interface SubtaskInfo {
   status: SubtaskStatus;
 }
 
+export interface ScoreHistoryPoint {
+  iteration: number;
+  score: number;
+  review_summary: string | null;
+}
+
 export interface IterationProgress {
   current_iteration: number;
   total_iterations: number;
@@ -22,6 +28,7 @@ export interface IterationProgress {
   last_score: number | null;
   passing_score: number;
   review_summary: string | null;
+  score_history: ScoreHistoryPoint[];
 }
 
 export interface IterationProgressEvent {
@@ -79,6 +86,7 @@ export const IDLE_PROGRESS: IterationProgress = {
   last_score: null,
   passing_score: 85,
   review_summary: null,
+  score_history: [],
 };
 
 export interface IterationState {

@@ -12,6 +12,7 @@ import {
   subtaskStatusLabel,
 } from './iterationProgressView';
 import { ReviewScoreSection } from './reviewScoreSection';
+import ScoreTrendChart from './ScoreTrendChart';
 
 interface IterationProgressPanelProps {
   issueNumber: number;
@@ -167,6 +168,13 @@ export default function IterationProgressPanel({
         passingScore={progress.passing_score}
         summary={progress.review_summary}
       />
+
+      {progress.last_score != null ? (
+        <ScoreTrendChart
+          scoreHistory={progress.score_history}
+          passingScore={progress.passing_score}
+        />
+      ) : null}
 
       <SubtaskList subtasks={progress.subtasks} />
 

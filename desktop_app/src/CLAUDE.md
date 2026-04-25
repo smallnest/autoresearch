@@ -159,7 +159,9 @@
 - 后端 `Phase` 枚举值为：`Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
 - 评分展示链路也走同一个 `IterationProgress` payload：新增字段时要同时更新 Rust struct、Tauri command 返回值、`iterationStore.ts` 接口和 `IDLE_PROGRESS` 默认值
 - 当前评分相关字段为 `last_score`, `passing_score`, `review_summary`；前端不自行提取评分，只消费后端结果
+- 评分趋势图使用同一条 `IterationProgress` 链路里的 `score_history` 数组；该字段元素保持 snake_case（`iteration`, `score`, `review_summary`），不要在 store 层改成 camelCase
 - 如果验收要求是“无 score 时不显示评分区域”，前端组件要以 `last_score` 为评分区块的唯一显隐条件，`review_summary` 不能单独触发渲染
+- 趋势图这类可视化组件优先做成独立可嵌入组件（如 `ScoreTrendChart`），由面板决定是否显示；这样同一组件可复用到 Dashboard 或右侧详情区
 
 ### 更新策略
 

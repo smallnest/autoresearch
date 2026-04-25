@@ -169,6 +169,17 @@ struct SubtaskInfo {
     status: SubtaskStatus,
 }
 
+/// Score trend point extracted from a review log for one iteration.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct ScoreHistoryPoint {
+    /// Iteration number (1-based).
+    iteration: i32,
+    /// Review score on a 0-100 scale.
+    score: i32,
+    /// Optional short summary extracted from the review text.
+    review_summary: Option<String>,
+}
+
 /// Overall iteration progress data sent to the frontend.
 #[derive(serde::Serialize, Debug, Clone, PartialEq)]
 struct IterationProgress {
@@ -190,6 +201,8 @@ struct IterationProgress {
     passing_score: i32,
     /// Short summary extracted from the latest review.
     review_summary: Option<String>,
+    /// Historical review scores ordered by iteration ascending.
+    score_history: Vec<ScoreHistoryPoint>,
 }
 
 /// Raw tasks.json structure for deserialization.
@@ -498,6 +511,54 @@ fn find_latest_review_content(workflow_dir: &Path) -> Option<String> {
     fs::read_to_string(path).ok()
 }
 
+fn build_score_history(workflow_dir: &Path) -> Vec<ScoreHistoryPoint> {
+    let entries = match fs::read_dir(workflow_dir) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut best_by_iteration: std::collections::BTreeMap<i32, std::path::PathBuf> =
+        std::collections::BTreeMap::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().map(|name| name.to_string_lossy().to_string()) else {
+            continue;
+        };
+
+        if !name.ends_with("-review.log") {
+            continue;
+        }
+
+        let Some(iteration) = iteration_number(&name) else {
+            continue;
+        };
+
+        let replace = best_by_iteration
+            .get(&iteration)
+            .and_then(|existing| existing.file_name())
+            .map(|current| name.as_str() > current.to_string_lossy().as_ref())
+            .unwrap_or(true);
+
+        if replace {
+            best_by_iteration.insert(iteration, path);
+        }
+    }
+
+    best_by_iteration
+        .into_iter()
+        .filter_map(|(iteration, path)| {
+            let content = fs::read_to_string(path).ok()?;
+            let score = extract_score(&content)?;
+            Some(ScoreHistoryPoint {
+                iteration,
+                score,
+                review_summary: extract_review_summary(&content),
+            })
+        })
+        .collect()
+}
+
 /// Reads the passing score from environment variable PASSING_SCORE, defaulting to 85.
 fn get_passing_score() -> i32 {
     std::env::var("PASSING_SCORE")
@@ -697,6 +758,7 @@ fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
     let last_score = review_content.as_deref().and_then(extract_score);
     let review_summary = review_content.as_deref().and_then(extract_review_summary);
     let passing_score = get_passing_score();
+    let score_history = build_score_history(workflow_dir);
 
     IterationProgress {
         current_iteration,
@@ -708,6 +770,7 @@ fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
         last_score,
         passing_score,
         review_summary,
+        score_history,
     }
 }
 
@@ -738,6 +801,7 @@ fn get_iteration_progress_sync(
             last_score: None,
             passing_score: get_passing_score(),
             review_summary: None,
+            score_history: Vec::new(),
         });
     }
 
@@ -1568,9 +1632,10 @@ mod tests {
     #[cfg(unix)]
     use super::RunProcessState;
     use super::{
-        build_iteration_progress, find_latest_review_content, get_iteration_progress_sync,
-        infer_phase, init_project_config_sync, parse_iteration_from_log_md,
-        parse_iteration_from_terminal, parse_tasks_json, Phase, SubtaskStatus,
+        build_iteration_progress, build_score_history, find_latest_review_content,
+        get_iteration_progress_sync, infer_phase, init_project_config_sync,
+        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
+        SubtaskStatus,
     };
     use super::{build_run_args, build_run_env_vars, StartRunRequest};
     use super::{
@@ -2486,6 +2551,45 @@ mod tests {
     }
 
     #[test]
+    fn build_score_history_collects_one_scored_review_per_iteration() {
+        let dir = create_temp_project_dir("score-history");
+        fs::write(
+            dir.join("iteration-1-claude-review.log"),
+            "总体评价\n评分: 72\n需要补充测试",
+        )
+        .expect("write");
+        fs::write(
+            dir.join("iteration-2-codex-review.log"),
+            "## 审核\n\n**评分: 88/100**\n\n实现已接近完成",
+        )
+        .expect("write");
+        fs::write(
+            dir.join("iteration-2-claude-review.log"),
+            "评分: 84\n较早的同迭代审核",
+        )
+        .expect("write");
+        fs::write(
+            dir.join("iteration-3-claude-review.log"),
+            "没有评分的审核文本",
+        )
+        .expect("write");
+
+        let history = build_score_history(&dir);
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].iteration, 1);
+        assert_eq!(history[0].score, 72);
+        assert_eq!(history[1].iteration, 2);
+        assert_eq!(history[1].score, 88);
+        assert!(history[1]
+            .review_summary
+            .as_deref()
+            .is_some_and(|summary| summary.contains("88/100")));
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
     fn build_iteration_progress_includes_score_from_review() {
         let dir = create_temp_project_dir("build-progress-score");
         fs::write(
@@ -2509,6 +2613,9 @@ mod tests {
         assert_eq!(progress.last_score, Some(78));
         assert_eq!(progress.passing_score, 85);
         assert!(progress.review_summary.is_some());
+        assert_eq!(progress.score_history.len(), 1);
+        assert_eq!(progress.score_history[0].iteration, 1);
+        assert_eq!(progress.score_history[0].score, 78);
         let summary = progress.review_summary.unwrap();
         assert!(summary.contains("78/100"));
 
@@ -2533,6 +2640,7 @@ mod tests {
 
         assert_eq!(progress.last_score, None);
         assert_eq!(progress.review_summary, None);
+        assert!(progress.score_history.is_empty());
 
         fs::remove_dir_all(dir).expect("cleanup");
     }

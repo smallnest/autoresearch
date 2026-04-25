@@ -17,8 +17,8 @@ has_subtasks() {
         return 1
     fi
     local count
-    count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
-    [ -n "$count" ] && [ "$count" -gt 0 ]
+    count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null | head -1)
+    [ -n "$count" ] && [ "$count" -gt 0 ] 2>/dev/null
 }
 
 # 获取第一个 passes: false 的子任务信息（JSON 格式）
@@ -110,7 +110,7 @@ all_subtasks_passed() {
         return 0
     fi
     local unfinished
-    unfinished=$(jq '[.subtasks[] | select(.passes == false)] | length' "$tasks_file" 2>/dev/null)
+    unfinished=$(jq '[.subtasks[] | select(.passes == false)] | length' "$tasks_file" 2>/dev/null | head -1)
     [ "$unfinished" = "0" ]
 }
 
