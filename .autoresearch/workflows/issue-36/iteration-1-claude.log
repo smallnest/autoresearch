@@ -1,0 +1,49 @@
+## 实现总结
+
+### 已实现内容
+
+**T-001: Backend: 添加历史详情数据接口**
+
+在 `desktop_app/src-tauri/src/lib.rs` 中新增了 3 个 Tauri 命令：
+
+1.  **`get_history_detail(project_path, issue_number)`** → `HistoryDetail`
+    -   返回 issue 详情，包括所有迭代摘要（迭代次数、代理、评分、评审总结）
+    -   重用现有的 `extract_history_title`、`determine_history_status`、`extract_score`、`extract_review_summary` 辅助函数
+    -   `build_iteration_summaries()` 从 `iteration-N-*-review.log` 文件中按迭代收集评审数据，并从实现日志中提取代理名称
+
+2.  **`get_iteration_log(project_path, issue_number, iteration)`** → `String`
+    -   返回指定迭代的完整日志文本
+    -   优先返回评审日志；若无，则回退到实现日志
+    -   使用相同的字典序决胜规则，以与现有模式保持一致
+
+3.  **`get_subtask_status(project_path, issue_number)`** → `Vec<SubtaskStatusEntry>`
+    -   返回来自 `tasks.json` 的子任务及其三态状态 (通过/失败/待定)
+    -   重用 `build_subtask_infos` 中的现有逻辑，以推断失败状态
+
+### TypeScript 类型 (在 `historyStore.ts` 中)
+
+添加了 `IterationSummary`、`HistoryDetail`、`SubtaskStatus`、`SubtaskStatusEntry` 接口，镜像 Rust 类型定义。
+
+### 测试 (7 个新增测试，总计 95 个)
+
+-   `get_history_detail_returns_iterations` - 验证迭代数据提取
+-   `get_history_detail_missing_issue` - 错误路径
+-   `get_iteration_log_returns_review_content` - 首选评审日志
+-   `get_iteration_log_falls_back_to_impl` - 回退到实现日志
+-   `get_iteration_log_missing_iteration` - 错误路径
+-   `get_subtask_status_parses_tasks` - 解析 tasks.json 并设置状态
+-   `get_subtask_status_missing_tasks_json` - 空结果回退
+-   `get_subtask_status_missing_issue` - 错误路径
+
+### 质量检查
+-   `cargo clippy -- -D warnings`: 通过
+-   `cargo test`: 95/95 通过
+-   `cargo fmt`: 格式化
+-   `npx tsc --noEmit`: 通过
+
+## 经验总结
+
+-   **模式**：Agent 名称提取应区分实现日志和评审日志 — 优先使用实现日志的代理（使用 `impl_agent_by_iter`），评审日志的代理作为备选（使用 `review_agent_by_iter`），因为迭代的主要代理是执行实现的代理。
+-   **陷阱**：`fs::read_dir` 的顺序在不同平台上是不确定的 — 测试不应该假设文件按字母顺序被访问。在 agent 名称提取时，可以使用 `or_insert` 来保留第一个值，但需要明确优先级（实现优先于评审）。
+-   **模式**：子任务三态逻辑 (`Passing`/`Failing`/`Pending`) 已存在于 `build_subtask_infos` 中；复用相同的逻辑而不是重复实现，以避免行为出现分歧。
+-   **陷阱**：测试 JSON 字符串需要仔细验证 — 一个多余的 `]` 会导致静默解析失败。

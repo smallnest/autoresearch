@@ -1,0 +1,123 @@
+所有 89 个前端测试都通过了。现在我已掌握进行全面审查所需的所有信息。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #36
+- 子任务: T-002 - 前端: 历史详情面板与迭代日志显示
+- 迭代: 5（基于迭代 4 审核分数 82）
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+T-002 已完全实现，所有验收标准均已满足。实现清晰、结构良好，并遵循项目模式（DI 工厂 store、Tauri 回退、中文 UI）。后端有 8 个测试，TypeScript 编译无误，所有 89 个前端测试通过。剩余的不足之处很小，不会阻碍发布。
+
+---
+
+### 严重问题
+
+无。
+
+---
+
+### 一般问题（建议修复）
+
+#### 问题 1: 重复的 STATUS_* 常量和辅助函数
+
+**位置**: `HistoryDetailPanel.tsx:16-64` vs `HistoryPage.tsx:18-61`
+
+**问题描述**:
+`STATUS_LABEL`、`STATUS_BADGE_CLASS`、`STATUS_DOT_CLASS` 映射，`StatusBadge` 组件和 `formatTime` 辅助函数在 `HistoryDetailPanel.tsx` 和 `HistoryPage.tsx` 之间完全重复。
+
+**建议**:
+提取到共享模块（例如 `src/components/historyShared.tsx` 或 `src/utils/historyConstants.ts`），以避免在两个组件之间出现变体漂移。
+
+**原因**: 重复的常量意味着在一个地方修复 bug 或更新标签会遗漏另一个。优先级较低，因为两者都已正确同步。
+
+#### 问题 2: `historyDetailStore` 没有单元测试
+
+**位置**: `desktop_app/tests/`（缺失）
+
+**问题描述**:
+store `createHistoryDetailStore` 遵循 DI 工厂模式但没有测试文件。该 store 有值得直接测试的逻辑：带有缓存跳过的 `loadIterationLog`、`clearDetail` 重置、`Promise.all` 并行加载和错误路径。
+
+**建议**:
+创建 `desktop_app/tests/historyDetailStore.test.mjs`，遵循 `historyStore.test.mjs` 模式——使用模拟 `invoke` 测试 Tauri 模式、非 Tauri 模拟回退、错误规范化和缓存行为。
+
+**原因**: 迭代日志缓存（跳过已加载的迭代）和并行 `Promise.all([detail, subtasks])` 加载是可能随时间推移而损坏的微妙行为。
+
+#### 问题 3: `useEffect` 缺少 `loadDetail` 的清理/竞态保护
+
+**位置**: `HistoryDetailPanel.tsx:324-328`
+
+**问题描述**:
+```tsx
+useEffect(() => {
+  if (projectPath) {
+    void loadDetail(projectPath, issueNumber);
+  }
+}, [projectPath, issueNumber, loadDetail]);
+```
+如果用户快速点击不同的历史条目，旧的 `loadDetail` 可以完成并覆盖新的。项目使用 `detailRequestKey` / 守卫模式（参见 `issueStore`）来防止这种情况。历史详情 store 缺少这种保护。
+
+**建议**:
+在 store 或组件中添加一个简单的请求守卫——例如，在请求开始时存储一个请求 ID，如果 ID 不匹配则忽略陈旧的响应。
+
+**原因**: 在快速点击下，陈旧的响应会短暂地闪烁错误的详情。
+
+---
+
+### 改进建议（可选）
+
+- `HistoryDetailPanel` 在滚动视图中以 `max-h-[24rem]` 渲染迭代日志——可以考虑使最大高度相对于面板高度而不是固定的。
+- 当 `detail` 可用但 `iterations` 为空时，组件仍会渲染“迭代日志”部分标题——对于没有迭代的工作流，可以条件性地隐藏它。
+- 如果排序后迭代标签溢出，可以考虑使其可滚动，但当前的 `flex-wrap` 对于典型计数是可以接受的。
+
+---
+
+### 验收标准检查清单
+
+| 标准 | 状态 |
+|---|---|
+| 点击历史条目展开详情面板 | 通过 — `HistoryListItem` → `handleSelectIssue` → `selectedIssue` 状态 → 右侧面板渲染 |
+| 详情面板显示所有迭代日志，按迭代选项卡切换 | 通过 — `IterationTabView` 带有带评分徽章的选项卡 + `handleTabSelect` → `loadIterationLog` |
+| 每次迭代的评分和审查反馈正确显示 | 通过 — `IterationSummaryCard` 显示代理、评分（颜色编码）和审查摘要 |
+| 子任务完成情况可视化 | 通过 — `SubtaskProgressView` 带有进度条 + 带有状态徽章的详细列表 |
+| 详情面板有关闭/返回按钮 | 通过 — 头部有 `BackIcon` 和 `CloseIcon`，两者都调用 `onClose` |
+| TypeScript 类型检查通过 | 通过 — `npx tsc --noEmit` 无错误 |
+| 浏览器无错误渲染 | 通过 — 非 Tauri 模式使用模拟数据，所有组件有回退 UI |
+
+---
+
+### 维度分数
+
+| 维度 | 分数 | 理由 |
+|---|---|---|
+| 正确性 (35%) | 90 | 所有功能均已实现并正常工作。较小的竞态条件问题，在正常使用中不会出现。 |
+| 测试质量 (25%) | 75 | 后端测试良好（8 个测试），现有 store 测试通过。没有 `historyDetailStore` 测试。 |
+| 代码质量 (20%) | 90 | 结构清晰，DI 模式，中文本地化。重复常量是主要不足。 |
+| 安全性 (10%) | 100 | 没有注入风险，store 的 Tauri 命令已净化。 |
+| 性能 (10%) | 95 | 迭代日志缓存避免了重新加载。`Promise.all` 使初始加载并行。 |
+
+**计算**: 90×0.35 + 75×0.25 + 90×0.20 + 100×0.10 + 95×0.10 = **89.25 → 88**
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量符合发布标准，可以进入人工审核
+
+**后续行动**:
+无需阻塞性修复。为了后续清理，考虑提取共享常量并添加 `historyDetailStore` 测试。
+
+## 学习要点
+
+- **模式**: `HistoryDetailPanel` 在 `loadIterationLog` 中使用缓存跳过模式——如果迭代日志已存在于 `iterationLogs[iteration]` 中，则只更新 `selectedIteration` 而不重新获取。这是 zustand store 中一个值得遵循和测试的清晰模式。
+- **模式**: `Promise.all([get_history_detail, get_subtask_status])` 并行加载是详情页面的标准模式——既减少了加载时间，又使加载/错误状态管理更简单。
+- **经验**: `HistoryDetailPanel.tsx` 和 `HistoryPage.tsx` 都定义了相同的 `STATUS_*` 常量、`StatusBadge` 和 `formatTime`。未来的迭代应该将这些提取到一个共享模块中，以防止变体漂移，并使中文化更新变得更容易。
+- **经验**: `historyDetailStore` 遵循 DI 工厂模式，但缺少测试。该项目中的后续 store 应在实现的同时编写测试，以避免在审查时因测试空白而被扣分。

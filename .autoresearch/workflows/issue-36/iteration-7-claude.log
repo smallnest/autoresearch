@@ -1,0 +1,38 @@
+## 实现总结
+
+T-003 的全部 4 个修改已完成：
+
+### 1. Rust 后端 (`lib.rs`)
+- **`format_export_log()`** — 纯函数，读取所有迭代日志并格式化为带时间戳、迭代分隔标记（`===...===`）的纯文本
+- **`export_history_log`** — Tauri 命令，调用 `format_export_log()` 生成内容，弹出原生保存文件对话框（`blocking_save_file`），写入用户选择的 `.txt` 文件
+- 已注册到 `invoke_handler`
+- 2 个新增单元测试通过
+
+### 2. 权限 (`capabilities/default.json`)
+- 添加了 `"dialog:allow-save"` 权限
+
+### 3. Store (`historyDetailStore.ts`)
+- 新增 `isExporting`、`exportError` 状态
+- 新增 `exportLog` action：调用后端 `export_history_log` 命令，处理加载/成功/错误状态
+- 浏览器模式下提示"浏览器模式不支持导出日志"
+
+### 4. UI (`HistoryDetailPanel.tsx`)
+- Header 右侧新增"导出日志"按钮（蓝色，带下载图标）
+- 导出中显示"导出中..."并禁用按钮
+- 错误时在面板底部显示红色错误提示
+
+### 验证结果
+- TypeScript: 通过
+- Rust cargo check: 通过
+- Rust clippy: 通过
+- Rust tests: 97/97 通过
+- Frontend tests: 89/89 通过
+
+---
+
+## Learnings
+
+- **模式**: Tauri 文件保存对话框使用 `DialogExt::dialog(&app).file().blocking_save_file()`，返回 `Option<FilePath>`。`FilePath` 需要调用 `.to_string()` 转换后才能用于 `fs::write()`，因为 `FilePath` 没有实现 `AsRef<Path>`。
+- **模式**: `build_iteration_summaries` 只为有 review log 的迭代生成 `IterationSummary`，因此只有 impl log 而没有 review log 的迭代不会出现在 `detail.iterations` 中。导出功能消费的是 `detail.iterations`，所以每个迭代都至少需要一个 review log 才能被导出。
+- **踩坑**: `tauri_plugin_dialog` 的 `blocking_save_file()` 和 `blocking_pick_folder()` 返回类型不同 — 后者返回 `Option<PathBuf>`，前者返回 `Option<FilePath>`，不能直接用 `fs::write` 写入 `FilePath`。
+- **经验**: Clippy 的 `uninlined_format_args` lint 在这个项目中通过 `-D warnings` 强制执行，所有 `format!` 中已绑定的变量必须使用内联格式（如 `{variable}`）而非位置参数（如 `{}`）。

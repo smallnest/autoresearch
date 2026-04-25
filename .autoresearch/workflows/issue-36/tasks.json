@@ -1,0 +1,53 @@
+{
+  "issueNumber": 36,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Backend: 添加历史详情数据接口",
+      "description": "在 Rust 后端添加 Tauri 命令，读取 .autoresearch/workflows/issue-N/ 下的迭代日志、评分、review 反馈和 tasks.json 数据，返回结构化的详情数据。包括：(1) get_history_detail 命令，返回 Issue 详情（包含迭代列表，每个迭代含 agent、评分、review 反馈摘要）；(2) get_iteration_log 命令，返回指定迭代的完整日志内容；(3) get_subtask_status 命令，返回 tasks.json 中的子任务完成情况。",
+      "acceptanceCriteria": [
+        "get_history_detail 命令能正确解析 workflow 目录下的所有迭代文件",
+        "返回每个迭代的 agent 名称、评分、review 反馈摘要",
+        "get_iteration_log 返回指定迭代的完整日志文本",
+        "get_subtask_status 正确解析 tasks.json 返回子任务列表及完成状态",
+        "Rust 代码编译通过，无 clippy 警告",
+        "处理文件不存在或格式异常的边界情况"
+      ],
+      "priority": 1,
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "Frontend: 历史详情面板与迭代日志展示",
+      "description": "实现前端历史详情面板组件。点击 HistoryListItem 后展开/导航到详情面板，展示：(1) Issue 基本信息（标题、状态、评分、时间）；(2) 迭代列表按编号 tab 切换，显示每次迭代的完整日志；(3) 每次迭代的评分和 review 反馈展示；(4) 子任务完成情况的进度展示。包含对应的 historyDetailStore 和类型定义。",
+      "acceptanceCriteria": [
+        "点击历史记录条目可展开详情面板",
+        "详情面板展示该 Issue 的所有迭代日志，按迭代编号 tab 切换",
+        "每次迭代的评分和 review 反馈正确展示",
+        "子任务完成情况以可视化方式展示（进度条或列表）",
+        "详情面板有关闭/返回按钮",
+        "TypeScript 类型检查通过",
+        "浏览器中正常渲染无报错"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "日志导出功能与最终验证",
+      "description": "实现日志导出功能：提供\"导出日志\"按钮，调用 Tauri 文件保存对话框，将全量日志（含时间戳和迭代分隔）保存为纯文本文件。导出格式为纯文本，包含时间戳和迭代分隔标记。完成后运行完整的 typecheck/lint 验证并在浏览器中确认功能正常。",
+      "acceptanceCriteria": [
+        "详情面板中有\"导出日志\"按钮",
+        "点击按钮弹出 Tauri 文件保存对话框",
+        "导出的文本文件包含完整日志内容，带时间戳和迭代分隔标记",
+        "导出格式为纯文本（.txt）",
+        "Typecheck/lint 全部通过",
+        "浏览器中验证所有功能正常工作"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": true
+    }
+  ]
+}

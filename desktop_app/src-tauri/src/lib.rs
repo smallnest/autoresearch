@@ -2037,6 +2037,425 @@ async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String>
         .map_err(|e| format!("Task join error: {e}"))?
 }
 
+// ========================================
+// History detail types and commands
+// ========================================
+
+/// Summary of one iteration within a history detail view.
+#[derive(serde::Serialize, Debug, Clone)]
+struct IterationSummary {
+    /// Iteration number (1-based).
+    iteration: i32,
+    /// Agent name extracted from the log filename (e.g. "claude", "codex").
+    agent: String,
+    /// Review score (0–100), `None` if not reviewed yet.
+    score: Option<i32>,
+    /// Short summary extracted from the review text.
+    review_summary: Option<String>,
+}
+
+/// Full detail for one processed Issue, returned by `get_history_detail`.
+#[derive(serde::Serialize, Debug, Clone)]
+struct HistoryDetail {
+    issue_number: i64,
+    title: String,
+    status: HistoryRunStatus,
+    final_score: Option<i32>,
+    total_iterations: Option<i32>,
+    start_time: Option<String>,
+    end_time: Option<String>,
+    /// Iteration summaries ordered by iteration number ascending.
+    iterations: Vec<IterationSummary>,
+}
+
+/// Reads all iteration log filenames and builds per-iteration summaries with
+/// agent name, score and review summary.
+fn build_iteration_summaries(workflow_dir: &Path) -> Vec<IterationSummary> {
+    let entries = match fs::read_dir(workflow_dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+
+    // Collect review logs grouped by iteration number, keeping the
+    // lexicographically last filename per iteration (same tie-break rule as
+    // `build_score_history`).
+    let mut review_by_iter: std::collections::BTreeMap<i32, std::path::PathBuf> =
+        std::collections::BTreeMap::new();
+
+    // Collect all iteration-* log filenames to discover agent names.
+    // Prefer implementation agent over review agent.
+    let mut impl_agent_by_iter: std::collections::BTreeMap<i32, String> =
+        std::collections::BTreeMap::new();
+    let mut review_agent_by_iter: std::collections::BTreeMap<i32, String> =
+        std::collections::BTreeMap::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+            continue;
+        };
+
+        if !name.starts_with("iteration-") {
+            continue;
+        }
+
+        let Some(iteration) = iteration_number(&name) else {
+            continue;
+        };
+
+        let is_review = name.ends_with("-review.log");
+
+        // Extract agent name from pattern: iteration-N-<agent>-*.log
+        if let Some(after_prefix) = name.strip_prefix(&format!("iteration-{iteration}-")) {
+            let agent = if let Some(before_dash) = after_prefix.find('-') {
+                after_prefix[..before_dash].to_string()
+            } else if after_prefix.ends_with(".log") {
+                // Pattern: iteration-N-<agent>.log (no trailing segment)
+                after_prefix.trim_end_matches(".log").to_string()
+            } else {
+                continue;
+            };
+
+            if is_review {
+                review_agent_by_iter.entry(iteration).or_insert(agent);
+            } else {
+                impl_agent_by_iter.entry(iteration).or_insert(agent);
+            }
+        }
+
+        if name.ends_with("-review.log") {
+            let replace = review_by_iter
+                .get(&iteration)
+                .and_then(|existing| existing.file_name())
+                .map(|current| name.as_str() > current.to_string_lossy().as_ref())
+                .unwrap_or(true);
+
+            if replace {
+                review_by_iter.insert(iteration, path);
+            }
+        }
+    }
+
+    review_by_iter
+        .into_iter()
+        .map(|(iteration, path)| {
+            let content = fs::read_to_string(&path).unwrap_or_default();
+            let score = extract_score(&content);
+            let review_summary = if content.is_empty() {
+                None
+            } else {
+                extract_review_summary(&content)
+            };
+            let agent = impl_agent_by_iter
+                .remove(&iteration)
+                .or_else(|| review_agent_by_iter.remove(&iteration))
+                .unwrap_or_else(|| "unknown".to_string());
+
+            IterationSummary {
+                iteration,
+                agent,
+                score,
+                review_summary,
+            }
+        })
+        .collect()
+}
+
+/// Returns the full history detail for a given processed Issue.
+fn get_history_detail_sync(
+    project_path: &Path,
+    issue_number: i64,
+) -> Result<HistoryDetail, String> {
+    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+    let issue_dir = workflows_dir.join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    let log_content = fs::read_to_string(issue_dir.join("log.md")).unwrap_or_default();
+    let title = extract_history_title(&log_content);
+    let start_time = extract_field(&log_content, "开始时间");
+    let end_time = extract_history_end_time(&log_content);
+    let total_iterations = extract_total_iterations(&log_content);
+    let final_score = extract_history_final_score(&log_content);
+    let status = determine_history_status(&log_content, &final_score);
+    let iterations = build_iteration_summaries(&issue_dir);
+
+    Ok(HistoryDetail {
+        issue_number,
+        title,
+        status,
+        final_score,
+        total_iterations,
+        start_time,
+        end_time,
+        iterations,
+    })
+}
+
+/// Returns the full history detail for a processed Issue.
+#[tauri::command]
+async fn get_history_detail(
+    project_path: String,
+    issue_number: i64,
+) -> Result<HistoryDetail, String> {
+    let path = project_path.clone();
+    tokio::task::spawn_blocking(move || get_history_detail_sync(Path::new(&path), issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Returns the full log content for a specific iteration of a processed Issue.
+///
+/// The iteration log is identified by matching `iteration-N-*-review.log`
+/// (review log preferred) or `iteration-N-*.log` (implementation log) files.
+fn get_iteration_log_sync(
+    project_path: &Path,
+    issue_number: i64,
+    iteration: i32,
+) -> Result<String, String> {
+    let issue_dir = project_path
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    let entries =
+        fs::read_dir(&issue_dir).map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+
+    // Prefer review log, then fall back to any iteration log.
+    let mut review_log: Option<std::path::PathBuf> = None;
+    let mut impl_log: Option<std::path::PathBuf> = None;
+
+    let prefix = format!("iteration-{iteration}-");
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.starts_with(&prefix) {
+            continue;
+        }
+        if name.ends_with("-review.log") {
+            // Keep the lexicographically last review log (consistent tie-break).
+            let existing_name = review_log
+                .as_ref()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
+            let replace = existing_name
+                .as_ref()
+                .map(|en| name.as_str() > en.as_str())
+                .unwrap_or(true);
+            if replace {
+                review_log = Some(entry.path());
+            }
+        } else if name.ends_with(".log") {
+            let replace = impl_log.is_none();
+            if replace {
+                impl_log = Some(entry.path());
+            }
+        }
+    }
+
+    let log_path = review_log.or(impl_log);
+    let Some(path) = log_path else {
+        return Err(format!(
+            "No log found for iteration {iteration} of Issue #{issue_number}"
+        ));
+    };
+
+    let bytes = fs::read(&path).map_err(|e| format!("Failed to read iteration log: {e}"))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Returns the full log content for a specific iteration.
+#[tauri::command]
+async fn get_iteration_log(
+    project_path: String,
+    issue_number: i64,
+    iteration: i32,
+) -> Result<String, String> {
+    let path = project_path.clone();
+    tokio::task::spawn_blocking(move || {
+        get_iteration_log_sync(Path::new(&path), issue_number, iteration)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Subtask status entry returned by `get_subtask_status`.
+#[derive(serde::Serialize, Debug, Clone)]
+struct SubtaskStatusEntry {
+    id: String,
+    title: String,
+    status: SubtaskStatus,
+}
+
+/// Returns the subtask completion status from tasks.json.
+fn get_subtask_status_sync(
+    project_path: &Path,
+    issue_number: i64,
+) -> Result<Vec<SubtaskStatusEntry>, String> {
+    let issue_dir = project_path
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    let raw_subtasks = parse_tasks_json(&issue_dir);
+    let current_iteration = extract_iteration_numbers(&issue_dir).0;
+    let last_score = read_last_score(&issue_dir);
+    let current_failed = current_iteration_has_review_or_hard_gate(&issue_dir, current_iteration)
+        || last_score.is_some_and(|score| score < 85);
+    let current_index = raw_subtasks.iter().position(|subtask| !subtask.passes);
+
+    Ok(raw_subtasks
+        .into_iter()
+        .enumerate()
+        .map(|(index, subtask)| {
+            let status = if subtask.passes {
+                SubtaskStatus::Passing
+            } else if Some(index) == current_index && current_failed {
+                SubtaskStatus::Failing
+            } else {
+                SubtaskStatus::Pending
+            };
+
+            SubtaskStatusEntry {
+                id: subtask.id,
+                title: subtask.title,
+                status,
+            }
+        })
+        .collect())
+}
+
+/// Returns the subtask completion status for a processed Issue.
+#[tauri::command]
+async fn get_subtask_status(
+    project_path: String,
+    issue_number: i64,
+) -> Result<Vec<SubtaskStatusEntry>, String> {
+    let path = project_path.clone();
+    tokio::task::spawn_blocking(move || get_subtask_status_sync(Path::new(&path), issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Builds a formatted plain-text export of all iteration logs for an Issue.
+fn format_export_log(
+    project_path: &Path,
+    issue_number: i64,
+) -> Result<String, String> {
+    let issue_dir = project_path
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    // Gather detail metadata.
+    let detail = get_history_detail_sync(project_path, issue_number)?;
+
+    let mut output = String::new();
+    output.push_str(&format!(
+        "Issue #{} - {}\n",
+        detail.issue_number, detail.title
+    ));
+    let status_label = match detail.status {
+        HistoryRunStatus::Success => "成功",
+        HistoryRunStatus::Fail => "失败",
+        HistoryRunStatus::Interrupt => "中断",
+        HistoryRunStatus::InProgress => "进行中",
+    };
+    output.push_str(&format!("状态: {status_label}\n"));
+    if let Some(score) = detail.final_score {
+        output.push_str(&format!("最终评分: {score}/100\n"));
+    }
+    if let Some(total) = detail.total_iterations {
+        output.push_str(&format!("总迭代次数: {total}\n"));
+    }
+    if let Some(ref start) = detail.start_time {
+        output.push_str(&format!("开始时间: {start}\n"));
+    }
+    if let Some(ref end) = detail.end_time {
+        output.push_str(&format!("结束时间: {end}\n"));
+    }
+    output.push('\n');
+
+    // Iterate through all iterations and append logs.
+    for iter_summary in &detail.iterations {
+        let separator = "=".repeat(60);
+        output.push_str(&format!(
+            "{separator}\n迭代 {} - Agent: {}\n{separator}\n",
+            iter_summary.iteration, iter_summary.agent,
+        ));
+        if let Some(score) = iter_summary.score {
+            output.push_str(&format!("评分: {score}/100\n"));
+        }
+        if let Some(ref summary) = iter_summary.review_summary {
+            output.push_str(&format!("审核摘要: {summary}\n"));
+        }
+        output.push('\n');
+
+        // Read the iteration log content.
+        match get_iteration_log_sync(project_path, issue_number, iter_summary.iteration) {
+            Ok(log) => {
+                output.push_str(&log);
+                if !log.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+            Err(e) => {
+                output.push_str(&format!("（无法读取日志: {e}）\n"));
+            }
+        }
+        output.push('\n');
+    }
+
+    Ok(output)
+}
+
+/// Exports all iteration logs for an Issue as a formatted plain-text file.
+///
+/// Opens a native save-file dialog so the user can choose the destination.
+#[tauri::command]
+async fn export_history_log(
+    app: tauri::AppHandle,
+    project_path: String,
+    issue_number: i64,
+) -> Result<(), String> {
+    let pp = project_path.clone();
+    let content = tokio::task::spawn_blocking(move || {
+        format_export_log(Path::new(&pp), issue_number)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    // Open a save-file dialog.
+    let file_path = tauri_plugin_dialog::DialogExt::dialog(&app)
+        .file()
+        .set_title("导出日志")
+        .add_filter("文本文件", &["txt"])
+        .set_file_name(format!("issue-{issue_number}-log.txt"))
+        .blocking_save_file();
+
+    let Some(path) = file_path else {
+        return Ok(()); // User cancelled.
+    };
+
+    let path_str = path.to_string();
+    fs::write(path_str, content.as_bytes())
+        .map_err(|e| format!("Failed to write export file: {e}"))?;
+
+    Ok(())
+}
+
 /// Current status of run.sh process management.
 #[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 enum RunStatus {
@@ -2106,6 +2525,10 @@ pub fn run() {
             get_run_status,
             get_iteration_progress,
             list_history,
+            get_history_detail,
+            get_iteration_log,
+            get_subtask_status,
+            export_history_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -2128,12 +2551,14 @@ mod tests {
         map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
         resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
     };
-    use super::{extract_review_summary, extract_score};
     use super::{
         determine_history_status, extract_field, extract_history_end_time,
         extract_history_final_score, extract_history_title, extract_total_iterations,
+        format_export_log, get_history_detail_sync, get_iteration_log_sync,
+        get_subtask_status_sync,
         list_history_sync, HistoryRunStatus,
     };
+    use super::{extract_review_summary, extract_score};
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs as unix_fs;
@@ -3616,8 +4041,14 @@ mod tests {
         );
         assert_eq!(extract_history_title(log), "[desktop-app] 评分趋势折线图");
         assert_eq!(extract_total_iterations(log), Some(2));
-        assert_eq!(extract_field(log, "开始时间"), Some("2026-04-25 14:59:50".to_string()));
-        assert_eq!(extract_history_end_time(log), Some("2026-04-25 15:12:14".to_string()));
+        assert_eq!(
+            extract_field(log, "开始时间"),
+            Some("2026-04-25 14:59:50".to_string())
+        );
+        assert_eq!(
+            extract_history_end_time(log),
+            Some("2026-04-25 15:12:14".to_string())
+        );
     }
 
     #[test]
@@ -3651,7 +4082,10 @@ mod tests {
             determine_history_status(log, &None),
             HistoryRunStatus::Interrupt
         );
-        assert_eq!(extract_history_end_time(log), Some("2026-04-25 08:24:04".to_string()));
+        assert_eq!(
+            extract_history_end_time(log),
+            Some("2026-04-25 08:24:04".to_string())
+        );
     }
 
     #[test]
@@ -3771,6 +4205,264 @@ mod tests {
         assert_eq!(entries[0].status, HistoryRunStatus::InProgress);
         assert!(entries[0].title.is_empty());
 
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    // ========================================
+    // History detail tests
+    // ========================================
+
+    fn setup_history_detail_issue(
+        dir: &std::path::Path,
+        issue_number: i64,
+        log_md: &str,
+        iteration_logs: &[(&str, &str)],
+        tasks_json: Option<&str>,
+    ) {
+        let issue_dir = dir
+            .join(".autoresearch")
+            .join("workflows")
+            .join(format!("issue-{issue_number}"));
+        fs::create_dir_all(&issue_dir).expect("dir");
+        fs::write(issue_dir.join("log.md"), log_md).expect("log.md");
+
+        for (filename, content) in iteration_logs {
+            fs::write(issue_dir.join(filename), content).expect("iteration log");
+        }
+
+        if let Some(json) = tasks_json {
+            fs::write(issue_dir.join("tasks.json"), json).expect("tasks.json");
+        }
+    }
+
+    #[test]
+    fn get_history_detail_returns_iterations() {
+        let dir = create_temp_project_dir("history-detail-iterations");
+
+        let log_md = "# Issue #42 实现日志\n\
+             \n\
+             ## 基本信息\n\
+             - Issue: #42 - Test detail issue\n\
+             - 开始时间: 2026-04-24 10:00:00\n\
+             \n\
+             ## 最终结果\n\
+             - 总迭代次数: 2\n\
+             - 最终评分: 90/100\n\
+             - 状态: completed\n\
+             - 结束时间: 2026-04-24 11:00:00\n";
+
+        setup_history_detail_issue(
+            &dir,
+            42,
+            log_md,
+            &[
+                (
+                    "iteration-1-claude-implement.log",
+                    "Implementation output for iter 1",
+                ),
+                (
+                    "iteration-1-codex-review.log",
+                    "**评分: 60/100**\n\nSome issues found.",
+                ),
+                (
+                    "iteration-2-claude-implement.log",
+                    "Implementation output for iter 2",
+                ),
+                (
+                    "iteration-2-codex-review.log",
+                    "**评分: 90/100**\n\nLooks good!",
+                ),
+            ],
+            None,
+        );
+
+        let detail = get_history_detail_sync(&dir, 42).expect("get_history_detail_sync");
+        assert_eq!(detail.issue_number, 42);
+        assert_eq!(detail.title, "Test detail issue");
+        assert_eq!(detail.status, HistoryRunStatus::Success);
+        assert_eq!(detail.final_score, Some(90));
+        assert_eq!(detail.total_iterations, Some(2));
+        assert_eq!(detail.iterations.len(), 2);
+
+        assert_eq!(detail.iterations[0].iteration, 1);
+        assert_eq!(detail.iterations[0].agent, "claude");
+        assert_eq!(detail.iterations[0].score, Some(60));
+
+        assert_eq!(detail.iterations[1].iteration, 2);
+        assert_eq!(detail.iterations[1].agent, "claude");
+        assert_eq!(detail.iterations[1].score, Some(90));
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_history_detail_missing_issue() {
+        let dir = create_temp_project_dir("history-detail-missing");
+        let result = get_history_detail_sync(&dir, 999);
+        assert!(result.is_err());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_iteration_log_returns_review_content() {
+        let dir = create_temp_project_dir("iteration-log-review");
+
+        setup_history_detail_issue(
+            &dir,
+            30,
+            "- Issue: #30 - Log test\n",
+            &[
+                ("iteration-1-claude-implement.log", "impl content"),
+                ("iteration-1-codex-review.log", "review content here"),
+            ],
+            None,
+        );
+
+        // Should return review log (preferred over impl log)
+        let log = get_iteration_log_sync(&dir, 30, 1).expect("get_iteration_log_sync");
+        assert_eq!(log, "review content here");
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_iteration_log_falls_back_to_impl() {
+        let dir = create_temp_project_dir("iteration-log-impl");
+
+        setup_history_detail_issue(
+            &dir,
+            30,
+            "- Issue: #30 - Log test\n",
+            &[("iteration-1-claude-implement.log", "impl content only")],
+            None,
+        );
+
+        let log = get_iteration_log_sync(&dir, 30, 1).expect("get_iteration_log_sync");
+        assert_eq!(log, "impl content only");
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_iteration_log_missing_iteration() {
+        let dir = create_temp_project_dir("iteration-log-missing");
+
+        setup_history_detail_issue(&dir, 30, "- Issue: #30 - Log test\n", &[], None);
+
+        let result = get_iteration_log_sync(&dir, 30, 5);
+        assert!(result.is_err());
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_subtask_status_parses_tasks() {
+        let dir = create_temp_project_dir("subtask-status");
+
+        let tasks_json = r#"{"issueNumber":42,"subtasks":[
+            {"id":"T-001","title":"First task","passes":true},
+            {"id":"T-002","title":"Second task","passes":false},
+            {"id":"T-003","title":"Third task","passes":false}
+        ]}"#;
+
+        setup_history_detail_issue(&dir, 42, "", &[], Some(tasks_json));
+
+        let subtasks = get_subtask_status_sync(&dir, 42).expect("get_subtask_status_sync");
+        assert_eq!(subtasks.len(), 3);
+        assert_eq!(subtasks[0].id, "T-001");
+        assert!(matches!(subtasks[0].status, SubtaskStatus::Passing));
+        assert_eq!(subtasks[1].id, "T-002");
+        // Without a review or hard-gate for the current iteration, the second
+        // task should be Pending (not Failing).
+        assert!(matches!(subtasks[1].status, SubtaskStatus::Pending));
+        assert_eq!(subtasks[2].id, "T-003");
+        assert!(matches!(subtasks[2].status, SubtaskStatus::Pending));
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_subtask_status_missing_tasks_json() {
+        let dir = create_temp_project_dir("subtask-status-missing");
+
+        setup_history_detail_issue(&dir, 42, "", &[], None);
+
+        let subtasks = get_subtask_status_sync(&dir, 42).expect("get_subtask_status_sync");
+        assert!(subtasks.is_empty());
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_subtask_status_missing_issue() {
+        let dir = create_temp_project_dir("subtask-status-no-issue");
+        let result = get_subtask_status_sync(&dir, 999);
+        assert!(result.is_err());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn format_export_log_includes_all_iterations() {
+        let dir = create_temp_project_dir("export-log");
+
+        let log_md = "# Issue #42 实现日志\n\
+             \n\
+             ## 基本信息\n\
+             - Issue: #42 - Export test issue\n\
+             - 开始时间: 2026-04-24 10:00:00\n\
+             \n\
+             ## 最终结果\n\
+             - 总迭代次数: 2\n\
+             - 最终评分: 90/100\n\
+             - 状态: completed\n\
+             - 结束时间: 2026-04-24 11:00:00\n";
+
+        setup_history_detail_issue(
+            &dir,
+            42,
+            log_md,
+            &[
+                (
+                    "iteration-1-claude-implement.log",
+                    "Implementation output for iter 1",
+                ),
+                (
+                    "iteration-1-codex-review.log",
+                    "**评分: 60/100**\n\nSome issues found.",
+                ),
+                (
+                    "iteration-2-claude-implement.log",
+                    "Implementation output for iter 2",
+                ),
+                (
+                    "iteration-2-codex-review.log",
+                    "**评分: 90/100**\n\nAll good.",
+                ),
+            ],
+            None,
+        );
+
+        let content = format_export_log(&dir, 42).expect("format_export_log");
+
+        assert!(content.contains("Issue #42 - Export test issue"));
+        assert!(content.contains("成功"));
+        assert!(content.contains("最终评分: 90/100"));
+        assert!(content.contains("总迭代次数: 2"));
+        assert!(content.contains("迭代 1"));
+        assert!(content.contains("迭代 2"));
+        // Iteration 1: review log is preferred over impl log.
+        assert!(content.contains("Some issues found."));
+        // Iteration 2: review log is preferred over impl log.
+        assert!(content.contains("All good."));
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn format_export_log_missing_issue() {
+        let dir = create_temp_project_dir("export-log-missing");
+        let result = format_export_log(&dir, 999);
+        assert!(result.is_err());
         fs::remove_dir_all(dir).expect("cleanup");
     }
 }

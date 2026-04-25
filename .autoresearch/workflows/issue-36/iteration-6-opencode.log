@@ -1,0 +1,71 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-36/tasks.json
+[0m→ [0mRead desktop_app/src/components/HistoryDetailPanel.tsx
+[0m→ [0mRead desktop_app/src/stores/historyDetailStore.ts
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+Let me start by reading the key files to understand the current state before making a plan.
+[0m✱ [0mGrep "tauri_plugin_dialog|DialogExt|save_file|saveFile"[90m in desktop_app/src-tauri · 2 matches[0m
+[0m✱ [0mGrep "tauri_plugin_dialog|DialogExt|save"[90m in desktop_app/src-tauri · 5 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2380, limit=50][0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m in . · 12 matches[0m
+Let me also examine the Rust backend and look for existing test patterns before making the plan.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=880, limit=30][0m
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml[90m [limit=60][0m
+Let me read a few more critical sections to understand the dialog save pattern and test conventions.
+[0m✱ [0mGrep "async fn get_iteration_log|async fn get_history_detail|async fn get_subtask_status|async fn get_history_detail_sync|async fn get_iteration_log_sync|async fn get_subtask_status_sync"[90m in desktop_app/src-tauri · 3 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2037, limit=340][0m
+Now let me check the existing history detail commands and the Rust file structure to understand the exact insertion point:
+Now I have a complete picture. Here's the plan:
+
+---
+
+## T-003 修复计划
+
+审核反馈明确指出：T-003（日志导出功能）**完全未实现**。需要从零实现三层代码。
+
+### 改动的 4 个文件 + 1 个新文件
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | `desktop_app/src-tauri/src/lib.rs` | 新增 `export_history_log` Tauri 命令 + 格式化 helper |
+| 2 | `desktop_app/src-tauri/capabilities/default.json` | 添加 `dialog:allow-save` 权限 |
+| 3 | `desktop_app/src/stores/historyDetailStore.ts` | 添加 `isExporting`/`exportError` 状态和 `exportLog` action（含 browser fallback） |
+| 4 | `desktop_app/src/components/HistoryDetailPanel.tsx` | 在 header 添加"导出日志"按钮，接入 store action |
+| 5 | `desktop_app/tests/historyDetailExport.test.mjs` | **新文件**：store `exportLog` action 的纯函数 + DI 模式测试 |
+
+### 实现细节
+
+**Rust 侧**（约 80 行）：
+- `export_history_log_sync()` — 读取 log.md 元数据 + 所有迭代日志 → 拼接带时间戳/分隔符的完整导出文本 → `fs::write`
+- `export_history_log` 命令 — 先调用 `blocking_save_file()` 弹出原生保存对话框（默认 `issue-36-export.txt`），用户选路径后 spawn_blocking 执行格式化+写入
+- 注册到 `invoke_handler`
+
+**Store 侧**（约 40 行）：
+- 新增状态 `isExporting`、`exportError`
+- Tauri 模式：`invoke('export_history_log', { projectPath, issueNumber })`
+- Browser 模式：调用 `buildExportContent(detail, iterationLogs)` 纯函数生成文本 → Blob → `<a>` download
+- 错误统一走 `normalizeUserFacingError` 中文化
+
+**Panel 侧**（约 15 行）：
+- 在 header 的左侧组与关闭按钮之间添加 `导出日志` 按钮
+- `isExporting` 时显示 spinner 文案
+- 导出失败时显示红色错误提示
+
+**测试**（约 100 行）：
+- `buildExportContent` 纯函数测试（格式正确性、分隔符、时间戳）
+- DI 注入的 store 测试（Tauri invoke 参数、错误归一化、browser blob 生成）
+- 遵循现有 `historyStore.test.mjs` 的工厂+mock 模式
+
+### 验证步骤
+1. `cargo clippy -- -D warnings`（Rust）
+2. `npx tsc --noEmit`（TypeScript）
+3. `npm --prefix desktop_app run lint`
+4. `node --test --experimental-strip-types desktop_app/tests/historyDetailExport.test.mjs`
+5. `npm --prefix desktop_app run build`（Vite 打包验证）
+
+---
+
+确认后我将开始逐步实现。需要我立即开始吗？

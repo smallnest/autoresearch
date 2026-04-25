@@ -2398,7 +2398,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
         subtask_progress=$(get_subtask_progress_summary)
         log_console "$subtask_progress"
     fi
-    if [ $ITERATION -eq 1 ] && ! has_subtasks; then
+    if [ $ITERATION -eq 1 ]; then
         log_console "👤 ${AGENT_NAMES[0]} 开始实现..."
     else
         agent_idx=$(get_review_agent $ITERATION)

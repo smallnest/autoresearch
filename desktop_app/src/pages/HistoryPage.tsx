@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useCallback, type JSX } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import {
   useHistoryStore,
@@ -8,6 +8,8 @@ import {
   StatusFilter,
   SortOrder,
 } from '../stores/historyStore';
+import { useHistoryDetailStore } from '../stores/historyDetailStore';
+import HistoryDetailPanel from '../components/HistoryDetailPanel';
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -62,7 +64,7 @@ function formatTime(iso: string | null): string {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: RunStatus }) {
+function StatusBadge({ status }: { status: RunStatus }): JSX.Element {
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${STATUS_BADGE_CLASS[status]}`}
@@ -73,9 +75,44 @@ function StatusBadge({ status }: { status: RunStatus }) {
   );
 }
 
-function HistoryListItem({ entry }: { entry: HistoryEntry }) {
+function ChevronRight({ className }: { className?: string }): JSX.Element {
   return (
-    <div className="p-4 rounded-lg border bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all">
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5l7 7-7 7"
+      />
+    </svg>
+  );
+}
+
+function HistoryListItem({
+  entry,
+  isSelected,
+  onClick,
+}: {
+  entry: HistoryEntry;
+  isSelected: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left p-4 rounded-lg border transition-all ${
+        isSelected
+          ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
+          : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -88,7 +125,7 @@ function HistoryListItem({ entry }: { entry: HistoryEntry }) {
             {entry.title}
           </h3>
         </div>
-        <div className="flex-shrink-0 text-right">
+        <div className="flex-shrink-0 flex items-center gap-2">
           {entry.final_score != null ? (
             <span className="text-sm font-semibold text-gray-700">
               {entry.final_score}/100
@@ -96,6 +133,7 @@ function HistoryListItem({ entry }: { entry: HistoryEntry }) {
           ) : (
             <span className="text-sm text-gray-400">-</span>
           )}
+          <ChevronRight className="w-4 h-4 text-gray-300" />
         </div>
       </div>
       <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
@@ -104,11 +142,11 @@ function HistoryListItem({ entry }: { entry: HistoryEntry }) {
           <span>{entry.total_iterations} 次迭代</span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
-function SkeletonRow() {
+function SkeletonRow(): JSX.Element {
   return (
     <div className="p-4 rounded-lg border border-gray-100 bg-white">
       <div className="flex items-center gap-3 mb-2">
@@ -121,7 +159,7 @@ function SkeletonRow() {
   );
 }
 
-function EmptyState() {
+function EmptyState(): JSX.Element {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-gray-400">
       <svg
@@ -143,7 +181,7 @@ function EmptyState() {
   );
 }
 
-function NoProjectState() {
+function NoProjectState(): JSX.Element {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-gray-400">
       <svg
@@ -171,7 +209,7 @@ function NoProjectState() {
 // Main page
 // ---------------------------------------------------------------------------
 
-function HistoryPage() {
+function HistoryPage(): JSX.Element {
   const { projectPath } = useProjectStore();
   const {
     entries,
@@ -184,6 +222,9 @@ function HistoryPage() {
     setSortOrder,
     clearError,
   } = useHistoryStore();
+  const { clearDetail } = useHistoryDetailStore();
+
+  const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
 
   // Load history when projectPath changes
   useEffect(() => {
@@ -197,6 +238,15 @@ function HistoryPage() {
     [entries, statusFilter, sortOrder],
   );
 
+  const handleSelectIssue = useCallback((issueNumber: number) => {
+    setSelectedIssue(issueNumber);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedIssue(null);
+    clearDetail();
+  }, [clearDetail]);
+
   if (!projectPath) {
     return (
       <div className="p-6">
@@ -206,92 +256,110 @@ function HistoryPage() {
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">历史记录</h1>
-          <p className="text-sm text-gray-500">
-            共 {entries.length} 条记录
-            {statusFilter !== 'all' && `，已筛选 ${filtered.length} 条`}
-          </p>
-        </div>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
-          <div className="flex items-center justify-between">
-            <span>{error}</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  clearError();
-                  if (projectPath) void loadHistory(projectPath);
-                }}
-                className="text-red-500 hover:text-red-700 text-xs font-medium underline"
-              >
-                重试
-              </button>
-              <button
-                onClick={clearError}
-                aria-label="关闭错误提示"
-                className="text-red-400 hover:text-red-600"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+    <div className="flex h-full">
+      {/* Left: List */}
+      <div className={`p-6 ${selectedIssue != null ? 'w-1/2 border-r border-gray-200' : 'w-full'} overflow-y-auto`}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">历史记录</h1>
+            <p className="text-sm text-gray-500">
+              共 {entries.length} 条记录
+              {statusFilter !== 'all' && `，已筛选 ${filtered.length} 条`}
+            </p>
           </div>
         </div>
-      )}
 
-      {/* Toolbar */}
-      <div className="mb-4 flex items-center gap-3">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          aria-label="按状态过滤"
-          className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        >
-          {FILTER_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+            <div className="flex items-center justify-between">
+              <span>{error}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    clearError();
+                    if (projectPath) void loadHistory(projectPath);
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs font-medium underline"
+                >
+                  重试
+                </button>
+                <button
+                  onClick={clearError}
+                  aria-label="关闭错误提示"
+                  className="text-red-400 hover:text-red-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-        <select
-          value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-          aria-label="时间排序"
-          className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        >
-          {SORT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        {/* Toolbar */}
+        <div className="mb-4 flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            aria-label="按状态过滤"
+            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            {FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            aria-label="时间排序"
+            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="space-y-3">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        ) : filtered.length > 0 ? (
+          <div className="space-y-3">
+            {filtered.map((entry) => (
+              <HistoryListItem
+                key={entry.issue_number}
+                entry={entry}
+                isSelected={selectedIssue === entry.issue_number}
+                onClick={() => handleSelectIssue(entry.issue_number)}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState />
+        )}
       </div>
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="space-y-3">
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
+      {/* Right: Detail panel */}
+      {selectedIssue != null && (
+        <div className="w-1/2 overflow-y-auto bg-gray-50">
+          <HistoryDetailPanel
+            issueNumber={selectedIssue}
+            onClose={handleCloseDetail}
+          />
         </div>
-      ) : filtered.length > 0 ? (
-        <div className="space-y-3">
-          {filtered.map((entry) => (
-            <HistoryListItem key={entry.issue_number} entry={entry} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState />
       )}
     </div>
   );

@@ -1,0 +1,101 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue #36 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue #36 implementation[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2330, limit=140][0m
+[0m→ [0mRead desktop_app/src/stores/historyDetailStore.ts
+[0m→ [0mRead desktop_app/src/components/HistoryDetailPanel.tsx
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+Let me verify the key files directly to provide a precise review.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4400, limit=70][0m
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m 13 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/__tests__/**"[90m 0 matches[0m
+Now let me verify the Rust tests for the export functionality and check for frontend tests:
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs
+[0m✱ [0mGrep "historyDetailStore|history_detail|export_log"[90m in desktop_app/tests · 0 matches[0m
+[0m✱ [0mGrep "export_history_log"[90m in desktop_app/src-tauri/src · 2 matches[0m
+Let me check the frontend test for the history detail store and also verify the Rust structure for history detail commands:
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2265, limit=50][0m
+[0m✱ [0mGrep "useHistoryDetailStore|historyDetailStore"[90m in desktop_app/src · 6 matches[0m
+Let me verify the `get_iteration_log` command that `format_export_log` depends on:
+[0m✱ [0mGrep "historyDetailStore"[90m in desktop_app/tests · 0 matches[0m
+[0m✱ [0mGrep "exportLog|export_log|export.log"[90m in desktop_app/tests · 0 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2490, limit=50][0m
+现在让我检查前端是否有 `historyDetailStore` 的测试文件：
+以下是关于 Issue #36 子任务 T-003 的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #36
+- 标题: [desktop-app] 历史详情查看与日志导出
+- 子任务: T-003 — 日志导出功能与最终验证
+
+### 总体评价
+
+**评分: 92/100**
+
+T-003 的核心功能已完整实现，涵盖 Rust 后端、Tauri 命令注册、权限配置、前端 store action 和 UI 组件。这是一个优秀且清晰的实现。
+
+### 各维度得分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 100 | 35.0 |
+| 测试质量 | 25% | 70 | 17.5 |
+| 代码质量 | 20% | 100 | 20.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | **100%** | | **92.0** |
+
+### 验收条件清单
+
+| # | 条件 | 状态 | 依据 |
+|---|------|------|------|
+| 1 | 详情面板中有"导出日志"按钮 | ✅ | `HistoryDetailPanel.tsx:423-451` — 带下载图标，disabled 态正确处理 |
+| 2 | 点击按钮弹出 Tauri 文件保存对话框 | ✅ | `export_history_log` 使用 `DialogExt::file().blocking_save_file()`，标题"导出日志"，默认名 `issue-N-log.txt` |
+| 3 | 导出的文件包含完整日志，带时间戳和迭代分隔 | ✅ | `format_export_log` 格式化：Issue 元数据 + 按迭代遍历的日志全文 + `=`*60 分隔符 + 评分/Agent/审核摘要 |
+| 4 | 导出格式为纯文本（.txt） | ✅ | `add_filter("文本文件", &["txt"])`，`set_file_name("issue-{issueNumber}-log.txt")` |
+| 5 | Typecheck/lint 全部通过 | ❓ | 只读模式无法验证，需 `cargo clippy` 和 `npm run typecheck` 确认 |
+| 6 | 浏览器验证功能正常 | ❓ | 只读模式无法截屏验证 |
+
+### 严重问题
+
+无。核心功能均正确实现。
+
+### 一般问题（建议修复）
+
+#### 1. 缺少 `historyDetailStore` 的前端测试
+
+**位置**: `desktop_app/src/stores/historyDetailStore.ts`（全部 257 行）
+
+**问题**: `historyDetailStore` 已遵循工厂模式（`createHistoryDetailStore(overrides)`），可注入 `isTauri`/`invoke` 依赖，但 `tests/` 目录下完全没有针对它的测试。`exportLog`、`loadDetail`、`loadIterationLog` 三个关键 action 均无测试覆盖。同一项目的 `historyStore` 已有 17 个测试作为参考样板，补充测试的成本很低。
+
+**建议**: 在 `desktop_app/tests/historyDetailStore.test.mjs` 中添加测试，覆盖：
+- `exportLog` 在 Tauri 模式下调用 `invoke('export_history_log')` 并返回 `true`
+- `exportLog` 在浏览器模式下设置 `exportError` 并返回 `false`
+- `exportLog` 在 invoke 失败时设置错误并返回 `false`
+- `loadDetail` / `loadIterationLog` 的基本流程
+
+### 建议改进
+
+#### 2. `exportLog` 成功时没有用户反馈
+
+**位置**: `historyDetailStore.ts:225`
+
+当前 `exportLog` 成功时仅返回 `true`，UI 层没有 toast 或成功提示。用户点击"导出日志"后如果保存对话框关闭很快，可能无法确定是否成功写入。建议在成功路径中不产生副作用（当前行为可以接受，非阻塞级别的问题），或未来可在 UI 中添加短暂的绿色成功反馈。
+
+### 代码亮点
+
+- `format_export_log` 与 `export_history_log` 职责分离清晰：纯函数格式化 vs. Tauri 命令处理对话框和 I/O
+- 使用 `spawn_blocking` 将格式化操作移到 blocking 线程，不阻塞 Tauri async 运行时
+- 权限最小化：`dialog:allow-save` 已正确配置且是唯一需要的额外权限
+- 前端"导出日志"按钮的 loading 和 disabled 状态覆盖完整，防止重复点击
+- 导出失败的红色错误提示条位于面板最底部，视觉上合理且不干扰主体内容
+
+### 审核结论
+
+- [x] **通过** — 达到优秀级别，建议进入人工审核（补测后可正式合并）
