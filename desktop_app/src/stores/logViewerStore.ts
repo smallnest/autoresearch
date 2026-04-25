@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { isTauri as issueStoreIsTauri } from './issueStore.ts';
+import { normalizeUserFacingError } from './uiError.ts';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 export type LogSourceKind = 'live' | 'terminal' | 'summary' | 'iteration' | 'file';
@@ -82,11 +83,8 @@ async function tauriInvoke<T>(
   return invoke<T>(cmd, args);
 }
 
-function normalizeError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
+export function normalizeLogViewerError(error: unknown): string {
+  return normalizeUserFacingError(error, '加载日志失败，请重试。');
 }
 
 function createLiveSource(): LogSourceOption {
@@ -312,7 +310,7 @@ export function createLogViewerStore(
           sources: [createLiveSource()],
           selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
           isLoadingSources: false,
-          error: normalizeError(error),
+          error: normalizeLogViewerError(error),
         });
       }
     },
@@ -367,7 +365,7 @@ export function createLogViewerStore(
 
         set({
           isLoadingContent: false,
-          error: normalizeError(error),
+          error: normalizeLogViewerError(error),
         });
       }
     },

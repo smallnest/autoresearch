@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { useAgentStore } from './agentStore.ts';
+import { normalizeUserFacingError } from './uiError.ts';
 
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-const MAX_OUTPUT_LINES = 2000;
+const MAX_OUTPUT_LINES = 5000;
 
 type RunLifecycleStatus = 'idle' | 'running' | 'stopping' | 'finished' | 'error';
 type BackendRunStatus = 'Idle' | 'Running';
@@ -52,11 +53,16 @@ async function tauriInvoke<T>(
   return invoke<T>(cmd, args);
 }
 
-function normalizeError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
+export function normalizeRunStatusError(error: unknown): string {
+  return normalizeUserFacingError(error, '获取运行状态失败，请重试。');
+}
+
+export function normalizeStartRunError(error: unknown): string {
+  return normalizeUserFacingError(error, '启动任务失败，请重试。');
+}
+
+export function normalizeStopRunError(error: unknown): string {
+  return normalizeUserFacingError(error, '停止任务失败，请重试。');
 }
 
 function mapBackendStatus(status: BackendRunStatus): RunLifecycleStatus {
@@ -158,7 +164,7 @@ export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
             error:
               killed || exitCode === 0
                 ? null
-                : `运行失败${exitCode === null ? '' : ` (exit code ${exitCode})`}`,
+                : `运行失败${exitCode === null ? '' : `（退出码 ${exitCode}）`}`,
           }));
         }),
       ]);
@@ -198,7 +204,7 @@ export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
       } catch (error) {
         set({
           status: 'error',
-          error: normalizeError(error),
+          error: normalizeRunStatusError(error),
         });
       }
     },
@@ -243,7 +249,6 @@ export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
           },
         });
       } catch (error) {
-        const message = normalizeError(error);
         await get().refreshStatus();
         set((state) => {
           const backendStillRunning = state.status === 'running';
@@ -254,7 +259,9 @@ export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
               : previousState.activeIssueNumber,
             outputLines: previousState.outputLines,
             exitCode: previousState.exitCode,
-            error: message,
+            error: backendStillRunning
+              ? '当前已有任务在运行，请先停止后再启动新任务。'
+              : normalizeStartRunError(error),
           };
         });
       }
@@ -275,11 +282,10 @@ export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
       try {
         await deps.invoke('stop_run');
       } catch (error) {
-        const message = normalizeError(error);
         await get().refreshStatus();
         set((state) => ({
           status: state.status === 'running' ? 'running' : 'error',
-          error: message,
+          error: normalizeStopRunError(error),
         }));
       }
     },

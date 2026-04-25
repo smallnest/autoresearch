@@ -53,6 +53,7 @@ function SortableTag({ id, name, onRemove }: SortableTagProps) {
           e.stopPropagation();
           onRemove();
         }}
+        aria-label={`移除 ${name}`}
         className="w-4 h-4 flex items-center justify-center text-blue-200 hover:text-white hover:bg-blue-700 rounded"
       >
         ×
@@ -118,21 +119,21 @@ export default function AgentSelector() {
     <div className="space-y-6">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-gray-600">Selected Agents</h3>
+          <h3 className="text-sm font-medium text-gray-600">已选 Agent</h3>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={selectAll}
               className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
             >
-              Select All
+              全选
             </button>
             <button
               type="button"
               onClick={clearAll}
               className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
             >
-              Clear All
+              清空
             </button>
           </div>
         </div>
@@ -158,14 +159,14 @@ export default function AgentSelector() {
           </DndContext>
         ) : (
           <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-400 text-sm">
-            No agents selected. Click below to select.
+            暂未选择 Agent，请在下方添加。
           </div>
         )}
       </div>
 
       {unselected.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-gray-600 mb-3">Available Agents</h3>
+          <h3 className="text-sm font-medium text-gray-600 mb-3">可选 Agent</h3>
           <div className="flex flex-wrap gap-2">
             {unselected.map((agentId) => (
               <AgentTag

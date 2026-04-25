@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { normalizeUserFacingError } from './uiError.ts';
 
 const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -73,6 +74,14 @@ const mockProcessedNumbers: number[] = [];
 
 const mockIssueDetails: Record<number, IssueDetail> = {};
 
+export function normalizeIssueListError(error: unknown): string {
+  return normalizeUserFacingError(error, '加载议题失败，请重试。');
+}
+
+export function normalizeIssueDetailError(error: unknown): string {
+  return normalizeUserFacingError(error, '加载议题详情失败，请重试。');
+}
+
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('zh-CN', {
@@ -121,7 +130,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
         set({
           issues: mockIssues,
           processedNumbers: mockProcessedNumbers,
-          error: '浏览器模式不支持获取 GitHub Issues，请通过 tauri dev 运行',
+          error: '浏览器模式不支持获取 GitHub 议题，请通过 tauri dev 运行',
         });
       }
 
@@ -136,7 +145,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
         });
       }
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: normalizeIssueListError(e) });
     } finally {
       set({ isLoading: false });
     }
@@ -165,7 +174,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
                 resolve(mockDetail);
                 return;
               }
-              reject(new Error(`Issue #${_issueNumber} not found`));
+              reject(new Error(`未找到议题 #${_issueNumber}`));
             }, 250);
           });
 
@@ -198,7 +207,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
 
       set({
         detailLoading: false,
-        detailError: String(e),
+        detailError: normalizeIssueDetailError(e),
       });
     }
   },

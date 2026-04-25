@@ -17,12 +17,12 @@ function RightPanel() {
     >
       <div className="h-14 flex items-center justify-between px-3 border-b border-gray-200">
         {!collapsed && (
-          <span className="text-sm font-medium text-gray-600">Info Panel</span>
+          <span className="text-sm font-medium text-gray-600">信息面板</span>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="p-1.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors"
-          aria-label={collapsed ? "Expand panel" : "Collapse panel"}
+          aria-label={collapsed ? "展开面板" : "收起面板"}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -44,7 +44,7 @@ function RightPanel() {
       </div>
       {!collapsed && (
         <div className="p-4 text-sm text-gray-500">
-          <p>Select an item to view details.</p>
+          <p>选择一项后可在这里查看详情。</p>
         </div>
       )}
     </aside>

@@ -7,12 +7,13 @@ import {
   scoreBadgeClass,
   scoreColorClass,
   subtaskBadgeClass,
+  subtaskStatusLabel,
 } from '../src/components/iterationProgressView.ts';
 
 test('phaseIndex and PHASE_STEPS expose the expected iteration pipeline labels', () => {
   assert.deepEqual(
     PHASE_STEPS.map((step) => step.label),
-    ['Planning', 'Implementation', 'Review', 'Build·Lint·Test'],
+    ['规划', '实现', '审核', '构建·检查·测试'],
   );
   assert.equal(phaseIndex('Planning'), 0);
   assert.equal(phaseIndex('Review'), 2);
@@ -28,7 +29,13 @@ test('subtaskBadgeClass maps all three statuses to distinct styles', () => {
 test('idleMessage distinguishes loading from idle copy', () => {
   assert.equal(idleMessage(true, false), '正在加载迭代进度…');
   assert.equal(idleMessage(false, true), '正在加载迭代进度…');
-  assert.equal(idleMessage(false, false), '暂无迭代进度，当前为 idle 状态。');
+  assert.equal(idleMessage(false, false), '暂无迭代进度，当前为空闲状态。');
+});
+
+test('subtaskStatusLabel localizes backend statuses for display', () => {
+  assert.equal(subtaskStatusLabel('pending'), '待处理');
+  assert.equal(subtaskStatusLabel('passing'), '通过');
+  assert.equal(subtaskStatusLabel('failing'), '失败');
 });
 
 test('scoreColorClass returns correct color classes for score ranges', () => {

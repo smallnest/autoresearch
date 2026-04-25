@@ -9,6 +9,7 @@ import {
   PHASE_STEPS,
   phaseIndex,
   subtaskBadgeClass,
+  subtaskStatusLabel,
 } from './iterationProgressView';
 import { ReviewScoreSection } from './reviewScoreSection';
 
@@ -63,7 +64,7 @@ function SubtaskList({
 }): JSX.Element {
   if (subtasks.length === 0) {
     return (
-      <p className="text-xs text-gray-400">暂无 subtask 信息。</p>
+      <p className="text-xs text-gray-400">暂无子任务信息。</p>
     );
   }
 
@@ -81,7 +82,7 @@ function SubtaskList({
           <span
             className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${subtaskBadgeClass(subtask.status)}`}
           >
-            {subtask.status}
+            {subtaskStatusLabel(subtask.status)}
           </span>
         </li>
       ))}
@@ -102,7 +103,7 @@ function ProgressBar({
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
         <span className="font-medium text-gray-600">
-          {passed}/{total} subtasks passed
+          已通过 {passed}/{total} 个子任务
         </span>
         <span className="text-gray-400">{pct}%</span>
       </div>
