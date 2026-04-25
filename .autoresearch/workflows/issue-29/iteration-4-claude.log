@@ -1,0 +1,37 @@
+## 第三步：修复总结
+
+### 已完成的修复
+
+1. **runConfigStore.ts** - 已存在且正确实现，包含：
+   - `maxIterations` 默认值 16，范围 1-50
+   - `passingScore` 默认值 85，范围 1-100
+   - `continueMode` 默认值 false
+   - 使用 `zustand/middleware` 的 `persist` 持久化到 localStorage
+   - store key 为 `'autoresearch-run-config'`
+
+2. **RunConfigPanel.tsx** - 新创建的参数配置 UI 组件，包含：
+   - 可折叠面板设计
+   - max iterations 滑块 + 数字输入框
+   - passing score 滑块 + 数字输入框
+   - continue 模式开关按钮
+   - 重置为默认值按钮
+   - "已修改"标签显示配置是否为非默认值
+
+3. **IssueDetailPanel.tsx** - 集成配置面板和 Agent 选择器：
+   - 导入 `useRunConfigStore`、`RunConfigPanel`、`AgentSelector`
+   - 在运行控制区域添加配置面板和 Agent 选择器
+   - 修改 `startRun` 调用，传递 `maxIter`、`passingScore`、`continueMode` 参数
+
+### 验证结果
+- ✅ TypeScript 编译通过
+- ✅ ESLint 检查通过
+- ✅ Vite 构建成功
+
+---
+
+## Learnings
+
+- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`。`runConfigStore` 已经预先实现了完整的配置存储功能，包括范围约束和 sanitize 逻辑
+- **模式**: `runStore.ts` 中的 `StartRunRequest` 接口已预留了 `maxIter`、`passingScore`、`continueMode` 参数，后端 Rust 命令 `start_run` 同样支持这些参数
+- **经验**: UI 组件应使用可控/非可控模式支持（如 `collapsed` 属性），方便父组件控制状态
+- **经验**: 在集成多个 store 时，从各自的 store 中获取状态，然后在同一个组件内组合使用是推荐的模式

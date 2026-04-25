@@ -2,6 +2,15 @@ import { useEffect, useRef, type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { formatDateTime, GhIssue, IssueDetail } from '../stores/issueStore';
 import { useRunStore } from '../stores/runStore';
+import {
+  DEFAULT_CONTINUE_MODE,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  useRunConfigStore,
+} from '../stores/runConfigStore';
+import RunConfigPanel from './RunConfigPanel';
+import AgentSelector from './AgentSelector';
+import { buildIssueRunRequest } from './issueRunRequest';
 
 interface IssueDetailPanelProps {
   issue: GhIssue | null;
@@ -225,6 +234,12 @@ function IssueDetailPanel({
     clearError: clearRunError,
   } = useRunStore();
 
+  const {
+    maxIterations,
+    passingScore,
+    continueMode,
+  } = useRunConfigStore();
+
   useEffect(() => {
     const container = outputContainerRef.current;
     if (!container) {
@@ -306,10 +321,13 @@ function IssueDetailPanel({
                 onClick={() => {
                   clearRunError();
                   if (projectPath) {
-                    void startRun({
-                      projectPath,
-                      issueNumber: issue.number,
-                    });
+                    void startRun(
+                      buildIssueRunRequest(projectPath, issue.number, {
+                        maxIterations,
+                        passingScore,
+                        continueMode,
+                      })
+                    );
                   }
                 }}
                 disabled={!canStart}
@@ -330,6 +348,19 @@ function IssueDetailPanel({
                 <StopIcon className="h-4 w-4" />
                 停止
               </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <RunConfigPanel
+              defaultConfig={{
+                maxIterations: DEFAULT_MAX_ITERATIONS,
+                passingScore: DEFAULT_PASSING_SCORE,
+                continueMode: DEFAULT_CONTINUE_MODE,
+              }}
+            />
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <AgentSelector />
             </div>
           </div>
 

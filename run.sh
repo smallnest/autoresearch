@@ -884,16 +884,20 @@ check_project() {
         exit 1
     fi
 
-    # 拉取 autoresearch 最新代码
-    local autoresearch_dir
-    autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
-    if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
-        log "拉取 autoresearch 最新代码..."
-        if git -C "$autoresearch_dir" pull --rebase origin master &> /dev/null; then
-            log "autoresearch 代码已更新"
-        else
-            log_console "⚠️  autoresearch git pull 失败，继续使用当前版本"
+    # 拉取 autoresearch 最新代码（continue 模式跳过，避免冲突）
+    if [ $CONTINUE_MODE -eq 0 ]; then
+        local autoresearch_dir
+        autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
+        if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
+            log "拉取 autoresearch 最新代码..."
+            if git -C "$autoresearch_dir" pull --rebase origin master &> /dev/null; then
+                log "autoresearch 代码已更新"
+            else
+                log_console "⚠️  autoresearch git pull 失败，继续使用当前版本"
+            fi
         fi
+    else
+        log "continue 模式，跳过 autoresearch 代码更新"
     fi
 
     local lang=$(detect_language)
@@ -2107,7 +2111,7 @@ restore_continue_state() {
     fi
 
     # 检测是否有残留的 autoresearch stash（上次中断遗留）
-    # 排除本次 continue 刚创建的 stash
+    # 只警告，不自动 pop，避免冲突导致脚本中断
     local residual_stash
     if [ -n "$CONTINUE_STASH_REF" ]; then
         residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | grep -v "$CONTINUE_STASH_REF" | head -1 || true)
@@ -2115,21 +2119,11 @@ restore_continue_state() {
         residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | head -1 || true)
     fi
     if [ -n "$residual_stash" ]; then
-        log_console "⚠️ 发现上次中断遗留的 stash: $residual_stash"
-        log "发现残留 stash: $residual_stash"
-        # 尝试恢复残留 stash
         local stash_index
         stash_index=$(echo "$residual_stash" | grep -oE 'stash@\{[0-9]+\}' | head -1)
-        if [ -n "$stash_index" ]; then
-            log_console "尝试恢复残留 stash..."
-            if git stash pop "$stash_index" 2>/dev/null; then
-                log_console "已恢复残留 stash"
-                log "残留 stash 恢复成功: $stash_index"
-            else
-                log_console "⚠️ 残留 stash pop 失败（可能有冲突），请手动处理"
-                log "残留 stash pop 失败: $stash_index"
-            fi
-        fi
+        log_console "⚠️ 发现上次中断遗留的 stash: $residual_stash"
+        log_console "   如需恢复，请手动执行: git stash pop $stash_index"
+        log "发现残留 stash: $residual_stash (未自动恢复)"
     fi
 
     # 追加继续标记到日志
@@ -2613,7 +2607,8 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
     review_feedback_brief=""
     if [ -f "$review_log" ]; then
-        review_feedback_brief=$(cat "$review_log" | head -c 800)
+        # 避免 SIGPIPE: head 直接读取文件，而非通过 cat 管道
+        review_feedback_brief=$(head -c 800 "$review_log" 2>/dev/null || true)
     fi
 
     subtask_label=""
