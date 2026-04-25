@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 const navItems = [
   {
     to: "/",
-    label: "Dashboard",
+    label: "概览",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" />
@@ -15,7 +15,7 @@ const navItems = [
   },
   {
     to: "/issues",
-    label: "Issues",
+    label: "议题",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
@@ -26,7 +26,7 @@ const navItems = [
   },
   {
     to: "/history",
-    label: "History",
+    label: "历史",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="12 8 12 12 14 14" />
@@ -36,7 +36,7 @@ const navItems = [
   },
   {
     to: "/settings",
-    label: "Settings",
+    label: "设置",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />

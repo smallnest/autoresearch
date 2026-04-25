@@ -120,9 +120,9 @@ function EmptySelectionState(): JSX.Element {
     <div className="flex h-full min-h-[420px] items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-gray-50/50 p-8 text-center">
       <div>
         <CommentIcon className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-        <h2 className="mb-2 text-lg font-semibold text-gray-700">选择一个 Issue</h2>
+        <h2 className="mb-2 text-lg font-semibold text-gray-700">选择一个议题</h2>
         <p className="max-w-sm text-sm leading-6 text-gray-500">
-          从左侧列表中点击 Issue 后，这里会展示描述、评论和最新状态。
+          从左侧列表中点击议题后，这里会展示描述、评论和最新状态。
         </p>
       </div>
     </div>
@@ -238,20 +238,20 @@ function IssueDetailPanel({
       <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
         <div className="min-w-0">
           <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-blue-600">
-            Issue Detail
+            议题详情
           </p>
           <h2 className="truncate text-lg font-semibold text-gray-900">
             #{issue.number} {issue.title}
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            {issue.state === 'OPEN' ? 'Open' : 'Closed'} · 创建于{' '}
+            {issue.state === 'OPEN' ? '进行中' : '已关闭'} · 创建于{' '}
             {formatDateTime(issue.createdAt)}
           </p>
         </div>
         <button
           onClick={onClose}
           className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
-          aria-label="关闭 Issue 详情"
+          aria-label="关闭议题详情"
         >
           <CloseIcon className="h-5 w-5" />
         </button>
@@ -273,7 +273,7 @@ function IssueDetailPanel({
                 {showRunMeta && (
                   <span className="text-xs text-gray-500">
                     当前任务 #{activeIssueNumber}
-                    {exitCode !== null ? ` · exit code ${exitCode}` : ''}
+                    {exitCode !== null ? ` · 退出码 ${exitCode}` : ''}
                   </span>
                 )}
               </div>
@@ -281,7 +281,7 @@ function IssueDetailPanel({
                 运行控制
               </h3>
               <p className="mt-2 text-sm leading-6 text-gray-500">
-                选择当前 Issue 后可直接启动 `run.sh`，输出会实时显示在下方。
+                选择当前议题后可直接启动 `run.sh`，输出会实时显示在下方。
               </p>
             </div>
 
@@ -342,7 +342,7 @@ function IssueDetailPanel({
 
           {isSupported && !isCurrentIssueRunning && isRunActive && activeIssueNumber !== null && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              当前正在运行 Issue #{activeIssueNumber}，一次只能处理一个任务。
+              当前正在运行议题 #{activeIssueNumber}，一次只能处理一个任务。
             </div>
           )}
 
@@ -378,7 +378,7 @@ function IssueDetailPanel({
                   {detail.body}
                 </ReactMarkdown>
               ) : (
-                <EmptyContentState title="该 Issue 暂无描述。" />
+                <EmptyContentState title="该议题暂无描述。" />
               )}
             </section>
 
@@ -403,7 +403,7 @@ function IssueDetailPanel({
                       <div className="mb-4 flex items-center gap-3">
                         <img
                           src={avatarUrl(comment.author.login)}
-                          alt={`${comment.author.login} avatar`}
+                          alt={`${comment.author.login} 的头像`}
                           className="h-10 w-10 rounded-full border border-gray-200 bg-gray-100 object-cover"
                         />
                         <div>
@@ -422,7 +422,7 @@ function IssueDetailPanel({
                   ))}
                 </div>
               ) : (
-                <EmptyContentState title="该 Issue 暂无评论。" />
+                <EmptyContentState title="该议题暂无评论。" />
               )}
             </section>
           </>

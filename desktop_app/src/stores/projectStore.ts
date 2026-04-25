@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { normalizeUserFacingError } from './uiError.ts';
 
 // Detect if running inside Tauri (has native backend) or plain browser (vite dev only)
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -60,6 +61,10 @@ function saveRecentToStorage(path: string) {
   }
 }
 
+export function normalizeProjectError(error: unknown): string {
+  return normalizeUserFacingError(error, '加载项目失败，请重试。');
+}
+
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projectPath: null,
   config: null,
@@ -114,7 +119,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
       }
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: normalizeProjectError(e) });
     } finally {
       set({ isLoading: false });
     }
@@ -143,7 +148,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }));
       }
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: normalizeProjectError(e) });
     } finally {
       set({ isLoading: false });
     }

@@ -176,3 +176,21 @@
 - subtask 三态由后端提供 `status: pending | passing | failing`；前端只负责渲染，不要再用 `passes: boolean` 自行推导 `failing`
 - 评分 UI 的颜色映射约定放在 `iterationProgressView.ts` 这类纯函数里，用 `node --test --experimental-strip-types` 直接测阈值边界，比把颜色逻辑写死在 JSX 里更稳
 - 对这类小型 React UI，优先把关键显示区块提成纯组件，再用 `react-dom/server` 的 `renderToStaticMarkup` 做静态渲染测试；这样无需引入浏览器测试框架，也能覆盖文案、图标和显隐逻辑
+
+## 文案与中文化约定
+
+- “UI 全面中文化”类需求默认覆盖所有用户可见文案：页面标题、导航、按钮、空状态、提示语、状态标签、ARIA label 和占位符；不能只改局部组件
+- 中文化审核要覆盖未触碰的页面和可访问性文案，尤其是 `DashboardPage`、详情区图片 `alt`、搜索框 placeholder 这类容易漏掉的字符串
+- 做文案类改动时，必须同步更新受影响的字符串断言测试或静态渲染测试；如果常量语义变了（例如输出上限），对应测试里的边界值也要一起改
+- 审核此类需求时先看 `master...HEAD` 的实际 diff；如果 diff 与需求标题明显不符，优先按“需求未实现”处理，而不是假设代码落在别处
+- 纯文案 / 中文化需求不应顺手修改运行逻辑或容量阈值；如果确实需要顺带调整行为，必须在说明和测试里明确交代原因
+- `runStore` 的输出保留上限当前约定为 2000 行；若要调整属于独立行为/性能变更，不能夹带在 UI 文案类 Issue 里
+- 文案回归测试除了标题和正文，还要显式覆盖 placeholder、空状态、`aria-label`、图片 `alt`；这些字符串最容易漏。
+- 对前端 store 返回给 UI 的错误消息也要做中文化检查；这些字符串虽然不在 JSX 里，但会直接显示给用户，审核时不能漏掉
+- store 里的通用异常不要直接 `String(error)` / `error.message` 回传到 UI；统一通过 `src/stores/uiError.ts` 这类 helper 做“保留中文、英文回退到中文 fallback”的归一化
+- `iterationStore` 也属于直接面向用户的状态源；拉取迭代进度失败时不能直接透传后端异常原文，否则会在“迭代进度”面板泄漏英文报错
+- 后端枚举值如 `Phase`、`SubtaskStatus` 允许继续使用英文 key，但前端展示层必须通过单独映射输出中文，不能直接把 `Planning`、`pending` 之类的内部值渲染给用户
+- `LogViewer` 这类状态面板里的筛选标签同样属于用户可见文案，`info/warn/error` 不能直接 `toUpperCase()` 暴露给 UI，必须单独做展示映射
+- 中文化审核不能只看前端静态 JSX；像日志源下拉框这类由后端返回 `label` 的动态文案也必须检查，`iteration-*.log` 这种原始英文文件名如果直接展示给用户，同样算未完成中文化
+- 图标型按钮也属于中文化范围；像 Agent 标签的移除按钮这类仅显示 “×” 的控件，需要补充中文 `aria-label`，否则视觉上看似完成中文化但读屏仍缺失可理解文案
+- 中文化需求不得夹带运行行为改动；像 `runStore` / `logViewerStore` 的日志保留行数这种容量常量要保持一致，若要调整必须作为独立行为变更处理

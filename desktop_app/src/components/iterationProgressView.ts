@@ -1,10 +1,10 @@
 import type { Phase, SubtaskStatus } from '../stores/iterationStore';
 
 export const PHASE_STEPS: { key: Exclude<Phase, 'Idle'>; label: string }[] = [
-  { key: 'Planning', label: 'Planning' },
-  { key: 'Implementation', label: 'Implementation' },
-  { key: 'Review', label: 'Review' },
-  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+  { key: 'Planning', label: '规划' },
+  { key: 'Implementation', label: '实现' },
+  { key: 'Review', label: '审核' },
+  { key: 'BuildLintTest', label: '构建·检查·测试' },
 ];
 
 export function phaseIndex(phase: Phase): number {
@@ -28,7 +28,19 @@ export function idleMessage(isRunning: boolean, isLoading: boolean): string {
   if (isRunning || isLoading) {
     return '正在加载迭代进度…';
   }
-  return '暂无迭代进度，当前为 idle 状态。';
+  return '暂无迭代进度，当前为空闲状态。';
+}
+
+export function subtaskStatusLabel(status: SubtaskStatus): string {
+  switch (status) {
+    case 'passing':
+      return '通过';
+    case 'failing':
+      return '失败';
+    case 'pending':
+    default:
+      return '待处理';
+  }
 }
 
 /**

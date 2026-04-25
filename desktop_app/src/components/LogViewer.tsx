@@ -97,6 +97,11 @@ function LevelBadge({
       ? 'border-rose-500 bg-rose-500 text-white'
       : 'border-rose-500/60 text-rose-300',
   };
+  const labelMap: Record<LogLevel, string> = {
+    info: '信息',
+    warn: '警告',
+    error: '错误',
+  };
 
   return (
     <button
@@ -104,7 +109,7 @@ function LevelBadge({
       onClick={onClick}
       className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${styleMap[level]}`}
     >
-      {level.toUpperCase()}
+      {labelMap[level]}
     </button>
   );
 }

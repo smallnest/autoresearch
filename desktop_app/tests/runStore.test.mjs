@@ -32,7 +32,7 @@ test('startRun clears unknown active issue when backend already has another task
 
   assert.equal(store.getState().status, 'running');
   assert.equal(store.getState().activeIssueNumber, null);
-  assert.equal(store.getState().error, 'A run is already in progress.');
+  assert.equal(store.getState().error, '当前已有任务在运行，请先停止后再启动新任务。');
 });
 
 test('startRun restores previous running issue when stop/start race fails', async () => {
@@ -90,16 +90,16 @@ test('initialize wires run events and caps output history', async () => {
   assert.ok(outputListener);
   assert.ok(exitListener);
 
-  for (let index = 0; index < 2005; index += 1) {
+  for (let index = 0; index < 5005; index += 1) {
     outputListener({ payload: `line-${index}` });
   }
 
   exitListener({ payload: { exit_code: 2, killed: false } });
 
-  assert.equal(store.getState().outputLines.length, 2000);
+  assert.equal(store.getState().outputLines.length, 5000);
   assert.equal(store.getState().outputLines[0], 'line-5');
-  assert.equal(store.getState().outputLines[store.getState().outputLines.length - 1], 'line-2004');
+  assert.equal(store.getState().outputLines[store.getState().outputLines.length - 1], 'line-5004');
   assert.equal(store.getState().status, 'error');
   assert.equal(store.getState().exitCode, 2);
-  assert.equal(store.getState().error, '运行失败 (exit code 2)');
+  assert.equal(store.getState().error, '运行失败（退出码 2）');
 });
