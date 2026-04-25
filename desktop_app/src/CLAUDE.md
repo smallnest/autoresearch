@@ -37,6 +37,7 @@
 - Async actions should handle loading and error states
 - Store pattern: state + actions + getters in one `create()` call
 - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
 - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
 - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
 - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
@@ -71,6 +72,7 @@
 - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
 - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
 - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
+- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
 - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
 - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
 - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
