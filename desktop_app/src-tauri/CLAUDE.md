@@ -23,6 +23,11 @@
 - `iteration-progress` 事件应携带 `issue_number` 和完整 `IterationProgress`，前端可以据此忽略非当前 Issue 的推送，避免全局 store 串数据。
 - `tasks.json` 的 `passes` 只能表达“已通过/未通过”；如果 UI 需要 `pending/passing/failing`，应在 Rust 侧基于当前 subtask 和最新 review / hard-gate 结果生成显式 `status` 字段。
 
+## Project Config Initialization
+- `init_project_config` should only create missing files under `<project>/.autoresearch/`; never overwrite an existing `program.md` or existing agent template file.
+- Reuse the repo-root `program.md` and `agents/*.md` as built-in templates via `include_str!`, so desktop init stays aligned with CLI defaults without runtime filesystem lookups.
+- Keep the command return type consistent with `detect_project_config` by returning the refreshed `ProjectConfig` after initialization; the frontend can use that directly to refresh badge state.
+
 ## Tests
 - Keep process-management tests in `src/lib.rs` as pure helper tests where possible; use a short-lived `sh -c "exit 0"` child on Unix to verify shared state stores both PID and handle without adding sleeps.
 - Helper functions that only exist for unit tests should either be exercised by production code or annotated deliberately; this crate runs `cargo clippy -- -D warnings`, so otherwise `dead_code` will fail the build.

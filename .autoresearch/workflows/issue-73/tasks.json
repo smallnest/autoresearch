@@ -1,0 +1,150 @@
+{
+  "issueNumber": 73,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "子任务标题",
+      "description": "详细描述此子任务需要完成的工作",
+      "acceptanceCriteria": ["验收条件1", "验收条件2"],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "子任务标题",
+      "description": "详细描述",
+      "acceptanceCriteria": ["验收条件1"],
+      "priority": 2,
+      "passes": false
+    }
+  ]
+}
+{
+  "issueNumber": 73,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现 Rust 侧项目配置模板初始化命令",
+      "description": "在 `desktop_app/src-tauri/src/lib.rs` 中新增 Tauri command `init_project_config`，负责在目标项目根目录下补齐 `.autoresearch/` 配置结构。实现目录创建、`program.md` 模板写入、`agents/` 目录和默认 agent 配置生成，并遵循“仅补缺失项、不覆盖已有文件”的规则。模板内容优先采用内嵌方式（如 `include_str!`），同时补充后端单元测试，覆盖完整初始化、部分缺失补全和错误场景。",
+      "acceptanceCriteria": [
+        "新增 `init_project_config` Tauri command，并可被前端调用",
+        "当目标目录缺少 `.autoresearch/`、`program.md` 或 `agents/` 时，命令只创建缺失项",
+        "已存在的文件不会被覆盖或改写",
+        "默认生成的 `program.md` 和 agent 配置来自内置模板",
+        "初始化失败时返回清晰错误信息（如权限不足、目标路径无效）",
+        "Rust 侧包含覆盖完整初始化、部分补全、不覆盖已有文件的测试"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "将配置缺失提示接入前端初始化交互",
+      "description": "在 Dashboard 配置缺失提示 UI 基础上，新增真正的“从模板初始化”操作流。前端需要在用户触发后先弹出确认对话框，明确告知将创建哪些文件和目录，然后调用 `init_project_config`，并处理加载中、成功、失败三种状态。需要替换当前仅有的占位交互（如“了解”按钮/alert）。",
+      "acceptanceCriteria": [
+        "配置缺失时，用户可在 Dashboard 触发“从模板初始化”操作",
+        "初始化前会弹出确认对话框，并列出将创建的目录和文件",
+        "确认后前端调用 `init_project_config` command",
+        "初始化进行中有明确的 loading/disabled 状态，避免重复点击",
+        "初始化失败时前端显示错误提示，不会静默失败"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "补齐初始化后的配置状态刷新与结果反馈",
+      "description": "扩展前端项目配置 store 和 Dashboard 页面逻辑，在初始化成功后自动重新执行配置检测并刷新展示状态，使 `.autoresearch/`、`program.md`、`agents/` 三项检测结果即时更新。同时补齐成功提示和“部分已存在、部分新建”的场景展示，确保页面状态与实际文件系统一致。",
+      "acceptanceCriteria": [
+        "初始化成功后会自动重新调用配置检测，无需用户手动刷新页面",
+        "Dashboard 上的绿色勾/红色叉状态会立即更新为最新结果",
+        "配置完整后不再显示初始化提示，而显示成功/完整状态提示",
+        "当项目原本已有部分配置时，补齐后页面仍能正确展示最终完整状态",
+        "相关 store/页面逻辑有前端测试覆盖或现有测试得到更新"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "完成质量检查与浏览器验证",
+      "description": "针对本 Issue 的全链路改动执行项目级验证，包括前端 typecheck/lint、Rust 侧格式与测试检查，以及浏览器中的手工验证。重点确认初始化按钮、确认对话框、成功/失败提示、配置状态刷新和部分配置补全场景都符合预期。",
+      "acceptanceCriteria": [
+        "项目相关 typecheck/lint 命令通过",
+        "Rust 侧测试和前端相关测试通过",
+        "浏览器验证通过，确认初始化交互和状态刷新正常",
+        "验证至少覆盖“空项目初始化成功”和“部分配置补全成功”两个场景",
+        "如存在无法自动化覆盖的部分，验证结果有明确记录"
+      ],
+      "priority": 4,
+      "passes": false
+    }
+  ]
+}
+{
+  "issueNumber": 73,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现 Rust 侧项目配置模板初始化命令",
+      "description": "在 `desktop_app/src-tauri/src/lib.rs` 中新增 Tauri command `init_project_config`，负责在目标项目根目录下补齐 `.autoresearch/` 配置结构。实现目录创建、`program.md` 模板写入、`agents/` 目录和默认 agent 配置生成，并遵循“仅补缺失项、不覆盖已有文件”的规则。模板内容优先采用内嵌方式（如 `include_str!`），同时补充后端单元测试，覆盖完整初始化、部分缺失补全和错误场景。",
+      "acceptanceCriteria": [
+        "新增 `init_project_config` Tauri command，并可被前端调用",
+        "当目标目录缺少 `.autoresearch/`、`program.md` 或 `agents/` 时，命令只创建缺失项",
+        "已存在的文件不会被覆盖或改写",
+        "默认生成的 `program.md` 和 agent 配置来自内置模板",
+        "初始化失败时返回清晰错误信息（如权限不足、目标路径无效）",
+        "Rust 侧包含覆盖完整初始化、部分补全、不覆盖已有文件的测试"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "将配置缺失提示接入前端初始化交互",
+      "description": "在 Dashboard 配置缺失提示 UI 基础上，新增真正的“从模板初始化”操作流。前端需要在用户触发后先弹出确认对话框，明确告知将创建哪些文件和目录，然后调用 `init_project_config`，并处理加载中、成功、失败三种状态。需要替换当前仅有的占位交互（如“了解”按钮/alert）。",
+      "acceptanceCriteria": [
+        "配置缺失时，用户可在 Dashboard 触发“从模板初始化”操作",
+        "初始化前会弹出确认对话框，并列出将创建的目录和文件",
+        "确认后前端调用 `init_project_config` command",
+        "初始化进行中有明确的 loading/disabled 状态，避免重复点击",
+        "初始化失败时前端显示错误提示，不会静默失败"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "补齐初始化后的配置状态刷新与结果反馈",
+      "description": "扩展前端项目配置 store 和 Dashboard 页面逻辑，在初始化成功后自动重新执行配置检测并刷新展示状态，使 `.autoresearch/`、`program.md`、`agents/` 三项检测结果即时更新。同时补齐成功提示和“部分已存在、部分新建”的场景展示，确保页面状态与实际文件系统一致。",
+      "acceptanceCriteria": [
+        "初始化成功后会自动重新调用配置检测，无需用户手动刷新页面",
+        "Dashboard 上的绿色勾/红色叉状态会立即更新为最新结果",
+        "配置完整后不再显示初始化提示，而显示成功/完整状态提示",
+        "当项目原本已有部分配置时，补齐后页面仍能正确展示最终完整状态",
+        "相关 store/页面逻辑有前端测试覆盖或现有测试得到更新"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "完成质量检查与浏览器验证",
+      "description": "针对本 Issue 的全链路改动执行项目级验证，包括前端 typecheck/lint、Rust 侧格式与测试检查，以及浏览器中的手工验证。重点确认初始化按钮、确认对话框、成功/失败提示、配置状态刷新和部分配置补全场景都符合预期。",
+      "acceptanceCriteria": [
+        "项目相关 typecheck/lint 命令通过",
+        "Rust 侧测试和前端相关测试通过",
+        "浏览器验证通过，确认初始化交互和状态刷新正常",
+        "验证至少覆盖“空项目初始化成功”和“部分配置补全成功”两个场景",
+        "如存在无法自动化覆盖的部分，验证结果有明确记录"
+      ],
+      "priority": 4,
+      "passes": false
+    }
+  ]
+}
