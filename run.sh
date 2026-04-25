@@ -1264,9 +1264,9 @@ $agent_instructions
         return 1
     fi
 
-    # 尝试提取 ```json ... ``` 代码块
+    # 尝试提取第一个 ```json ... ``` 代码块（避免多个 JSON 块拼接导致无效 JSON）
     local json_content
-    json_content=$(sed -n '/^```json$/,/^```$/{ /^```json$/d; /^```$/d; p; }' "$log_file" | head -200)
+    json_content=$(sed -n '/^```json$/,/^```$/{ /^```json$/d; /^```$/d; p; }' "$log_file" | awk 'BEGIN{f=0} f==0{print; if(NR>=200) exit} /^/{f=1}' | head -200)
 
     if [ -n "$json_content" ]; then
         echo "$json_content" > "$tasks_file"

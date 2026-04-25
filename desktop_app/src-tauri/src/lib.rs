@@ -53,7 +53,7 @@ fn get_was_killed() -> &'static AtomicBool {
 }
 
 /// Configuration detection result for a project directory.
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 struct ProjectConfig {
     has_autoresearch_dir: bool,
     has_program_md: bool,
@@ -215,6 +215,11 @@ struct TasksFileSubtask {
 // ========================================
 
 use regex::Regex;
+
+const PROGRAM_TEMPLATE: &str = include_str!("../../../program.md");
+const CLAUDE_AGENT_TEMPLATE: &str = include_str!("../../../agents/claude.md");
+const CODEX_AGENT_TEMPLATE: &str = include_str!("../../../agents/codex.md");
+const OPENCODE_AGENT_TEMPLATE: &str = include_str!("../../../agents/opencode.md");
 
 fn score_number_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
@@ -689,12 +694,8 @@ fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
     let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
 
     let review_content = find_latest_review_content(workflow_dir);
-    let last_score = review_content
-        .as_deref()
-        .and_then(extract_score);
-    let review_summary = review_content
-        .as_deref()
-        .and_then(extract_review_summary);
+    let last_score = review_content.as_deref().and_then(extract_score);
+    let review_summary = review_content.as_deref().and_then(extract_review_summary);
     let passing_score = get_passing_score();
 
     IterationProgress {
@@ -817,18 +818,94 @@ async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, Str
 async fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> {
     tokio::task::spawn_blocking(move || {
         let base = Path::new(&project_path);
-        if !base.is_dir() {
-            return Err(format!("Path is not a directory: {project_path}"));
-        }
-        let ar = base.join(".autoresearch");
-        Ok(ProjectConfig {
-            has_autoresearch_dir: ar.is_dir(),
-            has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
-            has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
-        })
+        detect_project_config_sync(base, &project_path)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Initializes missing `.autoresearch/` config files from built-in templates.
+#[tauri::command]
+async fn init_project_config(project_path: String) -> Result<ProjectConfig, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        init_project_config_sync(base, &project_path)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn detect_project_config_sync(base: &Path, project_path: &str) -> Result<ProjectConfig, String> {
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let ar = base.join(".autoresearch");
+    Ok(ProjectConfig {
+        has_autoresearch_dir: ar.is_dir(),
+        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+        has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
+    })
+}
+
+fn init_project_config_sync(base: &Path, project_path: &str) -> Result<ProjectConfig, String> {
+    detect_project_config_sync(base, project_path)?;
+
+    let config_dir = base.join(".autoresearch");
+    create_dir_if_missing(&config_dir, "config directory")?;
+
+    let program_path = config_dir.join("program.md");
+    write_file_if_missing(&program_path, PROGRAM_TEMPLATE, "program template")?;
+
+    let agents_dir = config_dir.join("agents");
+    create_dir_if_missing(&agents_dir, "agents directory")?;
+    write_file_if_missing(
+        &agents_dir.join("claude.md"),
+        CLAUDE_AGENT_TEMPLATE,
+        "Claude agent template",
+    )?;
+    write_file_if_missing(
+        &agents_dir.join("codex.md"),
+        CODEX_AGENT_TEMPLATE,
+        "Codex agent template",
+    )?;
+    write_file_if_missing(
+        &agents_dir.join("opencode.md"),
+        OPENCODE_AGENT_TEMPLATE,
+        "OpenCode agent template",
+    )?;
+
+    detect_project_config_sync(base, project_path)
+}
+
+fn create_dir_if_missing(path: &Path, label: &str) -> Result<(), String> {
+    if path.exists() {
+        if path.is_dir() {
+            return Ok(());
+        }
+        return Err(format!(
+            "Cannot create {label}: path exists and is not a directory: {}",
+            path.display()
+        ));
+    }
+
+    fs::create_dir_all(path)
+        .map_err(|e| format!("Failed to create {label} at {}: {e}", path.display()))
+}
+
+fn write_file_if_missing(path: &Path, content: &str, label: &str) -> Result<(), String> {
+    if path.exists() {
+        if path.is_file() {
+            return Ok(());
+        }
+        return Err(format!(
+            "Cannot create {label}: path exists and is not a file: {}",
+            path.display()
+        ));
+    }
+
+    fs::write(path, content)
+        .map_err(|e| format!("Failed to write {label} at {}: {e}", path.display()))
 }
 
 /// Retrieves the most recently opened project path from the Tauri store.
@@ -1469,6 +1546,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             select_project_dir,
             detect_project_config,
+            init_project_config,
             get_recent_project,
             save_recent_project,
             list_issues,
@@ -1491,8 +1569,8 @@ mod tests {
     use super::RunProcessState;
     use super::{
         build_iteration_progress, find_latest_review_content, get_iteration_progress_sync,
-        infer_phase, parse_iteration_from_log_md, parse_iteration_from_terminal,
-        parse_tasks_json, Phase, SubtaskStatus,
+        infer_phase, init_project_config_sync, parse_iteration_from_log_md,
+        parse_iteration_from_terminal, parse_tasks_json, Phase, SubtaskStatus,
     };
     use super::{build_run_args, build_run_env_vars, StartRunRequest};
     use super::{
@@ -1512,6 +1590,115 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("temp project dir should be created");
         root
+    }
+
+    #[test]
+    fn init_project_config_creates_missing_template_files() {
+        let project_dir = create_temp_project_dir("init-project-config-full");
+
+        let config = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+            .expect("init should succeed");
+
+        assert!(config.has_autoresearch_dir);
+        assert!(config.has_program_md);
+        assert!(config.has_agents_dir);
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/program.md"))
+                .expect("program template should exist"),
+            super::PROGRAM_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/agents/claude.md"))
+                .expect("claude template should exist"),
+            super::CLAUDE_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/agents/codex.md"))
+                .expect("codex template should exist"),
+            super::CODEX_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/agents/opencode.md"))
+                .expect("opencode template should exist"),
+            super::OPENCODE_AGENT_TEMPLATE
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn init_project_config_only_fills_missing_files() {
+        let project_dir = create_temp_project_dir("init-project-config-partial");
+        let config_dir = project_dir.join(".autoresearch");
+        let agents_dir = config_dir.join("agents");
+        fs::create_dir_all(&agents_dir).expect("agents dir should exist");
+        fs::write(config_dir.join("program.md"), "custom program\n").expect("program should exist");
+        fs::write(agents_dir.join("codex.md"), "custom codex\n").expect("codex should exist");
+
+        let config = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+            .expect("init should succeed");
+
+        assert!(config.has_autoresearch_dir);
+        assert!(config.has_program_md);
+        assert!(config.has_agents_dir);
+        assert_eq!(
+            fs::read_to_string(config_dir.join("program.md")).expect("program should still exist"),
+            "custom program\n"
+        );
+        assert_eq!(
+            fs::read_to_string(agents_dir.join("codex.md")).expect("codex should still exist"),
+            "custom codex\n"
+        );
+        assert_eq!(
+            fs::read_to_string(agents_dir.join("claude.md")).expect("claude should be created"),
+            super::CLAUDE_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(agents_dir.join("opencode.md")).expect("opencode should be created"),
+            super::OPENCODE_AGENT_TEMPLATE
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn init_project_config_rejects_non_directory_project_path() {
+        let file_path = std::env::temp_dir().join(format!(
+            "autoresearch-init-project-config-file-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&file_path);
+        fs::write(&file_path, "not a directory").expect("temp file should exist");
+
+        let error = init_project_config_sync(&file_path, file_path.to_string_lossy().as_ref())
+            .expect_err("file path should fail");
+
+        assert_eq!(
+            error,
+            format!("Path is not a directory: {}", file_path.display())
+        );
+        fs::remove_file(file_path).expect("cleanup");
+    }
+
+    #[test]
+    fn init_project_config_reports_conflicting_config_paths() {
+        let project_dir = create_temp_project_dir("init-project-config-conflict");
+        fs::write(project_dir.join(".autoresearch"), "conflict")
+            .expect("conflict file should exist");
+
+        let error = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+            .expect_err("conflicting .autoresearch file should fail");
+
+        assert!(
+            error.contains("config directory"),
+            "expected config directory error, got: {error}"
+        );
+        assert!(
+            error.contains(".autoresearch"),
+            "expected path in error, got: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
     }
 
     #[test]
