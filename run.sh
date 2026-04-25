@@ -1241,10 +1241,10 @@ $program_instructions
 $agent_instructions
 "
 
-    local log_file="$WORK_DIR/planning.log"
+    log_file="$WORK_DIR/planning.log"
 
     cd "$PROJECT_ROOT"
-    local agent_ret=0
+    agent_ret=0
     run_with_retry "$first_agent" "$prompt" "$log_file" || agent_ret=$?
     if [ $agent_ret -eq 2 ]; then
         log "规划阶段 agent 被跳过，将不拆分子任务（回退到原有模式）"
@@ -1255,7 +1255,6 @@ $agent_instructions
     fi
 
     # 从 agent 输出中提取 tasks.json
-    local tasks_file
     tasks_file=$(get_tasks_file)
 
     # 防御性检查：确保日志文件存在且非空
@@ -1265,7 +1264,6 @@ $agent_instructions
     fi
 
     # 尝试提取第一个 ```json ... ``` 代码块（避免多个 JSON 块拼接导致无效 JSON）
-    local json_content
     json_content=$(awk '/^```json$/{n++; next} n==1 && /^```$/{exit} n==1{print}' "$log_file" | head -200)
 
     if [ -n "$json_content" ]; then
@@ -1273,7 +1271,6 @@ $agent_instructions
 
         # 验证 JSON 格式
         if jq '.' "$tasks_file" > /dev/null 2>&1; then
-            local count
             count=$(jq '.subtasks | length' "$tasks_file")
             log_console "✅ 成功拆分为 $count 个子任务"
 
@@ -2745,7 +2742,7 @@ EOF
         [ -z "$main_branch" ] && main_branch="master"
 
         # 切换回主分支前，如果有未提交的更改，先 stash
-        local stashed=0
+        stashed=0
         if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
             log "检测到未提交的更改，暂存..."
             if git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null; then

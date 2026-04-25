@@ -1,0 +1,66 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1820, limit=220][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3590, limit=190][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m✱ [0mGlob ".autoresearch/workflows/issue-35/iteration-*"[90m 19 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/progress.md[90m [limit=100][0m
+Now let me read the iteration 12 review log for any additional details:
+[0m→ [0mRead .autoresearch/workflows/issue-35/iteration-12-opencode-review.log
+Now I have a thorough understanding of the codebase and review feedback. Here is my plan:
+
+---
+
+## 修复计划
+
+### 审核反馈提炼
+
+最新审核 (迭代12) 评分 **92/100**，T-001 已达标通过。需处理的 issue：
+
+| 类别 | 问题 | 位置 |
+|------|------|------|
+| **一般问题** | `has_interrupt` 匹配两种模式但 `interrupt_pos` 只搜一种，对 last-event-wins 逻辑存在防御性缺口 | `lib.rs:1996-2000` |
+| **可选改进** | `extract_field_line` 每次调用都 `format!` 分配前缀字符串 | `lib.rs:1947` |
+| **可选改进** | `entries.flatten()` 静默跳过 I/O 错误，无日志记录 | `lib.rs:1855` |
+
+### 修复任务清单
+
+#### 任务 1: 修复 `has_interrupt` / `interrupt_pos` 不对称 (一般问题)
+
+**位置**: `lib.rs:1993-2029` 中的 `determine_history_status` 函数
+
+**修改点**:
+1. 计算 `interrupt_pos` 时同时搜索两种中断标记，取两者的最大值（最后出现者）
+2. 由于 `rfind` 返回 `Option<usize>`，通过 `max` 比较取两者中较晚的位置
+3. 新增测试用例：日志仅含 "中断信号" 不含 "⚠️ 脚本被中断" 时仍能正确判定为 Interrupt，并能进入 last-event-wins 比较分支
+
+#### 任务 2: 优化 `extract_field_line` 减少分配 (可选)
+
+**位置**: `lib.rs:1946-1963`
+
+**修改点**:
+- 去掉 `format!` 调用，改用固定字符串拼接比较（`"- {field}: "` 和 `"- **{field}**: "` 直接 inline 比较）
+- 实际优化幅度极小（仅解析少量字段），保持代码清晰度同时减少一次堆分配
+
+#### 任务 3: 修复 `entries.flatten()` 静默跳过错误 (可选)
+
+**位置**: `lib.rs:1855`
+
+**修改点**:
+- 将 `entries.flatten()` 改为显式 `filter_map`，对 `Err` 分支用 `eprintln!` 记录跳过原因
+- 不影响正常流程，仅增加可观测性
+
+### 验证步骤
+
+1. `cargo clippy -- -D warnings` — 零警告
+2. `cargo test history` — 所有历史相关测试通过（含新测试）
+3. `cargo test` — 全量测试通过
+
+### 文件修改范围
+
+仅修改 `desktop_app/src-tauri/src/lib.rs`，不涉及其他文件。
+
+---
+
+是否同意此计划？确认后我将逐步实施修复。

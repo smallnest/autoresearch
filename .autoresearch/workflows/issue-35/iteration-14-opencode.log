@@ -1,0 +1,120 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m→ [0mRead desktop_app/src/stores/issueStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1800, limit=150][0m
+[0m✱ [0mGlob "desktop_app/src/stores/*.ts"[90m 8 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m 11 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1950, limit=200][0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs[90m [limit=120][0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/package.json
+Let me read more context - the Rust Tauri command, a sample test file for patterns, and the iterationStore for factory pattern reference.
+[0m✱ [0mGlob "desktop_app/src/pages/History*"[90m 1 match[0m
+[0m→ [0mRead desktop_app/tsconfig.json
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2150, limit=120][0m
+[0m→ [0mRead desktop_app/src/pages/HistoryPage.tsx
+[0m
+[0m$ [0mgrep -n "fn test.*history\|fn history" /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs | head -30
+3597:    fn history_status_success() {
+3624:    fn history_status_fail() {
+3641:    fn history_status_interrupt() {
+3658:    fn history_status_interrupt_after_completion() {
+3684:    fn history_status_in_progress() {
+3705:    fn history_list_sync_scans_workflows() {
+3755:    fn history_list_sync_empty_dir() {
+3763:    fn history_no_log_md() {
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3597, limit=200][0m
+以下是针对 T-002 的实现计划。请确认后我将进入实现阶段。
+
+---
+
+## 实现计划：T-002 — 前端历史记录数据层（Types + Store）
+
+### 待创建文件
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 1 | `desktop_app/src/stores/historyStore.ts` | HistoryEntry 类型、纯函数、Zustand store |
+| 2 | `desktop_app/tests/historyStore.test.mjs` | Node 测试，覆盖纯函数和 store 行为 |
+
+### 1. `historyStore.ts` 详细设计
+
+#### 类型定义
+
+```typescript
+// Rust 枚举序列化为 PascalCase，需在前端做 case 映射
+type RawStatus = 'Success' | 'Fail' | 'Interrupt' | 'InProgress';
+export type RunStatus = 'success' | 'fail' | 'interrupt' | 'in_progress';
+
+// Rust 返回的 JSON shape（snake_case 字段）
+export interface HistoryEntry {
+  issue_number: number;
+  title: string;
+  status: RunStatus;  // 已归一化（小写）
+  final_score: number | null;
+  total_iterations: number | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+```
+
+#### 纯函数
+
+- **`normalizeHistoryStatus(raw: string): RunStatus`** — 映射 `"Success"→"success"`, `"InProgress"→"in_progress"` 等
+- **`normalizeHistoryEntry(raw: RawHistoryEntry): HistoryEntry`** — 对单条记录做完整归一化
+- **`getFilteredAndSortedHistory(entries, statusFilter, sortOrder): HistoryEntry[]`** — 按状态过滤 + 按 `start_time` 排序
+- **`normalizeHistoryError(error: unknown): string`** — 通过 `normalizeUserFacingError` 归一化错误消息
+
+#### Store（工厂模式，参考 `iterationStore.ts`）
+
+```typescript
+export function createHistoryStore(overrides?) → useHistoryStore
+```
+
+状态字段：
+- `entries: HistoryEntry[]`
+- `statusFilter: 'all' | RunStatus`（默认 `'all'`）
+- `sortOrder: 'asc' | 'desc'`（默认 `'desc'`）
+- `isLoading: boolean`
+- `error: string | null`
+
+动作：
+- `loadHistory(projectPath)` — Tauri 环境调用 `list_history` → 归一化 status；浏览器环境使用 mock 数据
+- `setStatusFilter(filter)` / `setSortOrder(order)` / `clearError()`
+
+Mock 数据：4 条样例记录覆盖全部 status + 空字段场景。
+
+### 2. `historyStore.test.mjs` 测试用例
+
+| 测试 | 覆盖内容 |
+|------|----------|
+| `normalizeHistoryStatus` | 4 种输入 → 4 种输出、未知输入 fallback |
+| `getFilteredAndSortedHistory` — 过滤 | `'all'` 返回全部、`'success'`/`'fail'`/`'interrupt'`/`'in_progress'` 各自过滤 |
+| `getFilteredAndSortedHistory` — 排序 | asc/desc 按 start_time 排序、null start_time 排最后 |
+| `getFilteredAndSortedHistory` — 组合 | 同时过滤+排序 |
+| store `loadHistory` (Tauri) | mock invoke 返回数据，验证 entries 归一化 |
+| store `loadHistory` error | invoke 抛出异常 → error 状态正确、中文 fallback |
+| store `setStatusFilter` / `setSortOrder` | 状态变更正确 |
+
+### 3. 验证步骤
+
+```bash
+npm --prefix desktop_app run typecheck   # tsc --noEmit
+npm --prefix desktop_app run lint        # eslint .
+npm --prefix desktop_app test            # node --test --experimental-strip-types tests/*.test.mjs
+```
+
+### 关键设计决策
+
+1. **PascalCase → lowercase 映射**：Rust `#[derive(Serialize)]` 默认将枚举序列化为 variant 名（`"Success"` 等），前端 `loadHistory` 在存储前完成归一化，确保过滤/排序逻辑使用统一的小写类型。
+2. **工厂模式**：采用 `createHistoryStore(overrides)` 注入 `invoke` 依赖，使 store 在 Node 测试中可隔离（无需浏览器/Tauri runtime）。
+3. **纯函数优先**：`getFilteredAndSortedHistory` 不依赖 Zustand/Zustand state，接受参数返回结果，可在 store 外部独立测试。
+
+---
+
+确认后我将立即创建这两个文件并运行验证。

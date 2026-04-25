@@ -1,0 +1,123 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=100][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1240, limit=200][0m
+[0m→ [0mRead desktop_app/src-tau[0m✓ [0mExplore existing test patterns[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1240, limit=120][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=220, limit=40][0m
+Now let me read the specific lines around the existing `find_latest_review_content` and the parsing helpers to understand the full context:
+Now I have a thorough understanding of the codebase. Let me present the implementation plan.
+
+---
+
+## Implementation Plan for T-001: Rust Side History Scanning & Parsing
+
+Based on analysis of the existing codebase patterns, workflow log formats, and review feedback:
+
+### Files to Modify
+
+**Only one file**: `desktop_app/src-tauri/src/lib.rs`
+
+### Tasks
+
+#### Task 1: Add new types (struct + enum)
+**Location**: After line 233 (end of `TasksFileSubtask` struct), before line 235 (Score extraction section).
+
+```rust
+// New enum (different from existing RunStatus which is Idle/Running for process mgmt)
+RunHistoryStatus { Success, Fail, Interrupt, InProgress }
+HistoryEntry { issue_number, title, final_score, status, start_time, end_time, total_iterations }
+```
+
+Both derive `serde::Serialize, Debug, Clone`. `RunHistoryStatus` additionally derives `PartialEq, Eq, Copy`. All fields map to snake_case JSON for frontend consumption.
+
+#### Task 2: Implement `list_history_sync()` + regex helpers
+**Location**: After `check_processed_issues` (~line 1335).
+
+Following the existing `OnceLock<Regex>` pattern used by `extract_score()`:
+
+- `list_history_sync(project_path: &str) -> Result<Vec<HistoryEntry>, String>`: 
+  - Reuses `get_processed_issue_numbers()` scanning pattern
+  - For each issue-N dir, reads `log.md`, calls `parse_log_md()`
+  - Falls back to directory-name-derived title if `log.md` doesn't exist (dir exists but no log.md → InProgress with issue number from dir name)
+  - Sorts by `issue_number` descending
+
+- `parse_log_md(content: &str, issue_number: i64) -> HistoryEntry`: Parses a single log.md
+
+- Helper regexes (lazy static `OnceLock<Regex>`):
+  - `issue_title_regex`: `r"- Issue:\s*#\d+\s*-\s*(.+)"`
+  - `start_time_regex`: `r"- 开始时间:\s*(.+)"`  
+  - `final_score_regex`: `r"- 最终评分:\s*(\d+)"`
+  - `status_regex`: `r"- 状态:\s*(\S+)"`
+  - `total_iterations_regex`: `r"- 总迭代次数:\s*(\d+)"`
+  - `end_time_regex`: `r"- 结束时间:\s*(.+)"`
+
+**Status determination logic** (incorporating review feedback - "last event wins"):
+1. Find byte position of last `## 最终结果` in content
+2. Find byte position of last `## ⚠️ 脚本被中断` in content  
+3. Both None → `InProgress`
+4. Interrupt exists, no result → `Interrupt`
+5. Result exists, no interrupt (or result after interrupt) → parse result block:
+   - `状态: completed` + score >= 85 → `Success`
+   - `状态: completed` + score < 85 → `Fail`
+   - `状态: push_failed` → `Fail`
+   - Other status → `Fail`
+6. Interrupt after result → `Interrupt`
+7. Result after interrupt → use result block (as above)
+
+Only parse the **last** final result block (for issue-29 which has 5). Parse metadata from within that block only.
+
+#### Task 3: Create `#[tauri::command] async fn list_history()`
+**Location**: Right after `list_history_sync()`.
+
+Standard pattern:
+```rust
+#[tauri::command]
+async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String> {
+    tokio::task::spawn_blocking(move || list_history_sync(&project_path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+```
+
+Pre-validates `project_path` is a directory inside `list_history_sync`.
+
+#### Task 4: Register command in `generate_handler!`
+**Location**: Line ~1875, add `list_history` to the handler list (alphabetically between `list_issues` and `check_processed_issues` — actually, to maintain existing order, I'll add it after `list_issues`).
+
+#### Task 5: Write tests
+**Location**: In `#[cfg(test)] mod tests` at end of file.
+
+Test cases (each creates a temp dir with realistic log.md content):
+1. **success status**: completed + score >= 85 (like issue-28)
+2. **fail status**: completed + score < 85
+3. **interrupt status**: only interrupt mark, no result (like issue-29 early state)
+4. **in_progress status**: no final result, no interrupt
+5. **interrupt before result**: interrupt then resume then complete → should be `Success` (like issue-28)
+6. **interrupt after result**: complete then cleanup interrupt → should be `Interrupt` (like issue-34)
+7. **push_failed status**: status=push_failed → `Fail`
+8. **missing log.md**: dir exists but no log.md → `InProgress` with title from dir name
+9. **missing ## 基本信息**: no header block (like issue-29) → title derived from issue number
+10. **multiple final results**: only parse last one (like issue-29 has 5)
+11. **empty workflows dir**: returns empty Vec
+
+#### Task 6: Build & verify
+```bash
+cd desktop_app/src-tauri && cargo clippy -- -D warnings && cargo test
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| New enum named `RunHistoryStatus` | Existing `RunStatus` (Idle/Running) is for process management; different semantics |
+| `parse_log_md()` as pure function | Testable without filesystem setup; follows `extract_score()` pattern |
+| `OnceLock<Regex>` pattern | Matches existing regex usage in the codebase |
+| `tokio::spawn_blocking` wrapper | Matches existing `check_processed_issues` pattern exactly |
+| Title fallback to issue number | Handles issue-29 pattern where `## 基本信息` header is missing |
+| "Last event wins" for status | Fixes the bug identified in review where "interrupt always wins" would misclassify issue-28 |
+
+Shall I proceed with implementation?

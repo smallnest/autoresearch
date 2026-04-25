@@ -1,0 +1,142 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m✱ [0mGlob "**/historyStore*"[90m in . · 1 match[0m
+[0m✱ [0mGlob "**/historyTypes*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "**/*history*.{ts,tsx,mjs}"[90m in . · 1 match[0m
+[0m✱ [0mGrep "HistoryEntry|RunStatus|getFilteredAndSortedHistory"[90m in . · 22 matches[0m
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+[0m→ [0mRead desktop_app/src/stores/issueStore.ts
+[0m✱ [0mGrep "HistoryEntry|HistoryRunStatus|list_history"[90m in . · 32 matches[0m
+[0m✱ [0mGlob "**/historyStore.test*"[90m in . · 0 matches[0m
+Found the file. Let me read it along with the reference stores and the Rust side for comparison.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1815, limit=80][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGlob "**/desktop_app/package.json"[90m in . · 1 match[0m
+[0m✱ [0mGrep "useHistoryStore|historyStore"[90m in desktop_app · 1 match[0m
+Now let me read the Rust source to verify the snake_case/PascalCase alignment, and check for tests/lint/typecheck setup.
+[0m→ [0mRead desktop_app/package.json
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m✱ [0mGrep "historyStore|HistoryPage|HistoryEntry"[90m in desktop_app/src/pages · 2 matches[0m
+[0m→ [0mRead desktop_app/src/pages/HistoryPage.tsx
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && npx tsc --noEmit 2>&1 | tail -30
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && npx eslint src/stores/historyStore.ts 2>&1 | tail -30
+(no output)
+[0m
+[0m✱ [0mGlob "tests/*.test.*"[90m in desktop_app · 11 matches[0m
+[0m✱ [0mGrep "historyStore|historyStore|getFilteredAndSortedHistory|HistoryEntry"[90m in desktop_app · 0 matches[0m
+Now let me check for existing tests and the test infrastructure.
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && node --test --experimental-strip-types tests/*.test.* 2>&1 | tail -30
+(node:19765) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (0.771625ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.164375ms)
+✔ runConfigStore normalizes decimal values to integers before persisting (0.63825ms)
+✔ runConfigStore persists values under the required storage key (0.092708ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.081791ms)
+✔ runConfigStore rounds persisted decimal values during hydration (0.085625ms)
+✔ runConfigStore ignores NaN updates and preserves the previous valid values (0.092166ms)
+✔ sanitizeRunConfig rejects non-boolean and non-finite persisted values (0.04575ms)
+✔ startRun clears unknown active issue when backend already has another task (2.782542ms)
+✔ startRun restores previous running issue when stop/start race fails (1.016958ms)
+✔ initialize wires run events and caps output history (23.84775ms)
+✔ buildScoreTrendChartData preserves iteration order and review summaries (2.616625ms)
+✔ buildScoreTrendTooltipContent exposes score and summary for hover card (0.186833ms)
+✔ ScoreTrendChart component uses Recharts primitives and passing reference line (0.532875ms)
+✔ store error normalizers preserve Chinese copy and replace English errors with Chinese fallbacks (0.662125ms)
+✔ run store error normalizers keep user-facing copy fully Chinese (0.072542ms)
+✔ layout components use Chinese navigation and panel copy (1.149875ms)
+✔ settings, history, and agent selection copy is localized (1.149959ms)
+✔ issues page and issue detail copy is localized (0.764458ms)
+✔ iteration progress copy is localized (0.28875ms)
+ℹ tests 70
+ℹ suites 0
+ℹ pass 70
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 308.27725
+[0m
+Now I have all the information needed. Let me compile the audit report.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 迭代次数: 16 (审核)
+
+### 总体评价
+**评分: 68/100**
+
+### 严重问题 (必须修复)
+
+1. **无测试覆盖 (Test Quality: 10/100)**
+   - `getFilteredAndSortedHistory` 是验收条件明确要求的"可独立测试"纯函数，但完全没有对应测试
+   - `normalizeHistoryError`、`RUN_STATUS_TO_FILTER` 映射、排序边界逻辑均未覆盖
+   - 项目已有 11 个测试文件 + `node --test --experimental-strip-types` 基础设施，不存在技术障碍
+   - 建议至少添加:
+     - `getFilteredAndSortedHistory` 的过滤/排序/空列表/混合状态测试
+     - PascalCase → lowercase 映射正确性测试
+     - `normalizeHistoryError` 中文保留/英文回退测试
+
+2. **缺少工厂模式/依赖注入 (Code Quality)**
+   - `runStore.ts` (`createRunStore(overrides)`) 和 `iterationStore.ts` 均使用工厂模式注入 `isTauri`/`invoke` 依赖，使 store 可在 Node 测试中实例化
+   - `historyStore.ts` 使用普通 `create()` + 模块级 `isTauri`/`tauriInvoke`，无法在测试中 mock Tauri 环境
+   - 跨迭代 learnings 已明确要求: *"iterationStore.ts 的工厂函数 + 依赖注入模式建议也用于 T-002，便于 Node 单测"* — 该建议未被采纳
+
+### 一般问题 (建议修复)
+
+3. **缺少请求竞态保护**
+   - `issueStore.ts` 的 `loadIssueDetail` 使用 `detailRequestKey` 机制防止快速切换时旧请求覆盖新数据
+   - `loadHistory` 没有类似保护，快速切换项目路径时存在潜在竞态
+   - 影响较小（历史记录按项目隔离），但遵循现有模式更安全
+
+4. **排序空值处理未验证**
+   - `start_time ?? ''` — 将 `null` 视为空字符串，`localeCompare` 行为在空字符串上的排序语义未经过测试验证
+   - 建议至少添加边界测试确认 null 值排序行为符合预期
+
+### 正确项（无需修改）
+
+- TypeScript 类型与 Rust snake_case 完全对齐 ✓
+- `RunStatus` (PascalCase) → `StatusFilter` (lowercase) 映射正确 ✓
+- 纯函数 `getFilteredAndSortedHistory` 正确导出，逻辑清晰 ✓
+- 错误处理使用 `normalizeUserFacingError` 归一化 ✓
+- `loadHistory` 处理 isTauri/mock 双分支 ✓
+- 加载中/错误/空列表状态管理完整 ✓
+- Store 导出 `useHistoryStore` hook，可被 React 消费 ✓
+- `npm run typecheck` 通过 ✓
+- `npm run lint` 通过 ✓
+- Mock 数据涵盖所有 4 种 RunStatus ✓
+
+### 审核结论
+- [x] 需要修改 — 必须补充测试后再审核
+
+### 评分明细
+
+| 维度 | 得分 | 权重 | 加权 |
+|------|------|------|------|
+| 正确性 | 90 | 35% | 31.5 |
+| 测试质量 | 10 | 25% | 2.5 |
+| 代码质量 | 75 | 20% | 15.0 |
+| 安全性 | 90 | 10% | 9.0 |
+| 性能 | 100 | 10% | 10.0 |
+| **总计** | | | **68.0** |
+
+### 实现者自检确认
+- [x] 实现者已执行编译/类型检查 (tsc --noEmit 通过)
+- [x] 实现者已执行 Lint 检查 (eslint 通过)
+- [ ] 实现者已运行相关测试 (**未执行 — 无测试文件**)
+- [ ] 实现者已确认测试覆盖 (**未覆盖 — 零测试**)
+
+## Learnings
+
+- **模式**: 本项目 store 的工厂模式已验证可行 — `createRunStore(overrides)` + `createRunStoreDeps()` 是 T-002 和其他新 store 应该复制的模板，不要为了一致性而保留未使用的 `isTauri` export
+- **踩坑**: 跨迭代 learnings 中的建议（工厂模式、Rust PascalCase 映射）已部分采纳但测试建议被忽略，审核时不仅要检查实现存在性，还要检查 tests/ 目录下是否有对应测试文件
+- **经验**: `getFilteredAndSortedHistory` 这类刻意导出为纯函数的工具方法，验收条件写"可独立测试"就应在 tests/ 下有对应 `.test.mjs` 文件；否则纯函数导出就只是名义上的可测试而未实际落地

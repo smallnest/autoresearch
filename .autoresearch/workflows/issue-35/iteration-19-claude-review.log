@@ -1,0 +1,103 @@
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 子任务: T-003 - History 页面 UI 实现（列表、状态徽章、过滤、空状态）
+- 迭代次数: 19
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-003 子任务**完全没有实现**。`HistoryPage.tsx` 仍是最初的占位组件（10 行代码），与 T-001/T-002 完成前完全一致，没有任何改动。迭代 18 的审核（94/100）存在严重误判 — 该审核仅验证了 store 层代码和测试（属于 T-002），未实际检查 `HistoryPage.tsx` 是否已更新。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: HistoryPage.tsx 未做任何修改
+
+**位置**: `desktop_app/src/pages/HistoryPage.tsx:1-10`
+
+**问题描述**:
+文件仍是占位组件，仅显示"历史"标题和一行说明文字。T-003 要求的全部 UI 功能均未实现：
+
+| 验收条件 | 状态 |
+|---|---|
+| 展示 Issue 编号、标题、评分、状态、时间 | 未实现 |
+| 状态颜色编码（绿/红/黄/蓝） | 未实现 |
+| 按状态过滤下拉框 | 未实现 |
+| 按时间排序切换 | 未实现 |
+| 空状态提示"暂无历史记录" | 未实现 |
+| 骨架屏加载动画 | 未实现 |
+| 错误提示和重试按钮 | 未实现 |
+| 中文文案 | 未实现 |
+| typecheck/lint 通过 | 通过（但因为没有新增代码） |
+| 浏览器渲染验证 | 无法验证（页面无实质内容） |
+
+**当前代码**:
+```tsx
+function HistoryPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">历史</h1>
+      <p className="text-gray-500">查看过去的工作流执行记录与结果。</p>
+    </div>
+  );
+}
+```
+
+**原因**: `HistoryPage.tsx` 自 issue #23 (布局搭建) 以来从未被修改过。`git log -- desktop_app/src/pages/HistoryPage.tsx` 最后两次提交是 `53e0316` (#74) 和 `60bb916` (#23)，没有任何来自本 Issue 的改动。
+
+---
+
+### 关于上一轮审核（迭代 18）的纠偏
+
+迭代 18 由 opencode 审核 T-003 给出 94/100，但该审核存在以下问题：
+1. 审核日志显示只运行了 `typecheck`/`lint`/`test`，这些都验证的是 T-002 的 store 和测试代码
+2. 未读取或检查 `HistoryPage.tsx` 的实际内容
+3. 得出的 learnings（"三项硬性指标"）是关于 store 审核的，与 UI 子任务无关
+
+---
+
+### 可复用的实现基础
+
+T-001 和 T-002 已完成，为 T-003 提供了完整基础：
+
+- **Rust 后端**: `list_history` 命令已注册，返回 `Vec<HistoryEntry>`
+- **前端 Store**: `historyStore.ts` 已实现，包含:
+  - `useHistoryStore` hook（Zustand + 工厂模式）
+  - `loadHistory(projectPath)` 异步加载
+  - `getFilteredAndSortedHistory` 纯函数
+  - 状态过滤 (`setStatusFilter`) 和排序 (`setSortOrder`)
+  - 加载/错误状态管理
+  - mock 数据（浏览器 fallback）
+- **测试**: `historyStore.test.mjs` 已有 20 个测试全部通过
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - UI 实现完全缺失
+
+**下一步行动**:
+需要实现者将 `HistoryPage.tsx` 从占位组件替换为完整的历史记录列表页面，消费 `useHistoryStore` 的数据和方法。具体需要：
+
+1. 连接 `useHistoryStore` 和 `useProjectStore`（获取 projectPath）
+2. 用 `useEffect` 监听 `projectPath` 变化并调用 `loadHistory`
+3. 渲染工具栏（状态过滤下拉框 + 排序按钮）
+4. 渲染列表（issue 编号、标题、评分、状态徽章、时间）
+5. 渲染空状态、加载骨架屏、错误重试
+6. 状态颜色编码：成功绿、失败红、中断黄、进行中蓝
+7. 所有文案使用中文
+
+---
+
+## Learnings
+
+- **踩坑**: 迭代 18 的 94/100 评分是误判 — 审核者只验证了底层 store（T-002 的成果）通过 typecheck/lint/test，却没有打开 `HistoryPage.tsx` 确认 UI 是否实际实现。后续审核 UI 类型子任务时，必须先读取目标组件文件确认其不是占位内容，再运行其他检查。
+- **模式**: UI 类型子任务（`"type": "ui"`）的审核顺序应该是：(1) 读取目标 .tsx 文件确认非占位 → (2) 对照验收条件逐项检查 → (3) 运行 typecheck/lint/test → (4) 浏览器截图验证。跳过第 1 步会导致给空壳页面打出高分。
+- **经验**: 当底层 store 和测试全部通过但 UI 页面未改动时，应警惕"审核错位"风险 — 审核者可能把 T-002 的成果误记为 T-003 的成果。

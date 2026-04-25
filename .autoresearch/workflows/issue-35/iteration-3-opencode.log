@@ -1,0 +1,187 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m• [0mExplore frontend HistoryPage[90m Explore Agent[0m
+[0m• [0mAnalyze log.md patterns[90m Explore Agent[0m
+[0m• [0mExplore tasks.json patterns[90m Explore Agent[0m
+Let me explore the codebase to understand the existing patterns before making a plan.
+[0m✓ [0mExplore tasks.json patterns[90m Explore Agent[0m
+[0m✓ [0mExplore frontend HistoryPage[90m Explore Agent[0m
+[0m✓ [0mAnalyze log.md patterns[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1580][0m
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m→ [0mRead .autoresearch/workflows/issue-35/log.md
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3009][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m
+[0m# [0mTodos
+[ ] 在现有 RunStatus 旁边添加 HistoryEntry struct 和 RunHistoryStatus 枚举（约第 1822 行）
+[ ] 实现 list_history_sync() — 扫描 workflows/issue-* 目录，解析 log.md + tasks.json
+[ ] 实现 log.md 解析辅助函数（状态判定、标题、时间、评分提取）
+[ ] 添加 #[tauri::command] async fn list_history 包装器（遵循现有 spawn_blocking 模式）
+[ ] 在 run() invoke_handler 中注册 list_history
+[ ] 为所有 4 种状态 + 边缘情况编写综合测试（issue-34、issue-29 模式等）
+[ ] 运行 cargo clippy -- -D warnings 和 cargo test 验证
+[0m
+现在我已经全面了解了代码库。让我制定实现计划。
+
+---
+
+## 实施计划：T-001 — Rust 后端 `list_history` 命令
+
+### 摘要
+
+目前已生成零行代码。审核反馈包含迭代 2 中经过充分研究的目标架构的详细蓝图。我将基于该蓝图实施，并结合从审查 5 个真实 `log.md` 文件和它们的 `tasks.json` 对应文件中发现的所有边缘情况。
+
+### 任务清单
+### 详细架构计划
+
+#### 1. 数据结构（添加在现有 `RunStatus` 枚举之后，约第 1822 行）
+
+```rust
+/// 已完成工作流的历史状态。
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum RunHistoryStatus {
+    /// 最终评分 >= 85 且状态为 completed。
+    Success,
+    /// 最终评分 < 85 或状态为 push_failed（未达质量门槛）。
+    Fail,
+    /// 日志包含中断标记，之后没有新的最终结果。
+    Interrupt,
+    /// 仍在进行中：无最终结果，无中断标记。
+    InProgress,
+}
+
+/// 已完成工作流运行的摘要信息。
+#[derive(serde::Serialize, Debug, Clone)]
+struct HistoryEntry {
+    issue_number: i64,
+    title: Option<String>,
+    status: RunHistoryStatus,
+    final_score: Option<i32>,
+    total_iterations: Option<i32>,
+    start_time: Option<String>,
+    end_time: Option<String>,
+    label: Option<String>,
+    subtask_total: Option<usize>,
+    subtask_passed: Option<usize>,
+}
+```
+
+**命名说明**：现有的 `RunStatus` 是 `Idle | Running`（用于进程管理）。为避免冲突，使用 `RunHistoryStatus` 和新名称。所有字段使用 `serde(rename_all = "snake_case")` 以匹配前端期望。
+
+#### 2. 核心解析逻辑：`parse_log_md()` 辅助函数
+
+单一函数接收 `&str`（log.md 内容）并返回提取的元数据：
+
+**状态判定（"最后事件优先"策略 — 来自审核反馈的关键修正）**：
+
+```
+1. 找到所有 "## 最终结果" 和 "## ⚠️ 脚本被中断" 的行号
+2. 比较最后一个出现的事件：
+   - 最后一个 最终结果 在最后一个中断之后？
+     → 读取其状态行和评分。
+       状态 == "completed" 且 评分 >= 85？→ 成功
+       状态 == "completed" 且 评分 < 85？→ 失败
+       状态 == "push_failed"？→ 失败（无论评分如何）
+   - 最后一个 中断 在最后一个 最终结果 之后？（issue-34 模式）
+     → 中断
+   - 只有中断？→ 中断
+   - 只有最终结果？→ 如上所述使用其状态
+   - 都没有？→ 进行中
+```
+
+**标题提取**：
+- 正则表达式：`- Issue: #N - *(.*)` 在 `## 基本信息` 下
+- 备用方案：如果缺少 `## 基本信息`（issue-29/30 模式），返回 `None`
+
+**时间提取**：
+- `开始时间: YYYY-MM-DD HH:MM:SS` 在 `## 基本信息` 下
+- `结束时间: YYYY-MM-DD HH:MM:SS` 在最后的 `## 最终结果` 块内
+
+**评分提取**：
+- `最终评分: X/100` 在最后的 `## 最终结果` 块内
+
+**迭代总数**：
+- `总迭代次数: N` 在最后的 `## 最终结果` 块内
+
+**标签**：
+- `- 标签: ...` 在 `## 基本信息` 下
+
+#### 3. `list_history_sync()` — 主编排器
+
+遵循现有的 `get_processed_issue_numbers()` 模式：
+- 扫描 `.autoresearch/workflows/issue-*` 目录
+- 对于每个目录，解析 `log.md` 和 `tasks.json`
+- 如果目录不存在则返回空 `Vec`
+- 每个条目的错误处理：如果 `log.md` 解析失败，创建 `InProgress` 条目并附带默认值
+- 按 `issue_number` 升序对结果排序
+
+#### 4. Tauri 命令包装器
+
+```rust
+#[tauri::command]
+async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String> {
+    tokio::task::spawn_blocking(move || list_history_sync(&project_path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+```
+
+与 `check_processed_issues`、`list_issues`、`get_iteration_progress` 模式完全一致。
+
+#### 5. 命令注册
+
+在 `run()` 的 `tauri::generate_handler![]` 宏参数中添加 `list_history`。
+
+#### 6. 测试计划（11 个测试用例）
+
+| # | 测试名称 | 场景 | 关键断言 |
+|---|---------|--------|------------|
+| 1 | `parse_history_success` | 已完成 + 评分 94/100 | 状态 == 成功，score == 94 |
+| 2 | `parse_history_fail` | 已完成 + 评分 62/100 | 状态 == 失败，score == 62 |
+| 3 | `parse_history_interrupt` | 仅中断，无最终结果 | 状态 == 中断，score == None |
+| 4 | `parse_history_in_progress` | 仅迭代记录，无最终结果/中断 | 状态 == 进行中，score == None |
+| 5 | `parse_history_interrupt_after_completion` | 完成 → 中断（issue-34 模式） | 状态 == 中断（中断在完成后出现） |
+| 6 | `parse_history_multiple_final_results` | 5 个最终结果块（issue-29 模式） | 状态使用最后得分（92）和最后状态 |
+| 7 | `parse_history_missing_log_md` | 无 log.md 文件 | 状态 == 进行中，标题 == None |
+| 8 | `parse_history_missing_basic_info` | 无 ## 基本信息（issue-29 模式） | 标题 == None，start_time == None |
+| 9 | `parse_history_push_failed` | 状态: push_failed + 评分 92 | 状态 == 失败（无法推送） |
+| 10 | `list_history_empty_workflows` | 无工作流目录 | 返回空 Vec |
+| 11 | `list_history_multiple_issues` | 3 个 issue 目录 | 按 issue 编号排序，长度 == 3 |
+
+#### 7. 实现模式遵循
+
+**与现有代码完全对齐**：
+- 同步辅助函数（`*_sync`）+ async `spawn_blocking` 包装器
+- `Result<T, String>` 错误类型
+- `use regex::Regex;` — 已经在作用域内，使用 `OnceLock` 进行静态正则表达式编译
+- `use std::fs;` — 已在作用域内
+- 测试使用 `create_temp_project_dir()` — 已在测试模块中
+- 在末尾使用 `fs::remove_dir_all()` 清理
+
+#### 8. 依赖项
+
+无需新的 crate 依赖。`regex`、`serde`、`serde_json` 和 `tokio` 已在 `Cargo.toml` 中。
+
+---
+
+### 状态判定边缘情况决策表
+
+| 场景 | 真实示例 | 判定为 | 依据 |
+|----------|------------|----------|--------|
+| 已完成，评分 94 | issue-34 | 成功 | 评分 >= 85 |
+| 已完成，评分 62 | （假设） | 失败 | 评分 < 85 |
+| push_failed，评分 92 | issue-29 | 失败 | 无法推送视为失败 |
+| 中断，无最终结果 | issue-28 中断 #1 | 中断 | 仅中断标记 |
+| 中断，然后完成 | issue-28（中断 → 恢复 → 完成） | 成功 | 最后事件 = 最终结果 |
+| 完成，然后中断 | issue-34（已完成 → 清理中断） | 中断 | 最后事件 = 中断 |
+| 无最终结果，无中断 | 正在运行的 issue-35 | 进行中 | 无终止标记 |
+| 无 log.md | issue-50 | 进行中 + 默认值 | 无法确定状态 |
+| 无 ## 基本信息 | issue-29 | 成功/失败（如果已评分） | 状态来自最终结果块 |
+
+---
+
+这个计划完整吗？还是您希望在实施之前调整某些方面？

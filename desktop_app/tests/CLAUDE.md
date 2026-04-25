@@ -31,3 +31,6 @@
 - **踩坑**: 仅断言硬编码的中文字符串不足以证明“全面中文化”完成；`catch (e) => String(e)` 这类通用错误路径仍可能把英文异常直接暴露给 UI。
 - **踩坑**: 同一功能链路若有多个容量常量（例如 `runStore` 与 `logViewerStore` 的日志行数上限），中文化回归也要顺手断言它们未被意外改动，否则容易混入需求外行为变化。
 - **经验**: 中文化测试要覆盖页面文案、placeholder、空状态、`aria-label`、图片 `alt`，否则测试全绿也可能遗漏真实 UI 文案。
+- **踩坑**: `.mjs` 测试文件不支持 TypeScript 非空断言运算符（`expr!`），必须用显式 null 检查或已知非空上下文代替，否则 `SyntaxError: missing ) after argument list`。
+- **模式**: 导出为纯函数的工具方法（如 `getFilteredAndSortedHistory`），验收条件写"可独立测试"就必须在 `tests/` 下落地对应的 `.test.mjs` 文件，覆盖过滤、排序、空输入和边界情况。
+- **模式**: 新 store 测试应同时覆盖工厂模式注入（`createHistoryStore({ isTauri: true, invoke: mock })`）和纯函数逻辑，确保 store 的 Tauri 调用逻辑和数据处理逻辑都能独立验证。

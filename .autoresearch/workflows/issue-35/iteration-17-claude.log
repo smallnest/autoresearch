@@ -1,0 +1,32 @@
+所有审查问题均已解决。以下是已完成工作的总结：
+
+## 更改摘要
+
+### 问题 1 (测试文件) - 已解决
+`desktop_app/tests/historyStore.test.mjs` 存在，包含13个测试，覆盖：
+- 所有5种状态过滤器类型（`all`, `success`, `fail`, `interrupt`, `in_progress`）
+- 升序和降序排序
+- Null `start_time` 在两种方向下都排在最后
+- 两个都为 null 的条目保留其相对顺序
+- 空数组输入
+- 不变性检查（不修改输入）
+- 通过工厂模式依赖注入进行存储测试（`loadHistory`、`setStatusFilter`、`setSortOrder`、`clearError`、错误规范化）
+
+### 问题 2 (工厂模式) - 已解决
+`historyStore.ts` 使用 `createHistoryStoreDeps(overrides)` + `createHistoryStore(overrides)`，匹配 `runStore.ts` 模式。测试通过 `createHistoryStore({ isTauri: true, invoke: mock })` 注入模拟依赖。
+
+### 问题 3 (重复的 `isTauri` 导出) - 已解决
+文件不再导出 `isTauri` — 它仅作为 `createHistoryStoreDeps` 的模块私有默认值。
+
+### 问题 4 (Null 排序) - 已改进
+`getFilteredAndSortedHistory` 现在明确地将 `null` 的 `start_time` 排到**末尾**，无论排序方向如何，符合用户预期（没有已知开始时间的条目不应出现在列表顶部）。
+
+### 验证
+- `npm run typecheck` — 通过
+- `npm run lint` — 通过
+- `npm test` — 89/89 通过（包括13个 `historyStore` 测试）
+
+## 经验总结
+- **模式**: Null 值排序应明确优先考虑用户预期 — 在 asc 和 desc 顺序中都将其排在末尾，而不是退化为空字符串 `''`。
+- **模式**: 为排序比较器中的 null 检查编写单独的测试用例，可以捕获诸如 `if (b == null) return 1` 而不是 `return -1` 这样的错误。
+- **模式**: 像此处所做的工厂模式审查修复，应同时验证纯函数测试和存储级依赖注入测试，以确认两个层都可独立测试。

@@ -1,0 +1,93 @@
+现在我已全面了解情况。这是我的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 子任务: T-001 - Rust 侧实现历史记录扫描与解析命令
+- 迭代次数: 13
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+T-001 实现完整且质量良好。所有验收条件均已满足：`HistoryEntry` 结构体和 `HistoryRunStatus` 枚举定义正确，`list_history` Tauri 命令已注册，四种状态判定逻辑准确（含"最后出现的事件优先"这一关键设计），七项测试覆盖了所有核心场景。cargo clippy 和 cargo test 均通过。
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 |
+|---|---|
+| `HistoryEntry` struct + `RunStatus` 枚举，派生 `Serialize`/`Debug`/`Clone` | 通过 (实际命名为 `HistoryRunStatus`，也派生了 `Copy`/`PartialEq`/`Eq`) |
+| `list_history` Tauri command，接受 `project_path`，返回 `Vec<HistoryEntry>` | 通过 |
+| 扫描 `issue-*` 目录，不存在时返回空列表 | 通过 |
+| 解析 `最终评分: X/100` 格式 | 通过 |
+| 四种状态判定：success/fail/interrupt/in_progress | 通过 |
+| 从 log.md 提取标题和处理时间 | 通过 |
+| cargo clippy -- -D warnings 通过 | 通过 |
+| cargo test 通过，包含四种状态测试 | 通过 (7 项测试) |
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: 不必要的 `project_path.clone()`
+
+**位置**: `lib.rs:2034`
+
+**问题描述**:
+`project_path` 是 `String` 类型，`path` 是唯一的使用者（通过 `move`），无需提前 `clone`。但 clippy 未报警，说明此为极小问题。
+
+**建议修复**:
+```rust
+async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String> {
+    tokio::task::spawn_blocking(move || list_history_sync(Path::new(&project_path)))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+```
+
+---
+
+### 建议改进 (可选)
+
+1. `extract_field` 和 `extract_field_line` 可以考虑统一为 `pub(crate)` 工具函数，它们在 log 解析场景下通用性很高
+2. 测试中的 `history_list_sync_scans_workflows` 可以额外验证 `start_time`/`end_time`/`total_iterations` 字段以增强断言覆盖率
+3. `determine_history_status` 的 `(true, true, _, None)` arm 在逻辑上不可达（`has_interrupt=true` 时 `interrupt_pos` 不可能为 `None`），但作为防御性分支可接受
+
+---
+
+### 各维度评分
+
+| 维度 | 得分 | 说明 |
+|---|---|---|
+| 正确性 (35%) | 90 | 四种状态判定逻辑正确，含 issue-34 先完成后中断的边缘场景处理 |
+| 测试质量 (25%) | 90 | 7 项测试覆盖四种状态 + 集成扫描 + 空目录 + 无 log.md；缺少边界解析（如缺标题行） |
+| 代码质量 (20%) | 95 | 命名清晰，文档完善，遵循项目约定，小函数职责分明 |
+| 安全性 (10%) | 90 | 无路径遍历风险，`project_path` 由前端传入但仅用于 `.autoresearch/workflows` 子路径拼接 |
+| 性能 (10%) | 85 | `spawn_blocking` 正确避免阻塞 async runtime；`extract_field` 多次遍历同一 log 内容，对大文件有轻微开销 |
+
+**加权总分**: 90×0.35 + 90×0.25 + 95×0.20 + 90×0.10 + 85×0.10 = **90.75 → 90**
+
+---
+
+### 审核结论
+
+- [x] **通过** - 代码质量达标，可以进入下一子任务
+
+**下一步行动**:
+T-001 通过，可推进至 T-002（前端历史列表 UI 实现）。
+
+---
+
+## Learnings
+
+- **经验**: `determine_history_status` 使用 `rfind` 实现"最后出现的事件优先"策略是处理 issue-34 这类先完成后中断场景的正确方案，比全局优先级更稳健。后续涉及日志事件判定的逻辑应参考此模式。
+- **踩坑**: `(true, true, _, None)` arm 在 `has_interrupt=true` 时不可达（`rfind` 必返回 `Some`），但作为防御性匹配分支不会造成 bug，且 clippy 不报警。
+- **模式**: `extract_field` / `extract_field_line` 的 `- key: value` 和 `- **key**: value` 双格式解析模式可用于其他 log.md 字段提取场景。

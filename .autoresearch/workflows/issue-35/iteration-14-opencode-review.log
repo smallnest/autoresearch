@@ -1,0 +1,170 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mFind T-002 implementation files[90m Explore Agent[0m
+[0m✓ [0mFind T-002 implementation files[90m Explore Agent[0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/iteration-14-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-35/log.md
+[0m✱ [0mGlob "**/historyStore*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "**/historyTypes*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "**/*history*.{ts,tsx,mjs}"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "HistoryEntry|RunStatus|getFilteredAndSortedHistory"[90m in desktop_app/src · 9 matches[0m
+Let me verify whether any T-002 implementation files might exist despite the exploration result.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1810, limit=50][0m
+[0m→ [0mRead desktop_app/src/stores/issueStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me read the key reference files for a thorough review.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1860, limit=200][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/progress.md
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs[90m [limit=80][0m
+[0m✱ [0mGlob "desktop_app/src/stores/*.ts"[90m in . · 8 matches[0m
+Let me check the existing test patterns for stores to provide better implementation guidance.
+Now I have all the information needed for a thorough review. Here is my audit report:
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 子任务: T-002 - 前端历史记录数据层（Types + Store）
+- 迭代次数: 14
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-002 子任务**尚未实现任何代码**。经过全面搜索确认，以下所有文件均不存在：
+
+- 无 `HistoryEntry` / `RunStatus` TypeScript 类型定义（项目内 0 处引用）
+- 无 `historyStore.ts` 文件
+- 无 `getFilteredAndSortedHistory` 函数
+- 无对应的测试文件
+
+当前 `desktop_app/src/stores/` 目录包含 8 个 store 文件，但没有任何与历史记录相关的代码。`HistoryPage.tsx` 仍为纯占位组件。
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 |
+|---|---|
+| TypeScript 接口与 Rust snake_case 字段对齐，无 `any` 类型 | ❌ 未实现 |
+| `historyStore.ts` 可被 React 组件消费，导出 `useHistoryStore` hook | ❌ 未实现 |
+| `getFilteredAndSortedHistory` 纯函数可独立测试 | ❌ 未实现 |
+| 状态过滤支持 `'all'`、`'success'`、`'fail'`、`'interrupt'`、`'in_progress'` | ❌ 未实现 |
+| 排序支持按开始时间升序/降序 | ❌ 未实现 |
+| 错误消息通过 `normalizeUserFacingError` 归一化 | ❌ 未实现 |
+| `npm run typecheck` 通过 | ❌ 未验证（无代码可检查） |
+| `npm run lint` 通过 | ❌ 未验证（无代码可检查） |
+
+**结论: 0/8 通过，全部阻塞。**
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 完全没有实现代码
+
+T-002 依赖的全部代码文件均不存在。此状态与迭代 1-10 遇到的相同问题——explore agent 无法写入代码，导致迭代空转。
+
+#### 问题 2: 缺少可执行 Agent
+
+progress.md 记录显示，迭代 14 使用了 explore agent（只读），它只能发现"不存在"但无法创建文件。根据跨迭代经验（`progress.md:122-126`），对于需要**修改/创建文件**的任务，必须直接使用具有写入能力的实现 Agent。
+
+---
+
+### 实现指引
+
+以下是基于现有代码模式的实现蓝图，供下一轮实现 Agent 参考：
+
+#### 1. TypeScript 类型定义 (需与 Rust `HistoryEntry` 对齐)
+
+Rust 端定义 (`desktop_app/src-tauri/src/lib.rs:1821-1843`):
+
+```rust
+enum HistoryRunStatus { Success, Fail, Interrupt, InProgress }
+struct HistoryEntry {
+    issue_number: i64,
+    title: String,
+    status: HistoryRunStatus,
+    final_score: Option<i32>,
+    total_iterations: Option<i32>,
+    start_time: Option<String>,
+    end_time: Option<String>,
+}
+```
+
+前端应映射为 (`historyStore.ts`):
+
+```typescript
+export type RunStatus = 'success' | 'fail' | 'interrupt' | 'in_progress';
+
+export interface HistoryEntry {
+  issue_number: number;
+  title: string;
+  status: RunStatus;
+  final_score: number | null;
+  total_iterations: number | null;
+  start_time: string | null;
+  end_time: string | null;
+}
+```
+
+注意：Rust enum variant `Success` 序列化为 `"Success"`，但验收条件要求前端过滤支持小写 `'success'`。需在 store 中做映射（`"Success" → "success"` 等），或接受验收条件定义的联合类型。
+
+#### 2. Store 模式参考
+
+参考 `issueStore.ts` (105 行起)：
+- `create<HistoryState>()` 定义 state + actions
+- `isTauri` 分支调用 `tauriInvoke<HistoryEntry[]>('list_history', { projectPath })`
+- 非 Tauri 环境提供 mock 数据
+- 错误通过 `normalizeUserFacingError(e, '加载历史记录失败，请重试。')` 归一化
+- 管理 `statusFilter` / `sortOrder` 状态 + `isLoading` / `error`
+
+#### 3. 纯函数 `getFilteredAndSortedHistory`
+
+该函数应放置在 store 外，接受参数并返回结果，可独立于 Zustand 测试：
+
+```typescript
+export function getFilteredAndSortedHistory(
+  entries: HistoryEntry[],
+  statusFilter: 'all' | RunStatus,
+  sortOrder: 'asc' | 'desc'
+): HistoryEntry[] { ... }
+```
+
+测试文件建议放置在 `desktop_app/tests/historyStore.test.mjs`，使用 `node --test --experimental-strip-types` 模式。
+
+#### 4. 测试模式
+
+参考 `iterationStore.test.mjs`：使用 factory 函数注入 `invoke` mock，在纯 Node 环境下测试 store 逻辑，无需浏览器。
+
+---
+
+### 审核结论
+
+- [x] **阻塞** — T-002 尚未实现，无法进入代码审核阶段。需先由实现 Agent 创建代码文件。
+
+---
+
+### 自检验证
+
+| 自检项 | 状态 |
+|---|---|
+| 实现者已执行编译/类型检查 | N/A（无代码） |
+| 实现者已执行 Lint 检查 | N/A |
+| 实现者已运行相关测试 | N/A |
+| 实现者已确认测试覆盖 | N/A |
+
+---
+
+## Learnings
+
+- **经验**: 审核时应先 `Grep` / `Glob` 关键标识符确认实现是否存在。如果完全不存在，直接判定阻塞，无需逐行阅读无关代码（同迭代 11 的 learnings）。
+- **经验**: 当前 Rust 端 `HistoryRunStatus` 枚举序列化为 PascalCase (`"Success"` / `"Fail"` / `"Interrupt"` / `"InProgress"`)，但验收条件要求前端过滤为小写 (`'success'` / `'fail'` / `'interrupt'` / `'in_progress'`)。实现时需在 store 中做 case 映射。
+- **模式**: `issueStore.ts` 的 `tauriInvoke<T>()` + `isTauri` 分支 + `normalizeUserFacingError` 模式是 T-002 store 应严格遵循的模板。`iterationStore.ts` 的 factory 函数 + 依赖注入模式建议也用于 T-002，便于 Node 单测。

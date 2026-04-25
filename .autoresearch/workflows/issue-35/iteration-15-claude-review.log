@@ -1,0 +1,99 @@
+现在我掌握了完整的上下文。以下是审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 迭代次数: 15
+- 子任务: T-002 - 前端历史记录数据层（Types + Store）
+
+---
+
+### 总体评价
+
+**评分: 10/100**
+
+T-002 的实现**完全缺失**。在 `desktop_app/src/` 目录下不存在任何 T-002 要求的文件：
+- 无 TypeScript 类型定义文件（`HistoryEntry`、`RunStatus` 接口）
+- 无 `historyStore.ts` store 文件
+- 无 `getFilteredAndSortedHistory` 纯函数
+- 无 mock 数据
+- 无单元测试
+
+`HistoryPage.tsx` 仍是一个空壳占位组件，与 T-001 迭代 13 完成时的状态一致，没有任何变化。
+
+T-001 的 Rust 侧实现（`list_history` 命令、`HistoryEntry` 结构体、`HistoryRunStatus` 枚举）已存在于 `lib.rs` 的未提交 diff 中，前端没有任何代码与之对接。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: T-002 所有验收条件均未实现
+
+**位置**: `desktop_app/src/` 目录
+
+**问题描述**:
+以下验收条件全部未通过：
+
+| 验收条件 | 状态 |
+|---|---|
+| TypeScript 接口与 Rust snake_case 字段对齐，无 any 类型 | **未实现** — 无类型文件 |
+| historyStore.ts 可被 React 组件消费，导出 useHistoryStore hook | **未实现** — 无 store 文件 |
+| getFilteredAndSortedHistory 纯函数可独立测试 | **未实现** — 无此函数 |
+| 状态过滤支持 'all'、'success'、'fail'、'interrupt'、'in_progress' | **未实现** |
+| 排序支持按开始时间升序/降序 | **未实现** |
+| 错误消息通过 normalizeUserFacingError 归一化 | **未实现** |
+| npm run typecheck 通过 | **无法验证**（无新代码） |
+| npm run lint 通过 | **无法验证**（无新代码） |
+
+**原因**: T-002 实现为空，当前迭代未产出任何前端代码。
+
+---
+
+### 需要实现的文件清单
+
+基于 T-001 Rust 侧返回的数据结构和项目现有 store 模式（以 `issueStore.ts` 和 `iterationStore.ts` 为参考），T-002 需要创建：
+
+1. **类型文件**（可内联在 store 文件或单独文件）:
+   - `RunStatus` 类型: 对应 Rust `HistoryRunStatus` 枚举的 PascalCase 序列化值（`"Success" | "Fail" | "Interrupt" | "InProgress"`）
+   - `HistoryEntry` 接口: snake_case 字段 — `issue_number`, `title`, `status`, `final_score`, `total_iterations`, `start_time`, `end_time`
+   - `StatusFilter` 类型: `'all' | RunStatus`
+   - `SortOrder` 类型: `'asc' | 'desc'`
+
+2. **Store 文件** (`stores/historyStore.ts`):
+   - 遵循 `issueStore.ts` 的 `isTauri` + `tauriInvoke` + mock fallback 模式
+   - 或遵循 `iterationStore.ts` 的工厂函数 + 依赖注入模式（便于测试）
+   - `loadHistory(projectPath)` 调用 T-001 的 `list_history` 命令
+   - 管理 `statusFilter`、`sortOrder` 状态
+   - 处理 loading / error / empty 状态
+
+3. **纯函数** (`getFilteredAndSortedHistory`):
+   - 可独立于 store 测试
+   - 按状态过滤 + 按时间排序
+
+4. **Mock 数据**: 浏览器模式下的 fallback 数据
+
+---
+
+### 审核结论
+
+- [x] **阻塞** — 实现完全缺失，需要从零开始实现
+
+**下一步行动**:
+请实现 T-002 的全部内容。参考：
+- Rust 侧 `HistoryEntry` 字段: `issue_number(i64)`, `title(String)`, `status(HistoryRunStatus)`, `final_score(Option<i32>)`, `total_iterations(Option<i32>)`, `start_time(Option<String>)`, `end_time(Option<String>)` — 全部 snake_case 序列化
+- Rust 侧 `HistoryRunStatus` 枚举序列化为 PascalCase: `"Success"`, `"Fail"`, `"Interrupt"`, `"InProgress"`
+- Store 模式参考 `issueStore.ts`（直接模式）或 `iterationStore.ts`（工厂模式）
+- 错误归一化使用 `normalizeUserFacingError`
+- 验收条件中过滤状态值为 `'all' | 'success' | 'fail' | 'interrupt' | 'in_progress'`（小写），需注意与 Rust PascalCase 的映射
+
+---
+
+## Learnings
+
+- **踩坑**: 迭代 11 和 14 的审核均发现 T-002 实现缺失。审核时应先用 `Glob`/`Grep` 确认实现是否存在，避免浪费时间阅读无关代码。
+- **模式**: Rust `HistoryRunStatus` 枚举默认 serde 序列化为 PascalCase，但验收条件要求前端过滤用小写 (`'success'`/`'fail'`/`'interrupt'`/`'in_progress'`)。实现时需在 store 中做 case 映射。
+- **模式**: `issueStore.ts` 的 `tauriInvoke<T>()` + `isTauri` 分支 + `normalizeUserFacingError` 模式是 T-002 store 应遵循的模板。`iterationStore.ts` 的工厂函数 + 依赖注入模式更便于 Node 单测，也值得参考。

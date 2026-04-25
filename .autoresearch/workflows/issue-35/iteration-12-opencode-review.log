@@ -1,0 +1,531 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore T-001 implementation state[90m Explore Agent[0m
+[0m✓ [0mExplore T-001 implementation state[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1820, limit=220][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3590, limit=190][0m
+Good, the implementation exists. Let me now conduct a thorough code audit by reading the actual implementation.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2095, limit=50][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2125, limit=30][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+Let me verify command registration and run the tests/clippy.
+[0m
+[0m$ [0mcat /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/progress.md 2>/dev/null || echo "No progress.md"
+# Issue #35 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 1 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 初始实现 - Rust 侧实现历史记录扫描与解析命令
+- **评分**: N/A/100
+
+- **经验与发现**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore project structure[90m Explore Agent[0m
+Let me start by exploring the project structure to understand the existing codebase before planning the implementation.
+[0m✓ [0mExplore project structure[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/pages/HistoryPage.tsx
+[0m→ [0mRead desktop_app/src/App.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/issueStore.ts
+Good, I have a thorough understanding of the project. Let me now read the key files I need to modify.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=100][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=100, limit=200][0m
+[0m
+[0m$ [0mls /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/
+issue-27
+issue-28
+issue-29
+issue-30
+issue-31
+issue-32
+issue-33
+issue-34
+issue-35
+issue-50
+issue-73
+issue-74
+[0m
+Let me read the Rust backend code and some sample log files to understand the data format.
+[0m$ [0mfor d in /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-28 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-29 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-30; do echo "=== $d/log.md ==="; cat "$d/log.md" 2>/dev/null || echo "NOT FOUND"; echo ""; done
+
+
+## Iteration 2 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复 - T-001
+- **评分**: 50/100
+
+- **审核要点**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore project structure[90m Explore Agent[0m
+[0m• [0mFind subtask implementation[90m Explore Agent[0m
+[0m• [0mRead workflow log files[90m Explore Agent[0m
+I'll start by exploring the project structure and reading the implementation files for subtask T-001.
+[0m✓ [0mRead workflow log files[90m Explore Agent[0m
+[0m✓ [0mFind subtask implementation[90m Explore Agent[0m
+[0m✓ [0mExplore project structure[90m Explore Agent[0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/iteration-1-opencode.log
+[0m→ [0mRead .autoresearch/workflows/issue-35/iteration-2-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-35/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-35/hard-gate-1.log
+Let me read
+
+- **经验与发现**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore project structure[90m Explore Agent[0m
+[0m• [0mFind subtask implementation[90m Explore Agent[0m
+[0m• [0mRead workflow log files[90m Explore Agent[0m
+I'll start by exploring the project structure and reading the implementation files for subtask T-001.
+[0m✓ [0mRead workflow log files[90m Explore Agent[0m
+[0m✓ [0mFind subtask implementation[90m Explore Agent[0m
+[0m✓ [0mExplore project structure[90m Explore Agent[0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/iteration-1-opencode.log
+[0m→ [0mRead .autoresearch/workflows/issue-35/iteration-2-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-35/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-35/hard-gate-1.log
+Let me read the iteration logs to understand what happened in previous iterations.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=200, offset=1][0m
+[0m✱ [0mGrep "list_history|HistoryEntry|RunHistoryStatus|history_status|parse_history|history_entry"[90m in desktop_app/src-tauri/src · 0 matches[0m
+Let me verify the current state of the Rust code more thoroughly to confirm whether any implementation exists.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1800, limit=120][0m
+[0m✱ [0mGrep "get_processed_issue_numbers|fn run\("[90m in desktop_app/src-tauri/src/lib.rs · 4 matches[0m
+Let me check more sections of lib.rs to understand existing patterns and confirm n
+
+... (内容过长，已截断)
+
+
+## Iteration 3 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复 - T-001
+- **评分**: 62/100
+
+- **审核要点**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore list_history implementation[90m Explore Agent[0m
+[0m✓ [0mExplore list_history implementation[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=200][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/log.md
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+The implementation hasn't been created yet. Let me read the existing code and sample workflow data to understand whether the current codebase provides the needed primitives for this subtask.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1250, limit=150][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1320, limit=100][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: 通过探索代理 (explore agent) 规划的迭代无法实际生成代码，需要实现代理直接输出代码变更。两次迭代均在 explore 阶段终止，未进入实际编码。
+- **经验**: 对于需要修改现有文件的任务，应直接使用实现 Agent 而非探索 Agent 完成规划+实现。
+- **数据模式**: 项目已积累 12 个 issue-N 工作流目录，包含丰富的真实数据可测试解析逻辑。关键发现：issue-29 缺少 `## 基本信息` 头部、issue-34 有 `completed` + 后续 `interrupt` 模式。
+- **状态判定优先级修正**: 计划中的 "中断最高优先级" 对 issue-34 (cleanup 后才中断) 合理，但对 issue-28 (中断后 resume 并完成) 会误判。正确做法是按文件中**最后出现的事件**判定，而非全局优先级。
+
+
+## Iteration 4 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复 - T-001
+- **评分**: 72/100
+
+- **审核要点**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m
+[0m$ [0mgit status
+On branch feature/issue-35
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .autoresearch/workflows/issue-34/log.md
+	modified:   run.sh
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.autoresearch/workflows/issue-35/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+[0m
+[0m$ [0mgit diff --stat HEAD
+.autoresearch/workflows/issue-34/log.md | 16 ++++++++++++++++
+ run.sh                                  |  9 +++------
+ 
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: 通过探索代理 (explore agent) 规划的迭代无法实际生成代码，需要实现代理直接输出代码变更。两次迭代均在 explore 阶段终止，未进入实际编码。
+- **经验**: 对于需要修改现有文件的任务，应直接使用实现 Agent 而非探索 Agent 完成规划+实现。
+- **数据模式**: 项目已积累 12 个 issue-N 工作流目录，包含丰富的真实数据可测试解析逻辑。关键发现：issue-29 缺少 `## 基本信息` 头部、issue-34 有 `completed` + 后续 `interrupt` 模式。
+- **状态判定优先级修正**: 计划中的 "中断最高优先级" 对 issue-34 (cleanup 后才中断) 合理，但对 issue-28 (中断后 resume 并完成) 会误判。正确做法是按文件中**最后出现的事件**判定，而非全局优先级。
+[0m
+[0m$ [0mcat .autoresearch/workflows/issue-35/iteration-4-opencode-review.log
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m
+[0m$ [0mgit status
+On branch feature/issue-35
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .autoresearch/workflows/issue-34/log.md
+	modified:   run.sh
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.autoresearch/workflows/issue-35/
+
+... (内容过长，已截断)
+
+
+## Iteration 5 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复 - T-001
+- **评分**: 72/100
+
+- **审核要点**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m
+[0m$ [0mgit diff HEAD --stat
+.autoresearch/workflows/issue-34/log.md | 16 ++++++++++++++++
+ run.sh                                  |  9 +++------
+ 2 files changed, 19 insertions(+), 6 deletions(-)
+[0m
+[0m$ [0mgit diff HEAD -- desktop_app/
+(no output)
+[0m
+[0m✱ [0mGrep "list_history|HistoryEntry|RunHistoryStatus|RunStatus.*Serialize"[90m in desktop_app/src-tauri/src · 0 matches[0m
+[0m
+[0m$ [0mgit diff HEAD -- run.sh
+diff --git a/run.sh b/run.sh
+index 83ca872..63d2c21 100755
+--- a/run.sh
++++ b/run.sh
+@@ -1241,10 +1241,10 @@ $program_instructions
+ $agent_instructions
+ "
+ 
+-    local log_file="$WORK_DIR/pl
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: 通过探索代理 (explore agent) 规划的迭代无法实际生成代码，需要实现代理直接输出代码变更。两次迭代均在 explore 阶段终止，未进入实际编码。
+- **经验**: 对于需要修改现有文件的任务，应直接使用实现 Agent 而非探索 Agent 完成规划+实现。
+- **数据模式**: 项目已积累 12 个 issue-N 工作流目录，包含丰富的真实数据可测试解析逻辑。关键发现：issue-29 缺少 `## 基本信息` 头部、issue-34 有 `completed` + 后续 `interrupt` 模式。
+- **状态判定优先级修正**: 计划中的 "中断最高优先级" 对 issue-34 (cleanup 后才中断) 合理，但对 issue-28 (中断后 resume 并完成) 会误判。正确做法是按文件中**最后出现的事件**判定，而非全局优先级。
+[0m
+[0m$ [0mcat .autoresearch/workflows/issue-35/iteration-4-opencode-review.log
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m
+[0m$ [0mgit status
+On branch feature/issue-35
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .autoresearch/workflows/issue-34/log.md
+	modified:   run.sh
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.autoresearch/workflows/issue-35/
+
+... (内容过长，已截断)
+
+
+## Iteration 6 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复 - T-001
+- **评分**: 78/100
+
+- **审核要点**:
+
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m$ [0mgit branch -a | head -20
+feature/issue-2
+  feature/issue-25
+  feature/issue-26
+  feature/issue-34
+* feature/issue-35
+  feature/issue-50
+  feature/issue-51
+  feature/issue-6
+  feature/issue-9
+  master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/feature/issue-1
+  remotes/origin/feature/issue-13
+  remotes/origin/feature/issue-2
+  remotes/origin/feature/issue-22
+  remotes/origin/feature/issue-25
+  remotes/origin/feature/issue-27
+  remotes/origin/feature/issue-28
+  remotes/origin/feature/issue-29
+  remotes/origin/feature/issue-30
+[0m
+[0m✱ [0mGlob "desktop_app/**/*.rs"[90m in . · 3 matches[0m
+[0m
+[0m$ [0mls .autoresearch/workflows/ 2>/dev/null | head -20
+issue-27
+issue-28
+issue-29
+issue-30
+issue-31
+issue-32
+issue-33
+issue-34
+is
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: `get_processed_issue_numbers()` 是扫描 `issue-*` 目录的标准模式，T-001 应直接复用而非重新实现目录扫描逻辑。
+- **模式**: `extract_score()` 已支持 `X/100` 格式，解析 `最终评分: 94/100` 可直接调用。
+- **模式**: Tauri command 的标准包装方式为 `tokio::task::spawn_blocking(move || sync_fn(...))`.
+- **踩坑**: 前 5 次迭代均在 explore/plan 阶段终止，未进入实际编码。原因是使用了探索 Agent 而非实现 Agent —— 探索 Agent 只能规划不能执行代码变更。
+- **踩坑**: issue-34 的 log.md 同时包含 `completed` 和 `interrupt`（cleanup 阶段中断），状态判定必须按最后出现的事件而非全局优先级，否则会将其误判为 interrupt。
+- **经验**: 标题行格式 `- Issue: #N - 标题` 在大多数 log.md 中存在，但 issue-29 缺少 `## 基本信息` 头部块，需处理缺失情况。
+- **经验**: 已有的 `RunStatus` 枚举（Idle/Running）用于进程管理，新枚举需不同命名以避免冲突。
+
+
+## Iteration 11 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复 - T-001
+- **评分**: 50/100
+
+- **审核要点**:
+
+确认：**未实现任何内容**。`HistoryEntry`、`list_history` 以及整个 T-001 子任务都未编写任何代码。代码库中不存在任何相关类型或函数。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 当前子任务: T-001 - Rust 侧实现历史记录扫描与解析命令
+- 迭代次数: 11
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-001 子任务经过 11 次迭代（迭代 1-6 由 OpenCode，迭代 7-11 继续）仍然没有任何代码实现。`desktop_app/src-tauri/src/lib.rs` 中不存在 `HistoryEntry`、`HistoryRunStatus`、`list_history` 等任何与 T-001 相关的类型、函数或命令注册。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 完全没有实现代码
+
+**位置**: `desktop_app/src-tauri/sr
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: OpenCode 的 Explore Agent 只有只读权限（Glob/Grep/Read），无法执行 Edit/Write。连续 5+ 次迭代被浪费在"探索后无代码输出"的循环中。实现型子任务必须由具有写入能力的 Agent 执行。
+- **经验**: 审核时应先 `Grep` 关键标识符（如 `list_history`），如果完全不存在则直接判定为阻塞，无需逐行阅读无关代码。
+- **经验**: 对于历史数据解析类任务，已有 `get_processed_issue_numbers()` 和 `build_score_history()` 等可复用模式，实现时优先搜索现有代码再设计新方案。
+[0m
+[0m$ [0mls /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-*/ 2>/dev/null | head -50
+zsh:1: no matches found: /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-*/
+[0m
+Now let me run clippy and tests to verify the implementation.
+[0m$ [0mcargo test 2>&1 | tail -30
+test tests::run_process_state_default_is_idle ... ok
+test tests::workflow_issue_dir_requires_existing_issue_directory ... ok
+test tests::reset_config_file_materializes_first_project_override ... ok
+test tests::init_project_config_only_fills_missing_files ... ok
+test tests::list_issue_log_sources_returns_sorted_sources ... ok
+test tests::read_issue_log_content_reads_utf8_lossy_text ... ok
+test tests::resolve_issue_log_source_path_rejects_path_traversal ... ok
+test tests::write_config_file_rejects_unsupported_file_id ... ok
+test tests::write_config_file_materializes_first_project_override ... ok
+test tests::reset_config_file_restores_default_template ... ok
+test tests::write_config_file_fails_when_target_path_is_directory ... ok
+test tests::reset_config_file_rejects_symlinked_backup_path ... ok
+test tests::write_config_file_creates_project_override_and_backup ... ok
+test tests::write_config_file_rejects_broken_symlink_backup_path ... ok
+test tests::write_config_file_rejects_symlinked_target_file ... ok
+
+test result: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/main.rs (target/debug/deps/desktop_app-961d7fa979874e65)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests desktop_app_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+[0m
+[0m$ [0mcargo clippy -- -D warnings 2>&1 | tail -20
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
+[0m
+[0m$ [0mcargo test --list 2>&1 | grep -i history
+(no output)
+[0m
+[0m$ [0mcargo test history 2>&1
+Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (target/debug/deps/desktop_app_lib-38cd3b529e894603)
+
+running 9 tests
+test tests::history_status_interrupt ... ok
+test tests::history_status_interrupt_after_completion ... ok
+test tests::history_status_in_progress ... ok
+test tests::history_status_success ... ok
+test tests::history_status_fail ... ok
+test tests::history_list_sync_empty_dir ... ok
+test tests::history_no_log_md ... ok
+test tests::history_list_sync_scans_workflows ... ok
+test tests::build_score_history_collects_one_scored_review_per_iteration ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/desktop_app-961d7fa979874e65)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+[0m
+All the data is in. Here is the audit report:
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 当前子任务: T-001 - Rust 侧实现历史记录扫描与解析命令
+- 迭代次数: 11 (前次评分 50/100，判定为"未实现"——但代码现已存在)
+
+### 总体评价
+
+**评分: 92/100**
+
+T-001 已完成完整实现。`HistoryEntry` struct、`HistoryRunStatus` 枚举、`list_history` Tauri command、解析辅助函数和 8 个单元测试全部就位（`lib.rs:1820-2038` 实现，`lib.rs:3594-3775` 测试）。All 87 tests pass (0 failed)，cargo clippy 无警告。
+
+---
+
+### 验收条件逐项核对
+
+| # | 验收条件 | 状态 | 证据 |
+|---|---------|------|------|
+| 1 | HistoryEntry struct + RunStatus 枚举，派生 Serialize/Debug/Clone | ✅ | `HistoryEntry` (line 1835: Serialize, Debug, Clone), `HistoryRunStatus` (line 1822: Serialize, Debug, Clone, Copy, PartialEq, Eq)。命名为 `HistoryRunStatus` 避免与现有 `RunStatus`(Idle/Running) 冲突。 |
+| 2 | list_history Tauri command，project_path 参数，返回 Vec\<HistoryEntry\> | ✅ | Line 2031-2038，注册于 line 2108。使用 `tokio::task::spawn_blocking` 模式。 |
+| 3 | 扫描 issue-* 目录，不存在时返回空列表 | ✅ | `list_history_sync` (line 1846-1906)，测试 `history_list_sync_empty_dir` (line 3755)。 |
+| 4 | 正确解析 最终评分: X/100 | ✅ | `extract_history_final_score` (line 1974) 同时支持 `X/100` 和纯整数格式。 |
+| 5 | 正确判定四种状态 | ✅ | `determine_history_status` (line 1993-2029)，last-event-wins 逻辑。四种状态均有独立测试。 |
+| 6 | 提取 Issue 标题和处理时间 | ✅ | `extract_history_title` (line 1909), `extract_field` 提取开始时间, `extract_history_end_time` 提取结束/中断时间。 |
+| 7 | cargo clippy -- -D warnings 通过 | ✅ | 干净通过，零警告。 |
+| 8 | cargo test 通过，含四种状态的解析测试 | ✅ | 87 passed, 0 failed。8 个 T-001 测试覆盖所有 4 种状态 + 中断后恢复 + 空目录 + 缺 log.md。 |
+
+---
+
+### 严重问题 (必须修复)
+
+无。
+
+### 一般问题 (建议修复)
+
+**问题 1: `has_interrupt` 检测与 `interrupt_pos` 定位不对称**
+
+位置: `lib.rs:1996-2000`
+
+```rust
+let has_interrupt = log.contains("⚠️ 脚本被中断") || log.contains("中断信号");
+// ...
+let interrupt_pos = log.rfind("⚠️ 脚本被中断");
+```
+
+`has_interrupt` 匹配两种模式，但 `interrupt_pos` 仅搜索 `⚠️ 脚本被中断`。如果日志仅含 `中断信号` 而不含 `⚠️ 脚本被中断`（理论上可能，实践中几乎不发生），会导致第一 match arm `(true, true, Some(fp), Some(ip))` 因 `interrupt_pos = None` 而跳过 last-event-wins 比较。
+
+建议：在 `interrupt_pos` 为 None 且 `has_interrupt` 为 true 时，也尝试 `rfind("中断信号")` 获取位置。当前实践中不影响正确性，但防御性编码应修复此不对称。
+
+### 建议改进 (可选)
+
+1. **`extract_field_line` 重复分配前缀字符串**：每次调用都 `format!` 一个前缀。对于仅解析少量字段的小文件可忽略，但可考虑将 `field_name` 传给辅助函数，用 `strip_prefix` + 固定前缀比较减少分配。
+2. **`entries.flatten()` 静默跳过读取错误**：`line 1855` 对 `fs::read_dir` 返回的每个 entry 使用 `flatten()` 会静默跳过发生 I/O 错误的条目。对于扫描工作流目录的场景影响极小，但建议至少用 `filter_map` + 日志记录跳过原因。
+
+---
+
+### 审核结论
+
+- [x] 通过 (评分 92 ≥ 85 达标)
+- [ ] 需要修改
+- [ ] 阻塞
+
+**T-001 子任务可以标记为 `passes: true`，进入 T-002。**
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 权重 | 加权 |
+|------|------|------|------|
+| 正确性 | 92 | 35% | 32.20 |
+| 测试质量 | 95 | 25% | 23.75 |
+| 代码质量 | 90 | 20% | 18.00 |
+| 安全性 | 95 | 10% | 9.50 |
+| 性能 | 90 | 10% | 9.00 |
+| **总分** | | | **92.45 → 92** |
+
+---
+
+## Learnings
+
+- **模式**: `HistoryRunStatus` 与现有 `RunStatus`(Idle/Running) 通过不同命名避免冲突 —— 这是 Rust 模块内多个语义枚举的推荐做法。
+- **模式**: `determine_history_status` 使用 `rfind()` 实现 last-event-wins 逻辑正确处理 issue-34 的「先完成、后中断」场景 —— 这应作为其他状态判定逻辑的参考。
+- **踩坑**: 前 6 次迭代使用 Explore Agent（只读权限）浪费在「探索后无代码输出」循环中。实现型子任务必须由具有写入能力的 Agent 执行。审核时应先用 Grep 确认关键标识符是否存在。
+- **经验**: 当前 T-001 实现质量很高，`list_history_sync` + async wrapper + `spawn_blocking` 的模式应与 T-002 前端数据层对齐（前端调用 `invoke("list_history", { projectPath })` 即可拿到 `Vec<HistoryEntry>`）。
