@@ -26,6 +26,7 @@
 ## Testing
 
 - Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- Persisted Zustand stores should also expose a factory (for example `createRunConfigStore`) so tests can inject in-memory storage and explicitly exercise hydration behavior.
 - `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
 - When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
 
@@ -37,9 +38,11 @@
 - Async actions should handle loading and error states
 - Store pattern: state + actions + getters in one `create()` call
 - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
 - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
 - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
 - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+- For persisted stores with value bounds, validate both setter input and persisted hydration (`merge`/`migrate`), otherwise invalid `localStorage` data can bypass runtime constraints.
 
 ## Tauri Integration
 
@@ -71,6 +74,7 @@
 - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
 - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
 - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
+- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
 - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
 - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
 - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
@@ -80,6 +84,10 @@
 - **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
 - **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
 - **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
+- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+- **日志来源**: 日志源列表统一由 Tauri `list_issue_log_sources` 返回，前端只拿 `source.id` 调 `read_issue_log_content`，不要自己拼 `.autoresearch/workflows/issue-N/...` 路径
+- **日志轮询**: `LogViewer` 需要同时轮询“日志源列表”和“当前选中文件内容”；否则运行中新增的 iteration 日志文件不会出现在下拉列表里
+- **刷新保态**: 同一 Issue 的日志源轮询不能重置 `searchQuery`、`selectedSourceId`、`autoScroll` 或 `hasPendingScroll`，这些都是用户当前阅读状态
 
 ### 样式约定
 
@@ -118,3 +126,25 @@
 - 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
 - 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
 - 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+## LogViewer 约定
+
+### 性能
+
+- `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+- `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+
+### 状态正确性
+
+- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
+- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
+
+### 搜索高亮
+
+- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
+- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
+
+### React Key
+
+- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）

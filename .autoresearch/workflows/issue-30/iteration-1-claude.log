@@ -1,0 +1,7 @@
+                                                          Execution error[09:14:44] 
+[09:14:44] ⚠️ 脚本被 INT 信号中断
+[09:14:44] 📋 退出码: 0 (正常退出（但 SCRIPT_COMPLETED_NORMALLY 未设置）)
+[09:14:44] 🔧 最后执行命令: $first_impl_func "$ISSUE_NUMBER" "$ITERATION" ""
+[09:14:44] 📝 中断信息已记录到 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-30/log.md
+[09:14:44] 💡 使用 ./run.sh -c 30 可继续运行
+                                                          

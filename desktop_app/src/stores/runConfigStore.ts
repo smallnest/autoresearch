@@ -51,12 +51,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function normalizeInteger(value: number): number {
+  return Math.round(value);
+}
+
 function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
   }
 
-  return clamp(value, min, max);
+  return clamp(normalizeInteger(value), min, max);
 }
 
 function sanitizeBoolean(value: unknown, fallback: boolean): boolean {

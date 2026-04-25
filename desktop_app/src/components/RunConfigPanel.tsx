@@ -90,6 +90,7 @@ export default function RunConfigPanel({
   },
 }: RunConfigPanelProps): JSX.Element {
   const [internalCollapsed, setInternalCollapsed] = useState(true);
+  const contentId = 'run-config-panel-content';
 
   const isControlled = controlledCollapsed !== undefined;
   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
@@ -123,6 +124,8 @@ export default function RunConfigPanel({
       <button
         type="button"
         onClick={toggleCollapse}
+        aria-expanded={!collapsed}
+        aria-controls={contentId}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-2">
@@ -142,7 +145,10 @@ export default function RunConfigPanel({
       </button>
 
       {!collapsed && (
-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+        <div
+          id={contentId}
+          className="px-4 pb-4 space-y-4 border-t border-gray-100"
+        >
           <div className="pt-4">
             <div className="flex items-center justify-between mb-2">
               <label
@@ -161,6 +167,7 @@ export default function RunConfigPanel({
                 id="maxIterations"
                 min={MIN_MAX_ITERATIONS}
                 max={MAX_MAX_ITERATIONS}
+                step={1}
                 value={maxIterations}
                 onChange={(e) => setMaxIterations(Number(e.target.value))}
                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
@@ -169,6 +176,8 @@ export default function RunConfigPanel({
                 type="number"
                 min={MIN_MAX_ITERATIONS}
                 max={MAX_MAX_ITERATIONS}
+                step={1}
+                inputMode="numeric"
                 value={maxIterations}
                 onChange={(e) => setMaxIterations(Number(e.target.value))}
                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -197,6 +206,7 @@ export default function RunConfigPanel({
                 id="passingScore"
                 min={MIN_PASSING_SCORE}
                 max={MAX_PASSING_SCORE}
+                step={1}
                 value={passingScore}
                 onChange={(e) => setPassingScore(Number(e.target.value))}
                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
@@ -205,6 +215,8 @@ export default function RunConfigPanel({
                 type="number"
                 min={MIN_PASSING_SCORE}
                 max={MAX_PASSING_SCORE}
+                step={1}
+                inputMode="numeric"
                 value={passingScore}
                 onChange={(e) => setPassingScore(Number(e.target.value))}
                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

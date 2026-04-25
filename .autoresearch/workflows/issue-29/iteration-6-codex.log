@@ -1,0 +1,5192 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc212-a13d-7821-9043-539ccb7c6fcd
+--------
+user
+根据审核反馈改进 Issue #29 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 运行参数配置 UI
+
+审核反馈:
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc209-78de-7532-a6a5-0c30dddcb480
+--------
+user
+审核 Issue #29 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 运行参数配置 UI
+
+
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+# Issue #29 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 3 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复
+- **评分**: 0/100
+
+- **审核要点**:
+
+[91m[1mError: [0mYou've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade
+
+- **经验与发现**:
+
+[91m[1mError: [0mYou've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+这次是审核 Issue #29「[desktop-app] 运行参数配置 UI」的实现。我先看仓库状态、相关改动和测试入口，确认这次实现实际改了什么，再按正确性、测试、代码质量等维度出审核结论。
+exec
+/bin/zsh -lc pwd in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch
+
+exec
+/bin/zsh -lc 'git branch --show-current' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+feature/issue-29
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M run.sh
+?? .autoresearch/workflows/issue-29/
+
+exec
+/bin/zsh -lc 'rg -n "Issue #29|运行参数配置|desktop-app|run args|run arguments|参数配置" -S .' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+./README.md:144:详细过程见 [docs/desktop-app-prd-to-issues.md](docs/desktop-app-prd-to-issues.md)。
+./docs/desktop-app-prd-to-issues.md:54:基于用户回答生成完整 PRD，保存到 `tasks/prd-desktop-app.md`，包含：
+./docs/desktop-app-prd-to-issues.md:78:- Issue 标题统一加 `[desktop-app]` 前缀
+./docs/desktop-app-prd-to-issues.md:79:- 统一打 `desktop-app` 和 `enhancement` 标签
+./docs/desktop-app-prd-to-issues.md:100:└── #29 运行参数配置 UI
+./docs/desktop-app-prd-to-issues.md:161:1. 创建 GitHub Label: `desktop-app` (#0E8A16)
+./docs/desktop-app-prd-to-issues.md:170:| `tasks/prd-desktop-app.md` | 完整 PRD 文档 |
+./docs/desktop-app-prd-to-issues.md:171:| `docs/desktop-app-prd-to-issues.md` | 本文档（过程记录） |
+./desktop_app/src-tauri/CLAUDE.md:14:- In desktop-app commands, `projectPath` refers to the repository being processed, not the autoresearch installation directory. Resolve the `run.sh` executable relative to the autoresearch app/repo root, then pass the selected repository via `-p <projectPath>` when the target project is outside the autoresearch repo itself.
+
+codex
+仓库在 `feature/issue-29`，当前未提交改动只有 `run.sh` 和 `.autoresearch/workflows/issue-29/`。接下来我看这两个路径和最近提交差异，确认 Issue #29 的实现范围以及是否带了测试。
+exec
+/bin/zsh -lc 'git diff -- run.sh .autoresearch/workflows/issue-29' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+diff --git a/run.sh b/run.sh
+index ed11b12..c9ae8ef 100755
+--- a/run.sh
++++ b/run.sh
+@@ -2613,7 +2613,8 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+     review_log="$WORK_DIR/iteration-$ITERATION-${agent_name}-review.log"
+     review_feedback_brief=""
+     if [ -f "$review_log" ]; then
+-        review_feedback_brief=$(cat "$review_log" | head -c 800)
++        # 避免 SIGPIPE: head 直接读取文件，而非通过 cat 管道
++        review_feedback_brief=$(head -c 800 "$review_log" 2>/dev/null || true)
+     fi
+ 
+     subtask_label=""
+
+exec
+/bin/zsh -lc 'git log --oneline --decorate -n 12' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+a414939 (HEAD -> feature/issue-29, origin/master, origin/HEAD, master) Merge pull request #69 from smallnest/feature/issue-28
+2fcb949 (origin/feature/issue-28) feat: implement issue #28 - [desktop-app] run.sh 进程管理（启动/停止）
+f74495c fix: remove local keyword used outside function
+4776bdd chore: [desktop-app] reduce issues page size from 20 to 10
+3a30517 feat: [desktop-app] add front-end pagination for issues list (20 per page)
+4a049f7 fix: [desktop-app] match uppercase state values from gh CLI (OPEN/CLOSED)
+a95f36e feat: [desktop-app] show check icon and closed badge for closed issues
+d6d78f7 perf: [desktop-app] make Tauri commands async to avoid blocking UI thread
+226e17d fix: [desktop-app] remove mock issues, fix config detection paths
+c01ac7a feat: [desktop-app] switch to light theme inspired by Codex app style
+273e2db Merge pull request #68 from smallnest/feature/issue-27
+187845f (origin/feature/issue-27) feat: implement issue #27 - [desktop-app] Issue 详情查看
+
+exec
+/bin/zsh -lc 'rg --files desktop_app | sort' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/CLAUDE.md
+desktop_app/README.md
+desktop_app/eslint.config.js
+desktop_app/index.html
+desktop_app/package-lock.json
+desktop_app/package.json
+desktop_app/pnpm-lock.yaml
+desktop_app/public/tauri.svg
+desktop_app/public/vite.svg
+desktop_app/src-tauri/CLAUDE.md
+desktop_app/src-tauri/Cargo.lock
+desktop_app/src-tauri/Cargo.toml
+desktop_app/src-tauri/build.rs
+desktop_app/src-tauri/capabilities/default.json
+desktop_app/src-tauri/icons/128x128.png
+desktop_app/src-tauri/icons/128x128@2x.png
+desktop_app/src-tauri/icons/32x32.png
+desktop_app/src-tauri/icons/Square107x107Logo.png
+desktop_app/src-tauri/icons/Square142x142Logo.png
+desktop_app/src-tauri/icons/Square150x150Logo.png
+desktop_app/src-tauri/icons/Square284x284Logo.png
+desktop_app/src-tauri/icons/Square30x30Logo.png
+desktop_app/src-tauri/icons/Square310x310Logo.png
+desktop_app/src-tauri/icons/Square44x44Logo.png
+desktop_app/src-tauri/icons/Square71x71Logo.png
+desktop_app/src-tauri/icons/Square89x89Logo.png
+desktop_app/src-tauri/icons/StoreLogo.png
+desktop_app/src-tauri/icons/icon.icns
+desktop_app/src-tauri/icons/icon.ico
+desktop_app/src-tauri/icons/icon.png
+desktop_app/src-tauri/src/lib.rs
+desktop_app/src-tauri/src/main.rs
+desktop_app/src-tauri/tauri.conf.json
+desktop_app/src/App.tsx
+desktop_app/src/CLAUDE.md
+desktop_app/src/assets/react.svg
+desktop_app/src/components/AgentSelector.tsx
+desktop_app/src/components/AppShell.tsx
+desktop_app/src/components/IssueDetailPanel.tsx
+desktop_app/src/components/MarkdownRenderer.tsx
+desktop_app/src/components/RightPanel.tsx
+desktop_app/src/components/Sidebar.tsx
+desktop_app/src/index.css
+desktop_app/src/main.tsx
+desktop_app/src/pages/DashboardPage.tsx
+desktop_app/src/pages/HistoryPage.tsx
+desktop_app/src/pages/IssuesPage.tsx
+desktop_app/src/pages/SettingsPage.tsx
+desktop_app/src/stores/agentStore.ts
+desktop_app/src/stores/issueStore.ts
+desktop_app/src/stores/projectStore.ts
+desktop_app/src/stores/runStore.ts
+desktop_app/src/vendor/react-markdown.tsx
+desktop_app/src/vite-env.d.ts
+desktop_app/tests/runStore.test.mjs
+desktop_app/tsconfig.json
+desktop_app/tsconfig.node.json
+desktop_app/ui-verify-before.png
+desktop_app/vite.config.ts
+
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+... (中间迭代记录已省略)
+
+ 总体评价
+
+**评分: 15/100**
+
+Issue #29 的核心需求几乎**完全未实现**。虽然 `runStore.ts` 中已有 `maxIter`、`passingScore`、`continueMode` 参数的传递支持，但缺少关键的独立持久化配置存储（`runConfigStore`）和参数配置 UI 面板。用户无法在启动任务前配置这些参数。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少 runConfigStore 持久化配置存储
+
+**位置**: `desktop_app/src/stores/` (应创建 `runConfigStore.ts`)
+
+**问题描述**:
+Issue 要求创建独立的配置存储，使用 zustand persis
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`
+- **踩坑**: 之前迭代因 OpenCode 配额问题未能正常完成审核，导致进度丢失
+- **经验**: `runStore.ts` 已预留了配置参数的接口（`StartRunRequest`），实现时应直接使用这些接口，避免重复定义
+
+
+## Iteration 6 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复
+- **评分**: 0/100
+
+- **审核要点**:
+
+[91m[1mError: [0mYou've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade
+
+- **经验与发现**:
+
+[91m[1mError: [0mYou've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade
+
+
+## Iteration 7 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复
+- **评分**: 92/100
+
+- **审核要点**:
+
+无控制台错误。现在让我完成审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #29
+- 标题: [desktop-app] 运行参数配置 UI
+- 迭代次数: 7
+
+---
+
+### 总体评价
+
+**评分: 92/100**
+
+Issue #29 的实现**全面且高质量**。所有验收条件均已满足：创建了独立的 `runConfigStore` 持久化配置存储、可折叠的 `RunConfigPanel` 组件、集成了 Agent 选择器、参数正确传递到后端。代码结构清晰，测试覆盖全面，TypeScript/ESLint 检查通过。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 |
+|---------|------|
+| 启动任务前显示参数配置面板（可折叠形式） | ✅ `RunConfigPanel` 可折叠，默认收起 |
+| max iterations：数字输入框，默认 16，范围 1-50 | ✅ 滑块+数字输入，ran
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: `createXxxStore(deps)` 工厂函数 + 依赖注入是 Zustand 测试的最佳实践，避免 mock `localStorage`
+- **模式**: 持久化 store 应在 setter 和 `merge` (rehydration) 两处都做数值校验，防止旧数据绕过 UI 约束
+- **经验**: `RunConfigPanel` 采用受控/非受控双模式设计，父组件可选择性接管 `collapsed` 状态
+- **经验**: 后端参数分为 CLI args (`-c`, `-a`, `-p`) 和 env vars (`PASSING_SCORE`)，需分别处理
+
+---
+请按以下步骤执行:
+
+## 第一步：制定计划
+分析审核反馈，制定修复计划，拆解为具体的 tasks/todos，输出任务清单。
+
+## 第二步：逐步实现
+按照任务清单逐步修复，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
+
+---
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+先核对 `desktop_app` 当前实现状态和 Issue #29 相关文件，确认哪些缺口还在，再按审核反馈拆成具体修复任务。
+exec
+/bin/zsh -lc "sed -n '1,260p' desktop_app/src/pages/DashboardPage.tsx" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,240p' desktop_app/src/stores/runStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { useEffect, useState } from 'react';
+import { useProjectStore, ProjectConfig } from '../stores/projectStore';
+
+// Check Icon component
+function CheckIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M5 13l4 4L19 7"
+      />
+    </svg>
+  );
+}
+
+// X Icon component
+function XIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M6 18L18 6M6 6l12 12"
+      />
+    </svg>
+  );
+}
+
+// Format path for display (truncate if too long)
+function formatPath(path: string, maxLength: number = 50): string {
+  if (path.length <= maxLength) return path;
+  const start = path.slice(0, maxLength / 2);
+  const end = path.slice(-maxLength / 2);
+  return `${start}...${end}`;
+}
+
+// Get directory name from path
+function getDirName(path: string): string {
+  const parts = path.split(/[/\\]/);
+  return parts[parts.length - 1] || path;
+}
+
+// Config status badge component
+function ConfigBadge({
+  label,
+  exists,
+}: {
+  label: string;
+  exists: boolean;
+}): JSX.Element {
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+        exists
+          ? 'bg-green-50 text-green-700 border border-green-200'
+          : 'bg-red-50 text-red-700 border border-red-200'
+      }`}
+    >
+      {exists ? (
+        <CheckIcon className="w-3 h-3 mr-1.5" />
+      ) : (
+        <XIcon className="w-3 h-3 mr-1.5" />
+      )}
+      {label}
+    </span>
+  );
+}
+
+// Welcome screen when no project selected
+function WelcomeScreen(): JSX.Element {
+  const {
+    recentProjects,
+    isLoading,
+    error,
+    selectProject,
+    loadProject,
+    clearError,
+  } = useProjectStore();
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-6">
+      {/* Logo/Icon placeholder */}
+      <div className="w-16 h-16 mb-6 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/10">
+        <svg
+          className="w-8 h-8 text-white"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+          />
+        </svg>
+      </div>
+
+      <h2 className="text-2xl font-bold mb-2 text-gray-900">
+        欢迎使用 Autoresearch
+      </h2>
+      <p className="text-gray-500 mb-8 text-center max-w-md">
+        选择一个项目目录开始使用自动化研发工作流
+      </p>
+
+      {/* Error message */}
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm max-w-md">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={clearError}
+              className="ml-2 text-red-400 hover:text-red-600"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Select Project Button */}
+      <button
+        onClick={selectProject}
+        disabled={isLoading}
+        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/10"
+      >
+        {isLoading ? (
+          <>
+            <svg
+              className="animate-spin w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth={4}
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            加载中...
+          </>
+        ) : (
+          <>
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+              />
+            </svg>
+            选择项目目录
+          </>
+        )}
+      </button>
+
+      {/* Recent Projects Section */}
+      {recentProjects.length > 0 && (
+        <div className="mt-10 w-full max-w-md">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">
+            上次打开的项目
+          </h3>
+          <ul className="space-y-2">
+            {recentProjects.map((recentPath) => (
+              <li
+                key={recentPath}
+                className="group flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:border-gray-300 hover:bg-gray-100 cursor-pointer transition-colors"
+                onClick={() => {
+                  loadProject(recentPath);
+                }}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-medium text-gray-500">
+                      {getDirName(recentPath).charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {getDirName(recentPath)}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">
+                      {formatPath(recentPath)}
+                    </p>
+                  </div>
+                </div>
+                <svg
+                  className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0 ml-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Init from template prompt component
+function InitTemplatePrompt({
+  onLater,
+  onLearnMore,
+}: {
+  onLater: () => void;
+  onLearnMore: () => void;
+}): JSX.Element {
+  return (
+    <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 mb-6">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+          <svg
+            className="w-4 h-4 text-amber-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+
+ succeeded in 0ms:
+import { create } from 'zustand';
+import { useAgentStore } from './agentStore.ts';
+
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const MAX_OUTPUT_LINES = 2000;
+
+type RunLifecycleStatus = 'idle' | 'running' | 'stopping' | 'finished' | 'error';
+type BackendRunStatus = 'Idle' | 'Running';
+
+interface RunExitEvent {
+  exit_code: number | null;
+  killed: boolean;
+}
+
+interface StartRunRequest {
+  projectPath: string;
+  issueNumber: number;
+  agents?: string;
+  maxIter?: number;
+  passingScore?: number;
+  continueMode?: boolean;
+}
+
+type UnlistenFn = () => void;
+type RunEventName = 'run-output' | 'run-exit';
+type RunEventCallback<TPayload> = (event: { payload: TPayload }) => void;
+
+interface RunStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  listen: <TPayload>(
+    event: RunEventName,
+    callback: RunEventCallback<TPayload>
+  ) => Promise<UnlistenFn>;
+  getSelectedAgents: () => string[];
+}
+
+interface RunStateSnapshot {
+  status: RunLifecycleStatus;
+  activeIssueNumber: number | null;
+  outputLines: string[];
+  exitCode: number | null;
+}
+
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+function normalizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function mapBackendStatus(status: BackendRunStatus): RunLifecycleStatus {
+  return status === 'Running' ? 'running' : 'idle';
+}
+
+function appendLine(lines: string[], line: string): string[] {
+  const nextLines = [...lines, line];
+  if (nextLines.length <= MAX_OUTPUT_LINES) {
+    return nextLines;
+  }
+  return nextLines.slice(nextLines.length - MAX_OUTPUT_LINES);
+}
+
+function snapshotState(state: RunState): RunStateSnapshot {
+  return {
+    status: state.status,
+    activeIssueNumber: state.activeIssueNumber,
+    outputLines: state.outputLines,
+    exitCode: state.exitCode,
+  };
+}
+
+function restoreKnownIssue(snapshot: RunStateSnapshot): number | null {
+  return snapshot.status === 'running' || snapshot.status === 'stopping'
+    ? snapshot.activeIssueNumber
+    : null;
+}
+
+interface RunState {
+  status: RunLifecycleStatus;
+  activeIssueNumber: number | null;
+  outputLines: string[];
+  exitCode: number | null;
+  error: string | null;
+  isSupported: boolean;
+  subscriptionsReady: boolean;
+  initialize: () => Promise<void>;
+  refreshStatus: () => Promise<void>;
+  startRun: (_request: StartRunRequest) => Promise<void>;
+  stopRun: () => Promise<void>;
+  clearOutput: () => void;
+  clearError: () => void;
+  isIssueRunning: (_issueNumber: number | null) => boolean;
+}
+
+async function tauriListen<TPayload>(
+  event: RunEventName,
+  callback: RunEventCallback<TPayload>
+): Promise<UnlistenFn> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen(event, callback);
+}
+
+function createRunStoreDeps(overrides: Partial<RunStoreDeps> = {}): RunStoreDeps {
+  return {
+    isTauri,
+    invoke: tauriInvoke,
+    listen: tauriListen,
+    getSelectedAgents: () => [...useAgentStore.getState().selectedAgents],
+    ...overrides,
+  };
+}
+
+export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
+  const deps = createRunStoreDeps(overrides);
+
+  return create<RunState>((set, get) => ({
+    status: 'idle',
+    activeIssueNumber: null,
+    outputLines: [],
+    exitCode: null,
+    error: null,
+    isSupported: deps.isTauri,
+    subscriptionsReady: false,
+
+    initialize: async () => {
+      if (!deps.isTauri) {
+        set({ subscriptionsReady: true });
+        return;
+      }
+
+      if (get().subscriptionsReady) {
+        return;
+      }
+
+      await Promise.all<UnlistenFn>([
+        deps.listen<string>('run-output', (event) => {
+          set((state) => ({
+            outputLines: appendLine(state.outputLines, event.payload),
+          }));
+        }),
+        deps.listen<RunExitEvent>('run-exit', (event) => {
+          const { exit_code: exitCode, killed } = event.payload;
+          set((state) => ({
+            status: killed || exitCode === 0 ? 'finished' : 'error',
+            exitCode,
+            activeIssueNumber: state.activeIssueNumber,
+            error:
+              killed || exitCode === 0
+                ? null
+                : `运行失败${exitCode === null ? '' : ` (exit code ${exitCode})`}`,
+          }));
+        }),
+      ]);
+
+      set({ subscriptionsReady: true });
+      await get().refreshStatus();
+    },
+
+    refreshStatus: async () => {
+      if (!deps.isTauri) {
+        set({ status: 'idle' });
+        return;
+      }
+
+      try {
+        const backendStatus = await deps.invoke<BackendRunStatus>('get_run_status');
+        set((state) => {
+          const nextStatus = mapBackendStatus(backendStatus);
+          if (nextStatus === 'running') {
+            return {
+              status: nextStatus,
+              error: null,
+            };
+          }
+
+          if (state.status === 'running' || state.status === 'stopping') {
+            return {
+              status: 'idle',
+              activeIssueNumber: null,
+            };
+          }
+
+          return {
+            status: state.status === 'idle' ? 'idle' : state.status,
+          };
+        });
+      } catch (error) {
+        set({
+          status: 'error',
+          error: normalizeError(error),
+        });
+      }
+    },
+
+    startRun: async (_request: StartRunRequest) => {
+      if (!deps.isTauri) {
+        set({
+          status: 'error',
+          error: '浏览器模式不支持运行任务，请通过 tauri dev 启动桌面应用。',
+        });
+        return;
+      }
+
+      const currentStatus = get().status;
+      if (currentStatus === 'running' || currentStatus === 'stopping') {
+        set({ error: '当前已有任务在运行，请先停止后再启动新任务。' });
+        return;
+      }
+
+      const previousState = snapshotState(get());
+      const selectedAgents = deps.getSelectedAgents();
+      const agents =
+        _request.agents ?? (selectedAgents.length > 0 ? selectedAgents.join(',') : undefined);
+
+      set({
+        status: 'running',
+        activeIssueNumber: _request.issueNumber,
+        outputLines: [],
+        exitCode: null,
+        error: null,
+      });
+
+      try {
+        await deps.invoke('start_run', {
+          request: {
+            project_path: _request.projectPath,
+            issue_number: _request.issueNumber,
+            agents,
+            max_iter: _request.maxIter,
+
+exec
+/bin/zsh -lc 'rg -n "runConfig|RunConfig|passingScore|maxIter|continueMode|AgentSelector" desktop_app/src desktop_app/tests -S' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/tests/runConfigStore.test.mjs:4:  createRunConfigStore,
+desktop_app/tests/runConfigStore.test.mjs:9:  sanitizeRunConfig,
+desktop_app/tests/runConfigStore.test.mjs:10:} from '../src/stores/runConfigStore.ts';
+desktop_app/tests/runConfigStore.test.mjs:27:test('runConfigStore exposes required default values', () => {
+desktop_app/tests/runConfigStore.test.mjs:29:  const store = createRunConfigStore({ storage });
+desktop_app/tests/runConfigStore.test.mjs:31:  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+desktop_app/tests/runConfigStore.test.mjs:32:  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+desktop_app/tests/runConfigStore.test.mjs:33:  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+desktop_app/tests/runConfigStore.test.mjs:36:test('runConfigStore clamps numeric setters to accepted ranges', () => {
+desktop_app/tests/runConfigStore.test.mjs:38:  const store = createRunConfigStore({ storage });
+desktop_app/tests/runConfigStore.test.mjs:43:  assert.equal(store.getState().maxIterations, 1);
+desktop_app/tests/runConfigStore.test.mjs:44:  assert.equal(store.getState().passingScore, 100);
+desktop_app/tests/runConfigStore.test.mjs:49:  assert.equal(store.getState().maxIterations, 50);
+desktop_app/tests/runConfigStore.test.mjs:50:  assert.equal(store.getState().passingScore, 1);
+desktop_app/tests/runConfigStore.test.mjs:53:test('runConfigStore persists values under the required storage key', () => {
+desktop_app/tests/runConfigStore.test.mjs:55:  const store = createRunConfigStore({ storage });
+desktop_app/tests/runConfigStore.test.mjs:64:    maxIterations: 24,
+desktop_app/tests/runConfigStore.test.mjs:65:    passingScore: 90,
+desktop_app/tests/runConfigStore.test.mjs:66:    continueMode: true,
+desktop_app/tests/runConfigStore.test.mjs:70:test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+desktop_app/tests/runConfigStore.test.mjs:74:        maxIterations: -10,
+desktop_app/tests/runConfigStore.test.mjs:75:        passingScore: 999,
+desktop_app/tests/runConfigStore.test.mjs:76:        continueMode: true,
+desktop_app/tests/runConfigStore.test.mjs:82:  const store = createRunConfigStore({ storage });
+desktop_app/tests/runConfigStore.test.mjs:85:  assert.equal(store.getState().maxIterations, 1);
+desktop_app/tests/runConfigStore.test.mjs:86:  assert.equal(store.getState().passingScore, 100);
+desktop_app/tests/runConfigStore.test.mjs:87:  assert.equal(store.getState().continueMode, true);
+desktop_app/tests/runConfigStore.test.mjs:90:test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+desktop_app/tests/runConfigStore.test.mjs:92:  const store = createRunConfigStore({ storage });
+desktop_app/tests/runConfigStore.test.mjs:98:  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+desktop_app/tests/runConfigStore.test.mjs:99:  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+desktop_app/tests/runConfigStore.test.mjs:100:  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+desktop_app/tests/runConfigStore.test.mjs:103:test('sanitizeRunConfig rejects non-boolean and non-finite persisted values', () => {
+desktop_app/tests/runConfigStore.test.mjs:104:  const sanitized = sanitizeRunConfig({
+desktop_app/tests/runConfigStore.test.mjs:105:    maxIterations: Number.NaN,
+desktop_app/tests/runConfigStore.test.mjs:106:    passingScore: Infinity,
+desktop_app/tests/runConfigStore.test.mjs:107:    continueMode: 'false',
+desktop_app/tests/runConfigStore.test.mjs:111:    maxIterations: DEFAULT_MAX_ITERATIONS,
+desktop_app/tests/runConfigStore.test.mjs:112:    passingScore: DEFAULT_PASSING_SCORE,
+desktop_app/tests/runConfigStore.test.mjs:113:    continueMode: DEFAULT_CONTINUE_MODE,
+desktop_app/tests/issueRunRequest.test.mjs:7:    maxIterations: 24,
+desktop_app/tests/issueRunRequest.test.mjs:8:    passingScore: 92,
+desktop_app/tests/issueRunRequest.test.mjs:9:    continueMode: true,
+desktop_app/tests/issueRunRequest.test.mjs:15:    maxIter: 24,
+desktop_app/tests/issueRunRequest.test.mjs:16:    passingScore: 92,
+desktop_app/tests/issueRunRequest.test.mjs:17:    continueMode: true,
+desktop_app/src/pages/SettingsPage.tsx:1:import AgentSelector from '../components/AgentSelector';
+desktop_app/src/pages/SettingsPage.tsx:11:        <AgentSelector />
+desktop_app/src/components/IssueDetailPanel.tsx:9:  useRunConfigStore,
+desktop_app/src/components/IssueDetailPanel.tsx:10:} from '../stores/runConfigStore';
+desktop_app/src/components/IssueDetailPanel.tsx:11:import RunConfigPanel from './RunConfigPanel';
+desktop_app/src/components/IssueDetailPanel.tsx:12:import AgentSelector from './AgentSelector';
+desktop_app/src/components/IssueDetailPanel.tsx:238:    maxIterations,
+desktop_app/src/components/IssueDetailPanel.tsx:239:    passingScore,
+desktop_app/src/components/IssueDetailPanel.tsx:240:    continueMode,
+desktop_app/src/components/IssueDetailPanel.tsx:241:  } = useRunConfigStore();
+desktop_app/src/components/IssueDetailPanel.tsx:326:                        maxIterations,
+desktop_app/src/components/IssueDetailPanel.tsx:327:                        passingScore,
+desktop_app/src/components/IssueDetailPanel.tsx:328:                        continueMode,
+desktop_app/src/components/IssueDetailPanel.tsx:355:            <RunConfigPanel
+desktop_app/src/components/IssueDetailPanel.tsx:357:                maxIterations: DEFAULT_MAX_ITERATIONS,
+desktop_app/src/components/IssueDetailPanel.tsx:358:                passingScore: DEFAULT_PASSING_SCORE,
+desktop_app/src/components/IssueDetailPanel.tsx:359:                continueMode: DEFAULT_CONTINUE_MODE,
+desktop_app/src/components/IssueDetailPanel.tsx:363:              <AgentSelector />
+desktop_app/src/stores/runConfigStore.ts:21:interface RunConfigValues {
+desktop_app/src/stores/runConfigStore.ts:22:  maxIterations: number;
+desktop_app/src/stores/runConfigStore.ts:23:  passingScore: number;
+desktop_app/src/stores/runConfigStore.ts:24:  continueMode: boolean;
+desktop_app/src/stores/runConfigStore.ts:27:export interface RunConfigState extends RunConfigValues {
+desktop_app/src/stores/runConfigStore.ts:34:interface RunConfigStoreDeps {
+desktop_app/src/stores/runConfigStore.ts:38:const DEFAULT_CONFIG: RunConfigValues = {
+desktop_app/src/stores/runConfigStore.ts:39:  maxIterations: DEFAULT_MAX_ITERATIONS,
+desktop_app/src/stores/runConfigStore.ts:40:  passingScore: DEFAULT_PASSING_SCORE,
+desktop_app/src/stores/runConfigStore.ts:41:  continueMode: DEFAULT_CONTINUE_MODE,
+desktop_app/src/stores/runConfigStore.ts:66:export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigValues {
+desktop_app/src/stores/runConfigStore.ts:68:    maxIterations: sanitizeNumber(
+desktop_app/src/stores/runConfigStore.ts:69:      values.maxIterations,
+desktop_app/src/stores/runConfigStore.ts:74:    passingScore: sanitizeNumber(
+desktop_app/src/stores/runConfigStore.ts:75:      values.passingScore,
+desktop_app/src/stores/runConfigStore.ts:80:    continueMode: sanitizeBoolean(values.continueMode, DEFAULT_CONTINUE_MODE),
+desktop_app/src/stores/runConfigStore.ts:84:function createRunConfigState(
+desktop_app/src/stores/runConfigStore.ts:85:  set: Parameters<StateCreator<RunConfigState>>[0]
+desktop_app/src/stores/runConfigStore.ts:86:): RunConfigState {
+desktop_app/src/stores/runConfigStore.ts:91:        maxIterations: sanitizeNumber(
+desktop_app/src/stores/runConfigStore.ts:93:          state.maxIterations,
+desktop_app/src/stores/runConfigStore.ts:101:        passingScore: sanitizeNumber(
+desktop_app/src/stores/runConfigStore.ts:103:          state.passingScore,
+desktop_app/src/stores/runConfigStore.ts:111:        continueMode: sanitizeBoolean(value, state.continueMode),
+desktop_app/src/stores/runConfigStore.ts:121:  deps: RunConfigStoreDeps
+desktop_app/src/stores/runConfigStore.ts:122:): PersistOptions<RunConfigState, RunConfigValues> {
+desktop_app/src/stores/runConfigStore.ts:129:      maxIterations: state.maxIterations,
+desktop_app/src/stores/runConfigStore.ts:130:      passingScore: state.passingScore,
+desktop_app/src/stores/runConfigStore.ts:131:      continueMode: state.continueMode,
+desktop_app/src/stores/runConfigStore.ts:135:      ...sanitizeRunConfig((persistedState as Partial<RunConfigValues>) ?? {}),
+desktop_app/src/stores/runConfigStore.ts:140:export function createRunConfigStore(deps: RunConfigStoreDeps = {}) {
+desktop_app/src/stores/runConfigStore.ts:141:  return create<RunConfigState>()(
+desktop_app/src/stores/runConfigStore.ts:142:    persist((set) => createRunConfigState(set), createPersistOptions(deps))
+desktop_app/src/stores/runConfigStore.ts:146:export const useRunConfigStore = createRunConfigStore();
+desktop_app/src/stores/runStore.ts:21:  maxIter?: number;
+desktop_app/src/stores/runStore.ts:22:  passingScore?: number;
+desktop_app/src/stores/runStore.ts:23:  continueMode?: boolean;
+desktop_app/src/stores/runStore.ts:240:            max_iter: _request.maxIter,
+desktop_app/src/stores/runStore.ts:241:            passing_score: _request.passingScore,
+desktop_app/src/stores/runStore.ts:242:            continue_mode: _request.continueMode,
+desktop_app/src/components/AgentSelector.tsx:86:export default function AgentSelector() {
+desktop_app/src/components/issueRunRequest.ts:1:import type { RunConfigState } from '../stores/runConfigStore';
+desktop_app/src/components/issueRunRequest.ts:6:  maxIter: number;
+desktop_app/src/components/issueRunRequest.ts:7:  passingScore: number;
+desktop_app/src/components/issueRunRequest.ts:8:  continueMode: boolean;
+desktop_app/src/components/issueRunRequest.ts:11:type RunConfigSnapshot = Pick<
+desktop_app/src/components/issueRunRequest.ts:12:  RunConfigState,
+desktop_app/src/components/issueRunRequest.ts:13:  'maxIterations' | 'passingScore' | 'continueMode'
+desktop_app/src/components/issueRunRequest.ts:19:  runConfig: RunConfigSnapshot
+desktop_app/src/components/issueRunRequest.ts:24:    maxIter: runConfig.maxIterations,
+desktop_app/src/components/issueRunRequest.ts:25:    passingScore: runConfig.passingScore,
+desktop_app/src/components/issueRunRequest.ts:26:    continueMode: runConfig.continueMode,
+desktop_app/src/components/RunConfigPanel.tsx:3:  useRunConfigStore,
+desktop_app/src/components/RunConfigPanel.tsx:11:} from '../stores/runConfigStore';
+desktop_app/src/components/RunConfigPanel.tsx:73:interface RunConfigPanelProps {
+desktop_app/src/components/RunConfigPanel.tsx:77:    maxIterations: number;
+desktop_app/src/components/RunConfigPanel.tsx:78:    passingScore: number;
+desktop_app/src/components/RunConfigPanel.tsx:79:    continueMode: boolean;
+desktop_app/src/components/RunConfigPanel.tsx:83:export default function RunConfigPanel({
+desktop_app/src/components/RunConfigPanel.tsx:87:    maxIterations: DEFAULT_MAX_ITERATIONS,
+desktop_app/src/components/RunConfigPanel.tsx:88:    passingScore: DEFAULT_PASSING_SCORE,
+desktop_app/src/components/RunConfigPanel.tsx:89:    continueMode: DEFAULT_CONTINUE_MODE,
+desktop_app/src/components/RunConfigPanel.tsx:91:}: RunConfigPanelProps): JSX.Element {
+desktop_app/src/components/RunConfigPanel.tsx:107:    maxIterations,
+desktop_app/src/components/RunConfigPanel.tsx:108:    passingScore,
+desktop_app/src/components/RunConfigPanel.tsx:109:    continueMode,
+desktop_app/src/components/RunConfigPanel.tsx:114:  } = useRunConfigStore();
+desktop_app/src/components/RunConfigPanel.tsx:117:    maxIterations === defaultConfig.maxIterations &&
+desktop_app/src/components/RunConfigPanel.tsx:118:    passingScore === defaultConfig.passingScore &&
+desktop_app/src/components/RunConfigPanel.tsx:119:    continueMode === defaultConfig.continueMode;
+desktop_app/src/components/RunConfigPanel.tsx:149:                htmlFor="maxIterations"
+desktop_app/src/components/RunConfigPanel.tsx:161:                id="maxIterations"
+desktop_app/src/components/RunConfigPanel.tsx:164:                value={maxIterations}
+desktop_app/src/components/RunConfigPanel.tsx:172:                value={maxIterations}
+desktop_app/src/components/RunConfigPanel.tsx:185:                htmlFor="passingScore"
+desktop_app/src/components/RunConfigPanel.tsx:197:                id="passingScore"
+desktop_app/src/components/RunConfigPanel.tsx:200:                value={passingScore}
+desktop_app/src/components/RunConfigPanel.tsx:208:                value={passingScore}
+desktop_app/src/components/RunConfigPanel.tsx:222:                  htmlFor="continueMode"
+desktop_app/src/components/RunConfigPanel.tsx:233:                id="continueMode"
+desktop_app/src/components/RunConfigPanel.tsx:235:                aria-checked={continueMode}
+desktop_app/src/components/RunConfigPanel.tsx:236:                onClick={() => setContinueMode(!continueMode)}
+desktop_app/src/components/RunConfigPanel.tsx:238:                  continueMode ? 'bg-blue-600' : 'bg-gray-200'
+desktop_app/src/components/RunConfigPanel.tsx:243:                    continueMode ? 'translate-x-5' : 'translate-x-0'
+
+codex
+仓库里已经存在 `runConfigStore`、`RunConfigPanel` 和对应测试，说明这次不是从零实现，而是要核对这些内容是否完整、是否还有遗漏，再做针对性修补。
+exec
+/bin/zsh -lc "sed -n '1,260p' desktop_app/src/stores/runConfigStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { create, type StateCreator } from 'zustand';
+import {
+  createJSONStorage,
+  persist,
+  type PersistOptions,
+  type StateStorage,
+} from 'zustand/middleware';
+
+export const RUN_CONFIG_STORE_KEY = 'autoresearch-run-config';
+
+export const MIN_MAX_ITERATIONS = 1;
+export const MAX_MAX_ITERATIONS = 50;
+export const DEFAULT_MAX_ITERATIONS = 16;
+
+export const MIN_PASSING_SCORE = 1;
+export const MAX_PASSING_SCORE = 100;
+export const DEFAULT_PASSING_SCORE = 85;
+
+export const DEFAULT_CONTINUE_MODE = false;
+
+interface RunConfigValues {
+  maxIterations: number;
+  passingScore: number;
+  continueMode: boolean;
+}
+
+export interface RunConfigState extends RunConfigValues {
+  setMaxIterations: (value: number) => void;
+  setPassingScore: (value: number) => void;
+  setContinueMode: (value: boolean) => void;
+  reset: () => void;
+}
+
+interface RunConfigStoreDeps {
+  storage?: StateStorage;
+}
+
+const DEFAULT_CONFIG: RunConfigValues = {
+  maxIterations: DEFAULT_MAX_ITERATIONS,
+  passingScore: DEFAULT_PASSING_SCORE,
+  continueMode: DEFAULT_CONTINUE_MODE,
+};
+
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return clamp(value, min, max);
+}
+
+function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigValues {
+  return {
+    maxIterations: sanitizeNumber(
+      values.maxIterations,
+      DEFAULT_MAX_ITERATIONS,
+      MIN_MAX_ITERATIONS,
+      MAX_MAX_ITERATIONS
+    ),
+    passingScore: sanitizeNumber(
+      values.passingScore,
+      DEFAULT_PASSING_SCORE,
+      MIN_PASSING_SCORE,
+      MAX_PASSING_SCORE
+    ),
+    continueMode: sanitizeBoolean(values.continueMode, DEFAULT_CONTINUE_MODE),
+  };
+}
+
+function createRunConfigState(
+  set: Parameters<StateCreator<RunConfigState>>[0]
+): RunConfigState {
+  return {
+    ...DEFAULT_CONFIG,
+    setMaxIterations: (value) => {
+      set((state) => ({
+        maxIterations: sanitizeNumber(
+          value,
+          state.maxIterations,
+          MIN_MAX_ITERATIONS,
+          MAX_MAX_ITERATIONS
+        ),
+      }));
+    },
+    setPassingScore: (value) => {
+      set((state) => ({
+        passingScore: sanitizeNumber(
+          value,
+          state.passingScore,
+          MIN_PASSING_SCORE,
+          MAX_PASSING_SCORE
+        ),
+      }));
+    },
+    setContinueMode: (value) => {
+      set((state) => ({
+        continueMode: sanitizeBoolean(value, state.continueMode),
+      }));
+    },
+    reset: () => {
+      set({ ...DEFAULT_CONFIG });
+    },
+  };
+}
+
+function createPersistOptions(
+  deps: RunConfigStoreDeps
+): PersistOptions<RunConfigState, RunConfigValues> {
+  return {
+    name: RUN_CONFIG_STORE_KEY,
+    storage: createJSONStorage(() =>
+      deps.storage ?? (typeof localStorage === 'undefined' ? noopStorage : localStorage)
+    ),
+    partialize: (state) => ({
+      maxIterations: state.maxIterations,
+      passingScore: state.passingScore,
+      continueMode: state.continueMode,
+    }),
+    merge: (persistedState, currentState) => ({
+      ...currentState,
+      ...sanitizeRunConfig((persistedState as Partial<RunConfigValues>) ?? {}),
+    }),
+  };
+}
+
+export function createRunConfigStore(deps: RunConfigStoreDeps = {}) {
+  return create<RunConfigState>()(
+    persist((set) => createRunConfigState(set), createPersistOptions(deps))
+  );
+}
+
+export const useRunConfigStore = createRunConfigStore();
+
+exec
+/bin/zsh -lc "sed -n '1,320p' desktop_app/src/components/RunConfigPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { useState, type JSX } from 'react';
+import {
+  useRunConfigStore,
+  DEFAULT_CONTINUE_MODE,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  MIN_MAX_ITERATIONS,
+  MAX_MAX_ITERATIONS,
+  MIN_PASSING_SCORE,
+  MAX_PASSING_SCORE,
+} from '../stores/runConfigStore';
+
+function ChevronDownIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 9l-7 7-7-7"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+    </svg>
+  );
+}
+
+function ResetIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+  );
+}
+
+interface RunConfigPanelProps {
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
+  defaultConfig?: {
+    maxIterations: number;
+    passingScore: number;
+    continueMode: boolean;
+  };
+}
+
+export default function RunConfigPanel({
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
+  defaultConfig = {
+    maxIterations: DEFAULT_MAX_ITERATIONS,
+    passingScore: DEFAULT_PASSING_SCORE,
+    continueMode: DEFAULT_CONTINUE_MODE,
+  },
+}: RunConfigPanelProps): JSX.Element {
+  const [internalCollapsed, setInternalCollapsed] = useState(true);
+
+  const isControlled = controlledCollapsed !== undefined;
+  const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+
+  const toggleCollapse = () => {
+    const nextCollapsed = !collapsed;
+    if (isControlled && onCollapsedChange) {
+      onCollapsedChange(nextCollapsed);
+    } else {
+      setInternalCollapsed(nextCollapsed);
+    }
+  };
+
+  const {
+    maxIterations,
+    passingScore,
+    continueMode,
+    setMaxIterations,
+    setPassingScore,
+    setContinueMode,
+    reset,
+  } = useRunConfigStore();
+
+  const isDefault =
+    maxIterations === defaultConfig.maxIterations &&
+    passingScore === defaultConfig.passingScore &&
+    continueMode === defaultConfig.continueMode;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <button
+        type="button"
+        onClick={toggleCollapse}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <SettingsIcon className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">运行参数配置</span>
+          {!isDefault && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              已修改
+            </span>
+          )}
+        </div>
+        <ChevronDownIcon
+          className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+            collapsed ? '' : 'rotate-180'
+          }`}
+        />
+      </button>
+
+      {!collapsed && (
+        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+          <div className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label
+                htmlFor="maxIterations"
+                className="text-sm font-medium text-gray-700"
+              >
+                最大迭代次数
+              </label>
+              <span className="text-xs text-gray-500">
+                {MIN_MAX_ITERATIONS}-{MAX_MAX_ITERATIONS}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                id="maxIterations"
+                min={MIN_MAX_ITERATIONS}
+                max={MAX_MAX_ITERATIONS}
+                value={maxIterations}
+                onChange={(e) => setMaxIterations(Number(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <input
+                type="number"
+                min={MIN_MAX_ITERATIONS}
+                max={MAX_MAX_ITERATIONS}
+                value={maxIterations}
+                onChange={(e) => setMaxIterations(Number(e.target.value))}
+                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              每个任务最多执行的迭代次数（默认 {DEFAULT_MAX_ITERATIONS}）
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label
+                htmlFor="passingScore"
+                className="text-sm font-medium text-gray-700"
+              >
+                通过分数
+              </label>
+              <span className="text-xs text-gray-500">
+                {MIN_PASSING_SCORE}-{MAX_PASSING_SCORE}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                id="passingScore"
+                min={MIN_PASSING_SCORE}
+                max={MAX_PASSING_SCORE}
+                value={passingScore}
+                onChange={(e) => setPassingScore(Number(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <input
+                type="number"
+                min={MIN_PASSING_SCORE}
+                max={MAX_PASSING_SCORE}
+                value={passingScore}
+                onChange={(e) => setPassingScore(Number(e.target.value))}
+                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              审核评分达到此分数才算通过（默认 {DEFAULT_PASSING_SCORE}）
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label
+                  htmlFor="continueMode"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  继续模式
+                </label>
+                <p className="text-xs text-gray-500">
+                  从上次中断的地方继续执行
+                </p>
+              </div>
+              <button
+                type="button"
+                id="continueMode"
+                role="switch"
+                aria-checked={continueMode}
+                onClick={() => setContinueMode(!continueMode)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  continueMode ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    continueMode ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={reset}
+              disabled={isDefault}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ResetIcon className="h-4 w-4" />
+              重置为默认值
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/tests/runConfigStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/tests/issueRunRequest.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  createRunConfigStore,
+  DEFAULT_CONTINUE_MODE,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  RUN_CONFIG_STORE_KEY,
+  sanitizeRunConfig,
+} from '../src/stores/runConfigStore.ts';
+
+function createMemoryStorage(initialState = {}) {
+  const data = new Map(Object.entries(initialState));
+
+  return {
+    getItem: (name) => data.get(name) ?? null,
+    setItem: (name, value) => {
+      data.set(name, value);
+    },
+    removeItem: (name) => {
+      data.delete(name);
+    },
+    dump: () => Object.fromEntries(data.entries()),
+  };
+}
+
+test('runConfigStore exposes required default values', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+});
+
+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(0);
+  store.getState().setPassingScore(101);
+
+  assert.equal(store.getState().maxIterations, 1);
+  assert.equal(store.getState().passingScore, 100);
+
+  store.getState().setMaxIterations(99);
+  store.getState().setPassingScore(-20);
+
+  assert.equal(store.getState().maxIterations, 50);
+  assert.equal(store.getState().passingScore, 1);
+});
+
+test('runConfigStore persists values under the required storage key', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(24);
+  store.getState().setPassingScore(90);
+  store.getState().setContinueMode(true);
+
+  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
+
+  assert.deepEqual(persisted.state, {
+    maxIterations: 24,
+    passingScore: 90,
+    continueMode: true,
+  });
+});
+
+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+  const storage = createMemoryStorage({
+    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
+      state: {
+        maxIterations: -10,
+        passingScore: 999,
+        continueMode: true,
+      },
+      version: 0,
+    }),
+  });
+
+  const store = createRunConfigStore({ storage });
+  await store.persist.rehydrate();
+
+  assert.equal(store.getState().maxIterations, 1);
+  assert.equal(store.getState().passingScore, 100);
+  assert.equal(store.getState().continueMode, true);
+});
+
+test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(NaN);
+  store.getState().setPassingScore(Number.NaN);
+  store.getState().setContinueMode('true');
+
+  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+});
+
+test('sanitizeRunConfig rejects non-boolean and non-finite persisted values', () => {
+  const sanitized = sanitizeRunConfig({
+    maxIterations: Number.NaN,
+    passingScore: Infinity,
+    continueMode: 'false',
+  });
+
+  assert.deepEqual(sanitized, {
+    maxIterations: DEFAULT_MAX_ITERATIONS,
+    passingScore: DEFAULT_PASSING_SCORE,
+    continueMode: DEFAULT_CONTINUE_MODE,
+  });
+});
+
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildIssueRunRequest } from '../src/components/issueRunRequest.ts';
+
+test('buildIssueRunRequest maps the current run config into startRun payload', () => {
+  const request = buildIssueRunRequest('/tmp/project', 29, {
+    maxIterations: 24,
+    passingScore: 92,
+    continueMode: true,
+  });
+
+  assert.deepEqual(request, {
+    projectPath: '/tmp/project',
+    issueNumber: 29,
+    maxIter: 24,
+    passingScore: 92,
+    continueMode: true,
+  });
+});
+
+exec
+/bin/zsh -lc "sed -n '220,420p' desktop_app/src/components/IssueDetailPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+  onClose,
+  onRetry,
+}: IssueDetailPanelProps): JSX.Element {
+  const outputContainerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    status: runStatus,
+    activeIssueNumber,
+    outputLines,
+    exitCode,
+    error: runError,
+    isSupported,
+    startRun,
+    stopRun,
+    clearOutput,
+    clearError: clearRunError,
+  } = useRunStore();
+
+  const {
+    maxIterations,
+    passingScore,
+    continueMode,
+  } = useRunConfigStore();
+
+  useEffect(() => {
+    const container = outputContainerRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }, [outputLines, runStatus]);
+
+  if (!issue) {
+    return <EmptySelectionState />;
+  }
+
+  const isRunActive = runStatus === 'running' || runStatus === 'stopping';
+  const isCurrentIssueRunning = activeIssueNumber === issue.number && isRunActive;
+  const canStart =
+    Boolean(projectPath) && isSupported && !isRunActive;
+  const canStop = isSupported && isRunActive;
+  const outputText =
+    outputLines.length > 0 ? outputLines.join('\n') : '等待运行输出...';
+  const showRunMeta =
+    activeIssueNumber !== null &&
+    (isRunActive || runStatus === 'finished' || runStatus === 'error');
+
+  return (
+    <aside className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
+        <div className="min-w-0">
+          <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-blue-600">
+            Issue Detail
+          </p>
+          <h2 className="truncate text-lg font-semibold text-gray-900">
+            #{issue.number} {issue.title}
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {issue.state === 'OPEN' ? 'Open' : 'Closed'} · 创建于{' '}
+            {formatDateTime(issue.createdAt)}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+          aria-label="关闭 Issue 详情"
+        >
+          <CloseIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="space-y-6 p-5">
+        <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getRunStatusClass(runStatus)}`}
+                >
+                  {(runStatus === 'running' || runStatus === 'stopping') && (
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                  )}
+                  {getRunStatusLabel(runStatus)}
+                </span>
+                {showRunMeta && (
+                  <span className="text-xs text-gray-500">
+                    当前任务 #{activeIssueNumber}
+                    {exitCode !== null ? ` · exit code ${exitCode}` : ''}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                运行控制
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-gray-500">
+                选择当前 Issue 后可直接启动 `run.sh`，输出会实时显示在下方。
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  clearRunError();
+                  if (projectPath) {
+                    void startRun(
+                      buildIssueRunRequest(projectPath, issue.number, {
+                        maxIterations,
+                        passingScore,
+                        continueMode,
+                      })
+                    );
+                  }
+                }}
+                disabled={!canStart}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                <PlayIcon className="h-4 w-4" />
+                启动
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearRunError();
+                  void stopRun();
+                }}
+                disabled={!canStop}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <StopIcon className="h-4 w-4" />
+                停止
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <RunConfigPanel
+              defaultConfig={{
+                maxIterations: DEFAULT_MAX_ITERATIONS,
+                passingScore: DEFAULT_PASSING_SCORE,
+                continueMode: DEFAULT_CONTINUE_MODE,
+              }}
+            />
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <AgentSelector />
+            </div>
+          </div>
+
+          {!isSupported && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+            </div>
+          )}
+
+          {isSupported && !isCurrentIssueRunning && isRunActive && activeIssueNumber !== null && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              当前正在运行 Issue #{activeIssueNumber}，一次只能处理一个任务。
+            </div>
+          )}
+
+          {runError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {runError}
+            </div>
+          )}
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 text-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
+                <TerminalIcon className="h-4 w-4" />
+                实时输出
+              </div>
+              <button
+                type="button"
+                onClick={clearOutput}
+                disabled={outputLines.length === 0}
+                className="rounded-md border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                清空
+              </button>
+            </div>
+            <div
+              ref={outputContainerRef}
+              className="max-h-72 overflow-y-auto px-4 py-3"
+            >
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-6 text-gray-100">
+                {outputText}
+              </pre>
+            </div>
+          </div>
+        </section>
+
+        {isLoading ? (
+          <DetailSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={onRetry} />
+        ) : (
+          <>
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  描述
+
+codex
+现有实现看起来已经覆盖了大部分审核意见。我接着核对 Issue 文档里的验收条件和当前测试/类型检查结果，确认是否还有偏差，避免“看起来对、实际上漏了验收项”。
+exec
+/bin/zsh -lc "sed -n '90,135p' docs/desktop-app-prd-to-issues.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+P2 项目设置 (2)
+├── #24 项目目录选择与配置检测
+└── #25 Agent 选择器（拖拽排序）
+
+P3 GitHub 集成 (2)
+├── #26 GitHub Issue 列表展示
+└── #27 Issue 详情查看
+
+P4 进程控制 (2)
+├── #28 run.sh 进程管理（启动/停止）
+└── #29 运行参数配置 UI
+
+P5 实时监控 (4)
+├── #30 实时日志查看器
+├── #31 迭代进度与阶段展示
+├── #32 评分提取与展示
+└── #33 评分趋势折线图
+
+P6 配置 (1)
+└── #34 配置文件编辑器
+
+P7 历史 (2)
+├── #35 处理历史列表
+└── #36 历史详情查看与日志导出
+
+P8 PR (2)
+├── #37 PR 信息查看与 Diff 展示
+└── #38 PR 操作（合并/关闭）
+
+P9 系统集成 (2)
+├── #39 系统托盘集成
+└── #40 桌面通知系统
+```
+
+### 依赖关系图
+
+```
+#22 (脚手架)
+ ├── #23 (布局)
+ ├── #24 (目录选择) ── #26 (Issue 列表) ── #27 (Issue 详情)
+ │                 ── #34 (配置编辑器)
+ │                 ── #35 (历史列表) ── #36 (历史详情)
+ │                 ── #37 (PR 查看) ── #38 (PR 操作)
+ ├── #25 (Agent 选择器) ── #29 (参数 UI) ── #28 (进程管理)
+ │                                              ├── #30 (日志查看器)
+ │                                              ├── #31 (迭代进度) ── #32 (评分) ── #33 (趋势图)
+
+exec
+/bin/zsh -lc 'cat desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/components/issueRunRequest.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+# desktop_app/src
+
+## Architecture
+
+- **Router**: react-router-dom v7 with BrowserRouter wrapping in main.tsx, Routes/Route in App.tsx
+- **Layout**: AppShell component (three-column: Sidebar 240px | main flex-1 | RightPanel 300px collapsible)
+- **Pages**: Dashboard, Issues, History, Settings — each in src/pages/
+- **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
+- **Styling**: Tailwind CSS v4 via @tailwindcss/vite plugin (no tailwind.config.js)
+- **Theme**: Light theme (bg-white, text-gray-900, gray-50 for panels, gray-200 borders)
+
+## Conventions
+
+- Functional components with default exports
+- SVG icons inline in components (no icon library dependency)
+- NavLink for active route highlighting in navigation
+- Outlet pattern: AppShell renders `<Outlet />` for nested route content
+- Panel collapse state is local (useState), not global store
+
+## Dependencies
+
+- react-router-dom: routing (BrowserRouter, Routes, Route, NavLink, Outlet)
+- Tailwind CSS v4: utility-first styling via @tailwindcss/vite
+- zustand: global state management, stores in `src/stores/`
+
+## Testing
+
+- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
+- When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
+
+## State Management (Zustand)
+
+- Stores are in `src/stores/` directory
+- Use `create<State>()` from zustand to define stores
+- Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+- Async actions should handle loading and error states
+- Store pattern: state + actions + getters in one `create()` call
+- Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+- For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+- For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+- When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+
+## Tauri Integration
+
+- Import `invoke` from `@tauri-apps/api/core` to call Rust commands
+- Commands return `Promise<T>` and can throw errors
+- Pattern: `await invoke<ReturnType>('command_name', { args })`
+- Tauri event subscriptions should be centralized in a store when multiple UI components need the same lifecycle state; `run-output` / `run-exit` are handled in `src/stores/runStore.ts`
+
+## Pitfalls
+
+- Backend `get_recent_project` stores only a single path (not a list). Frontend `recentProjects` is kept as an array for future extensibility but currently holds at most one item.
+- When adding store actions that load a specific project by path, always call `detect_project_config` + `save_recent_project` + update state in one action — don't split across multiple calls.
+- In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+- `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+- Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
+
+## IssuesPage 约定
+
+### 组件结构
+
+- `IssueListItem`: 单个 Issue 列表项，显示编号、标题、标签、创建时间、处理状态
+- `LabelBadge`: 可点击的标签徽章，支持选中高亮状态
+- `SearchIcon`/`CheckIcon`/`IssueIcon`/`ProcessedIcon`/`ClearIcon`: 内联 SVG 图标组件
+- `EmptyState`: 空状态提示组件
+
+### 功能实现
+
+- **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+- **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+- **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
+- **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+- **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+- **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+- **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
+- **浏览器 fallback**: 非 Tauri 环境使用 mock issue 列表和 mock issue 详情，保证浏览器模式也能验证详情面板
+- **运行 fallback**: 非 Tauri 环境禁用启动/停止按钮，并明确提示“浏览器模式不支持运行任务”
+- **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
+- **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+- **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
+
+### 样式约定
+
+- Issue 列表项: `bg-white border-gray-200`，选中时 `bg-blue-50 border-blue-300`
+- 标签徽章: 使用 GitHub label 的 `color` 字段作为背景色，自动计算文字颜色（黑白）
+- 已处理标记: 绿色主题（`bg-green-50 text-green-700`）
+- 搜索框: `bg-white border-gray-200`，focus 时 `border-blue-500 ring-blue-500`
+- 空状态: 居中显示，灰色图标和文字
+- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+- Markdown 样式: 统一挂在 `.markdown-body`，代码块高亮 token 使用 `.md-token-*` 类名
+- Markdown 渲染: `react-markdown` 通过 Vite/TS alias 指向本地兼容实现 `src/vendor/react-markdown.tsx`，保证离线环境可构建；链接只允许 `http/https/mailto`
+- 骨架屏: 使用 `.skeleton-shimmer` 伪元素实现统一 shimmer 动效，避免在组件内重复写动画
+
+## DashboardPage 约定
+
+### 配置状态显示
+
+- 使用 `ConfigBadge` 组件显示 `.autoresearch/`、`program.md`、`agents/` 状态
+- `ConfigBadge` 使用勾/叉图标（`CheckIcon`/`XIcon`）替代圆点，符合验收条件要求
+- 配置完整时显示"配置完整"成功提示（绿色背景卡片）
+- 配置缺失时显示"是否从模板初始化"提示 UI（黄色背景卡片，仅 UI，不实际初始化）
+- 提示 UI 包含"稍后"和"了解"两个操作按钮
+
+### 组件结构
+
+- `WelcomeScreen`: 未选择项目时显示的欢迎页面
+- `ProjectInfoScreen`: 已选择项目时显示的项目信息页面
+- `ConfigBadge`: 配置状态徽章（用于显示单个配置项）
+- `InitTemplatePrompt`: 初始化模板提示（配置缺失时显示）
+- `ConfigCompleteNotification`: 配置完整提示（配置齐全时显示）
+- `CheckIcon`/`XIcon`: 状态图标组件
+
+### 样式约定
+
+- 配置存在：绿色主题（`bg-green-50`, `text-green-700`, `border-green-200`）
+- 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+- 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+ succeeded in 0ms:
+import type { RunConfigState } from '../stores/runConfigStore';
+
+export interface IssueRunRequest {
+  projectPath: string;
+  issueNumber: number;
+  maxIter: number;
+  passingScore: number;
+  continueMode: boolean;
+}
+
+type RunConfigSnapshot = Pick<
+  RunConfigState,
+  'maxIterations' | 'passingScore' | 'continueMode'
+>;
+
+export function buildIssueRunRequest(
+  projectPath: string,
+  issueNumber: number,
+  runConfig: RunConfigSnapshot
+): IssueRunRequest {
+  return {
+    projectPath,
+    issueNumber,
+    maxIter: runConfig.maxIterations,
+    passingScore: runConfig.passingScore,
+    continueMode: runConfig.continueMode,
+  };
+}
+
+exec
+/bin/zsh -lc 'cd desktop_app && npm run build' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cd desktop_app && npm test -- --runInBand' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 287ms:
+✔ buildIssueRunRequest maps the current run config into startRun payload (1.096583ms)
+(node:83811) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (1.913833ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.478208ms)
+✔ runConfigStore persists values under the required storage key (1.390791ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.124291ms)
+✔ runConfigStore ignores NaN updates and preserves the previous valid values (0.090042ms)
+✔ sanitizeRunConfig rejects non-boolean and non-finite persisted values (0.051291ms)
+✔ startRun clears unknown active issue when backend already has another task (1.375ms)
+✔ startRun restores previous running issue when stop/start race fails (0.996666ms)
+✔ initialize wires run events and caps output history (6.09425ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 165.02025
+
+ succeeded in 1603ms:
+vite v7.3.2 building client environment for production...
+transforming...
+✓ 68 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:  0.29 kB
+dist/assets/index-igj02-qi.css   35.15 kB │ gzip:  7.25 kB
+dist/assets/core-BEOw45JP.js      0.20 kB │ gzip:  0.15 kB
+dist/assets/event-DXqYWlmG.js     1.04 kB │ gzip:  0.58 kB
+dist/assets/index-Co1glO0k.js   287.05 kB │ gzip: 91.72 kB
+✓ built in 558ms
+
+codex
+测试已经通过；我在继续等前端构建结束，并准备把这次确认到的可复用约定补进目录级 `CLAUDE.md`。
+codex
+我发现一个实际的边界缺口：当前 store 只做范围裁剪，没有强制整数化，`type="number"` 仍可输入小数。Issue 里的参数语义是整数，后端 Rust 侧也是整数类型，所以我会把 store 和测试补到“范围校验 + 整数化”这一层。
+exec
+/bin/zsh -lc 'rg -n "passing_score|max_iter|continue_mode|StartRunRequest|struct .*Run|issue_number" desktop_app/src-tauri src-tauri run.sh -S' in /Users/chaoyuepan/ai/autoresearch
+ exited 2 in 0ms:
+rg: src-tauri: No such file or directory (os error 2)
+run.sh:7:#   ./run.sh [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] <issue_number> [max_iterations]
+run.sh:817:    echo "用法: $0 [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] <issue_number> [max_iterations]"
+run.sh:829:    echo "  issue_number     GitHub Issue 编号"
+run.sh:830:    echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
+run.sh:991:    local issue_number=$1
+run.sh:993:    log "获取 Issue #$issue_number 信息..."
+run.sh:995:    ISSUE_INFO=$(gh issue view $issue_number --json number,title,body,state,labels 2>&1)
+run.sh:998:        error "无法获取 Issue #$issue_number: $ISSUE_INFO"
+run.sh:1008:        error "Issue #$issue_number 状态为 ${ISSUE_STATE}，不是 OPEN"
+run.sh:1069:    local issue_number=$1
+run.sh:1073:        archive_old_workflows "$issue_number"
+run.sh:1076:    WORK_DIR="$PROJECT_ROOT/.autoresearch/workflows/issue-$issue_number"
+run.sh:1083:            log_console "⚠️ 未找到 Issue #$issue_number 的工作日志，回退为全新运行"
+run.sh:1092:# Issue #$issue_number 实现日志
+run.sh:1095:- Issue: #$issue_number - $ISSUE_TITLE
+run.sh:1134:    local issue_number=$1
+run.sh:1136:    BRANCH_NAME="feature/issue-$issue_number"
+run.sh:1157:    local issue_number=$1
+run.sh:1159:    log "规划阶段: 拆分 Issue #$issue_number 为子任务..."
+run.sh:1183:    local prompt="规划 GitHub Issue #$issue_number 的子任务拆分
+run.sh:1197:  \"issueNumber\": $issue_number,
+run.sh:1307:    local issue_number=$1
+run.sh:1333:        prompt="实现 GitHub Issue #$issue_number
+run.sh:1362:        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+run.sh:1411:    local issue_number=$1
+run.sh:1437:        prompt="实现 GitHub Issue #$issue_number
+run.sh:1466:        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+run.sh:1515:    local issue_number=$1
+run.sh:1541:        prompt="实现 GitHub Issue #$issue_number
+run.sh:1570:        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+run.sh:1621:    local issue_number=$1
+run.sh:1638:    local prompt="审核 Issue #$issue_number 的实现
+run.sh:1744:    local issue_number=$1
+run.sh:1761:    local prompt="审核 Issue #$issue_number 的实现
+run.sh:1839:    local issue_number=$1
+run.sh:1856:    local prompt="审核 Issue #$issue_number 的实现
+run.sh:1959:    local issue_number=$1
+run.sh:1976:        "$issue_number" \
+desktop_app/src-tauri/src/lib.rs:19:struct RunProcess {
+desktop_app/src-tauri/src/lib.rs:26:struct RunProcessState {
+desktop_app/src-tauri/src/lib.rs:156:fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> {
+desktop_app/src-tauri/src/lib.rs:214:    let processed_numbers = get_processed_issue_numbers(base)?;
+desktop_app/src-tauri/src/lib.rs:230:        get_processed_issue_numbers(base)
+desktop_app/src-tauri/src/lib.rs:240:fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
+desktop_app/src-tauri/src/lib.rs:242:        return format!("Issue #{issue_number} not found");
+desktop_app/src-tauri/src/lib.rs:250:async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+desktop_app/src-tauri/src/lib.rs:252:        get_issue_detail_sync(&project_path, issue_number)
+desktop_app/src-tauri/src/lib.rs:258:fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
+desktop_app/src-tauri/src/lib.rs:268:            &issue_number.to_string(),
+desktop_app/src-tauri/src/lib.rs:277:        return Err(map_issue_detail_command_error(issue_number, &stderr));
+desktop_app/src-tauri/src/lib.rs:286:struct StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:290:    issue_number: i64,
+desktop_app/src-tauri/src/lib.rs:292:    max_iter: Option<i32>,
+desktop_app/src-tauri/src/lib.rs:296:    passing_score: Option<i32>,
+desktop_app/src-tauri/src/lib.rs:298:    continue_mode: Option<bool>,
+desktop_app/src-tauri/src/lib.rs:303:fn build_run_args(request: &StartRunRequest) -> Vec<String> {
+desktop_app/src-tauri/src/lib.rs:316:    if request.continue_mode.unwrap_or(false) {
+desktop_app/src-tauri/src/lib.rs:320:    args.push(request.issue_number.to_string());
+desktop_app/src-tauri/src/lib.rs:322:    if let Some(max_iter) = request.max_iter {
+desktop_app/src-tauri/src/lib.rs:323:        args.push(max_iter.to_string());
+desktop_app/src-tauri/src/lib.rs:332:fn build_run_env_vars(request: &StartRunRequest) -> Vec<(&'static str, String)> {
+desktop_app/src-tauri/src/lib.rs:334:    if let Some(passing_score) = request.passing_score {
+desktop_app/src-tauri/src/lib.rs:335:        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+desktop_app/src-tauri/src/lib.rs:342:struct RunExitEvent {
+desktop_app/src-tauri/src/lib.rs:352:/// - `issue_number` -> positional argument
+desktop_app/src-tauri/src/lib.rs:353:/// - `max_iter` -> positional argument (after issue_number)
+desktop_app/src-tauri/src/lib.rs:355:/// - `passing_score` -> `PASSING_SCORE` environment variable
+desktop_app/src-tauri/src/lib.rs:356:/// - `continue_mode` -> `-c` flag
+desktop_app/src-tauri/src/lib.rs:362:async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<(), String> {
+desktop_app/src-tauri/src/lib.rs:569:async fn start_run(_app: tauri::AppHandle, _request: StartRunRequest) -> Result<(), String> {
+desktop_app/src-tauri/src/lib.rs:605:    use super::{build_run_args, build_run_env_vars, StartRunRequest};
+desktop_app/src-tauri/src/lib.rs:679:        let request = StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:681:            issue_number: 42,
+desktop_app/src-tauri/src/lib.rs:682:            max_iter: Some(10),
+desktop_app/src-tauri/src/lib.rs:684:            passing_score: Some(90),
+desktop_app/src-tauri/src/lib.rs:685:            continue_mode: Some(true),
+desktop_app/src-tauri/src/lib.rs:702:        let request = StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:704:            issue_number: 42,
+desktop_app/src-tauri/src/lib.rs:705:            max_iter: None,
+desktop_app/src-tauri/src/lib.rs:707:            passing_score: None,
+desktop_app/src-tauri/src/lib.rs:708:            continue_mode: None,
+desktop_app/src-tauri/src/lib.rs:723:        let request = StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:725:            issue_number: 42,
+desktop_app/src-tauri/src/lib.rs:726:            max_iter: None,
+desktop_app/src-tauri/src/lib.rs:728:            passing_score: None,
+desktop_app/src-tauri/src/lib.rs:729:            continue_mode: None,
+desktop_app/src-tauri/src/lib.rs:738:    fn build_run_args_continue_mode_defaults_false() {
+desktop_app/src-tauri/src/lib.rs:739:        let request = StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:741:            issue_number: 42,
+desktop_app/src-tauri/src/lib.rs:742:            max_iter: None,
+desktop_app/src-tauri/src/lib.rs:744:            passing_score: None,
+desktop_app/src-tauri/src/lib.rs:745:            continue_mode: None,
+desktop_app/src-tauri/src/lib.rs:754:    fn build_run_env_vars_includes_passing_score() {
+desktop_app/src-tauri/src/lib.rs:755:        let request = StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:757:            issue_number: 42,
+desktop_app/src-tauri/src/lib.rs:758:            max_iter: None,
+desktop_app/src-tauri/src/lib.rs:760:            passing_score: Some(95),
+desktop_app/src-tauri/src/lib.rs:761:            continue_mode: None,
+desktop_app/src-tauri/src/lib.rs:772:    fn build_run_env_vars_empty_when_no_passing_score() {
+desktop_app/src-tauri/src/lib.rs:773:        let request = StartRunRequest {
+desktop_app/src-tauri/src/lib.rs:775:            issue_number: 42,
+desktop_app/src-tauri/src/lib.rs:776:            max_iter: None,
+desktop_app/src-tauri/src/lib.rs:778:            passing_score: None,
+desktop_app/src-tauri/src/lib.rs:779:            continue_mode: None,
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M .autoresearch/workflows/issue-29/.last_score
+ M .autoresearch/workflows/issue-29/log.md
+?? .autoresearch/workflows/issue-29/iteration-6-codex.log
+
+基于审核反馈和现有实现核对后，主要剩余改进点是把运行参数约束收紧到整数语义，并补充相应测试与目录知识沉淀。
+  ✓ 核对 Issue #29 验收项与当前实现差异，确定需要修复的边界问题
+  → 修复运行参数 store/UI 的整数化与可访问性细节
+  • 补充并运行相关测试、构建验证
+  • 更新相关目录 CLAUDE.md，总结本次经验
+codex
+我现在开始改代码，范围是 `runConfigStore`、`RunConfigPanel`、对应测试，以及 `desktop_app/src/CLAUDE.md` 的可复用约定，不动用户已有的工作流日志。
+apply patch
+patch: completed
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+
+apply patch
+patch: completed
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+
+apply patch
+patch: completed
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+apply patch
+patch: completed
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+codex
+整数化约束和面板的可访问性细节已经补上。下一步跑测试、构建和 lint，确认这次收紧校验没有引入回归。
+exec
+/bin/zsh -lc 'cat desktop_app/package.json' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+{
+  "name": "desktop_app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.6.0",
+    "recharts": "^2.15.3",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^7.0.4"
+  }
+}
+
+exec
+/bin/zsh -lc 'cd desktop_app && npm test -- --runInBand' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cd desktop_app && npm run build' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 290ms:
+✔ buildIssueRunRequest maps the current run config into startRun payload (1.936709ms)
+(node:85852) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (1.006875ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.1695ms)
+✔ runConfigStore normalizes decimal values to integers before persisting (0.674083ms)
+✔ runConfigStore persists values under the required storage key (0.0965ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.083625ms)
+✔ runConfigStore rounds persisted decimal values during hydration (0.070583ms)
+✔ runConfigStore ignores NaN updates and preserves the previous valid values (0.085167ms)
+✔ sanitizeRunConfig rejects non-boolean and non-finite persisted values (0.0435ms)
+✔ startRun clears unknown active issue when backend already has another task (0.898166ms)
+✔ startRun restores previous running issue when stop/start race fails (0.699291ms)
+✔ initialize wires run events and caps output history (5.767375ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 154.468334
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+ succeeded in 1603ms:
+vite v7.3.2 building client environment for production...
+transforming...
+✓ 68 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:  0.29 kB
+dist/assets/index-igj02-qi.css   35.15 kB │ gzip:  7.25 kB
+dist/assets/core-BEOw45JP.js      0.20 kB │ gzip:  0.15 kB
+dist/assets/event-DXqYWlmG.js     1.04 kB │ gzip:  0.58 kB
+dist/assets/index-B3PN-TR_.js   287.23 kB │ gzip: 91.80 kB
+✓ built in 546ms
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+codex
+构建通过了。我再补一轮 `eslint`，这样这次自检就完整了。
+exec
+/bin/zsh -lc 'cd desktop_app && npm run lint' in /Users/chaoyuepan/ai/autoresearch
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+ succeeded in 732ms:
+  ✓ 核对 Issue #29 验收项与当前实现差异，确定需要修复的边界问题
+  ✓ 修复运行参数 store/UI 的整数化与可访问性细节
+  ✓ 补充并运行相关测试、构建验证
+  ✓ 更新相关目录 CLAUDE.md，总结本次经验
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+exec
+/bin/zsh -lc 'git diff --stat -- desktop_app/src/stores/runConfigStore.ts desktop_app/src/components/RunConfigPanel.tsx desktop_app/tests/runConfigStore.test.mjs desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'git diff -- desktop_app/src/stores/runConfigStore.ts desktop_app/src/components/RunConfigPanel.tsx desktop_app/tests/runConfigStore.test.mjs desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ desktop_app/src/CLAUDE.md                     |  2 ++
+ desktop_app/src/components/RunConfigPanel.tsx | 14 +++++++++-
+ desktop_app/src/stores/runConfigStore.ts      |  6 ++++-
+ desktop_app/tests/runConfigStore.test.mjs     | 39 +++++++++++++++++++++++++++
+ 4 files changed, 59 insertions(+), 2 deletions(-)
+
+ succeeded in 0ms:
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381ce..6929490 100644
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e754..20abb78 100644
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@ export default function RunConfigPanel({
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@ export default function RunConfigPanel({
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@ export default function RunConfigPanel({
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@ export default function RunConfigPanel({
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@ export default function RunConfigPanel({
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@ export default function RunConfigPanel({
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@ export default function RunConfigPanel({
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169..71246e7 100644
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@ function clamp(value: number, min: number, max: number): number {
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 7298496..747a9f6 100644
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@ test('runConfigStore clamps numeric setters to accepted ranges', () => {
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@ test('runConfigStore sanitizes persisted numeric values during hydration', async
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+codex
+## 实现报告
+
+### Issue
+- 编号: `#29`
+- 标题: `[desktop-app] 运行参数配置 UI`
+- 类型: `bugfix`
+
+### 任务清单
+- [x] 核对 Issue #29 验收项与当前实现差异
+- [x] 修复运行参数的整数语义与面板可访问性细节
+- [x] 补充 store 边界测试并完成构建验证
+- [x] 更新目录级 `CLAUDE.md` 沉淀可复用约定
+
+### 改动概述
+- 修改文件:
+  - [desktop_app/src/stores/runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts)
+  - [desktop_app/src/components/RunConfigPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx)
+  - [desktop_app/tests/runConfigStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs)
+  - [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md)
+- 新增文件: 无
+- 删除文件: 无
+- 代码行数: `+59 / -2`
+
+### 实现思路
+这轮没有重做 Issue #29 主体功能，而是针对审核反馈后的现有实现做边界收紧和自检补强。
+
+核心改动有两点。第一，`runConfigStore` 现在会在 setter 和持久化回填时统一把数值规范成整数，再做范围裁剪，避免 UI、localStorage 或程序化更新把小数传给后端整数参数。第二，`RunConfigPanel` 给折叠按钮补了 `aria-expanded` / `aria-controls`，并给数值输入明确加了 `step={1}` 和 `inputMode="numeric"`，让交互语义和实际约束保持一致。
+
+另外，我把这次确认下来的约定补进了 [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md)，方便后续迭代直接复用。
+
+### 测试情况
+- 测试文件:
+  - [desktop_app/tests/runConfigStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs)
+- 测试用例数: `12`
+- 覆盖场景:
+  - 默认值暴露正确
+  - setter 的范围裁剪
+  - 小数输入会被整数化后再持久化
+  - localStorage 回填时非法值会被清洗
+  - localStorage 回填时小数会被整数化
+  - `NaN` / `Infinity` / 错误布尔类型被拒绝
+  - run request 参数映射正确
+  - run store 的运行态恢复与输出上限逻辑
+
+### 自检执行
+- [x] `npm test -- --runInBand`
+- [x] `npm run build`
+- [x] `npm run lint`
+
+### 待确认问题
+- 无
+
+## Learnings
+
+- **模式**: 持久化的 Zustand store 如果承载后端参数，校验应放在 store 层统一做，不能只依赖 HTML 输入控件。
+- **踩坑**: `type="number"` 和滑块即使限制了范围，仍可能通过回填数据或程序调用引入小数；仅做 clamp 不够，需要整数化。
+- **经验**: 这类 UI 配置最好同时补三层保障: 输入控件语义、store 清洗、无浏览器运行时的轻量测试。
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index b8381cef4b482d183cf93625de9dc916fb08c1e7..692949053568ec55e0e3259c559b40edd7d62a04
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,6 +37,7 @@
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+@@ -71,6 +72,7 @@
+ - **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+ - **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+ - **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
++- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+ - **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+ - **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+ - **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+diff --git a/desktop_app/src/components/RunConfigPanel.tsx b/desktop_app/src/components/RunConfigPanel.tsx
+index fa2e75484b72511aade263926da78f4eb59d57b8..20abb7872d282b6afac0292f49d07550fbcc6bad
+--- a/desktop_app/src/components/RunConfigPanel.tsx
++++ b/desktop_app/src/components/RunConfigPanel.tsx
+@@ -90,6 +90,7 @@
+   },
+ }: RunConfigPanelProps): JSX.Element {
+   const [internalCollapsed, setInternalCollapsed] = useState(true);
++  const contentId = 'run-config-panel-content';
+ 
+   const isControlled = controlledCollapsed !== undefined;
+   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+@@ -123,6 +124,8 @@
+       <button
+         type="button"
+         onClick={toggleCollapse}
++        aria-expanded={!collapsed}
++        aria-controls={contentId}
+         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+       >
+         <div className="flex items-center gap-2">
+@@ -142,7 +145,10 @@
+       </button>
+ 
+       {!collapsed && (
+-        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
++        <div
++          id={contentId}
++          className="px-4 pb-4 space-y-4 border-t border-gray-100"
++        >
+           <div className="pt-4">
+             <div className="flex items-center justify-between mb-2">
+               <label
+@@ -161,6 +167,7 @@
+                 id="maxIterations"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -169,6 +176,8 @@
+                 type="number"
+                 min={MIN_MAX_ITERATIONS}
+                 max={MAX_MAX_ITERATIONS}
++                step={1}
++                inputMode="numeric"
+                 value={maxIterations}
+                 onChange={(e) => setMaxIterations(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+@@ -197,6 +206,7 @@
+                 id="passingScore"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+@@ -205,6 +215,8 @@
+                 type="number"
+                 min={MIN_PASSING_SCORE}
+                 max={MAX_PASSING_SCORE}
++                step={1}
++                inputMode="numeric"
+                 value={passingScore}
+                 onChange={(e) => setPassingScore(Number(e.target.value))}
+                 className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+index 974d169e44267195493c4eceb311a1e5100a202e..71246e7e2758932298229532b37a30d52ca19784
+--- a/desktop_app/src/stores/runConfigStore.ts
++++ b/desktop_app/src/stores/runConfigStore.ts
+@@ -51,12 +51,16 @@
+   return Math.min(Math.max(value, min), max);
+ }
+ 
++function normalizeInteger(value: number): number {
++  return Math.round(value);
++}
++
+ function sanitizeNumber(value: unknown, fallback: number, min: number, max: number): number {
+   if (typeof value !== 'number' || !Number.isFinite(value)) {
+     return fallback;
+   }
+ 
+-  return clamp(value, min, max);
++  return clamp(normalizeInteger(value), min, max);
+ }
+ 
+ function sanitizeBoolean(value: unknown, fallback: boolean): boolean {
+diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+index 729849615b5e17cd2f0d36b53105039a6f27ab04..747a9f635c6ccd95dfc964349126ee501aef4ddc
+--- a/desktop_app/tests/runConfigStore.test.mjs
++++ b/desktop_app/tests/runConfigStore.test.mjs
+@@ -50,6 +50,25 @@
+   assert.equal(store.getState().passingScore, 1);
+ });
+ 
++test('runConfigStore normalizes decimal values to integers before persisting', () => {
++  const storage = createMemoryStorage();
++  const store = createRunConfigStore({ storage });
++
++  store.getState().setMaxIterations(12.6);
++  store.getState().setPassingScore(84.4);
++
++  assert.equal(store.getState().maxIterations, 13);
++  assert.equal(store.getState().passingScore, 84);
++
++  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
++
++  assert.deepEqual(persisted.state, {
++    maxIterations: 13,
++    passingScore: 84,
++    continueMode: DEFAULT_CONTINUE_MODE,
++  });
++});
++
+ test('runConfigStore persists values under the required storage key', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+@@ -87,6 +106,26 @@
+   assert.equal(store.getState().continueMode, true);
+ });
+ 
++test('runConfigStore rounds persisted decimal values during hydration', async () => {
++  const storage = createMemoryStorage({
++    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
++      state: {
++        maxIterations: 8.8,
++        passingScore: 90.2,
++        continueMode: false,
++      },
++      version: 0,
++    }),
++  });
++
++  const store = createRunConfigStore({ storage });
++  await store.persist.rehydrate();
++
++  assert.equal(store.getState().maxIterations, 9);
++  assert.equal(store.getState().passingScore, 90);
++  assert.equal(store.getState().continueMode, false);
++});
++
+ test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
+   const storage = createMemoryStorage();
+   const store = createRunConfigStore({ storage });
+
+tokens used
+45,125
+## 实现报告
+
+### Issue
+- 编号: `#29`
+- 标题: `[desktop-app] 运行参数配置 UI`
+- 类型: `bugfix`
+
+### 任务清单
+- [x] 核对 Issue #29 验收项与当前实现差异
+- [x] 修复运行参数的整数语义与面板可访问性细节
+- [x] 补充 store 边界测试并完成构建验证
+- [x] 更新目录级 `CLAUDE.md` 沉淀可复用约定
+
+### 改动概述
+- 修改文件:
+  - [desktop_app/src/stores/runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts)
+  - [desktop_app/src/components/RunConfigPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx)
+  - [desktop_app/tests/runConfigStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs)
+  - [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md)
+- 新增文件: 无
+- 删除文件: 无
+- 代码行数: `+59 / -2`
+
+### 实现思路
+这轮没有重做 Issue #29 主体功能，而是针对审核反馈后的现有实现做边界收紧和自检补强。
+
+核心改动有两点。第一，`runConfigStore` 现在会在 setter 和持久化回填时统一把数值规范成整数，再做范围裁剪，避免 UI、localStorage 或程序化更新把小数传给后端整数参数。第二，`RunConfigPanel` 给折叠按钮补了 `aria-expanded` / `aria-controls`，并给数值输入明确加了 `step={1}` 和 `inputMode="numeric"`，让交互语义和实际约束保持一致。
+
+另外，我把这次确认下来的约定补进了 [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md)，方便后续迭代直接复用。
+
+### 测试情况
+- 测试文件:
+  - [desktop_app/tests/runConfigStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs)
+- 测试用例数: `12`
+- 覆盖场景:
+  - 默认值暴露正确
+  - setter 的范围裁剪
+  - 小数输入会被整数化后再持久化
+  - localStorage 回填时非法值会被清洗
+  - localStorage 回填时小数会被整数化
+  - `NaN` / `Infinity` / 错误布尔类型被拒绝
+  - run request 参数映射正确
+  - run store 的运行态恢复与输出上限逻辑
+
+### 自检执行
+- [x] `npm test -- --runInBand`
+- [x] `npm run build`
+- [x] `npm run lint`
+
+### 待确认问题
+- 无
+
+## Learnings
+
+- **模式**: 持久化的 Zustand store 如果承载后端参数，校验应放在 store 层统一做，不能只依赖 HTML 输入控件。
+- **踩坑**: `type="number"` 和滑块即使限制了范围，仍可能通过回填数据或程序调用引入小数；仅做 clamp 不够，需要整数化。
+- **经验**: 这类 UI 配置最好同时补三层保障: 输入控件语义、store 清洗、无浏览器运行时的轻量测试。

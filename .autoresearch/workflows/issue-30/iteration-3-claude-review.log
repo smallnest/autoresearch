@@ -1,0 +1,165 @@
+Confirmed: `buildLogEntries(rawText)` is called again at line 426 on every render without memoization.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #30
+- 标题: [desktop-app] 实时日志查看器
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 82/100**
+
+整体实现质量较好，后端 Rust 代码结构清晰、安全性到位（路径遍历防护、文件名验证），前端 Zustand store 的可测试性设计（依赖注入工厂模式）和状态保持逻辑处理得当。但存在几个需要修复的问题：缺少 Issue 要求的搜索高亮功能、缺少 5000 行日志截断保护、`buildLogEntries` 在 footer 中重复调用导致性能问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少搜索关键词高亮
+
+**位置**: `desktop_app/src/components/LogViewer.tsx:405`
+
+**问题描述**:
+Issue 验收条件明确要求"支持关键词搜索（高亮匹配项）"。当前实现仅通过 `filterLogEntries` 过滤日志行，但搜索匹配的关键词没有在文本中高亮显示。
+
+**代码片段**:
+```tsx
+<span className={`whitespace-pre-wrap break-words ${lineClassName(entry.level)}`}>
+  {entry.text || ' '}
+</span>
+```
+
+**建议修复**:
+添加一个 `HighlightedText` 组件，将匹配的搜索词用 `<mark>` 或带背景色的 `<span>` 包裹：
+```tsx
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text || ' '}</>;
+  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, 'gi'));
+  return <>{parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} className="bg-yellow-400/40 text-inherit">{part}</mark>
+      : part
+  )}</>;
+}
+```
+
+**原因**: 这是 Issue 的明确验收条件之一，缺少此功能不满足需求。
+
+#### 问题 2: 缺少 5000 行日志截断保护
+
+**位置**: `desktop_app/src/stores/logViewerStore.ts:126-136`
+
+**问题描述**:
+Issue 验收条件要求"日志量大时只保留最近 5000 行，防止内存溢出"。`runStore` 有 2000 行上限保护实时输出，但 `logViewerStore` 对从文件加载的日志内容（`sourceContents`）没有行数限制。如果工作流日志文件非常大（如数万行的 terminal.log），`buildLogEntries` 会一次性解析全部行，可能导致前端内存问题。
+
+**建议修复**:
+在 `buildLogEntries` 或 `read_issue_log_content_sync` 中加入截断保护：
+```ts
+const MAX_LOG_LINES = 5000;
+export function buildLogEntries(text: string): LogEntry[] {
+  if (!text) return [];
+  const lines = text.split(/\r?\n/);
+  const start = Math.max(0, lines.length - MAX_LOG_LINES);
+  return lines.slice(start).map((line, index) => ({
+    lineNumber: start + index + 1,
+    text: line,
+    level: classifyLogLevel(line),
+  }));
+}
+```
+
+**原因**: 这是 Issue 的明确验收条件，大日志文件无截断保护会导致浏览器卡顿或崩溃。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: `buildLogEntries(rawText)` 在 footer 中重复计算
+
+**位置**: `desktop_app/src/components/LogViewer.tsx:426`
+
+**问题描述**:
+footer 中调用 `buildLogEntries(rawText).length` 在每次渲染时重新解析全部日志文本。line 207 已经通过 `useMemo` 计算了 `visibleEntries`，但总行数没有被缓存。
+
+**代码片段**:
+```tsx
+<span>
+  显示 {visibleEntries.length} / {buildLogEntries(rawText).length} 行
+</span>
+```
+
+**建议修复**:
+将 `buildLogEntries` 的结果也 memo 化，或者直接用行数统计代替：
+```tsx
+const totalEntries = useMemo(() => buildLogEntries(rawText), [rawText]);
+const visibleEntries = useMemo(
+  () => filterLogEntries(totalEntries, searchQuery, levelFilters),
+  [totalEntries, searchQuery, levelFilters]
+);
+// footer:
+显示 {visibleEntries.length} / {totalEntries.length} 行
+```
+
+**原因**: 日志量大时，重复 split + map 操作会造成不必要的 GC 压力和帧率下降。
+
+#### 问题 4: React key 使用 lineNumber + text 拼接可能不唯一
+
+**位置**: `desktop_app/src/components/LogViewer.tsx:399`
+
+**问题描述**:
+`key={\`${entry.lineNumber}-${entry.text}\`}` 在同一文件中如果出现重复行（日志中很常见，如空行或重复输出），会产生重复 key。
+
+**建议修复**:
+直接使用 `entry.lineNumber` 作为 key（在同一个日志文件中行号是唯一的）：
+```tsx
+key={entry.lineNumber}
+```
+
+**原因**: 重复 key 会导致 React 渲染行为异常，可能丢失 DOM 状态。
+
+---
+
+### 建议改进 (可选)
+
+- **轮询间隔可配置**: 当前源列表和内容都以 1500ms 轮询，建议在非运行状态下降低频率（如 5s），减少不必要的文件系统读取。
+- **大文件警告**: 当 `sizeBytes` 超过阈值时（如 >1MB），可考虑在 UI 中提示用户文件较大，或在后端做分页读取。
+- **`classifyLogLevel` 误判风险**: 当前按关键词（`error`、`failed` 等）分级可能导致误判，例如 "error handling improved" 会被标记为 error 级别。可考虑优先匹配 `[ERROR]`、`[WARN]` 等带方括号的标准日志格式。
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 权重 | 加权分 | 说明 |
+|------|------|------|--------|------|
+| 正确性 | 70 | 35% | 24.5 | 缺少搜索高亮和 5000 行截断两项验收条件 |
+| 测试质量 | 90 | 25% | 22.5 | 前端 6 个 store 测试 + 后端 18 个 Rust 测试，覆盖核心逻辑、排序、路径遍历防护等 |
+| 代码质量 | 90 | 20% | 18.0 | 结构清晰，依赖注入模式良好，但有重复计算问题 |
+| 安全性 | 95 | 10% | 9.5 | 路径遍历防护完备，`source_id` 验证严格 |
+| 性能 | 75 | 10% | 7.5 | `buildLogEntries` footer 重复计算，无日志截断保护 |
+| **总分** | | | **82.0** | |
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 实现搜索关键词高亮功能（验收条件要求）
+2. 添加 5000 行日志截断保护（验收条件要求）
+3. 修复 `buildLogEntries` 在 footer 的重复调用
+4. 修正 React key 为 `entry.lineNumber`
+
+---
+
+## Learnings
+
+- **模式**: `logViewerStore` 使用工厂函数 `createLogViewerStore(overrides)` 注入 `isTauri` 和 `invoke` 依赖，使得 Node.js 环境可以直接测试 Zustand store 逻辑，无需浏览器运行时。这与 `runStore` 和 `runConfigStore` 的模式一致。
+- **踩坑**: Issue 验收条件中的"高亮匹配项"和"5000 行限制"容易被忽略——搜索过滤（filter）和搜索高亮（highlight）是两个不同的功能。
+- **经验**: 后端 Rust 的日志源排序逻辑（`sort_log_sources`）通过 `iteration_number()` 解析数字前缀实现自然排序，避免了字典序将 `iteration-10` 排在 `iteration-2` 前面的问题——这是一个值得在 CLAUDE.md 中记录的约定。

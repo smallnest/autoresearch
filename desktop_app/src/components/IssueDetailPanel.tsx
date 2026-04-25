@@ -1,4 +1,4 @@
-import { useEffect, useRef, type JSX } from 'react';
+import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { formatDateTime, GhIssue, IssueDetail } from '../stores/issueStore';
 import { useRunStore } from '../stores/runStore';
@@ -11,6 +11,7 @@ import {
 import RunConfigPanel from './RunConfigPanel';
 import AgentSelector from './AgentSelector';
 import { buildIssueRunRequest } from './issueRunRequest';
+import LogViewer from './LogViewer';
 
 interface IssueDetailPanelProps {
   issue: GhIssue | null;
@@ -80,25 +81,6 @@ function StopIcon({ className }: { className?: string }): JSX.Element {
       aria-hidden="true"
     >
       <rect x="6" y="6" width="12" height="12" rx="2" />
-    </svg>
-  );
-}
-
-function TerminalIcon({ className }: { className?: string }): JSX.Element {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8 9l3 3-3 3m5 0h3M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-      />
     </svg>
   );
 }
@@ -220,17 +202,14 @@ function IssueDetailPanel({
   onClose,
   onRetry,
 }: IssueDetailPanelProps): JSX.Element {
-  const outputContainerRef = useRef<HTMLDivElement | null>(null);
   const {
     status: runStatus,
     activeIssueNumber,
-    outputLines,
     exitCode,
     error: runError,
     isSupported,
     startRun,
     stopRun,
-    clearOutput,
     clearError: clearRunError,
   } = useRunStore();
 
@@ -239,14 +218,6 @@ function IssueDetailPanel({
     passingScore,
     continueMode,
   } = useRunConfigStore();
-
-  useEffect(() => {
-    const container = outputContainerRef.current;
-    if (!container) {
-      return;
-    }
-    container.scrollTop = container.scrollHeight;
-  }, [outputLines, runStatus]);
 
   if (!issue) {
     return <EmptySelectionState />;
@@ -257,8 +228,6 @@ function IssueDetailPanel({
   const canStart =
     Boolean(projectPath) && isSupported && !isRunActive;
   const canStop = isSupported && isRunActive;
-  const outputText =
-    outputLines.length > 0 ? outputLines.join('\n') : '等待运行输出...';
   const showRunMeta =
     activeIssueNumber !== null &&
     (isRunActive || runStatus === 'finished' || runStatus === 'error');
@@ -382,30 +351,7 @@ function IssueDetailPanel({
             </div>
           )}
 
-          <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 text-gray-100">
-            <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
-                <TerminalIcon className="h-4 w-4" />
-                实时输出
-              </div>
-              <button
-                type="button"
-                onClick={clearOutput}
-                disabled={outputLines.length === 0}
-                className="rounded-md border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                清空
-              </button>
-            </div>
-            <div
-              ref={outputContainerRef}
-              className="max-h-72 overflow-y-auto px-4 py-3"
-            >
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-6 text-gray-100">
-                {outputText}
-              </pre>
-            </div>
-          </div>
+          <LogViewer issueNumber={issue.number} projectPath={projectPath} />
         </section>
 
         {isLoading ? (

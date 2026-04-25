@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio as StdStdio;
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 
 use tauri::Emitter;
 use tokio::sync::Mutex;
@@ -94,6 +95,24 @@ struct GhComment {
 struct IssueDetail {
     body: String,
     comments: Vec<GhComment>,
+}
+
+/// Metadata for a workflow log source under `.autoresearch/workflows/issue-N/`.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct IssueLogSource {
+    id: String,
+    label: String,
+    kind: String,
+    updated_at: Option<String>,
+    size_bytes: u64,
+}
+
+/// The full text content for a single workflow log source.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct IssueLogContent {
+    source_id: String,
+    text: String,
+    updated_at: Option<String>,
 }
 
 /// Result for the list_issues command, including processed status info.
@@ -245,6 +264,142 @@ fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
     format!("gh issue view failed: {}", stderr.trim())
 }
 
+fn workflow_issue_dir(project_path: &str, issue_number: i64) -> Result<std::path::PathBuf, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let issue_dir = base
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    Ok(issue_dir)
+}
+
+fn classify_log_source(filename: &str) -> (&'static str, String) {
+    match filename {
+        "terminal.log" => ("terminal", "终端日志".to_string()),
+        "log.md" => ("summary", "工作流摘要".to_string()),
+        _ if filename.starts_with("iteration-") => ("iteration", filename.to_string()),
+        _ => ("file", filename.to_string()),
+    }
+}
+
+fn iteration_number(filename: &str) -> Option<i32> {
+    filename
+        .strip_prefix("iteration-")
+        .and_then(|rest| rest.split('-').next())
+        .and_then(|value| value.parse::<i32>().ok())
+}
+
+fn sort_log_sources(left: &IssueLogSource, right: &IssueLogSource) -> std::cmp::Ordering {
+    fn rank(kind: &str) -> i32 {
+        match kind {
+            "terminal" => 0,
+            "summary" => 1,
+            "iteration" => 2,
+            _ => 3,
+        }
+    }
+
+    rank(&left.kind)
+        .cmp(&rank(&right.kind))
+        .then_with(|| match (left.kind.as_str(), right.kind.as_str()) {
+            ("iteration", "iteration") => iteration_number(&left.id)
+                .cmp(&iteration_number(&right.id))
+                .then_with(|| left.label.cmp(&right.label)),
+            _ => std::cmp::Ordering::Equal,
+        })
+        .then_with(|| left.label.cmp(&right.label))
+}
+
+fn file_timestamp(metadata: &fs::Metadata) -> Option<String> {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs().to_string())
+}
+
+fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
+    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+    let entries = fs::read_dir(&issue_dir)
+        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+
+    let mut sources = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read workflow entry: {e}"))?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let filename = entry.file_name().to_string_lossy().to_string();
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata for {filename}: {e}"))?;
+        let (kind, label) = classify_log_source(&filename);
+
+        sources.push(IssueLogSource {
+            id: filename,
+            label,
+            kind: kind.to_string(),
+            updated_at: file_timestamp(&metadata),
+            size_bytes: metadata.len(),
+        });
+    }
+
+    sources.sort_by(sort_log_sources);
+    Ok(sources)
+}
+
+fn resolve_issue_log_source_path(
+    project_path: &str,
+    issue_number: i64,
+    source_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    if source_id.is_empty()
+        || source_id.contains('/')
+        || source_id.contains('\\')
+        || source_id == "."
+        || source_id == ".."
+    {
+        return Err(format!("Invalid log source id: {source_id}"));
+    }
+
+    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+    let path = issue_dir.join(source_id);
+    if !path.is_file() {
+        return Err(format!("Log source not found: {source_id}"));
+    }
+
+    Ok(path)
+}
+
+fn read_issue_log_content_sync(
+    project_path: &str,
+    issue_number: i64,
+    source_id: &str,
+) -> Result<IssueLogContent, String> {
+    let source_path = resolve_issue_log_source_path(project_path, issue_number, source_id)?;
+    let metadata = fs::metadata(&source_path)
+        .map_err(|e| format!("Failed to read metadata for {source_id}: {e}"))?;
+    let bytes = fs::read(&source_path)
+        .map_err(|e| format!("Failed to read log source {source_id}: {e}"))?;
+
+    Ok(IssueLogContent {
+        source_id: source_id.to_string(),
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+        updated_at: file_timestamp(&metadata),
+    })
+}
+
 /// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
 #[tauri::command]
 async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
@@ -279,6 +434,31 @@ fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueD
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     parse_issue_detail(&stdout)
+}
+
+/// Lists available workflow log sources for a processed Issue.
+#[tauri::command]
+async fn list_issue_log_sources(
+    project_path: String,
+    issue_number: i64,
+) -> Result<Vec<IssueLogSource>, String> {
+    tokio::task::spawn_blocking(move || list_issue_log_sources_sync(&project_path, issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Reads the content of a workflow log source under `.autoresearch/workflows/issue-N/`.
+#[tauri::command]
+async fn read_issue_log_content(
+    project_path: String,
+    issue_number: i64,
+    source_id: String,
+) -> Result<IssueLogContent, String> {
+    tokio::task::spawn_blocking(move || {
+        read_issue_log_content_sync(&project_path, issue_number, &source_id)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 /// Request parameters for starting a run.sh process.
@@ -591,6 +771,8 @@ pub fn run() {
             list_issues,
             check_processed_issues,
             get_issue_detail,
+            list_issue_log_sources,
+            read_issue_log_content,
             start_run,
             stop_run,
             get_run_status,
@@ -601,10 +783,24 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_issue_detail_sync, map_issue_detail_command_error, parse_issue_detail, IssueDetail};
+    use super::{
+        classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
+        map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
+        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+    };
     use super::{build_run_args, build_run_env_vars, StartRunRequest};
     #[cfg(unix)]
     use super::RunProcessState;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn create_temp_project_dir(test_name: &str) -> PathBuf {
+        let root = std::env::temp_dir()
+            .join(format!("autoresearch-log-viewer-{test_name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temp project dir should be created");
+        root
+    }
 
     #[test]
     fn parse_issue_detail_returns_structured_data() {
@@ -668,6 +864,121 @@ mod tests {
             .expect_err("invalid path should fail");
 
         assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn classify_log_source_maps_known_workflow_files() {
+        assert_eq!(classify_log_source("terminal.log"), ("terminal", "终端日志".to_string()));
+        assert_eq!(classify_log_source("log.md"), ("summary", "工作流摘要".to_string()));
+        assert_eq!(
+            classify_log_source("iteration-2-codex-review.log"),
+            ("iteration", "iteration-2-codex-review.log".to_string())
+        );
+    }
+
+    #[test]
+    fn iteration_number_extracts_numeric_prefix() {
+        assert_eq!(iteration_number("iteration-2-codex-review.log"), Some(2));
+        assert_eq!(iteration_number("iteration-10-claude.log"), Some(10));
+        assert_eq!(iteration_number("terminal.log"), None);
+    }
+
+    #[test]
+    fn workflow_issue_dir_requires_existing_issue_directory() {
+        let project_dir = create_temp_project_dir("workflow-dir");
+        let error = workflow_issue_dir(project_dir.to_string_lossy().as_ref(), 30)
+            .expect_err("missing workflow dir should fail");
+
+        assert_eq!(error, "Workflow logs for Issue #30 not found");
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn list_issue_log_sources_returns_sorted_sources() {
+        let project_dir = create_temp_project_dir("list-sources");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+        fs::write(workflow_dir.join("iteration-10-codex-review.log"), "iteration10").expect("iteration log");
+        fs::write(workflow_dir.join("iteration-2-codex-review.log"), "iteration").expect("iteration log");
+        fs::write(workflow_dir.join("terminal.log"), "terminal").expect("terminal log");
+        fs::write(workflow_dir.join("log.md"), "summary").expect("summary log");
+
+        let sources = list_issue_log_sources_sync(project_dir.to_string_lossy().as_ref(), 30)
+            .expect("sources should load");
+
+        assert_eq!(
+            sources,
+            vec![
+                IssueLogSource {
+                    id: "terminal.log".to_string(),
+                    label: "终端日志".to_string(),
+                    kind: "terminal".to_string(),
+                    updated_at: sources[0].updated_at.clone(),
+                    size_bytes: 8,
+                },
+                IssueLogSource {
+                    id: "log.md".to_string(),
+                    label: "工作流摘要".to_string(),
+                    kind: "summary".to_string(),
+                    updated_at: sources[1].updated_at.clone(),
+                    size_bytes: 7,
+                },
+                IssueLogSource {
+                    id: "iteration-2-codex-review.log".to_string(),
+                    label: "iteration-2-codex-review.log".to_string(),
+                    kind: "iteration".to_string(),
+                    updated_at: sources[2].updated_at.clone(),
+                    size_bytes: 9,
+                },
+                IssueLogSource {
+                    id: "iteration-10-codex-review.log".to_string(),
+                    label: "iteration-10-codex-review.log".to_string(),
+                    kind: "iteration".to_string(),
+                    updated_at: sources[3].updated_at.clone(),
+                    size_bytes: 11,
+                },
+            ]
+        );
+
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn resolve_issue_log_source_path_rejects_path_traversal() {
+        let project_dir = create_temp_project_dir("reject-traversal");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+
+        let error = resolve_issue_log_source_path(
+            project_dir.to_string_lossy().as_ref(),
+            30,
+            "../terminal.log",
+        )
+        .expect_err("traversal should fail");
+
+        assert_eq!(error, "Invalid log source id: ../terminal.log");
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn read_issue_log_content_reads_utf8_lossy_text() {
+        let project_dir = create_temp_project_dir("read-content");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+        fs::write(workflow_dir.join("terminal.log"), b"line one\nline two").expect("terminal log");
+
+        let content = read_issue_log_content_sync(
+            project_dir.to_string_lossy().as_ref(),
+            30,
+            "terminal.log",
+        )
+        .expect("log content should load");
+
+        assert_eq!(content.source_id, "terminal.log");
+        assert_eq!(content.text, "line one\nline two");
+        assert!(content.updated_at.is_some());
+
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
     }
 
     // ========================================

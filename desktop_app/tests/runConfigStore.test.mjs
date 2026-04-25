@@ -50,6 +50,25 @@ test('runConfigStore clamps numeric setters to accepted ranges', () => {
   assert.equal(store.getState().passingScore, 1);
 });
 
+test('runConfigStore normalizes decimal values to integers before persisting', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(12.6);
+  store.getState().setPassingScore(84.4);
+
+  assert.equal(store.getState().maxIterations, 13);
+  assert.equal(store.getState().passingScore, 84);
+
+  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
+
+  assert.deepEqual(persisted.state, {
+    maxIterations: 13,
+    passingScore: 84,
+    continueMode: DEFAULT_CONTINUE_MODE,
+  });
+});
+
 test('runConfigStore persists values under the required storage key', () => {
   const storage = createMemoryStorage();
   const store = createRunConfigStore({ storage });
@@ -85,6 +104,26 @@ test('runConfigStore sanitizes persisted numeric values during hydration', async
   assert.equal(store.getState().maxIterations, 1);
   assert.equal(store.getState().passingScore, 100);
   assert.equal(store.getState().continueMode, true);
+});
+
+test('runConfigStore rounds persisted decimal values during hydration', async () => {
+  const storage = createMemoryStorage({
+    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
+      state: {
+        maxIterations: 8.8,
+        passingScore: 90.2,
+        continueMode: false,
+      },
+      version: 0,
+    }),
+  });
+
+  const store = createRunConfigStore({ storage });
+  await store.persist.rehydrate();
+
+  assert.equal(store.getState().maxIterations, 9);
+  assert.equal(store.getState().passingScore, 90);
+  assert.equal(store.getState().continueMode, false);
 });
 
 test('runConfigStore ignores NaN updates and preserves the previous valid values', () => {
