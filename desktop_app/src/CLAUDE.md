@@ -148,3 +148,26 @@
 ### React Key
 
 - 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+## IterationProgressPanel 约定
+
+### 数据来源
+
+- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+- 前端 TypeScript 接口必须匹配 snake_case 字段名（不是 camelCase）
+- 后端 `Phase` 枚举值为：`Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
+
+### 更新策略
+
+- `iteration-progress` 事件由后端主动推送，前端 `iterationStore.ts` 负责集中订阅并按 `issue_number` 过滤
+- 组件切换 Issue 时先调用 `watchIssue(projectPath, issueNumber)` 主动拉取一次，再等待事件增量更新；不要再在组件里用 `setInterval` 轮询
+- 切换 Issue 或关闭详情时调用 `reset()`，清空当前 issue 绑定并使旧请求失效
+
+### Store 模式
+
+- 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+- 迭代进度 store 还需要注入 `listen`，测试使用 `createIterationStore({ isTauri: true, invoke: mockFn, listen: mockListen })` 隔离事件
+- `isTauri: false` 时 `watchIssue` 为 no-op，确保浏览器模式不报错
+- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
+- subtask 三态由后端提供 `status: pending | passing | failing`；前端只负责渲染，不要再用 `passes: boolean` 自行推导 `failing`

@@ -1,0 +1,82 @@
+Now I have a comprehensive understanding of the codebase. Let me analyze the Issue and create the subtask breakdown.
+
+## 分析
+
+Issue #31 要求实现**迭代进度与阶段展示**，涉及：
+
+1. **Rust 后端**：文件监听 + `tasks.json` 解析 + 阶段推断
+2. **前端**：迭代进度 UI + 阶段标签 + subtask 进度条
+
+### 现有基础
+
+- `notify` crate 已在 `Cargo.toml` 中但未使用
+- 后端无 `tasks.json` 解析（只在 shell 脚本中用 `jq` 解析）
+- 前端 `LogViewer` 使用 1.5s 轮询而非文件监听
+- Rust→Frontend 通信使用 `emit` 事件推送 + `invoke` 请求响应
+- Zustand store 遵循工厂模式便于测试
+
+### 子任务拆分思路
+
+1. **T-001**：Rust 侧实现 `tasks.json` 解析 + 阶段推断数据结构和命令（纯后端逻辑）
+2. **T-002**：Rust 侧实现 `notify` 文件监听，当 workflow 目录变化时自动推送进度事件
+3. **T-003**：前端 store + UI 展示迭代进度、阶段标签、subtask 进度条
+
+```json
+{
+  "issueNumber": 31,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 侧 tasks.json 解析与阶段推断逻辑",
+      "description": "在 Rust 后端实现：1) 定义 IterationProgress 数据结构（当前迭代编号、总迭代数、当前阶段枚举 Planning/Implementation/Review/BuildLintTest、subtask 列表含 id/title/passes 状态）；2) 实现 tasks.json 解析函数，读取 subtask 列表和各 subtask 状态；3) 实现阶段推断逻辑：解析 workflow 目录下最新的 log 文件，通过关键词匹配推断当前阶段（planning.log 存在且无 iteration log → Planning；iteration-N-*.log 无 review → Implementation；有 review log → Review；有 hard-gate log → BuildLintTest）；4) 解析 log.md 获取当前迭代编号和总迭代数；5) 注册 Tauri command `get_iteration_progress` 供前端调用。",
+      "acceptanceCriteria": [
+        "定义 IterationProgress、SubtaskInfo、Phase 等 Rust struct/enum，均派生 Serialize",
+        "正确解析 tasks.json 获取 subtask 列表和 passes 状态",
+        "根据 workflow 目录文件推断当前阶段（Planning/Implementation/Review/BuildLintTest）",
+        "从 log.md 或 terminal.log 中提取当前迭代编号和总迭代数",
+        "get_iteration_progress Tauri command 可被前端 invoke 调用并返回正确数据",
+        "有对应的 Rust 单元测试覆盖解析逻辑和阶段推断",
+        "cargo check && cargo clippy 通过"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "Rust 侧 notify 文件监听与事件推送",
+      "description": "使用已引入的 notify crate 实现 workflow 目录的文件监听：1) 在 run 启动时（或通过新命令）开始监听 .autoresearch/workflows/issue-N/ 目录；2) 当文件变化时，调用 T-001 实现的解析逻辑获取最新 IterationProgress；3) 通过 Tauri event（如 'iteration-progress'）将进度数据推送给前端；4) 添加去抖处理避免短时间内多次文件变化导致频繁推送；5) 在 run 结束或 stop 时停止监听并清理 watcher 资源。确保 watcher 生命周期与 run 进程一致。",
+      "acceptanceCriteria": [
+        "使用 notify crate 监听 workflow 目录的文件创建/修改事件",
+        "文件变化时自动解析并通过 'iteration-progress' 事件推送 IterationProgress 数据",
+        "实现去抖机制（如 500ms），避免频繁推送",
+        "run 结束后自动停止 watcher 并释放资源",
+        "watcher 错误不影响主进程运行（优雅降级）",
+        "cargo check && cargo clippy 通过"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "前端迭代进度与 subtask 状态 UI 展示",
+      "description": "实现前端进度展示 UI：1) 创建 iterationStore.ts（Zustand），订阅 'iteration-progress' 事件接收后端推送的进度数据，同时支持通过 invoke get_iteration_progress 主动拉取；2) 在 IssueDetailPanel 或 RightPanel 中添加迭代进度区域：显示迭代编号（如 '3 / 16'），显示当前阶段标签（Planning → Implementation → Review → Build/Lint/Test 四个阶段，当前阶段高亮）；3) 展示 subtask 进度条（如 '2/5 subtasks passed'），列出各 subtask 名称和状态标签：pending（灰色）、passing（绿色）、failing（红色）；4) 实时更新无需手动刷新，利用事件推送自动更新 UI；5) run 未运行时显示 idle 状态。",
+      "acceptanceCriteria": [
+        "展示当前迭代编号和总迭代数（如 '3 / 16'）",
+        "显示当前阶段标签，四个阶段（Planning/Implementation/Review/Build·Lint·Test）有视觉区分",
+        "展示 subtask 进度条（如 '2/5 subtasks passed'）",
+        "各 subtask 显示状态标签：pending（灰色）、passing（绿色）、failing（红色）",
+        "通过 'iteration-progress' 事件实时更新，无需手动刷新",
+        "run 未运行时显示合理的空/idle 状态",
+        "组件有对应的前端测试",
+        "TypeScript 类型检查通过（npx tsc --noEmit）",
+        "可在浏览器中正确渲染"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

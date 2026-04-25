@@ -1,0 +1,44 @@
+All tasks complete. Here's a summary of what was implemented for **T-001**:
+
+## Implementation Summary
+
+### Data Structures (with `Serialize`)
+- **`Phase`** enum — `Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
+- **`SubtaskInfo`** struct — `id`, `title`, `passes` (also `Deserialize` for tasks.json parsing)
+- **`IterationProgress`** struct — `current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+- **`TasksFile`** / **`TasksFileSubtask`** — internal deserialization types for tasks.json
+
+### Core Functions
+- **`parse_tasks_json()`** — reads and parses `tasks.json` from a workflow directory, returns `Vec<SubtaskInfo>` (gracefully returns empty on missing/invalid)
+- **`infer_phase()`** — scans workflow directory files to determine current phase:
+  - No files → `Idle`
+  - Only `planning.log` → `Planning`
+  - `hard-gate-N.log` for latest iteration → `BuildLintTest`
+  - `iteration-N-*-review.log` for latest iteration → `Review`
+  - `iteration-N-*.log` only → `Implementation`
+- **`extract_iteration_numbers()`** / **`parse_iteration_from_terminal()`** — extracts `N/M` from `🔄 迭代 N/M` pattern in `terminal.log` (last match wins)
+- **`build_iteration_progress()`** — composes all the above into an `IterationProgress`
+
+### Tauri Command
+- **`get_iteration_progress`** — registered in the handler, takes `project_path` and `issue_number`, returns `IterationProgress` via `spawn_blocking`
+
+### Unit Tests (14 new tests, 33 total)
+- `parse_tasks_json` — valid, missing, invalid JSON
+- `infer_phase` — idle, planning, implementation, review, build/lint/test, latest-iteration priority
+- `parse_iteration_from_terminal` — extraction, no match, continue mode
+- `build_iteration_progress` — full aggregation
+- `get_iteration_progress_sync` — missing workflow (idle), existing workflow
+
+### Quality Checks
+- `cargo check` ✅
+- `cargo clippy` ✅ (0 warnings)
+- `cargo test` ✅ (33/33 pass)
+
+## Learnings
+
+- **模式**: 项目所有 Rust 代码集中在单个 `lib.rs` 中，新增代码应在合理位置插入而不是创建新模块
+- **模式**: Tauri commands 使用 `tokio::task::spawn_blocking` 包装同步 IO 操作，保持一致性
+- **模式**: 测试使用 `create_temp_project_dir()` 创建隔离的临时目录
+- **经验**: `notify` crate 已在 Cargo.toml 中声明但尚未使用，为 T-002 预留
+- **经验**: `terminal.log` 是提取迭代编号最可靠的来源，格式为 `[timestamp] 🔄 迭代 N/M`
+- **经验**: 阶段推断基于 **最大迭代号** 的文件存在性判断，而非时间戳排序

@@ -1,0 +1,4099 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc268-5fa1-7ff1-90b8-fc3636a68db5
+--------
+user
+审核 Issue #31 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 迭代进度与阶段展示
+
+
+## 子任务审核
+
+子任务进度: 1/3 已完成 | 当前子任务: T-002 - Rust 侧 notify 文件监听与事件推送
+
+请审核当前子任务的实现：
+
+- **ID**: T-002
+- **标题**: Rust 侧 notify 文件监听与事件推送
+- **类型**: code
+- **描述**: 使用已引入的 notify crate 实现 workflow 目录的文件监听：1) 在 run 启动时（或通过新命令）开始监听 .autoresearch/workflows/issue-N/ 目录；2) 当文件变化时，调用 T-001 实现的解析逻辑获取最新 IterationProgress；3) 通过 Tauri event（如 'iteration-progress'）将进度数据推送给前端；4) 添加去抖处理避免短时间内多次文件变化导致频繁推送；5) 在 run 结束或 stop 时停止监听并清理 watcher 资源。确保 watcher 生命周期与 run 进程一致。
+- **验收条件**:
+  - 使用 notify crate 监听 workflow 目录的文件创建/修改事件
+  - 文件变化时自动解析并通过 'iteration-progress' 事件推送 IterationProgress 数据
+  - 实现去抖机制（如 500ms），避免频繁推送
+  - run 结束后自动停止 watcher 并释放资源
+  - watcher 错误不影响主进程运行（优雅降级）
+  - cargo check && cargo clippy 通过
+
+
+请针对此子任务的验收条件进行审核。
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+... (中间迭代记录已省略)
+
+用 `tokio::task::spawn_blocking` 包装同步 IO 操作，保持一致性
+- **模式**: 测试使用 `create_temp_project_dir()` 创建隔离的临时目录
+- **经验**: `notify` crate 已在 Cargo.toml 中声明但尚未使用，为 T-002 预留
+- **经验**: `terminal.log` 是提取迭代编号最可靠的来源，格式为 `[timestamp] 🔄 迭代 N/M`
+- **经验**: 阶段推断基于 **最大迭代号** 的文件存在性判断，而非时间戳排序
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删
+
+... (内容过长，已截断)
+
+
+## Iteration 3 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复 - T-002
+- **评分**: 88/100
+
+- **审核要点**:
+
+I've now reviewed all the relevant code. Here is my audit report:
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #31
+- 标题: [desktop-app] 迭代进度与阶段展示
+- 子任务: T-001 - Rust 侧 tasks.json 解析与阶段推断逻辑
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+实现质量良好，符合所有验收条件。数据结构设计清晰，阶段推断逻辑正确匹配 `run.sh` 的文件命名规则，测试覆盖全面（20 个相关测试），`cargo check` 和 `cargo clippy` 均通过无警告。存在少量可改进之处但不影响功能正确性。
+
+---
+
+### 正确性 (90/100)
+
+**功能验证通过项：**
+- `Phase` 枚举覆盖 Planning/Implementation/Review/BuildLintTest/Idle 五种状态
+- `parse_tasks_json` 正确解析 subtask 列表（含 `#[serde
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: `infer_phase` 基于最大迭代号而非时间戳判断当前阶段，与 `run.sh` 的文件命名约定紧密耦合 — 任何 `run.sh` 文件命名变更需同步更新此函数
+- **模式**: `terminal.log` 中的 `🔄 迭代 N/M` 标记是最可靠的迭代进度来源，`log.md` 中的 `### 迭代 N` + `总迭代次数: N` 作为回退
+- **经验**: `TasksFile` 使用 `#[serde(rename_all = "camelCase")]` 适配 tasks.json 的驼峰命名，与 `GhIssue` 使用 `#[serde(rename)]` 单字段重命名是两种不同的模式
+- **经验**: 相比上一轮审核（79/100），此轮实现已修复了之前指出的问题，代码质量有明显提升
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我先定位 T-002 相关的 Rust/Tauri 实现与测试，再对照验收条件跑 `cargo check`/`cargo clippy`，确认是否存在功能或生命周期问题。
+exec
+/bin/zsh -lc 'rg -n "iteration-progress|notify|watcher|deboun|workflow" .' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+./CLAUDE.md:19:# Skip archiving of previous workflows (useful for debugging)
+./CLAUDE.md:34:Before a new run starts (and not in continue mode), `run.sh` automatically archives old workflow data:
+./CLAUDE.md:35:- Scans `.autoresearch/workflows/` for `issue-*` directories.
+./CLAUDE.md:65:Planning phase (before iteration 1) asks the first agent to split the Issue into subtasks, saved to `.autoresearch/workflows/issue-N/tasks.json`:
+./CLAUDE.md:110:Restores state from `.autoresearch/workflows/issue-N/` log files: iteration count, last score, consecutive failure count, last review feedback, and subtask state (from tasks.json). MAX_ITERATIONS becomes `last_iteration + new_count`.
+./program.md:23:✓ 在 .autoresearch/workflows/ 目录下记录工作日志
+./program.md:316:cat .github/workflows/*.yml
+./tasks/prd-desktop-app.md:68:- [ ] 可按迭代查看各 agent 的输出日志（对应 `.autoresearch/workflows/issue-N/` 下的 log 文件）
+./tasks/prd-desktop-app.md:130:- FR-4: 实时监听 `.autoresearch/workflows/issue-N/` 目录变化，解析 log 文件更新 UI 状态
+./tasks/prd-desktop-app.md:174:│   │   │   └── watcher.rs    # 文件系统监听
+./tasks/prd-desktop-app.md:188:- **文件监听**：Rust 侧使用 `notify` crate 监听 `.autoresearch/workflows/` 目录变化，前端通过 Tauri events 接收更新
+./tasks/prd-desktop-app.md:201:- `notify` crate（Rust 文件监听）
+./run.sh:826:    echo "  --no-archive     跳过归档其他 Issue 的 workflows 数据 (调试用)"
+./run.sh:1016:# 归档 workflows 目录下其他 Issue 的数据
+./run.sh:1018:archive_old_workflows() {
+./run.sh:1020:    local workflows_dir="$PROJECT_ROOT/.autoresearch/workflows"
+./run.sh:1023:    if [ ! -d "$workflows_dir" ]; then
+./run.sh:1031:    for dir in "$workflows_dir"/issue-*; do
+./run.sh:1071:    # 归档其他 Issue 的 workflows 数据（非继续模式且未禁用归档时）
+./run.sh:1073:        archive_old_workflows "$issue_number"
+./run.sh:1076:    WORK_DIR="$PROJECT_ROOT/.autoresearch/workflows/issue-$issue_number"
+./README.md:105:![](docs/workflow.png)
+./README.md:161:├── workflows/            # 各 Issue 详细记录（自动生成）
+./desktop_app/src/CLAUDE.md:88:- **日志来源**: 日志源列表统一由 Tauri `list_issue_log_sources` 返回，前端只拿 `source.id` 调 `read_issue_log_content`，不要自己拼 `.autoresearch/workflows/issue-N/...` 路径
+./desktop_app/CLAUDE.md:23:- `list_issues` calls `gh issue list --json` and also scans `.autoresearch/workflows/issue-*` for processed status
+./desktop_app/CLAUDE.md:32:- File system errors include context about which path failed (e.g., "Failed to read workflows dir")
+./tests/test_archive.sh:17:# ==================== Extract archive_old_workflows from run.sh ====================
+./tests/test_archive.sh:21:archive_old_workflows() {
+./tests/test_archive.sh:23:    local workflows_dir="$TEST_PROJECT_ROOT/.autoresearch/workflows"
+./tests/test_archive.sh:26:    if [ ! -d "$workflows_dir" ]; then
+./tests/test_archive.sh:34:    for dir in "$workflows_dir"/issue-*; do
+./tests/test_archive.sh:108:    mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows"
+./tests/test_archive.sh:120:echo "=== archive_old_workflows() Tests ==="
+./tests/test_archive.sh:126:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-1"
+./tests/test_archive.sh:127:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-2"
+./tests/test_archive.sh:128:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-3"
+./tests/test_archive.sh:130:archive_old_workflows "3"
+./tests/test_archive.sh:135:assert_exists "Issue 3 NOT archived (current)" "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-3"
+./tests/test_archive.sh:136:assert_not_exists "Issue 1 removed from workflows" "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-1"
+./tests/test_archive.sh:142:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-5"
+./tests/test_archive.sh:143:archive_old_workflows "5"
+./tests/test_archive.sh:144:assert_exists "Issue 5 still in workflows" "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-5"
+./tests/test_archive.sh:149:# 3. workflows 为空时不报错
+./tests/test_archive.sh:151:echo "Scenario 3: Empty workflows"
+./tests/test_archive.sh:152:archive_old_workflows "10"
+./tests/test_archive.sh:159:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-1"
+./tests/test_archive.sh:164:archive_old_workflows "2"
+./desktop_app/src-tauri/src/lib.rs:100:/// Metadata for a workflow log source under `.autoresearch/workflows/issue-N/`.
+./desktop_app/src-tauri/src/lib.rs:110:/// The full text content for a single workflow log source.
+./desktop_app/src-tauri/src/lib.rs:129:/// Current phase of the autoresearch workflow.
+./desktop_app/src-tauri/src/lib.rs:159:    /// Current workflow phase.
+./desktop_app/src-tauri/src/lib.rs:192:fn parse_tasks_json(workflow_dir: &Path) -> Vec<SubtaskInfo> {
+./desktop_app/src-tauri/src/lib.rs:193:    let tasks_path = workflow_dir.join("tasks.json");
+./desktop_app/src-tauri/src/lib.rs:213:/// Infers the current phase by examining files in the workflow directory.
+./desktop_app/src-tauri/src/lib.rs:222:fn infer_phase(workflow_dir: &Path) -> Phase {
+./desktop_app/src-tauri/src/lib.rs:223:    let entries = match fs::read_dir(workflow_dir) {
+./desktop_app/src-tauri/src/lib.rs:275:fn extract_iteration_numbers(workflow_dir: &Path) -> (i32, i32) {
+./desktop_app/src-tauri/src/lib.rs:277:    let terminal_path = workflow_dir.join("terminal.log");
+./desktop_app/src-tauri/src/lib.rs:284:    let log_md_path = workflow_dir.join("log.md");
+./desktop_app/src-tauri/src/lib.rs:354:/// Builds a complete IterationProgress for a given workflow directory.
+./desktop_app/src-tauri/src/lib.rs:355:fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:356:    let subtasks = parse_tasks_json(workflow_dir);
+./desktop_app/src-tauri/src/lib.rs:359:    let phase = infer_phase(workflow_dir);
+./desktop_app/src-tauri/src/lib.rs:360:    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
+./desktop_app/src-tauri/src/lib.rs:372:/// Returns the iteration progress for a given issue's workflow.
+./desktop_app/src-tauri/src/lib.rs:382:    let workflow_dir = base
+./desktop_app/src-tauri/src/lib.rs:384:        .join("workflows")
+./desktop_app/src-tauri/src/lib.rs:387:    if !workflow_dir.is_dir() {
+./desktop_app/src-tauri/src/lib.rs:399:    Ok(build_iteration_progress(&workflow_dir))
+./desktop_app/src-tauri/src/lib.rs:462:/// Scans `.autoresearch/workflows/issue-*` directories and returns Issue numbers that have been processed.
+./desktop_app/src-tauri/src/lib.rs:464:    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+./desktop_app/src-tauri/src/lib.rs:465:    if !workflows_dir.is_dir() {
+./desktop_app/src-tauri/src/lib.rs:469:    let entries = fs::read_dir(&workflows_dir)
+./desktop_app/src-tauri/src/lib.rs:470:        .map_err(|e| format!("Failed to read workflows dir: {e}"))?;
+./desktop_app/src-tauri/src/lib.rs:485:/// Also returns which Issue numbers have already been processed (have workflow directories).
+./desktop_app/src-tauri/src/lib.rs:555:fn workflow_issue_dir(project_path: &str, issue_number: i64) -> Result<std::path::PathBuf, String> {
+./desktop_app/src-tauri/src/lib.rs:563:        .join("workflows")
+./desktop_app/src-tauri/src/lib.rs:619:    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+./desktop_app/src-tauri/src/lib.rs:621:        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+./desktop_app/src-tauri/src/lib.rs:625:        let entry = entry.map_err(|e| format!("Failed to read workflow entry: {e}"))?;
+./desktop_app/src-tauri/src/lib.rs:664:    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+./desktop_app/src-tauri/src/lib.rs:727:/// Lists available workflow log sources for a processed Issue.
+./desktop_app/src-tauri/src/lib.rs:738:/// Reads the content of a workflow log source under `.autoresearch/workflows/issue-N/`.
+./desktop_app/src-tauri/src/lib.rs:1078:        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+./desktop_app/src-tauri/src/lib.rs:1164:    fn classify_log_source_maps_known_workflow_files() {
+./desktop_app/src-tauri/src/lib.rs:1181:    fn workflow_issue_dir_requires_existing_issue_directory() {
+./desktop_app/src-tauri/src/lib.rs:1182:        let project_dir = create_temp_project_dir("workflow-dir");
+./desktop_app/src-tauri/src/lib.rs:1183:        let error = workflow_issue_dir(project_dir.to_string_lossy().as_ref(), 30)
+./desktop_app/src-tauri/src/lib.rs:1184:            .expect_err("missing workflow dir should fail");
+./desktop_app/src-tauri/src/lib.rs:1193:        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+./desktop_app/src-tauri/src/lib.rs:1194:        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+./desktop_app/src-tauri/src/lib.rs:1195:        fs::write(workflow_dir.join("iteration-10-codex-review.log"), "iteration10").expect("iteration log");
+./desktop_app/src-tauri/src/lib.rs:1196:        fs::write(workflow_dir.join("iteration-2-codex-review.log"), "iteration").expect("iteration log");
+./desktop_app/src-tauri/src/lib.rs:1197:        fs::write(workflow_dir.join("terminal.log"), "terminal").expect("terminal log");
+./desktop_app/src-tauri/src/lib.rs:1198:        fs::write(workflow_dir.join("log.md"), "summary").expect("summary log");
+./desktop_app/src-tauri/src/lib.rs:1243:        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+./desktop_app/src-tauri/src/lib.rs:1244:        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+./desktop_app/src-tauri/src/lib.rs:1260:        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+./desktop_app/src-tauri/src/lib.rs:1261:        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+./desktop_app/src-tauri/src/lib.rs:1262:        fs::write(workflow_dir.join("terminal.log"), b"line one\nline two").expect("terminal log");
+./desktop_app/src-tauri/src/lib.rs:1634:    fn get_iteration_progress_returns_idle_for_missing_workflow() {
+./desktop_app/src-tauri/src/lib.rs:1648:    fn get_iteration_progress_returns_data_for_existing_workflow() {
+./desktop_app/src-tauri/src/lib.rs:1650:        let workflow_dir = dir.join(".autoresearch/workflows/issue-42");
+./desktop_app/src-tauri/src/lib.rs:1651:        fs::create_dir_all(&workflow_dir).expect("create workflow dir");
+./desktop_app/src-tauri/src/lib.rs:1653:            workflow_dir.join("tasks.json"),
+./desktop_app/src-tauri/src/lib.rs:1659:        fs::write(workflow_dir.join("planning.log"), "plan").expect("write");
+./desktop_app/src-tauri/CLAUDE.md:6:- Clear the stored state with a PID match check to avoid an old watcher wiping out a newer run that started after stop/restart.
+./desktop_app/src-tauri/CLAUDE.md:7:- Attach stdout/stderr readers and exit watchers only after the new `ProcessState` has been stored; otherwise a fast-exiting child can race the state write and leave a stale `running` entry behind.
+./desktop_app/src-tauri/CLAUDE.md:18:- Workflow log browsing should stay inside `.autoresearch/workflows/issue-N/`; expose file metadata and file contents through Tauri commands rather than letting the frontend assemble arbitrary filesystem paths.
+./desktop_app/src-tauri/CLAUDE.md:19:- Validate `source_id` as a single filename (no path separators or `..`) before reading a workflow log file to avoid traversal bugs.
+./desktop_app/src-tauri/CLAUDE.md:20:- Keep workflow log ordering stable for the UI: `terminal.log` first, `log.md` second, then iteration logs, then other files alphabetically.
+./desktop_app/src/pages/HistoryPage.tsx:5:      <p className="text-gray-500">View past workflow executions and results.</p>
+./desktop_app/src-tauri/Cargo.toml:28:notify = "8"
+./desktop_app/src-tauri/Cargo.lock:717: "notify",
+./desktop_app/src-tauri/Cargo.lock:1793:name = "inotify"
+./desktop_app/src-tauri/Cargo.lock:1799: "inotify-sys",
+./desktop_app/src-tauri/Cargo.lock:1804:name = "inotify-sys"
+./desktop_app/src-tauri/Cargo.lock:2246:name = "notify"
+./desktop_app/src-tauri/Cargo.lock:2253: "inotify",
+./desktop_app/src-tauri/Cargo.lock:2258: "notify-types",
+./desktop_app/src-tauri/Cargo.lock:2264:name = "notify-types"
+./desktop_app/src/components/LogViewer.tsx:117:      return '`.autoresearch/workflows/issue-N/terminal.log`';
+
+exec
+/bin/zsh -lc "rg --files . | rg \"(Cargo.toml|src-tauri|CLAUDE\\.md|progress\\.md)"'$"' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+./CLAUDE.md
+./lib/CLAUDE.md
+./desktop_app/src/CLAUDE.md
+./desktop_app/CLAUDE.md
+./desktop_app/src-tauri/CLAUDE.md
+./desktop_app/src-tauri/Cargo.toml
+./tests/CLAUDE.md
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M desktop_app/src-tauri/CLAUDE.md
+ M desktop_app/src-tauri/src/lib.rs
+?? .autoresearch/workflows/issue-31/
+
+codex
+我已经定位到改动集中在 `desktop_app/src-tauri/src/lib.rs`，下一步直接看该文件的实现与差异，重点核对 watcher 生命周期、去抖、事件推送和降级处理。
+exec
+/bin/zsh -lc 'git diff -- desktop_app/src-tauri/src/lib.rs' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+index 1b3ae84..c8ef39a 100644
+--- a/desktop_app/src-tauri/src/lib.rs
++++ b/desktop_app/src-tauri/src/lib.rs
+@@ -122,6 +122,294 @@ struct IssuesResult {
+     processed_numbers: Vec<i64>,
+ }
+ 
++// ========================================
++// Iteration progress types
++// ========================================
++
++/// Current phase of the autoresearch workflow.
++#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
++enum Phase {
++    /// Planning phase — subtask breakdown.
++    Planning,
++    /// Agent is implementing code.
++    Implementation,
++    /// Agent is reviewing code.
++    Review,
++    /// Build/lint/test hard gate checks.
++    BuildLintTest,
++    /// No active run or unknown state.
++    Idle,
++}
++
++/// Information about a single subtask from tasks.json.
++#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
++struct SubtaskInfo {
++    id: String,
++    title: String,
++    passes: bool,
++}
++
++/// Overall iteration progress data sent to the frontend.
++#[derive(serde::Serialize, Debug, Clone, PartialEq)]
++struct IterationProgress {
++    /// Current iteration number (1-based), 0 if not started.
++    current_iteration: i32,
++    /// Total iterations configured (e.g. 42).
++    total_iterations: i32,
++    /// Current workflow phase.
++    phase: Phase,
++    /// List of subtasks with pass/fail status.
++    subtasks: Vec<SubtaskInfo>,
++    /// Number of subtasks that have passed.
++    passed_count: usize,
++    /// Total number of subtasks.
++    total_count: usize,
++}
++
++/// Raw tasks.json structure for deserialization.
++#[derive(serde::Deserialize, Debug)]
++#[serde(rename_all = "camelCase")]
++struct TasksFile {
++    #[allow(dead_code)]
++    issue_number: Option<i64>,
++    subtasks: Vec<TasksFileSubtask>,
++}
++
++/// A subtask entry in tasks.json.
++#[derive(serde::Deserialize, Debug)]
++#[serde(rename_all = "camelCase")]
++struct TasksFileSubtask {
++    id: String,
++    title: String,
++    passes: bool,
++}
++
++// ========================================
++// Iteration progress helpers
++// ========================================
++
++/// Parses tasks.json and returns a list of SubtaskInfo.
++fn parse_tasks_json(workflow_dir: &Path) -> Vec<SubtaskInfo> {
++    let tasks_path = workflow_dir.join("tasks.json");
++    let bytes = match fs::read(&tasks_path) {
++        Ok(b) => b,
++        Err(_) => return Vec::new(),
++    };
++    let tasks_file: TasksFile = match serde_json::from_slice(&bytes) {
++        Ok(t) => t,
++        Err(_) => return Vec::new(),
++    };
++    tasks_file
++        .subtasks
++        .into_iter()
++        .map(|s| SubtaskInfo {
++            id: s.id,
++            title: s.title,
++            passes: s.passes,
++        })
++        .collect()
++}
++
++/// Infers the current phase by examining files in the workflow directory.
++///
++/// Logic:
++/// 1. Find the highest iteration number N from `iteration-N-*.log` files.
++/// 2. If no iteration logs exist but `planning.log` exists → Planning.
++/// 3. If no iteration logs and no planning.log → Idle.
++/// 4. If `hard-gate-N.log` exists → BuildLintTest.
++/// 5. If `iteration-N-*-review.log` exists → Review.
++/// 6. Otherwise → Implementation.
++fn infer_phase(workflow_dir: &Path) -> Phase {
++    let entries = match fs::read_dir(workflow_dir) {
++        Ok(e) => e,
++        Err(_) => return Phase::Idle,
++    };
++
++    let mut max_iteration: i32 = 0;
++    let mut has_planning = false;
++    let mut review_iterations = std::collections::HashSet::new();
++    let mut hard_gate_iterations = std::collections::HashSet::new();
++
++    for entry in entries.flatten() {
++        let name = entry.file_name().to_string_lossy().to_string();
++        if name == "planning.log" {
++            has_planning = true;
++            continue;
++        }
++        if let Some(n) = iteration_number(&name) {
++            if n > max_iteration {
++                max_iteration = n;
++            }
++            if name.contains("-review.log") {
++                review_iterations.insert(n);
++            }
++        }
++        if name.starts_with("hard-gate-") && name.ends_with(".log") {
++            if let Some(n) = name
++                .strip_prefix("hard-gate-")
++                .and_then(|s| s.strip_suffix(".log"))
++                .and_then(|s| s.parse::<i32>().ok())
++            {
++                hard_gate_iterations.insert(n);
++            }
++        }
++    }
++
++    if max_iteration == 0 {
++        return if has_planning { Phase::Planning } else { Phase::Idle };
++    }
++
++    if hard_gate_iterations.contains(&max_iteration) {
++        return Phase::BuildLintTest;
++    }
++    if review_iterations.contains(&max_iteration) {
++        return Phase::Review;
++    }
++    Phase::Implementation
++}
++
++/// Extracts the current iteration and total iterations from terminal.log.
++///
++/// Looks for the pattern `🔄 迭代 N/M` in terminal.log lines (last match wins).
++/// Falls back to parsing log.md if terminal.log is missing or has no match.
++fn extract_iteration_numbers(workflow_dir: &Path) -> (i32, i32) {
++    // Try terminal.log first (most reliable for iteration markers)
++    let terminal_path = workflow_dir.join("terminal.log");
++    if let Ok(content) = fs::read_to_string(&terminal_path) {
++        if let Some((current, total)) = parse_iteration_from_terminal(&content) {
++            return (current, total);
++        }
++    }
++
++    let log_md_path = workflow_dir.join("log.md");
++    if let Ok(content) = fs::read_to_string(&log_md_path) {
++        if let Some((current, total)) = parse_iteration_from_log_md(&content) {
++            return (current, total);
++        }
++    }
++
++    (0, 0)
++}
++
++/// Parses "迭代 N/M" from terminal.log content. Returns the last match.
++fn parse_iteration_from_terminal(content: &str) -> Option<(i32, i32)> {
++    let mut result = None;
++    for line in content.lines() {
++        // Look for "迭代 N/M" pattern
++        if let Some(pos) = line.find("迭代 ") {
++            let rest = &line[pos + "迭代 ".len()..];
++            if let Some(slash_pos) = rest.find('/') {
++                let current_str = rest[..slash_pos].trim();
++                let total_rest = &rest[slash_pos + 1..];
++                // Total might be followed by other characters or end of line
++                let total_str: String = total_rest.chars().take_while(|c| c.is_ascii_digit()).collect();
++                if let (Ok(current), Ok(total)) = (current_str.parse::<i32>(), total_str.parse::<i32>()) {
++                    result = Some((current, total));
++                }
++            }
++        }
++    }
++    result
++}
++
++/// Parses iteration progress from log.md content.
++///
++/// Current iteration is inferred from the last `### 迭代 N - ...` heading.
++/// Total iterations is inferred from the last `总迭代次数: N` entry.
++/// If only one value is present, the other defaults to 0.
++fn parse_iteration_from_log_md(content: &str) -> Option<(i32, i32)> {
++    let mut current_iteration = 0;
++    let mut total_iterations = 0;
++
++    for line in content.lines() {
++        if let Some(rest) = line.strip_prefix("### 迭代 ") {
++            let iteration_str: String = rest
++                .chars()
++                .take_while(|c| c.is_ascii_digit())
++                .collect();
++            if let Ok(iteration) = iteration_str.parse::<i32>() {
++                current_iteration = iteration;
++            }
++        }
++
++        if let Some(pos) = line.find("总迭代次数:") {
++            let total_str: String = line[pos + "总迭代次数:".len()..]
++                .chars()
++                .skip_while(|c| c.is_whitespace())
++                .take_while(|c| c.is_ascii_digit())
++                .collect();
++            if let Ok(total) = total_str.parse::<i32>() {
++                total_iterations = total;
++            }
++        }
++    }
++
++    if current_iteration == 0 && total_iterations == 0 {
++        None
++    } else {
++        Some((current_iteration, total_iterations))
++    }
++}
++
++/// Builds a complete IterationProgress for a given workflow directory.
++fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
++    let subtasks = parse_tasks_json(workflow_dir);
++    let passed_count = subtasks.iter().filter(|s| s.passes).count();
++    let total_count = subtasks.len();
++    let phase = infer_phase(workflow_dir);
++    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
++
++    IterationProgress {
++        current_iteration,
++        total_iterations,
++        phase,
++        subtasks,
++        passed_count,
++        total_count,
++    }
++}
++
++/// Returns the iteration progress for a given issue's workflow.
++fn get_iteration_progress_sync(
++    project_path: &str,
++    issue_number: i64,
++) -> Result<IterationProgress, String> {
++    let base = Path::new(project_path);
++    if !base.is_dir() {
++        return Err(format!("Path is not a directory: {project_path}"));
++    }
++
++    let workflow_dir = base
++        .join(".autoresearch")
++        .join("workflows")
++        .join(format!("issue-{issue_number}"));
++
++    if !workflow_dir.is_dir() {
++        // Return idle progress with empty data
++        return Ok(IterationProgress {
++            current_iteration: 0,
++            total_iterations: 0,
++            phase: Phase::Idle,
++            subtasks: Vec::new(),
++            passed_count: 0,
++            total_count: 0,
++        });
++    }
++
++    Ok(build_iteration_progress(&workflow_dir))
++}
++
++/// Returns the current iteration progress for a specific issue.
++#[tauri::command]
++async fn get_iteration_progress(
++    project_path: String,
++    issue_number: i64,
++) -> Result<IterationProgress, String> {
++    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
++        .await
++        .map_err(|e| format!("Task join error: {e}"))?
++}
++
+ /// Opens a native folder selection dialog and returns the selected path.
+ #[tauri::command]
+ async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+@@ -776,6 +1064,7 @@ pub fn run() {
+             start_run,
+             stop_run,
+             get_run_status,
++            get_iteration_progress,
+         ])
+         .run(tauri::generate_context!())
+         .expect("error while running tauri application");
+@@ -789,6 +1078,11 @@ mod tests {
+         resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+     };
+     use super::{build_run_args, build_run_env_vars, StartRunRequest};
++    use super::{
++        build_iteration_progress, get_iteration_progress_sync, infer_phase,
++        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
++        SubtaskInfo,
++    };
+     #[cfg(unix)]
+     use super::RunProcessState;
+     use std::fs;
+@@ -1102,4 +1396,275 @@ mod tests {
+ 
+         assert!(state.process.is_none());
+     }
++
++    // ========================================
++    // Iteration progress tests
++    // ========================================
++
++    #[test]
++    fn parse_tasks_json_returns_subtasks() {
++        let dir = create_temp_project_dir("parse-tasks");
++        fs::write(
++            dir.join("tasks.json"),
++            r#"{
++                "issueNumber": 42,
++                "subtasks": [
++                    {"id": "T-001", "title": "First task", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false},
++                    {"id": "T-002", "title": "Second task", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": true}
++                ]
++            }"#,
++        )
++        .expect("tasks.json should be written");
++
++        let subtasks = parse_tasks_json(&dir);
++
++        assert_eq!(subtasks.len(), 2);
++        assert_eq!(subtasks[0], SubtaskInfo { id: "T-001".to_string(), title: "First task".to_string(), passes: false });
++        assert_eq!(subtasks[1], SubtaskInfo { id: "T-002".to_string(), title: "Second task".to_string(), passes: true });
++
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn parse_tasks_json_returns_empty_when_missing() {
++        let dir = create_temp_project_dir("parse-tasks-missing");
++
++        let subtasks = parse_tasks_json(&dir);
++
++        assert!(subtasks.is_empty());
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn parse_tasks_json_returns_empty_on_invalid_json() {
++        let dir = create_temp_project_dir("parse-tasks-invalid");
++        fs::write(dir.join("tasks.json"), "{not valid json").expect("write");
++
++        let subtasks = parse_tasks_json(&dir);
++
++        assert!(subtasks.is_empty());
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn infer_phase_idle_when_empty() {
++        let dir = create_temp_project_dir("phase-idle");
++
++        assert_eq!(infer_phase(&dir), Phase::Idle);
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn infer_phase_planning_when_only_planning_log() {
++        let dir = create_temp_project_dir("phase-planning");
++        fs::write(dir.join("planning.log"), "planning output").expect("write");
++
++        assert_eq!(infer_phase(&dir), Phase::Planning);
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn infer_phase_implementation_when_iteration_log_only() {
++        let dir = create_temp_project_dir("phase-impl");
++        fs::write(dir.join("planning.log"), "").expect("write");
++        fs::write(dir.join("iteration-1-claude.log"), "impl output").expect("write");
++
++        assert_eq!(infer_phase(&dir), Phase::Implementation);
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn infer_phase_review_when_review_log_exists() {
++        let dir = create_temp_project_dir("phase-review");
++        fs::write(dir.join("planning.log"), "").expect("write");
++        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
++        fs::write(dir.join("iteration-2-codex-review.log"), "review").expect("write");
++
++        assert_eq!(infer_phase(&dir), Phase::Review);
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn infer_phase_build_lint_test_when_hard_gate_log() {
++        let dir = create_temp_project_dir("phase-blt");
++        fs::write(dir.join("planning.log"), "").expect("write");
++        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
++        fs::write(dir.join("iteration-3-codex-review.log"), "").expect("write");
++        fs::write(dir.join("hard-gate-3.log"), "gate results").expect("write");
++
++        assert_eq!(infer_phase(&dir), Phase::BuildLintTest);
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn infer_phase_uses_latest_iteration() {
++        let dir = create_temp_project_dir("phase-latest");
++        // Iteration 1 completed with review + hard-gate
++        fs::write(dir.join("iteration-1-claude.log"), "").expect("write");
++        fs::write(dir.join("iteration-1-codex-review.log"), "").expect("write");
++        fs::write(dir.join("hard-gate-1.log"), "").expect("write");
++        // Iteration 2 in progress (implementation only)
++        fs::write(dir.join("iteration-2-codex.log"), "").expect("write");
++
++        assert_eq!(infer_phase(&dir), Phase::Implementation);
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn parse_iteration_from_terminal_extracts_last_match() {
++        let content = "\
++[2026-04-25 08:46:39] 🔄 迭代 1/42\n\
++[2026-04-25 09:21:17] 🔄 迭代 2/42\n\
++[2026-04-25 09:30:00] 🔄 迭代 3/42\n";
++
++        assert_eq!(parse_iteration_from_terminal(content), Some((3, 42)));
++    }
++
++    #[test]
++    fn parse_iteration_from_terminal_returns_none_when_no_match() {
++        let content = "some log output\nno iteration markers here\n";
++
++        assert_eq!(parse_iteration_from_terminal(content), None);
++    }
++
++    #[test]
++    fn parse_iteration_from_terminal_handles_continue_mode() {
++        let content = "\
++[2026-04-25 09:21:17] 继续运行: 已完成 1 轮，再跑 41 轮 (总计 42)\n\
++[2026-04-25 09:21:17] 🔄 迭代 2/42\n";
++
++        assert_eq!(parse_iteration_from_terminal(content), Some((2, 42)));
++    }
++
++    #[test]
++    fn parse_iteration_from_log_md_extracts_iteration_and_total() {
++        let content = "\
++# Issue #30 实现日志\n\
++\n\
++### 迭代 2 - Codex (实现)\n\
++\n\
++### 迭代 4 - Claude (实现)\n\
++\n\
++## 最终结果\n\
++- 总迭代次数: 5\n";
++
++        assert_eq!(parse_iteration_from_log_md(content), Some((4, 5)));
++    }
++
++    #[test]
++    fn build_iteration_progress_aggregates_data() {
++        let dir = create_temp_project_dir("build-progress");
++        fs::write(
++            dir.join("tasks.json"),
++            r#"{"issueNumber": 42, "subtasks": [
++                {"id": "T-001", "title": "A", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": true},
++                {"id": "T-002", "title": "B", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": false},
++                {"id": "T-003", "title": "C", "description": "", "acceptanceCriteria": [], "priority": 3, "passes": true}
++            ]}"#,
++        )
++        .expect("write");
++        fs::write(dir.join("planning.log"), "").expect("write");
++        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
++        fs::write(dir.join("terminal.log"), "[time] 🔄 迭代 2/16\n").expect("write");
++
++        let progress = build_iteration_progress(&dir);
++
++        assert_eq!(progress.current_iteration, 2);
++        assert_eq!(progress.total_iterations, 16);
++        assert_eq!(progress.phase, Phase::Implementation);
++        assert_eq!(progress.subtasks.len(), 3);
++        assert_eq!(progress.passed_count, 2);
++        assert_eq!(progress.total_count, 3);
++
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn build_iteration_progress_falls_back_to_log_md_when_terminal_missing() {
++        let dir = create_temp_project_dir("build-progress-log-md");
++        fs::write(dir.join("planning.log"), "").expect("write");
++        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
++        fs::write(
++            dir.join("log.md"),
++            "\
++# Issue #31 实现日志\n\
++\n\
++### 迭代 3 - Claude (实现)\n\
++\n\
++## 最终结果\n\
++- 总迭代次数: 7\n",
++        )
++        .expect("write");
++
++        let progress = build_iteration_progress(&dir);
++
++        assert_eq!(progress.current_iteration, 3);
++        assert_eq!(progress.total_iterations, 7);
++
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match() {
++        let dir = create_temp_project_dir("build-progress-terminal-fallback");
++        fs::write(dir.join("planning.log"), "").expect("write");
++        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
++        fs::write(dir.join("terminal.log"), "no iteration marker here\n").expect("write");
++        fs::write(
++            dir.join("log.md"),
++            "\
++# Issue #31 实现日志\n\
++\n\
++### 迭代 2 - Codex (实现)\n\
++\n\
++## 最终结果\n\
++- 总迭代次数: 42\n",
++        )
++        .expect("write");
++
++        let progress = build_iteration_progress(&dir);
++
++        assert_eq!(progress.current_iteration, 2);
++        assert_eq!(progress.total_iterations, 42);
++
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn get_iteration_progress_returns_idle_for_missing_workflow() {
++        let dir = create_temp_project_dir("progress-missing");
++
++        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 999)
++            .expect("should return idle");
++
++        assert_eq!(progress.phase, Phase::Idle);
++        assert_eq!(progress.current_iteration, 0);
++        assert!(progress.subtasks.is_empty());
++
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
++
++    #[test]
++    fn get_iteration_progress_returns_data_for_existing_workflow() {
++        let dir = create_temp_project_dir("progress-existing");
++        let workflow_dir = dir.join(".autoresearch/workflows/issue-42");
++        fs::create_dir_all(&workflow_dir).expect("create workflow dir");
++        fs::write(
++            workflow_dir.join("tasks.json"),
++            r#"{"issueNumber": 42, "subtasks": [
++                {"id": "T-001", "title": "Task", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false}
++            ]}"#,
++        )
++        .expect("write");
++        fs::write(workflow_dir.join("planning.log"), "plan").expect("write");
++
++        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 42)
++            .expect("should return progress");
++
++        assert_eq!(progress.phase, Phase::Planning);
++        assert_eq!(progress.total_count, 1);
++        assert_eq!(progress.passed_count, 0);
++
++        fs::remove_dir_all(dir).expect("cleanup");
++    }
+ }
+
+exec
+/bin/zsh -lc "sed -n '1,260p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+use std::process::Stdio as StdStdio;
+use std::sync::Arc;
+use std::time::UNIX_EPOCH;
+
+use tauri::Emitter;
+use tokio::sync::Mutex;
+
+#[cfg(unix)]
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(unix)]
+use tokio::io::{AsyncBufReadExt, BufReader as TokioBufReader};
+#[cfg(unix)]
+use tokio::process::Command as TokioCommand;
+
+/// Process state for a running run.sh instance.
+#[cfg(unix)]
+struct RunProcess {
+    pid: u32,
+}
+
+/// Global state for run.sh process management.
+#[cfg(unix)]
+#[derive(Default)]
+struct RunProcessState {
+    process: Option<RunProcess>,
+}
+
+/// Global process state wrapped in Arc<Mutex>.
+#[cfg(unix)]
+static RUN_STATE: std::sync::OnceLock<Arc<Mutex<RunProcessState>>> = std::sync::OnceLock::new();
+
+/// Flag to track if the process was killed by stop_run (for the spawned task).
+#[cfg(unix)]
+static WAS_KILLED: std::sync::OnceLock<AtomicBool> = std::sync::OnceLock::new();
+
+#[cfg(unix)]
+fn get_run_state() -> Arc<Mutex<RunProcessState>> {
+    RUN_STATE
+        .get_or_init(|| Arc::new(Mutex::new(RunProcessState::default())))
+        .clone()
+}
+
+#[cfg(unix)]
+fn get_was_killed() -> &'static AtomicBool {
+    WAS_KILLED.get_or_init(|| AtomicBool::new(false))
+}
+
+/// Configuration detection result for a project directory.
+#[derive(serde::Serialize)]
+struct ProjectConfig {
+    has_autoresearch_dir: bool,
+    has_program_md: bool,
+    has_agents_dir: bool,
+}
+
+/// A label attached to a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct GhLabel {
+    name: String,
+    color: String,
+}
+
+/// A GitHub Issue returned by `gh issue list`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct GhIssue {
+    number: i64,
+    title: String,
+    labels: Vec<GhLabel>,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    state: String,
+}
+
+/// Author information for a GitHub comment.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct GhCommentAuthor {
+    login: String,
+}
+
+/// A comment on a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct GhComment {
+    id: String,
+    author: GhCommentAuthor,
+    body: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+}
+
+/// Detailed information about a GitHub Issue.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+struct IssueDetail {
+    body: String,
+    comments: Vec<GhComment>,
+}
+
+/// Metadata for a workflow log source under `.autoresearch/workflows/issue-N/`.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct IssueLogSource {
+    id: String,
+    label: String,
+    kind: String,
+    updated_at: Option<String>,
+    size_bytes: u64,
+}
+
+/// The full text content for a single workflow log source.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct IssueLogContent {
+    source_id: String,
+    text: String,
+    updated_at: Option<String>,
+}
+
+/// Result for the list_issues command, including processed status info.
+#[derive(serde::Serialize)]
+struct IssuesResult {
+    issues: Vec<GhIssue>,
+    processed_numbers: Vec<i64>,
+}
+
+// ========================================
+// Iteration progress types
+// ========================================
+
+/// Current phase of the autoresearch workflow.
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    /// Planning phase — subtask breakdown.
+    Planning,
+    /// Agent is implementing code.
+    Implementation,
+    /// Agent is reviewing code.
+    Review,
+    /// Build/lint/test hard gate checks.
+    BuildLintTest,
+    /// No active run or unknown state.
+    Idle,
+}
+
+/// Information about a single subtask from tasks.json.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct SubtaskInfo {
+    id: String,
+    title: String,
+    passes: bool,
+}
+
+/// Overall iteration progress data sent to the frontend.
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+struct IterationProgress {
+    /// Current iteration number (1-based), 0 if not started.
+    current_iteration: i32,
+    /// Total iterations configured (e.g. 42).
+    total_iterations: i32,
+    /// Current workflow phase.
+    phase: Phase,
+    /// List of subtasks with pass/fail status.
+    subtasks: Vec<SubtaskInfo>,
+    /// Number of subtasks that have passed.
+    passed_count: usize,
+    /// Total number of subtasks.
+    total_count: usize,
+}
+
+/// Raw tasks.json structure for deserialization.
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct TasksFile {
+    #[allow(dead_code)]
+    issue_number: Option<i64>,
+    subtasks: Vec<TasksFileSubtask>,
+}
+
+/// A subtask entry in tasks.json.
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct TasksFileSubtask {
+    id: String,
+    title: String,
+    passes: bool,
+}
+
+// ========================================
+// Iteration progress helpers
+// ========================================
+
+/// Parses tasks.json and returns a list of SubtaskInfo.
+fn parse_tasks_json(workflow_dir: &Path) -> Vec<SubtaskInfo> {
+    let tasks_path = workflow_dir.join("tasks.json");
+    let bytes = match fs::read(&tasks_path) {
+        Ok(b) => b,
+        Err(_) => return Vec::new(),
+    };
+    let tasks_file: TasksFile = match serde_json::from_slice(&bytes) {
+        Ok(t) => t,
+        Err(_) => return Vec::new(),
+    };
+    tasks_file
+        .subtasks
+        .into_iter()
+        .map(|s| SubtaskInfo {
+            id: s.id,
+            title: s.title,
+            passes: s.passes,
+        })
+        .collect()
+}
+
+/// Infers the current phase by examining files in the workflow directory.
+///
+/// Logic:
+/// 1. Find the highest iteration number N from `iteration-N-*.log` files.
+/// 2. If no iteration logs exist but `planning.log` exists → Planning.
+/// 3. If no iteration logs and no planning.log → Idle.
+/// 4. If `hard-gate-N.log` exists → BuildLintTest.
+/// 5. If `iteration-N-*-review.log` exists → Review.
+/// 6. Otherwise → Implementation.
+fn infer_phase(workflow_dir: &Path) -> Phase {
+    let entries = match fs::read_dir(workflow_dir) {
+        Ok(e) => e,
+        Err(_) => return Phase::Idle,
+    };
+
+    let mut max_iteration: i32 = 0;
+    let mut has_planning = false;
+    let mut review_iterations = std::collections::HashSet::new();
+    let mut hard_gate_iterations = std::collections::HashSet::new();
+
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "planning.log" {
+            has_planning = true;
+            continue;
+        }
+        if let Some(n) = iteration_number(&name) {
+            if n > max_iteration {
+                max_iteration = n;
+            }
+            if name.contains("-review.log") {
+                review_iterations.insert(n);
+            }
+        }
+        if name.starts_with("hard-gate-") && name.ends_with(".log") {
+            if let Some(n) = name
+                .strip_prefix("hard-gate-")
+                .and_then(|s| s.strip_suffix(".log"))
+                .and_then(|s| s.parse::<i32>().ok())
+            {
+                hard_gate_iterations.insert(n);
+            }
+        }
+    }
+
+    if max_iteration == 0 {
+        return if has_planning { Phase::Planning } else { Phase::Idle };
+    }
+
+exec
+/bin/zsh -lc "sed -n '260,620p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '620,1160p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+    }
+
+    if hard_gate_iterations.contains(&max_iteration) {
+        return Phase::BuildLintTest;
+    }
+    if review_iterations.contains(&max_iteration) {
+        return Phase::Review;
+    }
+    Phase::Implementation
+}
+
+/// Extracts the current iteration and total iterations from terminal.log.
+///
+/// Looks for the pattern `🔄 迭代 N/M` in terminal.log lines (last match wins).
+/// Falls back to parsing log.md if terminal.log is missing or has no match.
+fn extract_iteration_numbers(workflow_dir: &Path) -> (i32, i32) {
+    // Try terminal.log first (most reliable for iteration markers)
+    let terminal_path = workflow_dir.join("terminal.log");
+    if let Ok(content) = fs::read_to_string(&terminal_path) {
+        if let Some((current, total)) = parse_iteration_from_terminal(&content) {
+            return (current, total);
+        }
+    }
+
+    let log_md_path = workflow_dir.join("log.md");
+    if let Ok(content) = fs::read_to_string(&log_md_path) {
+        if let Some((current, total)) = parse_iteration_from_log_md(&content) {
+            return (current, total);
+        }
+    }
+
+    (0, 0)
+}
+
+/// Parses "迭代 N/M" from terminal.log content. Returns the last match.
+fn parse_iteration_from_terminal(content: &str) -> Option<(i32, i32)> {
+    let mut result = None;
+    for line in content.lines() {
+        // Look for "迭代 N/M" pattern
+        if let Some(pos) = line.find("迭代 ") {
+            let rest = &line[pos + "迭代 ".len()..];
+            if let Some(slash_pos) = rest.find('/') {
+                let current_str = rest[..slash_pos].trim();
+                let total_rest = &rest[slash_pos + 1..];
+                // Total might be followed by other characters or end of line
+                let total_str: String = total_rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+                if let (Ok(current), Ok(total)) = (current_str.parse::<i32>(), total_str.parse::<i32>()) {
+                    result = Some((current, total));
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Parses iteration progress from log.md content.
+///
+/// Current iteration is inferred from the last `### 迭代 N - ...` heading.
+/// Total iterations is inferred from the last `总迭代次数: N` entry.
+/// If only one value is present, the other defaults to 0.
+fn parse_iteration_from_log_md(content: &str) -> Option<(i32, i32)> {
+    let mut current_iteration = 0;
+    let mut total_iterations = 0;
+
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("### 迭代 ") {
+            let iteration_str: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if let Ok(iteration) = iteration_str.parse::<i32>() {
+                current_iteration = iteration;
+            }
+        }
+
+        if let Some(pos) = line.find("总迭代次数:") {
+            let total_str: String = line[pos + "总迭代次数:".len()..]
+                .chars()
+                .skip_while(|c| c.is_whitespace())
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if let Ok(total) = total_str.parse::<i32>() {
+                total_iterations = total;
+            }
+        }
+    }
+
+    if current_iteration == 0 && total_iterations == 0 {
+        None
+    } else {
+        Some((current_iteration, total_iterations))
+    }
+}
+
+/// Builds a complete IterationProgress for a given workflow directory.
+fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+    let subtasks = parse_tasks_json(workflow_dir);
+    let passed_count = subtasks.iter().filter(|s| s.passes).count();
+    let total_count = subtasks.len();
+    let phase = infer_phase(workflow_dir);
+    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
+
+    IterationProgress {
+        current_iteration,
+        total_iterations,
+        phase,
+        subtasks,
+        passed_count,
+        total_count,
+    }
+}
+
+/// Returns the iteration progress for a given issue's workflow.
+fn get_iteration_progress_sync(
+    project_path: &str,
+    issue_number: i64,
+) -> Result<IterationProgress, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let workflow_dir = base
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !workflow_dir.is_dir() {
+        // Return idle progress with empty data
+        return Ok(IterationProgress {
+            current_iteration: 0,
+            total_iterations: 0,
+            phase: Phase::Idle,
+            subtasks: Vec::new(),
+            passed_count: 0,
+            total_count: 0,
+        });
+    }
+
+    Ok(build_iteration_progress(&workflow_dir))
+}
+
+/// Returns the current iteration progress for a specific issue.
+#[tauri::command]
+async fn get_iteration_progress(
+    project_path: String,
+    issue_number: i64,
+) -> Result<IterationProgress, String> {
+    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Opens a native folder selection dialog and returns the selected path.
+#[tauri::command]
+async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let dir = tauri_plugin_dialog::DialogExt::dialog(&app)
+        .file()
+        .set_title("Select Project Directory")
+        .blocking_pick_folder();
+    Ok(dir.map(|p| p.to_string()))
+}
+
+/// Detects whether the given project directory contains autoresearch configuration files.
+#[tauri::command]
+async fn detect_project_config(project_path: String) -> Result<ProjectConfig, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        if !base.is_dir() {
+            return Err(format!("Path is not a directory: {project_path}"));
+        }
+        let ar = base.join(".autoresearch");
+        Ok(ProjectConfig {
+            has_autoresearch_dir: ar.is_dir(),
+            has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+            has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Retrieves the most recently opened project path from the Tauri store.
+#[tauri::command]
+async fn get_recent_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+    let value = store
+        .get("recent_project")
+        .and_then(|v| v.as_str().map(String::from));
+    Ok(value)
+}
+
+/// Saves the project path to the Tauri store as the most recent project.
+#[tauri::command]
+async fn save_recent_project(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+    store.set("recent_project", path);
+    store.save().map_err(|e| e.to_string())
+}
+
+/// Scans `.autoresearch/workflows/issue-*` directories and returns Issue numbers that have been processed.
+fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> {
+    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+    if !workflows_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut numbers = Vec::new();
+    let entries = fs::read_dir(&workflows_dir)
+        .map_err(|e| format!("Failed to read workflows dir: {e}"))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if let Some(suffix) = name_str.strip_prefix("issue-") {
+            if let Ok(num) = suffix.parse::<i64>() {
+                numbers.push(num);
+            }
+        }
+    }
+    numbers.sort();
+    Ok(numbers)
+}
+
+/// Lists GitHub Issues for the repository at `project_path` using `gh issue list`.
+/// Also returns which Issue numbers have already been processed (have workflow directories).
+#[tauri::command]
+async fn list_issues(project_path: String) -> Result<IssuesResult, String> {
+    tokio::task::spawn_blocking(move || {
+        list_issues_sync(&project_path)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    // Execute gh issue list
+    let output = Command::new("gh")
+        .args([
+            "issue", "list",
+            "--json", "number,title,labels,createdAt,state",
+            "--limit", "100",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gh issue list failed: {}", stderr.trim()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let issues: Vec<GhIssue> = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))?;
+
+    let processed_numbers = get_processed_issue_numbers(base)?;
+
+    Ok(IssuesResult {
+        issues,
+        processed_numbers,
+    })
+}
+
+/// Returns a list of Issue numbers that have already been processed by autoresearch.
+#[tauri::command]
+async fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        if !base.is_dir() {
+            return Err(format!("Path is not a directory: {project_path}"));
+        }
+        get_processed_issue_numbers(base)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn parse_issue_detail(stdout: &str) -> Result<IssueDetail, String> {
+    serde_json::from_str(stdout).map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+}
+
+fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Issue #{issue_number} not found");
+    }
+
+    format!("gh issue view failed: {}", stderr.trim())
+}
+
+fn workflow_issue_dir(project_path: &str, issue_number: i64) -> Result<std::path::PathBuf, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let issue_dir = base
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    Ok(issue_dir)
+}
+
+fn classify_log_source(filename: &str) -> (&'static str, String) {
+    match filename {
+        "terminal.log" => ("terminal", "终端日志".to_string()),
+        "log.md" => ("summary", "工作流摘要".to_string()),
+        _ if filename.starts_with("iteration-") => ("iteration", filename.to_string()),
+        _ => ("file", filename.to_string()),
+    }
+}
+
+fn iteration_number(filename: &str) -> Option<i32> {
+    filename
+        .strip_prefix("iteration-")
+        .and_then(|rest| rest.split('-').next())
+        .and_then(|value| value.parse::<i32>().ok())
+}
+
+fn sort_log_sources(left: &IssueLogSource, right: &IssueLogSource) -> std::cmp::Ordering {
+    fn rank(kind: &str) -> i32 {
+        match kind {
+            "terminal" => 0,
+            "summary" => 1,
+            "iteration" => 2,
+            _ => 3,
+        }
+    }
+
+    rank(&left.kind)
+        .cmp(&rank(&right.kind))
+        .then_with(|| match (left.kind.as_str(), right.kind.as_str()) {
+            ("iteration", "iteration") => iteration_number(&left.id)
+                .cmp(&iteration_number(&right.id))
+                .then_with(|| left.label.cmp(&right.label)),
+            _ => std::cmp::Ordering::Equal,
+        })
+        .then_with(|| left.label.cmp(&right.label))
+}
+
+fn file_timestamp(metadata: &fs::Metadata) -> Option<String> {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs().to_string())
+}
+
+fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
+    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+    let entries = fs::read_dir(&issue_dir)
+
+ succeeded in 0ms:
+    let entries = fs::read_dir(&issue_dir)
+        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+
+    let mut sources = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read workflow entry: {e}"))?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let filename = entry.file_name().to_string_lossy().to_string();
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata for {filename}: {e}"))?;
+        let (kind, label) = classify_log_source(&filename);
+
+        sources.push(IssueLogSource {
+            id: filename,
+            label,
+            kind: kind.to_string(),
+            updated_at: file_timestamp(&metadata),
+            size_bytes: metadata.len(),
+        });
+    }
+
+    sources.sort_by(sort_log_sources);
+    Ok(sources)
+}
+
+fn resolve_issue_log_source_path(
+    project_path: &str,
+    issue_number: i64,
+    source_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    if source_id.is_empty()
+        || source_id.contains('/')
+        || source_id.contains('\\')
+        || source_id == "."
+        || source_id == ".."
+    {
+        return Err(format!("Invalid log source id: {source_id}"));
+    }
+
+    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+    let path = issue_dir.join(source_id);
+    if !path.is_file() {
+        return Err(format!("Log source not found: {source_id}"));
+    }
+
+    Ok(path)
+}
+
+fn read_issue_log_content_sync(
+    project_path: &str,
+    issue_number: i64,
+    source_id: &str,
+) -> Result<IssueLogContent, String> {
+    let source_path = resolve_issue_log_source_path(project_path, issue_number, source_id)?;
+    let metadata = fs::metadata(&source_path)
+        .map_err(|e| format!("Failed to read metadata for {source_id}: {e}"))?;
+    let bytes = fs::read(&source_path)
+        .map_err(|e| format!("Failed to read log source {source_id}: {e}"))?;
+
+    Ok(IssueLogContent {
+        source_id: source_id.to_string(),
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+        updated_at: file_timestamp(&metadata),
+    })
+}
+
+/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+#[tauri::command]
+async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+    tokio::task::spawn_blocking(move || {
+        get_issue_detail_sync(&project_path, issue_number)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    // Execute gh issue view
+    let output = Command::new("gh")
+        .args([
+            "issue", "view",
+            &issue_number.to_string(),
+            "--json", "body,comments",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(map_issue_detail_command_error(issue_number, &stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_issue_detail(&stdout)
+}
+
+/// Lists available workflow log sources for a processed Issue.
+#[tauri::command]
+async fn list_issue_log_sources(
+    project_path: String,
+    issue_number: i64,
+) -> Result<Vec<IssueLogSource>, String> {
+    tokio::task::spawn_blocking(move || list_issue_log_sources_sync(&project_path, issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Reads the content of a workflow log source under `.autoresearch/workflows/issue-N/`.
+#[tauri::command]
+async fn read_issue_log_content(
+    project_path: String,
+    issue_number: i64,
+    source_id: String,
+) -> Result<IssueLogContent, String> {
+    tokio::task::spawn_blocking(move || {
+        read_issue_log_content_sync(&project_path, issue_number, &source_id)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Request parameters for starting a run.sh process.
+#[derive(serde::Deserialize, Debug)]
+struct StartRunRequest {
+    /// Project directory path where run.sh will execute.
+    project_path: String,
+    /// GitHub Issue number to process.
+    issue_number: i64,
+    /// Maximum number of iterations (optional, defaults to 42).
+    max_iter: Option<i32>,
+    /// Comma-separated list of agents (optional).
+    agents: Option<String>,
+    /// Passing score threshold (optional, defaults to 85).
+    passing_score: Option<i32>,
+    /// Continue from last interrupted run (optional).
+    continue_mode: Option<bool>,
+}
+
+/// Builds command-line arguments for run.sh from the request parameters.
+/// This is a pure function extracted for testability.
+fn build_run_args(request: &StartRunRequest) -> Vec<String> {
+    let mut args = vec![
+        "-p".to_string(),
+        request.project_path.clone(),
+    ];
+
+    if let Some(ref agents) = request.agents {
+        if !agents.is_empty() {
+            args.push("-a".to_string());
+            args.push(agents.clone());
+        }
+    }
+
+    if request.continue_mode.unwrap_or(false) {
+        args.push("-c".to_string());
+    }
+
+    args.push(request.issue_number.to_string());
+
+    if let Some(max_iter) = request.max_iter {
+        args.push(max_iter.to_string());
+    }
+
+    args
+}
+
+/// Builds environment variables for run.sh from the request parameters.
+/// Returns a vector of (key, value) pairs.
+/// This is a pure function extracted for testability.
+fn build_run_env_vars(request: &StartRunRequest) -> Vec<(&'static str, String)> {
+    let mut env_vars = vec![];
+    if let Some(passing_score) = request.passing_score {
+        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+    }
+    env_vars
+}
+
+/// Result returned when run.sh process exits.
+#[derive(serde::Serialize, Debug, Clone)]
+struct RunExitEvent {
+    /// Exit code of the process.
+    exit_code: Option<i32>,
+    /// Whether the process was killed by stop_run.
+    killed: bool,
+}
+
+/// Starts a run.sh process to process a GitHub Issue.
+///
+/// Parameters are mapped to run.sh CLI arguments:
+/// - `issue_number` -> positional argument
+/// - `max_iter` -> positional argument (after issue_number)
+/// - `agents` -> `-a` option
+/// - `passing_score` -> `PASSING_SCORE` environment variable
+/// - `continue_mode` -> `-c` flag
+///
+/// The process's stdout/stderr are streamed via `run-output` Tauri events.
+/// When the process exits, a `run-exit` event is emitted.
+#[cfg(unix)]
+#[tauri::command]
+async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<(), String> {
+    let state = get_run_state();
+    let mut state_guard = state.lock().await;
+
+    // Check if a process is already running
+    if state_guard.process.is_some() {
+        return Err("A run is already in progress. Stop the current run before starting a new one.".to_string());
+    }
+
+    // Validate project path
+    let project_path = Path::new(&request.project_path);
+    if !project_path.is_dir() {
+        return Err(format!("Project path is not a directory: {}", request.project_path));
+    }
+
+    // Find run.sh in autoresearch directory (relative to the app)
+    // run.sh is in the autoresearch project root, which is the parent of desktop_app
+    let autoresearch_root = project_path
+        .parent()
+        .ok_or("Cannot determine autoresearch root directory")?;
+    let run_sh_path = autoresearch_root.join("run.sh");
+    if !run_sh_path.is_file() {
+        return Err(format!("run.sh not found at: {}", run_sh_path.display()));
+    }
+
+    // Build command arguments and environment variables
+    let args = build_run_args(&request);
+    let env_vars = build_run_env_vars(&request);
+
+    // Spawn the process with a new process group
+    let mut cmd = TokioCommand::new(&run_sh_path);
+    cmd.args(&args)
+        .current_dir(autoresearch_root)
+        .stdout(StdStdio::piped())
+        .stderr(StdStdio::piped())
+        .kill_on_drop(false); // Don't kill on drop - we want to manage the process lifecycle
+
+    // Set environment variables
+    for (key, value) in &env_vars {
+        cmd.env(key, value);
+    }
+
+    // Set up process group on Unix
+    // SAFETY: pre_exec is safe as long as the closure doesn't panic or call unsafe code
+    unsafe {
+        cmd.pre_exec(move || {
+            // Create a new process group with the child's PID as the PGID
+            let pid = libc::getpid();
+            if libc::setpgid(pid, pid) < 0 {
+                // Log error but don't fail the spawn
+                eprintln!("Warning: Failed to set process group: {}", std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+
+    // Spawn the process
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to start run.sh: {e}"))?;
+
+    let pid = child.id().ok_or("Failed to get process ID")?;
+
+    // Store the PID for process group management
+    state_guard.process = Some(RunProcess { pid });
+    drop(state_guard);
+
+    // Reset the killed flag
+    get_was_killed().store(false, Ordering::SeqCst);
+
+    // Clone app handle for the spawned task
+    let app_clone = app.clone();
+    let state_clone = get_run_state();
+
+    // Take stdout/stderr before waiting on the process
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    // Spawn a task to wait for process exit and emit event
+    tokio::spawn(async move {
+        let status = child.wait().await;
+
+        // Check if we were killed by stop_run
+        let was_killed = get_was_killed().swap(false, Ordering::SeqCst);
+
+        // Clear the process state
+        {
+            let mut state_guard = state_clone.lock().await;
+            state_guard.process = None;
+        }
+
+        // Only emit exit event if we weren't killed by stop_run
+        // (stop_run emits its own event)
+        if !was_killed {
+            let exit_event = match status {
+                Ok(status) => RunExitEvent {
+                    exit_code: status.code(),
+                    killed: false,
+                },
+                Err(_) => RunExitEvent {
+                    exit_code: None,
+                    killed: false,
+                },
+            };
+
+            let _ = app_clone.emit("run-exit", &exit_event);
+        }
+    });
+
+    // Handle stdout streaming
+    if let Some(stdout) = stdout {
+        let app_clone = app.clone();
+        tokio::spawn(async move {
+            let mut reader = TokioBufReader::new(stdout).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                let _ = app_clone.emit("run-output", &line);
+            }
+        });
+    }
+
+    // Handle stderr streaming
+    if let Some(stderr) = stderr {
+        let app_clone = app.clone();
+        tokio::spawn(async move {
+            let mut reader = TokioBufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                let _ = app_clone.emit("run-output", &line);
+            }
+        });
+    }
+
+    Ok(())
+}
+
+/// Stops the currently running run.sh process by sending SIGTERM to its process group.
+#[cfg(unix)]
+#[tauri::command]
+async fn stop_run(app: tauri::AppHandle) -> Result<(), String> {
+    let state = get_run_state();
+    let mut state_guard = state.lock().await;
+
+    let process = state_guard.process.take().ok_or("No run is in progress")?;
+    let pid = process.pid;
+
+    // Mark that we're killing via stop_run, so the wait task doesn't emit duplicate event
+    get_was_killed().store(true, Ordering::SeqCst);
+
+    // Send SIGTERM to the process group
+    // Use the PID as PGID since we set it in pre_exec
+    let pgid = pid as i32;
+
+    // Use nix to send signal to process group
+    use nix::sys::signal::{killpg, Signal};
+    use nix::unistd::Pid;
+
+    match killpg(Pid::from_raw(pgid), Signal::SIGTERM) {
+        Ok(()) => {
+            // Emit exit event with killed flag
+            let exit_event = RunExitEvent {
+                exit_code: None,
+                killed: true,
+            };
+            let _ = app.emit("run-exit", &exit_event);
+            Ok(())
+        }
+        Err(e) => {
+            // Restore process state on error
+            state_guard.process = Some(process);
+            get_was_killed().store(false, Ordering::SeqCst);
+            Err(format!("Failed to stop process: {e}"))
+        }
+    }
+}
+
+/// Current status of run.sh process management.
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum RunStatus {
+    /// No process is running.
+    Idle,
+    /// A run.sh process is currently executing.
+    Running,
+}
+
+/// Returns the current status of run.sh process management.
+#[cfg(unix)]
+#[tauri::command]
+async fn get_run_status() -> Result<RunStatus, String> {
+    let state = get_run_state();
+    let state_guard = state.lock().await;
+
+    if state_guard.process.is_some() {
+        Ok(RunStatus::Running)
+    } else {
+        Ok(RunStatus::Idle)
+    }
+}
+
+/// Non-Unix stub for get_run_status.
+#[cfg(not(unix))]
+#[tauri::command]
+async fn get_run_status() -> Result<RunStatus, String> {
+    Ok(RunStatus::Idle)
+}
+
+/// Non-Unix stub for start_run (not supported on Windows).
+#[cfg(not(unix))]
+#[tauri::command]
+async fn start_run(_app: tauri::AppHandle, _request: StartRunRequest) -> Result<(), String> {
+    Err("run.sh process management is only supported on Unix systems".to_string())
+}
+
+/// Non-Unix stub for stop_run (not supported on Windows).
+#[cfg(not(unix))]
+#[tauri::command]
+async fn stop_run(_app: tauri::AppHandle) -> Result<(), String> {
+    Err("run.sh process management is only supported on Unix systems".to_string())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            select_project_dir,
+            detect_project_config,
+            get_recent_project,
+            save_recent_project,
+            list_issues,
+            check_processed_issues,
+            get_issue_detail,
+            list_issue_log_sources,
+            read_issue_log_content,
+            start_run,
+            stop_run,
+            get_run_status,
+            get_iteration_progress,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
+        map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
+        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+    };
+    use super::{build_run_args, build_run_env_vars, StartRunRequest};
+    use super::{
+        build_iteration_progress, get_iteration_progress_sync, infer_phase,
+        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
+        SubtaskInfo,
+    };
+    #[cfg(unix)]
+    use super::RunProcessState;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn create_temp_project_dir(test_name: &str) -> PathBuf {
+        let root = std::env::temp_dir()
+            .join(format!("autoresearch-log-viewer-{test_name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temp project dir should be created");
+        root
+    }
+
+    #[test]
+    fn parse_issue_detail_returns_structured_data() {
+        let detail = parse_issue_detail(
+            r#"{
+                "body": "Issue description",
+                "comments": [
+                    {
+                        "id": "IC_kwDOA",
+                        "author": { "login": "alice" },
+                        "body": "first comment",
+                        "createdAt": "2026-04-24T10:00:00Z"
+                    }
+                ]
+            }"#,
+        )
+        .expect("issue detail should parse");
+
+        assert_eq!(
+            detail,
+            IssueDetail {
+                body: "Issue description".to_string(),
+                comments: vec![super::GhComment {
+                    id: "IC_kwDOA".to_string(),
+                    author: super::GhCommentAuthor {
+                        login: "alice".to_string(),
+                    },
+                    body: "first comment".to_string(),
+                    created_at: "2026-04-24T10:00:00Z".to_string(),
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn parse_issue_detail_reports_invalid_json() {
+        let error = parse_issue_detail("{invalid json").expect_err("invalid json should fail");
+
+        assert!(error.contains("Failed to parse gh output"));
+        assert!(error.contains("{invalid json"));
+    }
+
+    #[test]
+    fn issue_detail_error_maps_missing_issue() {
+        let error =
+            map_issue_detail_command_error(27, "GraphQL: Could not resolve to an issue with the number of 27.");
+
+        assert_eq!(error, "Issue #27 not found");
+    }
+
+    #[test]
+    fn issue_detail_error_preserves_other_gh_failures() {
+        let error = map_issue_detail_command_error(27, "network timeout");
+
+        assert_eq!(error, "gh issue view failed: network timeout");
+    }
+
+    #[test]
+    fn get_issue_detail_rejects_non_directory_path() {
+        let error = get_issue_detail_sync("/path/that/does/not/exist", 27)
+            .expect_err("invalid path should fail");
+
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+
+exec
+/bin/zsh -lc "sed -n '1160,1760p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn classify_log_source_maps_known_workflow_files() {
+        assert_eq!(classify_log_source("terminal.log"), ("terminal", "终端日志".to_string()));
+        assert_eq!(classify_log_source("log.md"), ("summary", "工作流摘要".to_string()));
+        assert_eq!(
+            classify_log_source("iteration-2-codex-review.log"),
+            ("iteration", "iteration-2-codex-review.log".to_string())
+        );
+    }
+
+    #[test]
+    fn iteration_number_extracts_numeric_prefix() {
+        assert_eq!(iteration_number("iteration-2-codex-review.log"), Some(2));
+        assert_eq!(iteration_number("iteration-10-claude.log"), Some(10));
+        assert_eq!(iteration_number("terminal.log"), None);
+    }
+
+    #[test]
+    fn workflow_issue_dir_requires_existing_issue_directory() {
+        let project_dir = create_temp_project_dir("workflow-dir");
+        let error = workflow_issue_dir(project_dir.to_string_lossy().as_ref(), 30)
+            .expect_err("missing workflow dir should fail");
+
+        assert_eq!(error, "Workflow logs for Issue #30 not found");
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn list_issue_log_sources_returns_sorted_sources() {
+        let project_dir = create_temp_project_dir("list-sources");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+        fs::write(workflow_dir.join("iteration-10-codex-review.log"), "iteration10").expect("iteration log");
+        fs::write(workflow_dir.join("iteration-2-codex-review.log"), "iteration").expect("iteration log");
+        fs::write(workflow_dir.join("terminal.log"), "terminal").expect("terminal log");
+        fs::write(workflow_dir.join("log.md"), "summary").expect("summary log");
+
+        let sources = list_issue_log_sources_sync(project_dir.to_string_lossy().as_ref(), 30)
+            .expect("sources should load");
+
+        assert_eq!(
+            sources,
+            vec![
+                IssueLogSource {
+                    id: "terminal.log".to_string(),
+                    label: "终端日志".to_string(),
+                    kind: "terminal".to_string(),
+                    updated_at: sources[0].updated_at.clone(),
+                    size_bytes: 8,
+                },
+                IssueLogSource {
+                    id: "log.md".to_string(),
+                    label: "工作流摘要".to_string(),
+                    kind: "summary".to_string(),
+                    updated_at: sources[1].updated_at.clone(),
+                    size_bytes: 7,
+                },
+                IssueLogSource {
+                    id: "iteration-2-codex-review.log".to_string(),
+                    label: "iteration-2-codex-review.log".to_string(),
+                    kind: "iteration".to_string(),
+                    updated_at: sources[2].updated_at.clone(),
+                    size_bytes: 9,
+                },
+                IssueLogSource {
+                    id: "iteration-10-codex-review.log".to_string(),
+                    label: "iteration-10-codex-review.log".to_string(),
+                    kind: "iteration".to_string(),
+                    updated_at: sources[3].updated_at.clone(),
+                    size_bytes: 11,
+                },
+            ]
+        );
+
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn resolve_issue_log_source_path_rejects_path_traversal() {
+        let project_dir = create_temp_project_dir("reject-traversal");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+
+        let error = resolve_issue_log_source_path(
+            project_dir.to_string_lossy().as_ref(),
+            30,
+            "../terminal.log",
+        )
+        .expect_err("traversal should fail");
+
+        assert_eq!(error, "Invalid log source id: ../terminal.log");
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn read_issue_log_content_reads_utf8_lossy_text() {
+        let project_dir = create_temp_project_dir("read-content");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+        fs::write(workflow_dir.join("terminal.log"), b"line one\nline two").expect("terminal log");
+
+        let content = read_issue_log_content_sync(
+            project_dir.to_string_lossy().as_ref(),
+            30,
+            "terminal.log",
+        )
+        .expect("log content should load");
+
+        assert_eq!(content.source_id, "terminal.log");
+        assert_eq!(content.text, "line one\nline two");
+        assert!(content.updated_at.is_some());
+
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    // ========================================
+    // Process management tests
+    // ========================================
+
+    #[test]
+    fn build_run_args_includes_required_options() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: Some(10),
+            agents: Some("claude,codex".to_string()),
+            passing_score: Some(90),
+            continue_mode: Some(true),
+        };
+
+        let args = build_run_args(&request);
+
+        // Check required options
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"/test/project".to_string()));
+        assert!(args.contains(&"-a".to_string()));
+        assert!(args.contains(&"claude,codex".to_string()));
+        assert!(args.contains(&"-c".to_string()));
+        assert!(args.contains(&"42".to_string()));
+        assert!(args.contains(&"10".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_omits_optional_when_none() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let args = build_run_args(&request);
+
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"/test/project".to_string()));
+        assert!(args.contains(&"42".to_string()));
+        // Optional args should not be present
+        assert!(!args.contains(&"-a".to_string()));
+        assert!(!args.contains(&"-c".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_ignores_empty_agents() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: Some("".to_string()),
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let args = build_run_args(&request);
+
+        assert!(!args.contains(&"-a".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_continue_mode_defaults_false() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let args = build_run_args(&request);
+
+        assert!(!args.contains(&"-c".to_string()));
+    }
+
+    #[test]
+    fn build_run_env_vars_includes_passing_score() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: Some(95),
+            continue_mode: None,
+        };
+
+        let env_vars = build_run_env_vars(&request);
+
+        assert_eq!(env_vars.len(), 1);
+        assert_eq!(env_vars[0].0, "PASSING_SCORE");
+        assert_eq!(env_vars[0].1, "95");
+    }
+
+    #[test]
+    fn build_run_env_vars_empty_when_no_passing_score() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let env_vars = build_run_env_vars(&request);
+
+        assert!(env_vars.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_process_state_default_is_idle() {
+        let state = RunProcessState::default();
+
+        assert!(state.process.is_none());
+    }
+
+    // ========================================
+    // Iteration progress tests
+    // ========================================
+
+    #[test]
+    fn parse_tasks_json_returns_subtasks() {
+        let dir = create_temp_project_dir("parse-tasks");
+        fs::write(
+            dir.join("tasks.json"),
+            r#"{
+                "issueNumber": 42,
+                "subtasks": [
+                    {"id": "T-001", "title": "First task", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false},
+                    {"id": "T-002", "title": "Second task", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": true}
+                ]
+            }"#,
+        )
+        .expect("tasks.json should be written");
+
+        let subtasks = parse_tasks_json(&dir);
+
+        assert_eq!(subtasks.len(), 2);
+        assert_eq!(subtasks[0], SubtaskInfo { id: "T-001".to_string(), title: "First task".to_string(), passes: false });
+        assert_eq!(subtasks[1], SubtaskInfo { id: "T-002".to_string(), title: "Second task".to_string(), passes: true });
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn parse_tasks_json_returns_empty_when_missing() {
+        let dir = create_temp_project_dir("parse-tasks-missing");
+
+        let subtasks = parse_tasks_json(&dir);
+
+        assert!(subtasks.is_empty());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn parse_tasks_json_returns_empty_on_invalid_json() {
+        let dir = create_temp_project_dir("parse-tasks-invalid");
+        fs::write(dir.join("tasks.json"), "{not valid json").expect("write");
+
+        let subtasks = parse_tasks_json(&dir);
+
+        assert!(subtasks.is_empty());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn infer_phase_idle_when_empty() {
+        let dir = create_temp_project_dir("phase-idle");
+
+        assert_eq!(infer_phase(&dir), Phase::Idle);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn infer_phase_planning_when_only_planning_log() {
+        let dir = create_temp_project_dir("phase-planning");
+        fs::write(dir.join("planning.log"), "planning output").expect("write");
+
+        assert_eq!(infer_phase(&dir), Phase::Planning);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn infer_phase_implementation_when_iteration_log_only() {
+        let dir = create_temp_project_dir("phase-impl");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-1-claude.log"), "impl output").expect("write");
+
+        assert_eq!(infer_phase(&dir), Phase::Implementation);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn infer_phase_review_when_review_log_exists() {
+        let dir = create_temp_project_dir("phase-review");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+        fs::write(dir.join("iteration-2-codex-review.log"), "review").expect("write");
+
+        assert_eq!(infer_phase(&dir), Phase::Review);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn infer_phase_build_lint_test_when_hard_gate_log() {
+        let dir = create_temp_project_dir("phase-blt");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
+        fs::write(dir.join("iteration-3-codex-review.log"), "").expect("write");
+        fs::write(dir.join("hard-gate-3.log"), "gate results").expect("write");
+
+        assert_eq!(infer_phase(&dir), Phase::BuildLintTest);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn infer_phase_uses_latest_iteration() {
+        let dir = create_temp_project_dir("phase-latest");
+        // Iteration 1 completed with review + hard-gate
+        fs::write(dir.join("iteration-1-claude.log"), "").expect("write");
+        fs::write(dir.join("iteration-1-codex-review.log"), "").expect("write");
+        fs::write(dir.join("hard-gate-1.log"), "").expect("write");
+        // Iteration 2 in progress (implementation only)
+        fs::write(dir.join("iteration-2-codex.log"), "").expect("write");
+
+        assert_eq!(infer_phase(&dir), Phase::Implementation);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn parse_iteration_from_terminal_extracts_last_match() {
+        let content = "\
+[2026-04-25 08:46:39] 🔄 迭代 1/42\n\
+[2026-04-25 09:21:17] 🔄 迭代 2/42\n\
+[2026-04-25 09:30:00] 🔄 迭代 3/42\n";
+
+        assert_eq!(parse_iteration_from_terminal(content), Some((3, 42)));
+    }
+
+    #[test]
+    fn parse_iteration_from_terminal_returns_none_when_no_match() {
+        let content = "some log output\nno iteration markers here\n";
+
+        assert_eq!(parse_iteration_from_terminal(content), None);
+    }
+
+    #[test]
+    fn parse_iteration_from_terminal_handles_continue_mode() {
+        let content = "\
+[2026-04-25 09:21:17] 继续运行: 已完成 1 轮，再跑 41 轮 (总计 42)\n\
+[2026-04-25 09:21:17] 🔄 迭代 2/42\n";
+
+        assert_eq!(parse_iteration_from_terminal(content), Some((2, 42)));
+    }
+
+    #[test]
+    fn parse_iteration_from_log_md_extracts_iteration_and_total() {
+        let content = "\
+# Issue #30 实现日志\n\
+\n\
+### 迭代 2 - Codex (实现)\n\
+\n\
+### 迭代 4 - Claude (实现)\n\
+\n\
+## 最终结果\n\
+- 总迭代次数: 5\n";
+
+        assert_eq!(parse_iteration_from_log_md(content), Some((4, 5)));
+    }
+
+    #[test]
+    fn build_iteration_progress_aggregates_data() {
+        let dir = create_temp_project_dir("build-progress");
+        fs::write(
+            dir.join("tasks.json"),
+            r#"{"issueNumber": 42, "subtasks": [
+                {"id": "T-001", "title": "A", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": true},
+                {"id": "T-002", "title": "B", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": false},
+                {"id": "T-003", "title": "C", "description": "", "acceptanceCriteria": [], "priority": 3, "passes": true}
+            ]}"#,
+        )
+        .expect("write");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+        fs::write(dir.join("terminal.log"), "[time] 🔄 迭代 2/16\n").expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.current_iteration, 2);
+        assert_eq!(progress.total_iterations, 16);
+        assert_eq!(progress.phase, Phase::Implementation);
+        assert_eq!(progress.subtasks.len(), 3);
+        assert_eq!(progress.passed_count, 2);
+        assert_eq!(progress.total_count, 3);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn build_iteration_progress_falls_back_to_log_md_when_terminal_missing() {
+        let dir = create_temp_project_dir("build-progress-log-md");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
+        fs::write(
+            dir.join("log.md"),
+            "\
+# Issue #31 实现日志\n\
+\n\
+### 迭代 3 - Claude (实现)\n\
+\n\
+## 最终结果\n\
+- 总迭代次数: 7\n",
+        )
+        .expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.current_iteration, 3);
+        assert_eq!(progress.total_iterations, 7);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match() {
+        let dir = create_temp_project_dir("build-progress-terminal-fallback");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+        fs::write(dir.join("terminal.log"), "no iteration marker here\n").expect("write");
+        fs::write(
+            dir.join("log.md"),
+            "\
+# Issue #31 实现日志\n\
+\n\
+### 迭代 2 - Codex (实现)\n\
+\n\
+## 最终结果\n\
+- 总迭代次数: 42\n",
+        )
+        .expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.current_iteration, 2);
+        assert_eq!(progress.total_iterations, 42);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_iteration_progress_returns_idle_for_missing_workflow() {
+        let dir = create_temp_project_dir("progress-missing");
+
+        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 999)
+            .expect("should return idle");
+
+        assert_eq!(progress.phase, Phase::Idle);
+        assert_eq!(progress.current_iteration, 0);
+        assert!(progress.subtasks.is_empty());
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn get_iteration_progress_returns_data_for_existing_workflow() {
+        let dir = create_temp_project_dir("progress-existing");
+        let workflow_dir = dir.join(".autoresearch/workflows/issue-42");
+        fs::create_dir_all(&workflow_dir).expect("create workflow dir");
+        fs::write(
+            workflow_dir.join("tasks.json"),
+            r#"{"issueNumber": 42, "subtasks": [
+                {"id": "T-001", "title": "Task", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false}
+            ]}"#,
+        )
+        .expect("write");
+        fs::write(workflow_dir.join("planning.log"), "plan").expect("write");
+
+        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 42)
+            .expect("should return progress");
+
+        assert_eq!(progress.phase, Phase::Planning);
+        assert_eq!(progress.total_count, 1);
+        assert_eq!(progress.passed_count, 0);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+}
+
+codex
+目前看到的 diff 只实现了 T-001 的解析/查询接口，没有看到任何 `notify` watcher、Tauri `iteration-progress` 事件、去抖或 stop 清理逻辑。接下来我会再用精确搜索确认没有遗漏，然后跑编译检查验证现状。
+exec
+/bin/zsh -lc "rg -n \"notify|RecommendedWatcher|watch\\(|unwatch|Debounce|iteration-progress|emit\\(\\s*\\\"iteration-progress\\\"|deboun|watcher\" desktop_app/src-tauri/src/lib.rs desktop_app/src desktop_app/src-tauri" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/src-tauri/CLAUDE.md:6:- Clear the stored state with a PID match check to avoid an old watcher wiping out a newer run that started after stop/restart.
+desktop_app/src-tauri/CLAUDE.md:7:- Attach stdout/stderr readers and exit watchers only after the new `ProcessState` has been stored; otherwise a fast-exiting child can race the state write and leave a stale `running` entry behind.
+desktop_app/src-tauri/Cargo.lock:717: "notify",
+desktop_app/src-tauri/Cargo.lock:1793:name = "inotify"
+desktop_app/src-tauri/Cargo.lock:1799: "inotify-sys",
+desktop_app/src-tauri/Cargo.lock:1804:name = "inotify-sys"
+desktop_app/src-tauri/Cargo.lock:2246:name = "notify"
+desktop_app/src-tauri/Cargo.lock:2253: "inotify",
+desktop_app/src-tauri/Cargo.lock:2258: "notify-types",
+desktop_app/src-tauri/Cargo.lock:2264:name = "notify-types"
+desktop_app/src-tauri/Cargo.toml:28:notify = "8"
+
+exec
+/bin/zsh -lc 'cd desktop_app/src-tauri && cargo check' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cd desktop_app/src-tauri && cargo clippy --all-targets --all-features -- -D warnings' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 530ms:
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+
+ succeeded in 566ms:
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+
+codex
+搜索结果已经确认：代码库里没有任何 watcher 相关实现，`cargo check` 和 `cargo clippy` 虽然通过，但这只能说明代码可编译，不能证明 T-002 已完成。再补一轮前端侧搜索，确认是否已有事件消费逻辑或仍是拉取式接口。
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '120,420p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   120	struct IssuesResult {
+   121	    issues: Vec<GhIssue>,
+   122	    processed_numbers: Vec<i64>,
+   123	}
+   124	
+   125	// ========================================
+   126	// Iteration progress types
+   127	// ========================================
+   128	
+   129	/// Current phase of the autoresearch workflow.
+   130	#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+   131	enum Phase {
+   132	    /// Planning phase — subtask breakdown.
+   133	    Planning,
+   134	    /// Agent is implementing code.
+   135	    Implementation,
+   136	    /// Agent is reviewing code.
+   137	    Review,
+   138	    /// Build/lint/test hard gate checks.
+   139	    BuildLintTest,
+   140	    /// No active run or unknown state.
+   141	    Idle,
+   142	}
+   143	
+   144	/// Information about a single subtask from tasks.json.
+   145	#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+   146	struct SubtaskInfo {
+   147	    id: String,
+   148	    title: String,
+   149	    passes: bool,
+   150	}
+   151	
+   152	/// Overall iteration progress data sent to the frontend.
+   153	#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+   154	struct IterationProgress {
+   155	    /// Current iteration number (1-based), 0 if not started.
+   156	    current_iteration: i32,
+   157	    /// Total iterations configured (e.g. 42).
+   158	    total_iterations: i32,
+   159	    /// Current workflow phase.
+   160	    phase: Phase,
+   161	    /// List of subtasks with pass/fail status.
+   162	    subtasks: Vec<SubtaskInfo>,
+   163	    /// Number of subtasks that have passed.
+   164	    passed_count: usize,
+   165	    /// Total number of subtasks.
+   166	    total_count: usize,
+   167	}
+   168	
+   169	/// Raw tasks.json structure for deserialization.
+   170	#[derive(serde::Deserialize, Debug)]
+   171	#[serde(rename_all = "camelCase")]
+   172	struct TasksFile {
+   173	    #[allow(dead_code)]
+   174	    issue_number: Option<i64>,
+   175	    subtasks: Vec<TasksFileSubtask>,
+   176	}
+   177	
+   178	/// A subtask entry in tasks.json.
+   179	#[derive(serde::Deserialize, Debug)]
+   180	#[serde(rename_all = "camelCase")]
+   181	struct TasksFileSubtask {
+   182	    id: String,
+   183	    title: String,
+   184	    passes: bool,
+   185	}
+   186	
+   187	// ========================================
+   188	// Iteration progress helpers
+   189	// ========================================
+   190	
+   191	/// Parses tasks.json and returns a list of SubtaskInfo.
+   192	fn parse_tasks_json(workflow_dir: &Path) -> Vec<SubtaskInfo> {
+   193	    let tasks_path = workflow_dir.join("tasks.json");
+   194	    let bytes = match fs::read(&tasks_path) {
+   195	        Ok(b) => b,
+   196	        Err(_) => return Vec::new(),
+   197	    };
+   198	    let tasks_file: TasksFile = match serde_json::from_slice(&bytes) {
+   199	        Ok(t) => t,
+   200	        Err(_) => return Vec::new(),
+   201	    };
+   202	    tasks_file
+   203	        .subtasks
+   204	        .into_iter()
+   205	        .map(|s| SubtaskInfo {
+   206	            id: s.id,
+   207	            title: s.title,
+   208	            passes: s.passes,
+   209	        })
+   210	        .collect()
+   211	}
+   212	
+   213	/// Infers the current phase by examining files in the workflow directory.
+   214	///
+   215	/// Logic:
+   216	/// 1. Find the highest iteration number N from `iteration-N-*.log` files.
+   217	/// 2. If no iteration logs exist but `planning.log` exists → Planning.
+   218	/// 3. If no iteration logs and no planning.log → Idle.
+   219	/// 4. If `hard-gate-N.log` exists → BuildLintTest.
+   220	/// 5. If `iteration-N-*-review.log` exists → Review.
+   221	/// 6. Otherwise → Implementation.
+   222	fn infer_phase(workflow_dir: &Path) -> Phase {
+   223	    let entries = match fs::read_dir(workflow_dir) {
+   224	        Ok(e) => e,
+   225	        Err(_) => return Phase::Idle,
+   226	    };
+   227	
+   228	    let mut max_iteration: i32 = 0;
+   229	    let mut has_planning = false;
+   230	    let mut review_iterations = std::collections::HashSet::new();
+   231	    let mut hard_gate_iterations = std::collections::HashSet::new();
+   232	
+   233	    for entry in entries.flatten() {
+   234	        let name = entry.file_name().to_string_lossy().to_string();
+   235	        if name == "planning.log" {
+   236	            has_planning = true;
+   237	            continue;
+   238	        }
+   239	        if let Some(n) = iteration_number(&name) {
+   240	            if n > max_iteration {
+   241	                max_iteration = n;
+   242	            }
+   243	            if name.contains("-review.log") {
+   244	                review_iterations.insert(n);
+   245	            }
+   246	        }
+   247	        if name.starts_with("hard-gate-") && name.ends_with(".log") {
+   248	            if let Some(n) = name
+   249	                .strip_prefix("hard-gate-")
+   250	                .and_then(|s| s.strip_suffix(".log"))
+   251	                .and_then(|s| s.parse::<i32>().ok())
+   252	            {
+   253	                hard_gate_iterations.insert(n);
+   254	            }
+   255	        }
+   256	    }
+   257	
+   258	    if max_iteration == 0 {
+   259	        return if has_planning { Phase::Planning } else { Phase::Idle };
+   260	    }
+   261	
+   262	    if hard_gate_iterations.contains(&max_iteration) {
+   263	        return Phase::BuildLintTest;
+   264	    }
+   265	    if review_iterations.contains(&max_iteration) {
+   266	        return Phase::Review;
+   267	    }
+   268	    Phase::Implementation
+   269	}
+   270	
+   271	/// Extracts the current iteration and total iterations from terminal.log.
+   272	///
+   273	/// Looks for the pattern `🔄 迭代 N/M` in terminal.log lines (last match wins).
+   274	/// Falls back to parsing log.md if terminal.log is missing or has no match.
+   275	fn extract_iteration_numbers(workflow_dir: &Path) -> (i32, i32) {
+   276	    // Try terminal.log first (most reliable for iteration markers)
+   277	    let terminal_path = workflow_dir.join("terminal.log");
+   278	    if let Ok(content) = fs::read_to_string(&terminal_path) {
+   279	        if let Some((current, total)) = parse_iteration_from_terminal(&content) {
+   280	            return (current, total);
+   281	        }
+   282	    }
+   283	
+   284	    let log_md_path = workflow_dir.join("log.md");
+   285	    if let Ok(content) = fs::read_to_string(&log_md_path) {
+   286	        if let Some((current, total)) = parse_iteration_from_log_md(&content) {
+   287	            return (current, total);
+   288	        }
+   289	    }
+   290	
+   291	    (0, 0)
+   292	}
+   293	
+   294	/// Parses "迭代 N/M" from terminal.log content. Returns the last match.
+   295	fn parse_iteration_from_terminal(content: &str) -> Option<(i32, i32)> {
+   296	    let mut result = None;
+   297	    for line in content.lines() {
+   298	        // Look for "迭代 N/M" pattern
+   299	        if let Some(pos) = line.find("迭代 ") {
+   300	            let rest = &line[pos + "迭代 ".len()..];
+   301	            if let Some(slash_pos) = rest.find('/') {
+   302	                let current_str = rest[..slash_pos].trim();
+   303	                let total_rest = &rest[slash_pos + 1..];
+   304	                // Total might be followed by other characters or end of line
+   305	                let total_str: String = total_rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+   306	                if let (Ok(current), Ok(total)) = (current_str.parse::<i32>(), total_str.parse::<i32>()) {
+   307	                    result = Some((current, total));
+   308	                }
+   309	            }
+   310	        }
+   311	    }
+   312	    result
+   313	}
+   314	
+   315	/// Parses iteration progress from log.md content.
+   316	///
+   317	/// Current iteration is inferred from the last `### 迭代 N - ...` heading.
+   318	/// Total iterations is inferred from the last `总迭代次数: N` entry.
+   319	/// If only one value is present, the other defaults to 0.
+   320	fn parse_iteration_from_log_md(content: &str) -> Option<(i32, i32)> {
+   321	    let mut current_iteration = 0;
+   322	    let mut total_iterations = 0;
+   323	
+   324	    for line in content.lines() {
+   325	        if let Some(rest) = line.strip_prefix("### 迭代 ") {
+   326	            let iteration_str: String = rest
+   327	                .chars()
+   328	                .take_while(|c| c.is_ascii_digit())
+   329	                .collect();
+   330	            if let Ok(iteration) = iteration_str.parse::<i32>() {
+   331	                current_iteration = iteration;
+   332	            }
+   333	        }
+   334	
+   335	        if let Some(pos) = line.find("总迭代次数:") {
+   336	            let total_str: String = line[pos + "总迭代次数:".len()..]
+   337	                .chars()
+   338	                .skip_while(|c| c.is_whitespace())
+   339	                .take_while(|c| c.is_ascii_digit())
+   340	                .collect();
+   341	            if let Ok(total) = total_str.parse::<i32>() {
+   342	                total_iterations = total;
+   343	            }
+   344	        }
+   345	    }
+   346	
+   347	    if current_iteration == 0 && total_iterations == 0 {
+   348	        None
+   349	    } else {
+   350	        Some((current_iteration, total_iterations))
+   351	    }
+   352	}
+   353	
+   354	/// Builds a complete IterationProgress for a given workflow directory.
+   355	fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+   356	    let subtasks = parse_tasks_json(workflow_dir);
+   357	    let passed_count = subtasks.iter().filter(|s| s.passes).count();
+   358	    let total_count = subtasks.len();
+   359	    let phase = infer_phase(workflow_dir);
+   360	    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
+   361	
+   362	    IterationProgress {
+   363	        current_iteration,
+   364	        total_iterations,
+   365	        phase,
+   366	        subtasks,
+   367	        passed_count,
+   368	        total_count,
+   369	    }
+   370	}
+   371	
+   372	/// Returns the iteration progress for a given issue's workflow.
+   373	fn get_iteration_progress_sync(
+   374	    project_path: &str,
+   375	    issue_number: i64,
+   376	) -> Result<IterationProgress, String> {
+   377	    let base = Path::new(project_path);
+   378	    if !base.is_dir() {
+   379	        return Err(format!("Path is not a directory: {project_path}"));
+   380	    }
+   381	
+   382	    let workflow_dir = base
+   383	        .join(".autoresearch")
+   384	        .join("workflows")
+   385	        .join(format!("issue-{issue_number}"));
+   386	
+   387	    if !workflow_dir.is_dir() {
+   388	        // Return idle progress with empty data
+   389	        return Ok(IterationProgress {
+   390	            current_iteration: 0,
+   391	            total_iterations: 0,
+   392	            phase: Phase::Idle,
+   393	            subtasks: Vec::new(),
+   394	            passed_count: 0,
+   395	            total_count: 0,
+   396	        });
+   397	    }
+   398	
+   399	    Ok(build_iteration_progress(&workflow_dir))
+   400	}
+   401	
+   402	/// Returns the current iteration progress for a specific issue.
+   403	#[tauri::command]
+   404	async fn get_iteration_progress(
+   405	    project_path: String,
+   406	    issue_number: i64,
+   407	) -> Result<IterationProgress, String> {
+   408	    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
+   409	        .await
+   410	        .map_err(|e| format!("Task join error: {e}"))?
+   411	}
+   412	
+   413	/// Opens a native folder selection dialog and returns the selected path.
+   414	#[tauri::command]
+   415	async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+   416	    let dir = tauri_plugin_dialog::DialogExt::dialog(&app)
+   417	        .file()
+   418	        .set_title("Select Project Directory")
+   419	        .blocking_pick_folder();
+   420	    Ok(dir.map(|p| p.to_string()))
+
+exec
+/bin/zsh -lc "rg -n \"get_iteration_progress|iteration-progress|listen\\(|@tauri-apps/api/event|run-output|run-exit\" desktop_app/src" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/src/CLAUDE.md:52:- Tauri event subscriptions should be centralized in a store when multiple UI components need the same lifecycle state; `run-output` / `run-exit` are handled in `src/stores/runStore.ts`
+desktop_app/src/CLAUDE.md:75:- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+desktop_app/src/stores/runStore.ts:27:type RunEventName = 'run-output' | 'run-exit';
+desktop_app/src/stores/runStore.ts:110:  const { listen } = await import('@tauri-apps/api/event');
+desktop_app/src/stores/runStore.ts:111:  return listen(event, callback);
+desktop_app/src/stores/runStore.ts:147:        deps.listen<string>('run-output', (event) => {
+desktop_app/src/stores/runStore.ts:152:        deps.listen<RunExitEvent>('run-exit', (event) => {
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '780,1045p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   780	            args.push(agents.clone());
+   781	        }
+   782	    }
+   783	
+   784	    if request.continue_mode.unwrap_or(false) {
+   785	        args.push("-c".to_string());
+   786	    }
+   787	
+   788	    args.push(request.issue_number.to_string());
+   789	
+   790	    if let Some(max_iter) = request.max_iter {
+   791	        args.push(max_iter.to_string());
+   792	    }
+   793	
+   794	    args
+   795	}
+   796	
+   797	/// Builds environment variables for run.sh from the request parameters.
+   798	/// Returns a vector of (key, value) pairs.
+   799	/// This is a pure function extracted for testability.
+   800	fn build_run_env_vars(request: &StartRunRequest) -> Vec<(&'static str, String)> {
+   801	    let mut env_vars = vec![];
+   802	    if let Some(passing_score) = request.passing_score {
+   803	        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+   804	    }
+   805	    env_vars
+   806	}
+   807	
+   808	/// Result returned when run.sh process exits.
+   809	#[derive(serde::Serialize, Debug, Clone)]
+   810	struct RunExitEvent {
+   811	    /// Exit code of the process.
+   812	    exit_code: Option<i32>,
+   813	    /// Whether the process was killed by stop_run.
+   814	    killed: bool,
+   815	}
+   816	
+   817	/// Starts a run.sh process to process a GitHub Issue.
+   818	///
+   819	/// Parameters are mapped to run.sh CLI arguments:
+   820	/// - `issue_number` -> positional argument
+   821	/// - `max_iter` -> positional argument (after issue_number)
+   822	/// - `agents` -> `-a` option
+   823	/// - `passing_score` -> `PASSING_SCORE` environment variable
+   824	/// - `continue_mode` -> `-c` flag
+   825	///
+   826	/// The process's stdout/stderr are streamed via `run-output` Tauri events.
+   827	/// When the process exits, a `run-exit` event is emitted.
+   828	#[cfg(unix)]
+   829	#[tauri::command]
+   830	async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<(), String> {
+   831	    let state = get_run_state();
+   832	    let mut state_guard = state.lock().await;
+   833	
+   834	    // Check if a process is already running
+   835	    if state_guard.process.is_some() {
+   836	        return Err("A run is already in progress. Stop the current run before starting a new one.".to_string());
+   837	    }
+   838	
+   839	    // Validate project path
+   840	    let project_path = Path::new(&request.project_path);
+   841	    if !project_path.is_dir() {
+   842	        return Err(format!("Project path is not a directory: {}", request.project_path));
+   843	    }
+   844	
+   845	    // Find run.sh in autoresearch directory (relative to the app)
+   846	    // run.sh is in the autoresearch project root, which is the parent of desktop_app
+   847	    let autoresearch_root = project_path
+   848	        .parent()
+   849	        .ok_or("Cannot determine autoresearch root directory")?;
+   850	    let run_sh_path = autoresearch_root.join("run.sh");
+   851	    if !run_sh_path.is_file() {
+   852	        return Err(format!("run.sh not found at: {}", run_sh_path.display()));
+   853	    }
+   854	
+   855	    // Build command arguments and environment variables
+   856	    let args = build_run_args(&request);
+   857	    let env_vars = build_run_env_vars(&request);
+   858	
+   859	    // Spawn the process with a new process group
+   860	    let mut cmd = TokioCommand::new(&run_sh_path);
+   861	    cmd.args(&args)
+   862	        .current_dir(autoresearch_root)
+   863	        .stdout(StdStdio::piped())
+   864	        .stderr(StdStdio::piped())
+   865	        .kill_on_drop(false); // Don't kill on drop - we want to manage the process lifecycle
+   866	
+   867	    // Set environment variables
+   868	    for (key, value) in &env_vars {
+   869	        cmd.env(key, value);
+   870	    }
+   871	
+   872	    // Set up process group on Unix
+   873	    // SAFETY: pre_exec is safe as long as the closure doesn't panic or call unsafe code
+   874	    unsafe {
+   875	        cmd.pre_exec(move || {
+   876	            // Create a new process group with the child's PID as the PGID
+   877	            let pid = libc::getpid();
+   878	            if libc::setpgid(pid, pid) < 0 {
+   879	                // Log error but don't fail the spawn
+   880	                eprintln!("Warning: Failed to set process group: {}", std::io::Error::last_os_error());
+   881	            }
+   882	            Ok(())
+   883	        });
+   884	    }
+   885	
+   886	    // Spawn the process
+   887	    let mut child = cmd
+   888	        .spawn()
+   889	        .map_err(|e| format!("Failed to start run.sh: {e}"))?;
+   890	
+   891	    let pid = child.id().ok_or("Failed to get process ID")?;
+   892	
+   893	    // Store the PID for process group management
+   894	    state_guard.process = Some(RunProcess { pid });
+   895	    drop(state_guard);
+   896	
+   897	    // Reset the killed flag
+   898	    get_was_killed().store(false, Ordering::SeqCst);
+   899	
+   900	    // Clone app handle for the spawned task
+   901	    let app_clone = app.clone();
+   902	    let state_clone = get_run_state();
+   903	
+   904	    // Take stdout/stderr before waiting on the process
+   905	    let stdout = child.stdout.take();
+   906	    let stderr = child.stderr.take();
+   907	
+   908	    // Spawn a task to wait for process exit and emit event
+   909	    tokio::spawn(async move {
+   910	        let status = child.wait().await;
+   911	
+   912	        // Check if we were killed by stop_run
+   913	        let was_killed = get_was_killed().swap(false, Ordering::SeqCst);
+   914	
+   915	        // Clear the process state
+   916	        {
+   917	            let mut state_guard = state_clone.lock().await;
+   918	            state_guard.process = None;
+   919	        }
+   920	
+   921	        // Only emit exit event if we weren't killed by stop_run
+   922	        // (stop_run emits its own event)
+   923	        if !was_killed {
+   924	            let exit_event = match status {
+   925	                Ok(status) => RunExitEvent {
+   926	                    exit_code: status.code(),
+   927	                    killed: false,
+   928	                },
+   929	                Err(_) => RunExitEvent {
+   930	                    exit_code: None,
+   931	                    killed: false,
+   932	                },
+   933	            };
+   934	
+   935	            let _ = app_clone.emit("run-exit", &exit_event);
+   936	        }
+   937	    });
+   938	
+   939	    // Handle stdout streaming
+   940	    if let Some(stdout) = stdout {
+   941	        let app_clone = app.clone();
+   942	        tokio::spawn(async move {
+   943	            let mut reader = TokioBufReader::new(stdout).lines();
+   944	            while let Ok(Some(line)) = reader.next_line().await {
+   945	                let _ = app_clone.emit("run-output", &line);
+   946	            }
+   947	        });
+   948	    }
+   949	
+   950	    // Handle stderr streaming
+   951	    if let Some(stderr) = stderr {
+   952	        let app_clone = app.clone();
+   953	        tokio::spawn(async move {
+   954	            let mut reader = TokioBufReader::new(stderr).lines();
+   955	            while let Ok(Some(line)) = reader.next_line().await {
+   956	                let _ = app_clone.emit("run-output", &line);
+   957	            }
+   958	        });
+   959	    }
+   960	
+   961	    Ok(())
+   962	}
+   963	
+   964	/// Stops the currently running run.sh process by sending SIGTERM to its process group.
+   965	#[cfg(unix)]
+   966	#[tauri::command]
+   967	async fn stop_run(app: tauri::AppHandle) -> Result<(), String> {
+   968	    let state = get_run_state();
+   969	    let mut state_guard = state.lock().await;
+   970	
+   971	    let process = state_guard.process.take().ok_or("No run is in progress")?;
+   972	    let pid = process.pid;
+   973	
+   974	    // Mark that we're killing via stop_run, so the wait task doesn't emit duplicate event
+   975	    get_was_killed().store(true, Ordering::SeqCst);
+   976	
+   977	    // Send SIGTERM to the process group
+   978	    // Use the PID as PGID since we set it in pre_exec
+   979	    let pgid = pid as i32;
+   980	
+   981	    // Use nix to send signal to process group
+   982	    use nix::sys::signal::{killpg, Signal};
+   983	    use nix::unistd::Pid;
+   984	
+   985	    match killpg(Pid::from_raw(pgid), Signal::SIGTERM) {
+   986	        Ok(()) => {
+   987	            // Emit exit event with killed flag
+   988	            let exit_event = RunExitEvent {
+   989	                exit_code: None,
+   990	                killed: true,
+   991	            };
+   992	            let _ = app.emit("run-exit", &exit_event);
+   993	            Ok(())
+   994	        }
+   995	        Err(e) => {
+   996	            // Restore process state on error
+   997	            state_guard.process = Some(process);
+   998	            get_was_killed().store(false, Ordering::SeqCst);
+   999	            Err(format!("Failed to stop process: {e}"))
+  1000	        }
+  1001	    }
+  1002	}
+  1003	
+  1004	/// Current status of run.sh process management.
+  1005	#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+  1006	enum RunStatus {
+  1007	    /// No process is running.
+  1008	    Idle,
+  1009	    /// A run.sh process is currently executing.
+  1010	    Running,
+  1011	}
+  1012	
+  1013	/// Returns the current status of run.sh process management.
+  1014	#[cfg(unix)]
+  1015	#[tauri::command]
+  1016	async fn get_run_status() -> Result<RunStatus, String> {
+  1017	    let state = get_run_state();
+  1018	    let state_guard = state.lock().await;
+  1019	
+  1020	    if state_guard.process.is_some() {
+  1021	        Ok(RunStatus::Running)
+  1022	    } else {
+  1023	        Ok(RunStatus::Idle)
+  1024	    }
+  1025	}
+  1026	
+  1027	/// Non-Unix stub for get_run_status.
+  1028	#[cfg(not(unix))]
+  1029	#[tauri::command]
+  1030	async fn get_run_status() -> Result<RunStatus, String> {
+  1031	    Ok(RunStatus::Idle)
+  1032	}
+  1033	
+  1034	/// Non-Unix stub for start_run (not supported on Windows).
+  1035	#[cfg(not(unix))]
+  1036	#[tauri::command]
+  1037	async fn start_run(_app: tauri::AppHandle, _request: StartRunRequest) -> Result<(), String> {
+  1038	    Err("run.sh process management is only supported on Unix systems".to_string())
+  1039	}
+  1040	
+  1041	/// Non-Unix stub for stop_run (not supported on Windows).
+  1042	#[cfg(not(unix))]
+  1043	#[tauri::command]
+  1044	async fn stop_run(_app: tauri::AppHandle) -> Result<(), String> {
+  1045	    Err("run.sh process management is only supported on Unix systems".to_string())
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '1390,1710p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+  1390	    }
+  1391	
+  1392	    #[cfg(unix)]
+  1393	    #[test]
+  1394	    fn run_process_state_default_is_idle() {
+  1395	        let state = RunProcessState::default();
+  1396	
+  1397	        assert!(state.process.is_none());
+  1398	    }
+  1399	
+  1400	    // ========================================
+  1401	    // Iteration progress tests
+  1402	    // ========================================
+  1403	
+  1404	    #[test]
+  1405	    fn parse_tasks_json_returns_subtasks() {
+  1406	        let dir = create_temp_project_dir("parse-tasks");
+  1407	        fs::write(
+  1408	            dir.join("tasks.json"),
+  1409	            r#"{
+  1410	                "issueNumber": 42,
+  1411	                "subtasks": [
+  1412	                    {"id": "T-001", "title": "First task", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false},
+  1413	                    {"id": "T-002", "title": "Second task", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": true}
+  1414	                ]
+  1415	            }"#,
+  1416	        )
+  1417	        .expect("tasks.json should be written");
+  1418	
+  1419	        let subtasks = parse_tasks_json(&dir);
+  1420	
+  1421	        assert_eq!(subtasks.len(), 2);
+  1422	        assert_eq!(subtasks[0], SubtaskInfo { id: "T-001".to_string(), title: "First task".to_string(), passes: false });
+  1423	        assert_eq!(subtasks[1], SubtaskInfo { id: "T-002".to_string(), title: "Second task".to_string(), passes: true });
+  1424	
+  1425	        fs::remove_dir_all(dir).expect("cleanup");
+  1426	    }
+  1427	
+  1428	    #[test]
+  1429	    fn parse_tasks_json_returns_empty_when_missing() {
+  1430	        let dir = create_temp_project_dir("parse-tasks-missing");
+  1431	
+  1432	        let subtasks = parse_tasks_json(&dir);
+  1433	
+  1434	        assert!(subtasks.is_empty());
+  1435	        fs::remove_dir_all(dir).expect("cleanup");
+  1436	    }
+  1437	
+  1438	    #[test]
+  1439	    fn parse_tasks_json_returns_empty_on_invalid_json() {
+  1440	        let dir = create_temp_project_dir("parse-tasks-invalid");
+  1441	        fs::write(dir.join("tasks.json"), "{not valid json").expect("write");
+  1442	
+  1443	        let subtasks = parse_tasks_json(&dir);
+  1444	
+  1445	        assert!(subtasks.is_empty());
+  1446	        fs::remove_dir_all(dir).expect("cleanup");
+  1447	    }
+  1448	
+  1449	    #[test]
+  1450	    fn infer_phase_idle_when_empty() {
+  1451	        let dir = create_temp_project_dir("phase-idle");
+  1452	
+  1453	        assert_eq!(infer_phase(&dir), Phase::Idle);
+  1454	        fs::remove_dir_all(dir).expect("cleanup");
+  1455	    }
+  1456	
+  1457	    #[test]
+  1458	    fn infer_phase_planning_when_only_planning_log() {
+  1459	        let dir = create_temp_project_dir("phase-planning");
+  1460	        fs::write(dir.join("planning.log"), "planning output").expect("write");
+  1461	
+  1462	        assert_eq!(infer_phase(&dir), Phase::Planning);
+  1463	        fs::remove_dir_all(dir).expect("cleanup");
+  1464	    }
+  1465	
+  1466	    #[test]
+  1467	    fn infer_phase_implementation_when_iteration_log_only() {
+  1468	        let dir = create_temp_project_dir("phase-impl");
+  1469	        fs::write(dir.join("planning.log"), "").expect("write");
+  1470	        fs::write(dir.join("iteration-1-claude.log"), "impl output").expect("write");
+  1471	
+  1472	        assert_eq!(infer_phase(&dir), Phase::Implementation);
+  1473	        fs::remove_dir_all(dir).expect("cleanup");
+  1474	    }
+  1475	
+  1476	    #[test]
+  1477	    fn infer_phase_review_when_review_log_exists() {
+  1478	        let dir = create_temp_project_dir("phase-review");
+  1479	        fs::write(dir.join("planning.log"), "").expect("write");
+  1480	        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+  1481	        fs::write(dir.join("iteration-2-codex-review.log"), "review").expect("write");
+  1482	
+  1483	        assert_eq!(infer_phase(&dir), Phase::Review);
+  1484	        fs::remove_dir_all(dir).expect("cleanup");
+  1485	    }
+  1486	
+  1487	    #[test]
+  1488	    fn infer_phase_build_lint_test_when_hard_gate_log() {
+  1489	        let dir = create_temp_project_dir("phase-blt");
+  1490	        fs::write(dir.join("planning.log"), "").expect("write");
+  1491	        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
+  1492	        fs::write(dir.join("iteration-3-codex-review.log"), "").expect("write");
+  1493	        fs::write(dir.join("hard-gate-3.log"), "gate results").expect("write");
+  1494	
+  1495	        assert_eq!(infer_phase(&dir), Phase::BuildLintTest);
+  1496	        fs::remove_dir_all(dir).expect("cleanup");
+  1497	    }
+  1498	
+  1499	    #[test]
+  1500	    fn infer_phase_uses_latest_iteration() {
+  1501	        let dir = create_temp_project_dir("phase-latest");
+  1502	        // Iteration 1 completed with review + hard-gate
+  1503	        fs::write(dir.join("iteration-1-claude.log"), "").expect("write");
+  1504	        fs::write(dir.join("iteration-1-codex-review.log"), "").expect("write");
+  1505	        fs::write(dir.join("hard-gate-1.log"), "").expect("write");
+  1506	        // Iteration 2 in progress (implementation only)
+  1507	        fs::write(dir.join("iteration-2-codex.log"), "").expect("write");
+  1508	
+  1509	        assert_eq!(infer_phase(&dir), Phase::Implementation);
+  1510	        fs::remove_dir_all(dir).expect("cleanup");
+  1511	    }
+  1512	
+  1513	    #[test]
+  1514	    fn parse_iteration_from_terminal_extracts_last_match() {
+  1515	        let content = "\
+  1516	[2026-04-25 08:46:39] 🔄 迭代 1/42\n\
+  1517	[2026-04-25 09:21:17] 🔄 迭代 2/42\n\
+  1518	[2026-04-25 09:30:00] 🔄 迭代 3/42\n";
+  1519	
+  1520	        assert_eq!(parse_iteration_from_terminal(content), Some((3, 42)));
+  1521	    }
+  1522	
+  1523	    #[test]
+  1524	    fn parse_iteration_from_terminal_returns_none_when_no_match() {
+  1525	        let content = "some log output\nno iteration markers here\n";
+  1526	
+  1527	        assert_eq!(parse_iteration_from_terminal(content), None);
+  1528	    }
+  1529	
+  1530	    #[test]
+  1531	    fn parse_iteration_from_terminal_handles_continue_mode() {
+  1532	        let content = "\
+  1533	[2026-04-25 09:21:17] 继续运行: 已完成 1 轮，再跑 41 轮 (总计 42)\n\
+  1534	[2026-04-25 09:21:17] 🔄 迭代 2/42\n";
+  1535	
+  1536	        assert_eq!(parse_iteration_from_terminal(content), Some((2, 42)));
+  1537	    }
+  1538	
+  1539	    #[test]
+  1540	    fn parse_iteration_from_log_md_extracts_iteration_and_total() {
+  1541	        let content = "\
+  1542	# Issue #30 实现日志\n\
+  1543	\n\
+  1544	### 迭代 2 - Codex (实现)\n\
+  1545	\n\
+  1546	### 迭代 4 - Claude (实现)\n\
+  1547	\n\
+  1548	## 最终结果\n\
+  1549	- 总迭代次数: 5\n";
+  1550	
+  1551	        assert_eq!(parse_iteration_from_log_md(content), Some((4, 5)));
+  1552	    }
+  1553	
+  1554	    #[test]
+  1555	    fn build_iteration_progress_aggregates_data() {
+  1556	        let dir = create_temp_project_dir("build-progress");
+  1557	        fs::write(
+  1558	            dir.join("tasks.json"),
+  1559	            r#"{"issueNumber": 42, "subtasks": [
+  1560	                {"id": "T-001", "title": "A", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": true},
+  1561	                {"id": "T-002", "title": "B", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": false},
+  1562	                {"id": "T-003", "title": "C", "description": "", "acceptanceCriteria": [], "priority": 3, "passes": true}
+  1563	            ]}"#,
+  1564	        )
+  1565	        .expect("write");
+  1566	        fs::write(dir.join("planning.log"), "").expect("write");
+  1567	        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+  1568	        fs::write(dir.join("terminal.log"), "[time] 🔄 迭代 2/16\n").expect("write");
+  1569	
+  1570	        let progress = build_iteration_progress(&dir);
+  1571	
+  1572	        assert_eq!(progress.current_iteration, 2);
+  1573	        assert_eq!(progress.total_iterations, 16);
+  1574	        assert_eq!(progress.phase, Phase::Implementation);
+  1575	        assert_eq!(progress.subtasks.len(), 3);
+  1576	        assert_eq!(progress.passed_count, 2);
+  1577	        assert_eq!(progress.total_count, 3);
+  1578	
+  1579	        fs::remove_dir_all(dir).expect("cleanup");
+  1580	    }
+  1581	
+  1582	    #[test]
+  1583	    fn build_iteration_progress_falls_back_to_log_md_when_terminal_missing() {
+  1584	        let dir = create_temp_project_dir("build-progress-log-md");
+  1585	        fs::write(dir.join("planning.log"), "").expect("write");
+  1586	        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
+  1587	        fs::write(
+  1588	            dir.join("log.md"),
+  1589	            "\
+  1590	# Issue #31 实现日志\n\
+  1591	\n\
+  1592	### 迭代 3 - Claude (实现)\n\
+  1593	\n\
+  1594	## 最终结果\n\
+  1595	- 总迭代次数: 7\n",
+  1596	        )
+  1597	        .expect("write");
+  1598	
+  1599	        let progress = build_iteration_progress(&dir);
+  1600	
+  1601	        assert_eq!(progress.current_iteration, 3);
+  1602	        assert_eq!(progress.total_iterations, 7);
+  1603	
+  1604	        fs::remove_dir_all(dir).expect("cleanup");
+  1605	    }
+  1606	
+  1607	    #[test]
+  1608	    fn build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match() {
+  1609	        let dir = create_temp_project_dir("build-progress-terminal-fallback");
+  1610	        fs::write(dir.join("planning.log"), "").expect("write");
+  1611	        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+  1612	        fs::write(dir.join("terminal.log"), "no iteration marker here\n").expect("write");
+  1613	        fs::write(
+  1614	            dir.join("log.md"),
+  1615	            "\
+  1616	# Issue #31 实现日志\n\
+  1617	\n\
+  1618	### 迭代 2 - Codex (实现)\n\
+  1619	\n\
+  1620	## 最终结果\n\
+  1621	- 总迭代次数: 42\n",
+  1622	        )
+  1623	        .expect("write");
+  1624	
+  1625	        let progress = build_iteration_progress(&dir);
+  1626	
+  1627	        assert_eq!(progress.current_iteration, 2);
+  1628	        assert_eq!(progress.total_iterations, 42);
+  1629	
+  1630	        fs::remove_dir_all(dir).expect("cleanup");
+  1631	    }
+  1632	
+  1633	    #[test]
+  1634	    fn get_iteration_progress_returns_idle_for_missing_workflow() {
+  1635	        let dir = create_temp_project_dir("progress-missing");
+  1636	
+  1637	        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 999)
+  1638	            .expect("should return idle");
+  1639	
+  1640	        assert_eq!(progress.phase, Phase::Idle);
+  1641	        assert_eq!(progress.current_iteration, 0);
+  1642	        assert!(progress.subtasks.is_empty());
+  1643	
+  1644	        fs::remove_dir_all(dir).expect("cleanup");
+  1645	    }
+  1646	
+  1647	    #[test]
+  1648	    fn get_iteration_progress_returns_data_for_existing_workflow() {
+  1649	        let dir = create_temp_project_dir("progress-existing");
+  1650	        let workflow_dir = dir.join(".autoresearch/workflows/issue-42");
+  1651	        fs::create_dir_all(&workflow_dir).expect("create workflow dir");
+  1652	        fs::write(
+  1653	            workflow_dir.join("tasks.json"),
+  1654	            r#"{"issueNumber": 42, "subtasks": [
+  1655	                {"id": "T-001", "title": "Task", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false}
+  1656	            ]}"#,
+  1657	        )
+  1658	        .expect("write");
+  1659	        fs::write(workflow_dir.join("planning.log"), "plan").expect("write");
+  1660	
+  1661	        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 42)
+  1662	            .expect("should return progress");
+  1663	
+  1664	        assert_eq!(progress.phase, Phase::Planning);
+  1665	        assert_eq!(progress.total_count, 1);
+  1666	        assert_eq!(progress.passed_count, 0);
+  1667	
+  1668	        fs::remove_dir_all(dir).expect("cleanup");
+  1669	    }
+  1670	}
+
+codex
+我还需要补一项验证：跑 `cargo test` 看现有测试是否都通过，以及确认测试是否真的覆盖到了 T-002 的 watcher 路径，而不是只覆盖 T-001 的解析函数。
+exec
+/bin/zsh -lc 'cd desktop_app/src-tauri && cargo test' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 604ms:
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/desktop_app_lib-d89ea694633b560d)
+
+running 36 tests
+test tests::classify_log_source_maps_known_workflow_files ... ok
+test tests::build_run_env_vars_empty_when_no_passing_score ... ok
+test tests::build_run_args_continue_mode_defaults_false ... ok
+test tests::build_run_args_includes_required_options ... ok
+test tests::build_run_env_vars_includes_passing_score ... ok
+test tests::build_run_args_ignores_empty_agents ... ok
+test tests::build_run_args_omits_optional_when_none ... ok
+test tests::get_issue_detail_rejects_non_directory_path ... ok
+test tests::get_iteration_progress_returns_idle_for_missing_workflow ... ok
+test tests::infer_phase_idle_when_empty ... ok
+test tests::issue_detail_error_maps_missing_issue ... ok
+test tests::issue_detail_error_preserves_other_gh_failures ... ok
+test tests::iteration_number_extracts_numeric_prefix ... ok
+test tests::build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match ... ok
+test tests::build_iteration_progress_aggregates_data ... ok
+test tests::parse_issue_detail_reports_invalid_json ... ok
+test tests::parse_issue_detail_returns_structured_data ... ok
+test tests::build_iteration_progress_falls_back_to_log_md_when_terminal_missing ... ok
+test tests::parse_iteration_from_log_md_extracts_iteration_and_total ... ok
+test tests::parse_iteration_from_terminal_extracts_last_match ... ok
+test tests::parse_iteration_from_terminal_handles_continue_mode ... ok
+test tests::parse_iteration_from_terminal_returns_none_when_no_match ... ok
+test tests::infer_phase_planning_when_only_planning_log ... ok
+test tests::infer_phase_implementation_when_iteration_log_only ... ok
+test tests::parse_tasks_json_returns_empty_on_invalid_json ... ok
+test tests::infer_phase_build_lint_test_when_hard_gate_log ... ok
+test tests::run_process_state_default_is_idle ... ok
+test tests::parse_tasks_json_returns_empty_when_missing ... ok
+test tests::infer_phase_review_when_review_log_exists ... ok
+test tests::parse_tasks_json_returns_subtasks ... ok
+test tests::infer_phase_uses_latest_iteration ... ok
+test tests::workflow_issue_dir_requires_existing_issue_directory ... ok
+test tests::get_iteration_progress_returns_data_for_existing_workflow ... ok
+test tests::resolve_issue_log_source_path_rejects_path_traversal ... ok
+test tests::read_issue_log_content_reads_utf8_lossy_text ... ok
+test tests::list_issue_log_sources_returns_sorted_sources ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/desktop_app-83fd22e0354b85e4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests desktop_app_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+codex
+## 审核报告
+
+### 主要发现
+
+1. `T-002` 的核心能力尚未实现，当前代码只提供了“手动查询当前进度”的解析接口，没有任何文件监听、事件推送、去抖或 watcher 生命周期管理。
+   证据：
+   [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L125) 到 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L411) 新增的是 `Phase` / `IterationProgress` / `parse_tasks_json` / `infer_phase` / `get_iteration_progress`。
+   [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L829) 到 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L999) 的 `start_run` / `stop_run` 也没有启动或停止 `notify` watcher。
+   全局搜索也没有发现 `notify::RecommendedWatcher`、`watch()`、`iteration-progress` 事件发送、去抖定时器等实现。按验收条件看，这一项直接导致以下条件未满足：
+   - 监听 workflow 目录创建/修改事件
+   - 文件变化后自动解析并推送 `iteration-progress`
+   - 500ms 去抖
+   - run 结束或 stop 时释放 watcher
+   - watcher 错误优雅降级
+
+2. 测试覆盖的是 T-001 解析逻辑，不是 T-002 的 watcher 行为，无法证明子任务达标。
+   证据：
+   [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L1400) 到 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L1669) 的新增测试全部围绕 `tasks.json` 解析、阶段推断、迭代号提取、同步查询接口。
+   没有任何测试覆盖：
+   - 文件变更触发
+   - debounce 合并事件
+   - Tauri `emit("iteration-progress", ...)`
+   - run 退出或 `stop_run` 后 watcher 清理
+   - watcher 初始化/运行异常的降级路径
+
+### 实现者自检确认
+
+- [x] 已执行编译/类型检查
+- [x] 已执行 Lint 检查
+- [x] 已运行相关测试
+- [ ] 已确认测试覆盖 T-002 核心验收点
+
+我本地验证结果：
+- `cargo check` 通过
+- `cargo clippy --all-targets --all-features -- -D warnings` 通过
+- `cargo test` 通过，36 个测试全部通过
+
+### 总体评价
+
+**评分: 58/100**
+
+当前实现质量在“解析逻辑”这一层面是合格的，但这基本属于 T-001/T-001.5 的延伸，不是 T-002 要求的“Rust 侧 notify 文件监听与事件推送”。由于核心功能缺失，子任务验收不能通过。
+
+### 分项评分
+
+- 正确性: 15/35
+- 测试质量: 8/25
+- 代码质量: 16/20
+- 安全性: 10/10
+- 性能: 9/10
+
+### 验收条件核对
+
+- [ ] 使用 `notify` 监听 workflow 目录创建/修改事件
+- [ ] 文件变化时自动解析并通过 `'iteration-progress'` 推送
+- [ ] 实现 500ms 左右去抖
+- [ ] run 结束后自动停止 watcher 并释放资源
+- [ ] watcher 错误不影响主进程运行
+- [x] `cargo check && cargo clippy` 通过
+
+### 结论
+
+该子任务当前 **不达标**。  
+建议下一轮至少补上：
+
+1. 在 Rust 侧引入 watcher 状态，并让其与 `RunProcessState` 同生命周期。
+2. `start_run` 成功后启动对 `.autoresearch/workflows/issue-N/` 的监听。
+3. 监听到创建/修改事件后，500ms 去抖，再调用现有 `build_iteration_progress`。
+4. 通过 `app.emit("iteration-progress", progress)` 推送前端。
+5. 在进程自然退出和 `stop_run` 两条路径里统一清理 watcher。
+6. 增加 watcher 相关单测或集成测试。
+
+## Learnings
+
+- **模式**: 目前新增代码集中在 `IterationProgress` 的解析与查询接口，说明 T-001 的纯函数基础已经具备，T-002 可以直接复用 `build_iteration_progress()` 作为 watcher 回调的解析入口。
+- **经验**: `cargo check` / `clippy` / `test` 全绿不能代表子任务达标，尤其当验收条件包含事件驱动和生命周期管理时，必须看行为测试而不是只看纯函数测试。
+- **经验**: 如果后续实现 watcher，建议把“watcher 句柄 + debounce 任务取消句柄 + 目标 issue/pid”收敛到独立状态结构，避免 stop/restart 竞态。
+tokens used
+55,411
+## 审核报告
+
+### 主要发现
+
+1. `T-002` 的核心能力尚未实现，当前代码只提供了“手动查询当前进度”的解析接口，没有任何文件监听、事件推送、去抖或 watcher 生命周期管理。
+   证据：
+   [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L125) 到 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L411) 新增的是 `Phase` / `IterationProgress` / `parse_tasks_json` / `infer_phase` / `get_iteration_progress`。
+   [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L829) 到 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L999) 的 `start_run` / `stop_run` 也没有启动或停止 `notify` watcher。
+   全局搜索也没有发现 `notify::RecommendedWatcher`、`watch()`、`iteration-progress` 事件发送、去抖定时器等实现。按验收条件看，这一项直接导致以下条件未满足：
+   - 监听 workflow 目录创建/修改事件
+   - 文件变化后自动解析并推送 `iteration-progress`
+   - 500ms 去抖
+   - run 结束或 stop 时释放 watcher
+   - watcher 错误优雅降级
+
+2. 测试覆盖的是 T-001 解析逻辑，不是 T-002 的 watcher 行为，无法证明子任务达标。
+   证据：
+   [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L1400) 到 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L1669) 的新增测试全部围绕 `tasks.json` 解析、阶段推断、迭代号提取、同步查询接口。
+   没有任何测试覆盖：
+   - 文件变更触发
+   - debounce 合并事件
+   - Tauri `emit("iteration-progress", ...)`
+   - run 退出或 `stop_run` 后 watcher 清理
+   - watcher 初始化/运行异常的降级路径
+
+### 实现者自检确认
+
+- [x] 已执行编译/类型检查
+- [x] 已执行 Lint 检查
+- [x] 已运行相关测试
+- [ ] 已确认测试覆盖 T-002 核心验收点
+
+我本地验证结果：
+- `cargo check` 通过
+- `cargo clippy --all-targets --all-features -- -D warnings` 通过
+- `cargo test` 通过，36 个测试全部通过
+
+### 总体评价
+
+**评分: 58/100**
+
+当前实现质量在“解析逻辑”这一层面是合格的，但这基本属于 T-001/T-001.5 的延伸，不是 T-002 要求的“Rust 侧 notify 文件监听与事件推送”。由于核心功能缺失，子任务验收不能通过。
+
+### 分项评分
+
+- 正确性: 15/35
+- 测试质量: 8/25
+- 代码质量: 16/20
+- 安全性: 10/10
+- 性能: 9/10
+
+### 验收条件核对
+
+- [ ] 使用 `notify` 监听 workflow 目录创建/修改事件
+- [ ] 文件变化时自动解析并通过 `'iteration-progress'` 推送
+- [ ] 实现 500ms 左右去抖
+- [ ] run 结束后自动停止 watcher 并释放资源
+- [ ] watcher 错误不影响主进程运行
+- [x] `cargo check && cargo clippy` 通过
+
+### 结论
+
+该子任务当前 **不达标**。  
+建议下一轮至少补上：
+
+1. 在 Rust 侧引入 watcher 状态，并让其与 `RunProcessState` 同生命周期。
+2. `start_run` 成功后启动对 `.autoresearch/workflows/issue-N/` 的监听。
+3. 监听到创建/修改事件后，500ms 去抖，再调用现有 `build_iteration_progress`。
+4. 通过 `app.emit("iteration-progress", progress)` 推送前端。
+5. 在进程自然退出和 `stop_run` 两条路径里统一清理 watcher。
+6. 增加 watcher 相关单测或集成测试。
+
+## Learnings
+
+- **模式**: 目前新增代码集中在 `IterationProgress` 的解析与查询接口，说明 T-001 的纯函数基础已经具备，T-002 可以直接复用 `build_iteration_progress()` 作为 watcher 回调的解析入口。
+- **经验**: `cargo check` / `clippy` / `test` 全绿不能代表子任务达标，尤其当验收条件包含事件驱动和生命周期管理时，必须看行为测试而不是只看纯函数测试。
+- **经验**: 如果后续实现 watcher，建议把“watcher 句柄 + debounce 任务取消句柄 + 目标 issue/pid”收敛到独立状态结构，避免 stop/restart 竞态。

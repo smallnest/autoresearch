@@ -1,0 +1,119 @@
+I've now reviewed all the relevant code. Here is my audit report:
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #31
+- 标题: [desktop-app] 迭代进度与阶段展示
+- 子任务: T-001 - Rust 侧 tasks.json 解析与阶段推断逻辑
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+实现质量良好，符合所有验收条件。数据结构设计清晰，阶段推断逻辑正确匹配 `run.sh` 的文件命名规则，测试覆盖全面（20 个相关测试），`cargo check` 和 `cargo clippy` 均通过无警告。存在少量可改进之处但不影响功能正确性。
+
+---
+
+### 正确性 (90/100)
+
+**功能验证通过项：**
+- `Phase` 枚举覆盖 Planning/Implementation/Review/BuildLintTest/Idle 五种状态
+- `parse_tasks_json` 正确解析 subtask 列表（含 `#[serde(rename_all = "camelCase")]` 适配驼峰命名）
+- `infer_phase` 基于最大迭代号判断阶段，逻辑与 `run.sh` 文件命名 (`planning.log`, `iteration-N-agent.log`, `iteration-N-agent-review.log`, `hard-gate-N.log`) 完全匹配
+- `extract_iteration_numbers` 先 `terminal.log`（`🔄 迭代 N/M`），再 `log.md`（`### 迭代 N`+`总迭代次数: N`），双重回退策略合理
+- `get_iteration_progress` Tauri command 正确使用 `spawn_blocking` 包装同步 IO，已在 `.invoke_handler()` 中注册
+- 不存在的 workflow 目录返回 Idle 状态（而非错误），对前端友好
+
+**一般问题：**
+
+#### 问题 1: `get_iteration_progress_sync` 缺少非目录路径的错误路径测试
+
+**位置**: `lib.rs:378`
+
+**问题描述**: `get_iteration_progress_sync` 在 `project_path` 不是目录时返回 `Err`，但测试中没有覆盖这个分支。其他类似函数（如 `get_issue_detail_sync`）有对应的 `rejects_non_directory_path` 测试。
+
+**建议**: 增加一个测试验证非目录路径返回错误。
+
+---
+
+### 测试质量 (85/100)
+
+共 20 个相关测试，覆盖了核心逻辑的正常路径、边界条件和回退策略：
+
+| 函数 | 测试数量 | 覆盖范围 |
+|------|---------|---------|
+| `parse_tasks_json` | 3 | 正常/缺失/无效JSON |
+| `infer_phase` | 6 | Idle/Planning/Implementation/Review/BuildLintTest/最新迭代优先 |
+| `parse_iteration_from_terminal` | 3 | 正常/无匹配/继续模式 |
+| `parse_iteration_from_log_md` | 1 | 正常解析 |
+| `build_iteration_progress` | 3 | 聚合/terminal缺失回退/terminal无匹配回退 |
+| `get_iteration_progress_sync` | 2 | 缺失workflow/存在workflow |
+
+**建议改进（非必须）：**
+- `parse_iteration_from_log_md` 只有一个正常路径测试，缺少只有 `current_iteration` 或只有 `total_iterations` 的部分匹配测试
+- 缺少 `get_iteration_progress_sync` 的非目录路径测试（如上述）
+
+---
+
+### 代码质量 (90/100)
+
+- 结构清晰：类型定义、辅助函数、Tauri command 分段用注释区隔
+- 命名准确：`Phase`, `SubtaskInfo`, `IterationProgress` 语义明确
+- 遵循项目惯例：使用 `tokio::task::spawn_blocking`，`Result<T, String>` 错误模式，`create_temp_project_dir` 测试模式
+- `TasksFile` / `TasksFileSubtask` 作为内部反序列化类型与对外 `SubtaskInfo` 分离，避免暴露不必要字段
+- `iteration_number()` 辅助函数被 `infer_phase` 和已有的 `sort_log_sources` 共同复用，设计合理
+
+---
+
+### 安全性 (95/100)
+
+- 文件路径由 `project_path` + 固定前缀构建，无路径遍历风险
+- `issue_number` 为 `i64` 类型安全参数，无注入可能
+- 无敏感信息泄露
+
+---
+
+### 性能 (90/100)
+
+- `infer_phase` 单次 `read_dir` 扫描 O(n) 即完成，workflow 目录文件数通常 <50
+- `parse_iteration_from_terminal` 和 `parse_iteration_from_log_md` 逐行扫描，对 terminal.log/log.md 体量合理
+- `fs::read`/`fs::read_to_string` 全量读取：对 tasks.json（通常 <10KB）和 log 文件可接受
+- `spawn_blocking` 正确避免阻塞 Tokio 运行时
+
+---
+
+### 建议改进 (可选)
+
+1. `parse_tasks_json` 中 `fs::read` 错误和 `serde_json::from_slice` 错误均静默返回空 Vec —— 可考虑在 debug 级别 log 错误信息，便于排查问题
+2. `TasksFile.issue_number` 标记了 `#[allow(dead_code)]`，如果确实不需要可以移除该字段
+3. `infer_phase` 中 `hard_gate_iterations` HashSet 的 key 是 `i32`，实际只查询 `max_iteration` 一个值，可简化为 `bool`
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，所有验收条件满足
+
+**验收条件逐项确认：**
+- [x] 定义 IterationProgress、SubtaskInfo、Phase 等 Rust struct/enum，均派生 Serialize
+- [x] 正确解析 tasks.json 获取 subtask 列表和 passes 状态
+- [x] 根据 workflow 目录文件推断当前阶段（Planning/Implementation/Review/BuildLintTest）
+- [x] 从 log.md 或 terminal.log 中提取当前迭代编号和总迭代数
+- [x] get_iteration_progress Tauri command 可被前端 invoke 调用并返回正确数据
+- [x] 有对应的 Rust 单元测试覆盖解析逻辑和阶段推断（20 个测试）
+- [x] cargo check && cargo clippy 通过（零警告）
+
+---
+
+## Learnings
+
+- **模式**: `infer_phase` 基于最大迭代号而非时间戳判断当前阶段，与 `run.sh` 的文件命名约定紧密耦合 — 任何 `run.sh` 文件命名变更需同步更新此函数
+- **模式**: `terminal.log` 中的 `🔄 迭代 N/M` 标记是最可靠的迭代进度来源，`log.md` 中的 `### 迭代 N` + `总迭代次数: N` 作为回退
+- **经验**: `TasksFile` 使用 `#[serde(rename_all = "camelCase")]` 适配 tasks.json 的驼峰命名，与 `GhIssue` 使用 `#[serde(rename)]` 单字段重命名是两种不同的模式
+- **经验**: 相比上一轮审核（79/100），此轮实现已修复了之前指出的问题，代码质量有明显提升
