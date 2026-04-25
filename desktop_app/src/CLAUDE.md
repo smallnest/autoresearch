@@ -58,6 +58,15 @@
 - In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
 - `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
 - Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
+- Settings-style editors that refetch data on tab switch or manual reload must guard unsaved edits. If `editorContent` can be replaced from an effect, add a dirty-state confirmation or block the action; otherwise switching files silently loses user changes.
+- For Settings-style editors, keep the dirty-state policy in a nearby pure helper (for example action type + confirm message builder) and have the React component call that helper before mutating selection/reload state. This keeps the UX rule testable without a browser runner.
+- For config editors, treat "reset to default" as a destructive content replacement just like reload/switch-file, and route it through the same pending-action confirmation helper instead of bespoke UI logic.
+- For config editors, project changes are also destructive content replacement: if `projectPath` changes while the editor is dirty, do not auto-replace `editorContent`; confirm discard first, or hold the new project in a pending state until the user explicitly reloads it.
+- For SettingsPage async editor flows, prefer a thin component that delegates load/save/reset effects to helper functions with injected `invoke`/`refreshConfig` dependencies; this lets Node tests verify the full action chain without a dedicated DOM harness.
+- If a Settings page owns button disabled state and click wiring itself, extract a pure view-model/helper from the hook component and render from that object. This gives tests one place to lock `disabled`, `readOnly`, pending-project callouts, and tab switch wiring without introducing a browser runner.
+- If a Settings page owns the actual click handlers, move the handler sequencing itself (confirm -> clear feedback -> invoke -> refresh -> state update) into exported helpers too; otherwise tests only prove the low-level primitives work, not that the page wires them together correctly.
+- For config editors with async persistence, dirty-state guards are not enough: while save/reset/load is in flight, freeze file switching, reload, and textarea editing, or a late response can overwrite the newly selected file's state.
+- If a Settings page can keep editing the old project while a new `projectPath` is pending, route every save/reset/reload/refresh call through an `effectiveProjectPath` derived from the last loaded project; using the store's latest `projectPath` directly can write stale editor content into the wrong repository.
 
 ## IssuesPage 约定
 
@@ -126,6 +135,21 @@
 - 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
 - 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
 - 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+## SettingsPage 约定
+
+### 配置编辑器
+
+- 设置页中的配置编辑器直接消费 Tauri 白名单命令 `read_config_file` / `write_config_file` / `reset_config_file`；前端不要自行拼任意文件路径。
+- 编辑器切换文件时要展示“当前来源”和“写入位置”，让用户明确区分“内置默认模板”和“项目覆写”。
+- “写入位置”是用户可见文案，不能用简单的 `'/'` 字符串拼接；至少要按 `projectPath` 的分隔符风格生成，避免 Windows 下出现混合路径。
+- 如果 `projectPath` 带 Windows 盘符（例如 `C:/repo`），展示路径时也要整体转成反斜杠风格，而不是只替换追加段落。
+- 保存或重置成功后，需要刷新 `projectStore.config`，否则概览页的配置状态徽章会滞后于实际文件系统状态。
+- 浏览器 fallback 只允许展示占位内容用于页面开发，不要假装能读取真实本地文件。
+- 浏览器 fallback 也不应伪造“保存成功”或“已重置为默认值”的持久化结果；无 Tauri 后端时，配置编辑器应明确表现为只读演示态。
+- 配置加载失败时，不要让编辑器停留在“空白但可输入”的假可编辑状态；textarea 应保持只读/禁用，并把恢复路径引导到“重新加载”或“重置为默认值”。
+- 如果 dirty 状态下拦截了 `projectPath` 切换，保存、重置和“写入位置”展示都必须继续绑定旧的已加载项目路径；不能直接改用最新 store `projectPath`，否则保留下来的旧项目草稿会被误写到新项目目录。
+- 审核或实现 US-007 时，不要把“配置文件编辑器”和“运行参数配置”视为同一块功能已经自动覆盖；当前 `SettingsPage` 负责文件编辑器，而 `RunConfigPanel` 仍挂在 `IssueDetailPanel`，验收时要分别确认两处入口是否都满足需求。
 
 ## LogViewer 约定
 

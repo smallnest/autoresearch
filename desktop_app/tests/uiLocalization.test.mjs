@@ -29,12 +29,30 @@ test('settings, history, and agent selection copy is localized', () => {
   const settingsSource = readSource('../src/pages/SettingsPage.tsx');
   const historySource = readSource('../src/pages/HistoryPage.tsx');
   const dashboardSource = readSource('../src/pages/DashboardPage.tsx');
+  const configEditorSource = readSource('../src/pages/configEditor.ts');
   const agentSelectorSource = readSource('../src/components/AgentSelector.tsx');
   const runConfigSource = readSource('../src/components/RunConfigPanel.tsx');
   const logViewerSource = readSource('../src/components/LogViewer.tsx');
 
   assert.match(settingsSource, />设置</);
   assert.match(settingsSource, /配置应用偏好与 Agent 选择顺序。/);
+  assert.match(settingsSource, /配置文件编辑器/);
+  assert.match(settingsSource, /保存配置/);
+  assert.match(settingsSource, /重置为默认值/);
+  assert.match(settingsSource, /请先在概览页选择项目目录/);
+  assert.match(configEditorSource, /放弃当前修改并加载新项目配置/);
+  assert.match(configEditorSource, /pendingProjectSwitchMessage/);
+  assert.match(settingsSource, /运行参数/);
+  assert.match(settingsSource, /passing score、最大迭代次数与继续模式/);
+  assert.match(settingsSource, /<RunConfigPanel/);
+  assert.match(settingsSource, /disabled=\{configEditorView\?\.editorDisabled\}/);
+  assert.match(settingsSource, /readOnly=\{configEditorView\?\.editorReadOnly\}/);
+  assert.match(settingsSource, /projectPath: effectiveProjectPath/);
+  assert.match(settingsSource, /refreshConfig\(effectiveProjectPath \?\? undefined\)/);
+  assert.match(configEditorSource, /浏览器模式下仅支持查看占位内容，保存与重置需在桌面应用中进行。/);
+  assert.match(configEditorSource, /isConfigEditorInteractionLocked/);
+  assert.match(configEditorSource, /buildConfigEditorViewModel/);
+  assert.match(configEditorSource, /resolveConfigEditorProjectPath/);
   assert.match(settingsSource, /Agent 配置/);
   assert.doesNotMatch(settingsSource, />Settings</);
 

@@ -1,0 +1,2599 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc37f-8eb8-79a3-a5e0-bf555f89f3f1
+--------
+user
+规划 GitHub Issue #34 的子任务拆分
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 配置文件编辑器
+Issue 内容: ## Description
+在 Settings 页面中查看和编辑 program.md 及 agents/*.md 配置文件。
+
+## Acceptance Criteria
+- [ ] Settings 页面展示配置文件列表：program.md、agents/claude.md、agents/codex.md、agents/opencode.md
+- [ ] 点击配置文件显示内容，使用等宽字体
+- [ ] 支持编辑，提供"保存"按钮，写入对应文件
+- [ ] 编辑前自动加载文件当前内容（从项目目录的 .autoresearch/ 或默认目录读取）
+- [ ] 提供"重置为默认"按钮，从 autoresearch 默认配置恢复
+- [ ] 保存时自动备份原文件（.bak 后缀）
+- [ ] Rust 侧实现 Tauri commands：`read_config_file`、`write_config_file`、`reset_config_file`
+- [ ] Typecheck/lint passes
+- [ ] Verify in browser
+
+## Dependencies
+- Issue #24（需要项目目录）
+
+## Technical Notes
+- 读取优先级：项目 .autoresearch/ > autoresearch 默认目录
+- 使用简单的 textarea 或 highlight.js 渲染，不需要完整编辑器
+
+---
+请分析此 Issue，将其拆分为可独立完成的子任务。每个子任务应能在一次迭代内完成。
+
+输出格式要求：在输出的最后，必须输出一个 JSON 代码块（用 ```json 和 ``` 包裹），格式如下：
+
+```json
+{
+  "issueNumber": 34,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "子任务标题",
+      "description": "详细描述此子任务需要完成的工作",
+      "acceptanceCriteria": ["验收条件1", "验收条件2"],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "子任务标题",
+      "description": "详细描述",
+      "acceptanceCriteria": ["验收条件1"],
+      "priority": 2,
+      "passes": false
+    }
+  ]
+}
+```
+
+拆分原则：
+1. 每个子任务应是一个可独立验证的、在一次迭代内能完成的小目标
+2. 子任务之间应有清晰的依赖顺序（通过 priority 排序）
+3. 每个子任务必须有明确的验收条件（acceptanceCriteria）
+4. 如果 Issue 简单，可以只拆分为 1-2 个子任务
+5. 如果 Issue 复杂，建议拆分为 3-5 个子任务
+6. id 格式为 T-001, T-002, ...
+
+UI 类型识别：
+- 分析 Issue 内容，如果涉及以下变更，对应子任务应标注 "type": "ui"：
+  * 页面布局、样式、组件的增删改
+  * 前端交互逻辑（表单、按钮、导航等）
+  * CSS/样式文件的新增或修改
+  * HTML/模板文件的修改
+  * 前端框架组件（React/Vue/Svelte 等）的修改
+- 不涉及 UI 变更的子任务不添加 type 字段（默认为 "code"）
+- 示例：{"id": "T-001", "title": "添加登录页面", "type": "ui", ...}
+
+---
+# Program - 实现规则与约束
+
+本文档定义 Agent 在实现 Issues 时必须遵循的规则和约束。人类通过修改本文档来控制 Agent 的行为。
+
+> **提示**: 将此文件复制到项目目录 `.autoresearch/program.md` 中进行项目级别的自定义。
+
+---
+
+## 核心目标
+
+实现 GitHub Issues 中的功能需求或 Bug 修复，确保代码质量和测试覆盖。
+
+---
+
+## 权限边界
+
+### Agent 可以做的事情
+
+```
+✓ 修改源代码目录下的文件
+✓ 创建新的测试文件
+✓ 修改现有测试文件
+✓ 在 .autoresearch/workflows/ 目录下记录工作日志
+✓ 运行测试命令
+✓ 运行 lint 命令
+✓ 创建本地 git 分支
+✓ 提交本地 git commit
+```
+
+### Agent 不可以做的事情
+
+```
+✗ 修改依赖管理文件（如 go.mod/go.sum, package.json, requirements.txt，除非 Issue 明确要求）
+✗ 修改 .github/ 目录下的任何文件
+✗ 修改 Makefile / CMakeLists.txt / build.gradle
+✗ 修改 Dockerfile 或 docker-compose.yml
+✗ 修改 CI/CD 配置文件
+✗ 删除任何现有文件
+✗ 推送到远程仓库
+✗ 关闭 GitHub Issue
+✗ 创建 GitHub PR
+✗ 修改 .autoresearch/ 目录下的规则文件
+✗ 执行任何需要 --force 的 git 命令
+```
+
+---
+
+## 代码规范
+
+### 通用规范
+
+```
+1. 遵循项目现有代码风格
+2. 保持函数简短，单一职责
+3. 有意义的命名，避免缩写
+4. 适当的错误处理和日志记录
+5. 避免硬编码的配置值
+```
+
+### Go 代码规范
+
+```
+1. 遵循 Effective Go (https://golang.org/doc/effective_go)
+2. 遵循 Go Code Review Comments
+3. 使用 gofmt 格式化代码
+4. 使用 goimports 管理导入
+```
+
+### Python 代码规范
+
+```
+1. 遵循 PEP 8
+2. 使用 type hints
+3. 使用 pytest 编写测试
+```
+
+### TypeScript/JavaScript 代码规范
+
+```
+1. 使用 ESLint + Prettier
+2. 严格模式
+3. 使用 TypeScript 优先
+```
+
+### Rust 代码规范
+
+```
+1. 遵循 Rust API Guidelines (https://rust-lang.github.io/api-guidelines/)
+2. 使用 rustfmt 格式化代码 (cargo fmt)
+3. 使用 clippy 检查代码质量 (cargo clippy)
+4. 优先使用 Result<T, E> 处理错误，避免 panic
+5. 合理使用 Option<T>，避免不必要的 unwrap()
+6. 优先使用借用(&)而非所有权转移，避免不必要的 clone()
+7. 使用 Cargo 管理依赖，避免直接修改 Cargo.lock
+8. 公共 API 必须编写文档注释 (/// 和 //!)
+9. 使用 cargo test 编写单元测试和集成测试
+```
+
+### 前端代码规范 (React/Vue/Svelte)
+
+```
+1. 组件单一职责，一个文件一个组件
+2. Props 使用 TypeScript interface 定义，避免 any
+3. 使用函数式组件和 Hooks (React) / Composition API (Vue)
+4. 状态管理优先使用框架内置方案，避免过早引入全局状态库
+5. CSS 优先使用 CSS Modules / Scoped CSS / Tailwind，避免全局样式污染
+6. 事件处理函数命名: handle + 动作 (handleSubmit, handleClick)
+7. 列表渲染使用稳定的 key，禁止使用数组 index 作为 key
+8. 图片等静态资源使用懒加载
+9. 使用 Vitest/Jest 编写组件测试，Testing Library 进行 DOM 测试
+10. 遵循项目现有的目录结构约定 (pages/components/hooks/utils 等)
+```
+
+---
+
+## 测试规范
+
+### 测试要求
+
+```
+- 所有新增功能必须有测试
+- 测试覆盖率目标: ≥ 70%
+- 使用项目对应的测试框架
+- 测试函数命名清晰，体现测试场景
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline、文档等），可以不写单元测试，在实现报告中注明"单元测试不适用"及原因。
+
+### 测试禁止事项
+
+```
+✗ 不要在测试中使用固定 sleep（使用异步等待/channel 同步）
+✗ 不要依赖外部服务（使用 mock）
+✗ 不要修改全局状态
+✗ 不要跳过失败的测试
+```
+
+---
+
+## 迭代控制
+
+### 迭代限制
+
+```
+最大迭代次数: 默认 42 次（可通过参数指定）
+
+每次迭代时间预算:
+- 简单 Issue: 10 分钟
+- 中等 Issue: 30 分钟
+- 复杂 Issue: 60 分钟
+```
+
+### 终止条件
+
+```
+停止迭代的条件:
+1. 审核者评分 ≥ 达标线（默认 85 分），且无严重问题
+2. 达到最大迭代次数
+3. 测试连续失败 3 次
+4. Agent 报告无法实现
+5. 发现需要人工决策的设计问题
+```
+
+---
+
+## 质量检查点
+
+> **借鉴 [ralph](https://github.com/snarktank/ralph) 的质量自检设计：ALL commits must pass quality checks. Do NOT commit broken code.**
+
+### 硬性规则
+
+```
+⚠️ MUST: Agent 在认为实现完成之前，MUST 运行项目的 typecheck/lint/test，全部通过后才能提交审核。
+⚠️ MUST: 如果检查不通过，MUST 先修复再提交。不得带着已知错误提交审核。
+⚠️ MUST: 每次提交前必须逐项确认自检 checklist。
+```
+
+### 提交前自检 Checklist
+
+在标记实现完成或提交审核之前，Agent MUST 逐项确认以下清单：
+
+```
+MUST 级别（全部通过才能提交）:
+- [ ] ✅ 代码可以编译/类型检查通过
+- [ ] ✅ Lint 无新增错误
+- [ ] ✅ 相关测试通过
+
+SHOULD 级别（尽力满足，未满足时在报告中说明原因）:
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 80%
+- [ ] 所有公共 API 有文档注释
+```
+
+### 自检失败处理流程
+
+```
+自检失败时 MUST 遵循以下流程：
+
+1. 运行检查 → 发现失败
+2. 分析失败原因
+3. 修复问题
+4. 重新运行检查（回到步骤 1）
+5. 全部通过 → 提交审核
+
+禁止行为:
+✗ 跳过自检直接提交
+✗ 带着已知编译错误提交
+✗ 带着已知测试失败提交
+✗ 注释掉失败的测试来"通过"自检
+✗ 标记 TODO/FIXME 推迟已知问题而不在报告中说明
+```
+
+### 各语言自检命令参考
+
+Agent 应根据项目语言运行对应的检查命令。如果项目已有 Makefile 或 scripts 中的检查命令，优先使用项目自带的。
+
+#### Go
+
+```bash
+# 编译检查
+go build ./...
+
+# 类型检查（比 go build 更严格）
+go vet ./...
+
+# Lint
+golangci-lint run ./...   # 推荐工具
+# 或
+go vet ./...
+
+# 测试
+go test ./...
+
+# 测试覆盖率
+go test -cover ./...
+```
+
+#### Python
+
+```bash
+# 类型检查
+mypy .                    # 或 mypy src/
+pyright .                 # 替代方案
+
+# Lint
+ruff check .              # 推荐
+# 或
+flake8 .
+pylint src/
+
+# 测试
+pytest
+pytest --cov              # 带覆盖率
+
+# 格式检查
+black --check .
+```
+
+#### TypeScript/JavaScript
+
+```bash
+# 类型检查
+npx tsc --noEmit          # TypeScript 项目
+# 或查看 package.json 中的 typecheck script
+
+# Lint
+npx eslint .
+npx prettier --check .
+
+# 测试
+npm test                  # 或 pnpm test / yarn test
+npx vitest run            # 或 npx jest
+
+# 构建（验证编译）
+npm run build             # 验证产物能正确生成
+```
+
+#### Rust
+
+```bash
+# 编译检查
+cargo build
+cargo check               # 更快的编译检查
+
+# Lint
+cargo clippy              # MUST 通过 clippy 检查
+cargo fmt --check         # 格式检查
+
+# 测试
+cargo test
+
+# 完整检查（CI 级别）
+cargo clippy -- -D warnings && cargo test
+```
+
+#### Shell 脚本
+
+```bash
+# 语法检查
+bash -n script.sh         # 语法检查
+shellcheck script.sh       # Lint
+
+# 无标准测试框架，确认脚本可执行且 exit code 为 0
+```
+
+#### 项目自带命令优先
+
+```bash
+# 检查项目是否有标准化的检查命令
+cat Makefile              # make lint, make test, make check
+cat package.json          # npm scripts
+cat Cargo.toml            # cargo commands
+cat tox.ini / pyproject.toml  # Python 项目配置
+
+# 如果项目有 CI 配置，参考 CI 中运行的检查命令
+cat .github/workflows/*.yml
+```
+
+---
+
+## 行为准则
+
+> 基于 [forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills) 的行为指南，偏向谨慎而非速度。
+
+### 动手前先思考
+
+**不要假设。不要掩盖困惑。揭示权衡。**
+
+实现前：
+- 明确陈述你的假设。如果不确定，就问。
+- 如果存在多种理解，把它们都列出来，不要沉默地选择一个。
+- 如果存在更简单的方案，说出来。必要时提出反对。
+- 如果有不明确的地方，停下来，指出困惑之处，然后提问。
+
+### 简洁优先
+
+**用最少的代码解决问题。不做任何推测性设计。**
+
+- 不要实现超出需求的功能。
+- 不要为单次使用的代码创建抽象。
+- 不要添加未经请求的"灵活性"或"可配置性"。
+- 不要为不可能发生的场景添加错误处理。
+- 如果你写了 200 行而其实 50 行就够了，重写它。
+
+自问："一个资深工程师会说这太复杂了吗？" 如果是，简化。
+
+### 精准改动
+
+**只改你必须改的。只清理你自己造成的混乱。**
+
+编辑现有代码时：
+- 不要"改进"相邻的代码、注释或格式。
+- 不要重构没有坏的东西。
+- 匹配现有风格，即使你会用不同的方式。
+- 如果注意到无关的废弃代码，提一下就好，不要删除。
+
+当你自己的改动产生了孤儿代码时：
+- 移除因你的改动而变得未使用的 import/变量/函数。
+- 不要移除之前就存在的废弃代码，除非被要求。
+
+检验标准：每一行改动都应该能追溯到 Issue 的需求。
+
+### 目标驱动执行
+
+**定义成功标准。循环直到验证通过。**
+
+将任务转化为可验证的目标：
+- "添加验证" → "为无效输入写测试，然后让测试通过"
+- "修复 bug" → "写一个能重现它的测试，然后让测试通过"
+- "重构 X" → "确保重构前后测试都通过"
+
+多步骤任务应陈述简短计划：
+```
+1. [步骤] → 验证: [检查方式]
+2. [步骤] → 验证: [检查方式]
+3. [步骤] → 验证: [检查方式]
+4. 最终验证: 运行完整自检 checklist（编译/lint/测试全部通过）
+```
+
+**关键要求**：最后一步 MUST 是运行完整的自检 checklist。只有自检全部通过，才算实现完成。
+
+强的成功标准让你能独立循环。弱的标准（"让它能跑"）需要不断澄清。
+
+---
+
+**准则生效的标志：** diff 中更少的不必要改动，更少的过度复杂导致的重写，澄清问题出现在实现之前而非犯错之后。
+
+---
+
+## 安全约束
+
+### 安全检查
+
+```
+Agent 必须确保:
+✓ 无 SQL 注入风险
+✓ 无命令注入风险
+✓ 无路径遍历风险
+✓ 无敏感信息硬编码
+✓ 无不安全的数据反序列化
+✓ 输入验证完整
+✓ 错误信息不泄露敏感数据
+```
+
+---
+
+## 目录级知识积累 (CLAUDE.md)
+
+借鉴 [ralph](https://github.com/snarktank/ralph) 的 `AGENTS.md` 机制。Claude Code / Amp 等工具会自动读取工作目录下的 `CLAUDE.md`，Agent 写入可复用知识后，后续迭代自动生效，实现项目自进化。
+
+### 规则
+
+```
+1. 实现完成后，如果在某目录发现了可复用模式，更新该目录的 CLAUDE.md
+2. 如果目录下已有 CLAUDE.md，追加新知识（不覆盖已有内容）
+3. 如果目录下没有 CLAUDE.md，创建新文件
+4. 只写可复用知识，不写临时调试信息和 story 特定内容
+```
+
+### 应写入的内容
+
+```
+✓ 模块级 API 约定（如 "本模块的 Handler 必须实现 io.Closer 接口"）
+✓ 跨文件依赖关系（如 "修改 X 时必须同步更新 Y"）
+✓ 项目特有的模式（如 "本模块使用 Z 模式处理 API 调用"）
+✓ 重要的架构决策（如 "本包禁止直接访问数据库，必须通过 Repository 接口"）
+✓ 常见陷阱（如 "此函数的 ctx 参数不能为 nil，否则会 panic"）
+```
+
+### 禁止写入的内容
+
+```
+✗ 临时调试信息
+✗ 特定 Issue / Story 的上下文
+✗ 一次性的 workaround
+✗ 敏感信息（密钥、密码、token）
+✗ 与代码无直接关系的注释
+```
+
+### CLAUDE.md 文件格式
+
+```markdown
+# [目录名]
+
+## 架构约定
+- [约定1]
+- [约定2]
+
+## 依赖关系
+- [依赖说明]
+
+## 注意事项
+- [常见陷阱或特殊处理]
+```
+
+---
+
+## 异常处理
+
+当 Agent 遇到阻塞时，应输出结构化的阻塞报告，说明原因、已尝试的方案和建议操作。
+
+### Tool Call 格式要求
+
+```
+⚠️ 调用工具（tool/function call）时，arguments 必须严格遵循以下格式规范：
+
+1. arguments 必须是合法的 JSON 对象（字典/dict），不得为数组
+   ✓ 正确: {"path": "src/main.go", "content": "package main"}
+   ✗ 错误: [{"path": "src/main.go", "content": "package main"}]
+
+2. arguments 的 JSON 字符串必须语法正确，不得包含：
+   - 多余的逗号（如 {"a": 1,} 或 {"a": 1,,"b": 2}）
+   - 缺少引号的键或值
+   - 末尾多余的标点
+
+3. 如果只需传递一个对象的参数，直接使用对象格式，不要包裹在数组中
+
+4. 任何 tool call 的 arguments 都必须是完整、可解析的 JSON 对象字符串
+```
+
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+
+codex
+我先看一下项目结构和现有 desktop app/Settings 相关实现，确认这个 Issue 应拆成前端、Tauri 命令和验证这几类工作，而不是凭标题硬拆。
+exec
+/bin/zsh -lc pwd in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch
+
+exec
+/bin/zsh -lc "rg --files /Users/chaoyuepan/ai/autoresearch | rg '("'^|/)(src|app|desktop|tauri|settings|package.json|Cargo.toml|pnpm-lock|yarn.lock|package-lock|vite'"\\.config|tsconfig|CLAUDE\\.md)"'$'"'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/lib/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/package.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/docs/package.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/Cargo.toml
+/Users/chaoyuepan/ai/autoresearch/tests/CLAUDE.md
+
+exec
+/bin/zsh -lc "rg -n \"Settings|read_config_file|write_config_file|reset_config_file|\\.autoresearch|program\\.md|agents/\" /Users/chaoyuepan/ai/autoresearch" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:35:- Scans `.autoresearch/workflows/` for `issue-*` directories.
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:36:- Moves non-current issue directories to `.autoresearch/archive/YYYY-MM-DD-issue-N/`.
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:65:Planning phase (before iteration 1) asks the first agent to split the Issue into subtasks, saved to `.autoresearch/workflows/issue-N/tasks.json`:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:93:3. `program.md` content — global rules and constraints
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:94:4. Agent-specific instructions from `agents/<name>.md`
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:96:For review prompts, only task context + subtask review section + agent instructions are included (no program.md).
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:100:Project-level configs in `$PROJECT_ROOT/.autoresearch/` take precedence over defaults in the autoresearch directory:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:101:- `agents/<name>.md` — agent persona and review rubric
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:102:- `program.md` — implementation rules and code standards
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:110:Restores state from `.autoresearch/workflows/issue-N/` log files: iteration count, last score, consecutive failure count, last review feedback, and subtask state (from tasks.json). MAX_ITERATIONS becomes `last_iteration + new_count`.
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md:120:- `program.md` contains code standards for Go/Python/TypeScript/Rust/Frontend — the README advises trimming to only the target project's language to save tokens
+/Users/chaoyuepan/ai/autoresearch/lib/CLAUDE.md:17:| `prompt.sh` | Prompt 裁剪与 program.md 读取 | `trim_prompt_smart`, `apply_prompt_trimming`, `get_program_instructions` |
+/Users/chaoyuepan/ai/autoresearch/run.sh:29:#   在项目根目录创建 .autoresearch/ 目录，可以放置:
+/Users/chaoyuepan/ai/autoresearch/run.sh:30:#   - .autoresearch/agents/codex.md     自定义 Codex 指令
+/Users/chaoyuepan/ai/autoresearch/run.sh:31:#   - .autoresearch/agents/claude.md    自定义 Claude 指令
+/Users/chaoyuepan/ai/autoresearch/run.sh:32:#   - .autoresearch/agents/opencode.md  自定义 OpenCode 指令
+/Users/chaoyuepan/ai/autoresearch/run.sh:33:#   - .autoresearch/program.md          自定义实现规则与约束
+/Users/chaoyuepan/ai/autoresearch/run.sh:60:# 脚本所在目录（用于查找默认 agents 配置和 program.md）
+/Users/chaoyuepan/ai/autoresearch/run.sh:840:    echo "自定义配置文件 (放在项目目录 .autoresearch/ 下):"
+/Users/chaoyuepan/ai/autoresearch/run.sh:841:    echo "  agents/codex.md              Codex 指令"
+/Users/chaoyuepan/ai/autoresearch/run.sh:842:    echo "  agents/claude.md             Claude 指令"
+/Users/chaoyuepan/ai/autoresearch/run.sh:843:    echo "  agents/opencode.md           OpenCode 指令"
+/Users/chaoyuepan/ai/autoresearch/run.sh:844:    echo "  program.md                   实现规则与约束"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1017:# 将非当前 Issue 的 issue-* 目录移动到 .autoresearch/archive/YYYY-MM-DD-issue-N/
+/Users/chaoyuepan/ai/autoresearch/run.sh:1020:    local workflows_dir="$PROJECT_ROOT/.autoresearch/workflows"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1021:    local archive_dir="$PROJECT_ROOT/.autoresearch/archive"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1076:    WORK_DIR="$PROJECT_ROOT/.autoresearch/workflows/issue-$issue_number"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1110:# 优先级: 项目 .autoresearch/ > 脚本目录 agents/
+/Users/chaoyuepan/ai/autoresearch/run.sh:1114:    local project_agent="$PROJECT_ROOT/.autoresearch/agents/$agent_name.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1120:    local default_agent="$SCRIPT_DIR/agents/$agent_name.md"
+/Users/chaoyuepan/ai/autoresearch/run.sh:1129:# 获取 program.md 内容
+/Users/chaoyuepan/ai/autoresearch/run.sh:1973:    local results_file="$PROJECT_ROOT/.autoresearch/results.tsv"
+/Users/chaoyuepan/ai/autoresearch/run.sh:2793:            git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null || true
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:14:- 统一管理所有配置（agents、program.md、passing score 等）
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:21:**Description:** 作为开发者，我希望能通过 GUI 选择项目目录，App 自动识别该目录下的 `.autoresearch/` 配置，无需手动输入路径。
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:26:- [ ] 自动检测目录下是否存在 `.autoresearch/`、`program.md`、`agents/` 等配置
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:68:- [ ] 可按迭代查看各 agent 的输出日志（对应 `.autoresearch/workflows/issue-N/` 下的 log 文件）
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:87:- [ ] 可查看和编辑 `program.md`（代码规范部分）
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:88:- [ ] 可查看和编辑各 agent 配置（`agents/claude.md`、`agents/codex.md` 等）
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:130:- FR-4: 实时监听 `.autoresearch/workflows/issue-N/` 目录变化，解析 log 文件更新 UI 状态
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:133:- FR-7: 配置编辑器直接读写文件系统中的 `program.md` 和 `agents/*.md`
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:188:- **文件监听**：Rust 侧使用 `notify` crate 监听 `.autoresearch/workflows/` 目录变化，前端通过 Tauri events 接收更新
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:216:- 是否需要在 App 中展示 `program.md` 中定义的代码规范摘要，帮助用户了解当前配置？
+/Users/chaoyuepan/ai/autoresearch/lib/prompt.sh:8:    local project_program="$PROJECT_ROOT/.autoresearch/program.md"
+/Users/chaoyuepan/ai/autoresearch/lib/prompt.sh:9:    local default_program="$SCRIPT_DIR/program.md"
+/Users/chaoyuepan/ai/autoresearch/lib/prompt.sh:26:    # PROMPT_TRIMMED=1: 按优先级裁剪 program.md
+/Users/chaoyuepan/ai/autoresearch/lib/prompt.sh:59:#   2. 移除：program.md 内容（get_program_instructions 已按语言裁剪）、长代码块（>20行）
+/Users/chaoyuepan/ai/autoresearch/lib/prompt.sh:78:    # 1. Remove program.md content (section starting with "# Program")
+/Users/chaoyuepan/ai/autoresearch/lib/prompt.sh:173:                # 轻度裁剪：只移除 program.md 和长代码块
+/Users/chaoyuepan/ai/autoresearch/agents/claude.md:101:- 参考 program.md 中定义的规范
+/Users/chaoyuepan/ai/autoresearch/agents/claude.md:679:4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+/Users/chaoyuepan/ai/autoresearch/program.md:5:> **提示**: 将此文件复制到项目目录 `.autoresearch/program.md` 中进行项目级别的自定义。
+/Users/chaoyuepan/ai/autoresearch/program.md:23:✓ 在 .autoresearch/workflows/ 目录下记录工作日志
+/Users/chaoyuepan/ai/autoresearch/program.md:42:✗ 修改 .autoresearch/ 目录下的规则文件
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:40:    # 1. Remove program.md content (section starting with "# Program")
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:175:# Uses a test program.md file instead of real project files.
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:189:    # PROMPT_TRIMMED=1: 按优先级裁剪 program.md
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:388:This is a long program.md content.
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:402:assert_not_contains "removes Program section content" "$result" "long program.md content"
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:555:# Create a test program.md
+/Users/chaoyuepan/ai/autoresearch/tests/test_trim_prompt.sh:556:TEST_PROGRAM_MD="$TMPDIR_TESTS/program.md"
+/Users/chaoyuepan/ai/autoresearch/agents/opencode.md:224:4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+/Users/chaoyuepan/ai/autoresearch/agents/codex.md:314:4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+/Users/chaoyuepan/ai/autoresearch/README.md:152:在项目目录下创建 `.autoresearch/`：
+/Users/chaoyuepan/ai/autoresearch/README.md:155:.autoresearch/
+/Users/chaoyuepan/ai/autoresearch/README.md:156:├── agents/
+/Users/chaoyuepan/ai/autoresearch/README.md:160:├── program.md            # 自定义实现规则与约束
+/Users/chaoyuepan/ai/autoresearch/README.md:176:### 裁剪 program.md
+/Users/chaoyuepan/ai/autoresearch/README.md:178:`program.md` 包含多种语言的规范模板。使用前应根据目标项目语言裁剪，只保留相关规范以减少 token 消耗。
+/Users/chaoyuepan/ai/autoresearch/README.md:188:| `program.md` | 默认实现规则与约束 |
+/Users/chaoyuepan/ai/autoresearch/README.md:189:| `agents/*.md` | Agent 提示词模板 |
+/Users/chaoyuepan/ai/autoresearch/docs/architecture.html:88:      <!-- 2. .autoresearch/ → run.sh -->
+/Users/chaoyuepan/ai/autoresearch/docs/architecture.html:137:      <!-- 3. .autoresearch/ Config (store) -->
+/Users/chaoyuepan/ai/autoresearch/docs/architecture.html:142:      <text x="776" y="194" fill="#1c1917" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">.autoresearch/</text>
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:344:    # 1. Remove program.md content (section starting with "# Program")
+/Users/chaoyuepan/ai/autoresearch/tests/test_context_overflow.sh:1420:# Test 2: Prompt with program.md section
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:7:- **Pages**: Dashboard, Issues, History, Settings — each in src/pages/
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:88:- **日志来源**: 日志源列表统一由 Tauri `list_issue_log_sources` 返回，前端只拿 `source.id` 调 `read_issue_log_content`，不要自己拼 `.autoresearch/workflows/issue-N/...` 路径
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:108:- 使用 `ConfigBadge` 组件显示 `.autoresearch/`、`program.md`、`agents/` 状态
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:23:    local workflows_dir="$TEST_PROJECT_ROOT/.autoresearch/workflows"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:24:    local archive_dir="$TEST_PROJECT_ROOT/.autoresearch/archive"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:108:    mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:109:    mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/archive"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:126:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-1"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:127:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-2"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:128:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-3"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:133:assert_exists "Issue 1 archived" "$TEST_PROJECT_ROOT/.autoresearch/archive/${current_date}-issue-1"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:134:assert_exists "Issue 2 archived" "$TEST_PROJECT_ROOT/.autoresearch/archive/${current_date}-issue-2"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:135:assert_exists "Issue 3 NOT archived (current)" "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-3"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:136:assert_not_exists "Issue 1 removed from workflows" "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-1"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:142:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-5"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:144:assert_exists "Issue 5 still in workflows" "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-5"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:145:count=$(ls "$TEST_PROJECT_ROOT/.autoresearch/archive" | wc -l)
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:159:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/workflows/issue-1"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:161:mkdir -p "$TEST_PROJECT_ROOT/.autoresearch/archive/${current_date}-issue-1"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:162:touch "$TEST_PROJECT_ROOT/.autoresearch/archive/${current_date}-issue-1/old.txt"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:166:assert_exists "Issue 1 archived with suffix" "$TEST_PROJECT_ROOT/.autoresearch/archive/${current_date}-issue-1-1"
+/Users/chaoyuepan/ai/autoresearch/tests/test_archive.sh:167:assert_exists "Original archive still exists" "$TEST_PROJECT_ROOT/.autoresearch/archive/${current_date}-issue-1/old.txt"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:273:            是否从模板初始化？这将创建 .autoresearch/ 目录、program.md 和 agents/ 目录。
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:403:                label=".autoresearch/"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:407:                label="program.md"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:411:                label="agents/"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/App.tsx:6:import SettingsPage from "./pages/SettingsPage";
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/App.tsx:15:        <Route path="/settings" element={<SettingsPage />} />
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:82:- **保留结构化裁剪**：保留头部关键信息（Issue 描述、项目路径、子任务详情）+ 尾部（最新 review 反馈），去掉 `program.md` 等冗长但非必要内容
+/Users/chaoyuepan/ai/autoresearch/docs/hardness_engineering.md:84:- **可选：分段式 prompt**：将 prompt 分为必要段（Issue + 子任务）和可选段（program.md + 示例），裁剪时只去掉可选段
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/SettingsPage.tsx:3:function SettingsPage() {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/SettingsPage.tsx:17:export default SettingsPage;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/uiLocalization.test.mjs:29:  const settingsSource = readSource('../src/pages/SettingsPage.tsx');
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/uiLocalization.test.mjs:39:  assert.doesNotMatch(settingsSource, />Settings</);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md:18:- Workflow log browsing should stay inside `.autoresearch/workflows/issue-N/`; expose file metadata and file contents through Tauri commands rather than letting the frontend assemble arbitrary filesystem paths.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md:28:- `init_project_config` should only create missing files under `<project>/.autoresearch/`; never overwrite an existing `program.md` or existing agent template file.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md:29:- Reuse the repo-root `program.md` and `agents/*.md` as built-in templates via `include_str!`, so desktop init stays aligned with CLI defaults without runtime filesystem lookups.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/CLAUDE.md:20:- `detect_project_config` checks for `.autoresearch/`, `.autoresearch/program.md`, `.autoresearch/agents/`
+/Users/chaoyuepan/ai/autoresearch/desktop_app/CLAUDE.md:23:- `list_issues` calls `gh issue list --json` and also scans `.autoresearch/workflows/issue-*` for processed status
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:104:/// Metadata for a workflow log source under `.autoresearch/workflows/issue-N/`.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:232:const PROGRAM_TEMPLATE: &str = include_str!("../../../program.md");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:233:const CLAUDE_AGENT_TEMPLATE: &str = include_str!("../../../agents/claude.md");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:234:const CODEX_AGENT_TEMPLATE: &str = include_str!("../../../agents/codex.md");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:235:const OPENCODE_AGENT_TEMPLATE: &str = include_str!("../../../agents/opencode.md");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:788:        .join(".autoresearch")
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:891:/// Initializes missing `.autoresearch/` config files from built-in templates.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:907:    let ar = base.join(".autoresearch");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:910:        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:918:    let config_dir = base.join(".autoresearch");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:921:    let program_path = config_dir.join("program.md");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:995:/// Scans `.autoresearch/workflows/issue-*` directories and returns Issue numbers that have been processed.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:997:    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1097:        .join(".autoresearch")
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1276:/// Reads the content of a workflow log source under `.autoresearch/workflows/issue-N/`.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1671:            fs::read_to_string(project_dir.join(".autoresearch/program.md"))
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1676:            fs::read_to_string(project_dir.join(".autoresearch/agents/claude.md"))
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1681:            fs::read_to_string(project_dir.join(".autoresearch/agents/codex.md"))
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1686:            fs::read_to_string(project_dir.join(".autoresearch/agents/opencode.md"))
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1697:        let config_dir = project_dir.join(".autoresearch");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1700:        fs::write(config_dir.join("program.md"), "custom program\n").expect("program should exist");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1710:            fs::read_to_string(config_dir.join("program.md")).expect("program should still exist"),
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1751:        fs::write(project_dir.join(".autoresearch"), "conflict")
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1755:            .expect_err("conflicting .autoresearch file should fail");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1762:            error.contains(".autoresearch"),
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1871:        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1929:        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:1946:        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:2340:        let workflow_dir = dir.join(".autoresearch/workflows/issue-42");
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/tauri.conf.json:5:  "identifier": "com.chaoyuepan.autoresearch",
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:31:function SettingsIcon({ className }: { className?: string }): JSX.Element {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:132:          <SettingsIcon className="h-4 w-4 text-gray-500" />
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:122:      return '`.autoresearch/workflows/issue-N/terminal.log`';
+
+codex
+已经确认这是现有 `desktop_app` 上补能力，不是新页面从零开始。接下来我读 `SettingsPage` 和 Tauri 侧已有配置模板/项目路径逻辑，避免把一个功能拆成粒度过细但实际耦合很强的任务。
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/SettingsPage.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import AgentSelector from '../components/AgentSelector';
+
+function SettingsPage() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">设置</h1>
+      <p className="text-gray-500 mb-6">配置应用偏好与 Agent 选择顺序。</p>
+      
+      <div className="max-w-2xl">
+        <h2 className="text-lg font-semibold mb-4">Agent 配置</h2>
+        <AgentSelector />
+      </div>
+    </div>
+  );
+}
+
+export default SettingsPage;
+
+exec
+/bin/zsh -lc "sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/App.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { Routes, Route } from "react-router-dom";
+import AppShell from "./components/AppShell";
+import DashboardPage from "./pages/DashboardPage";
+import IssuesPage from "./pages/IssuesPage";
+import HistoryPage from "./pages/HistoryPage";
+import SettingsPage from "./pages/SettingsPage";
+
+function App() {
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/issues" element={<IssuesPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
+    </Routes>
+  );
+}
+
+export default App;
+
+exec
+/bin/zsh -lc "sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+# src-tauri
+
+## Process Management
+- Use Tauri-managed `Arc<Mutex<Option<ProcessState>>>` for app-wide run state instead of a standalone `static Mutex`; commands can receive it via `tauri::State`.
+- `ProcessState` should keep both the process `pid` and a shared child handle (`Arc<tokio::sync::Mutex<tokio::process::Child>>`) so async wait tasks and stop logic can coordinate on the same process.
+- Clear the stored state with a PID match check to avoid an old watcher wiping out a newer run that started after stop/restart.
+- Attach stdout/stderr readers and exit watchers only after the new `ProcessState` has been stored; otherwise a fast-exiting child can race the state write and leave a stale `running` entry behind.
+
+## Unix Process Groups
+- On Unix, start `run.sh` with `tokio::process::Command` and set the child process group in `pre_exec` via `nix::unistd::setpgid(0, 0)`.
+- When terminating the Unix run group, prefer `nix::sys::signal::killpg` with the stored PID as the process-group id.
+
+## run.sh Invocation Contract
+- In desktop-app commands, `projectPath` refers to the repository being processed, not the autoresearch installation directory. Resolve the `run.sh` executable relative to the autoresearch app/repo root, then pass the selected repository via `-p <projectPath>` when the target project is outside the autoresearch repo itself.
+- Keep argument-building tests separate from process-spawn tests; pure tests can cover flag ordering, but start/exit event behavior needs at least one integration-style backend test that exercises real child stdout/stderr forwarding.
+
+## Workflow Logs
+- Workflow log browsing should stay inside `.autoresearch/workflows/issue-N/`; expose file metadata and file contents through Tauri commands rather than letting the frontend assemble arbitrary filesystem paths.
+- Validate `source_id` as a single filename (no path separators or `..`) before reading a workflow log file to avoid traversal bugs.
+- Keep workflow log ordering stable for the UI: `terminal.log` first, `log.md` second, then iteration logs, then other files alphabetically.
+- When sorting iteration logs, parse the numeric prefix from `iteration-N-...` and sort by `N`; plain lexicographic ordering will put `iteration-10` before `iteration-2`.
+- Any helper that selects the "latest review" must share the same tie-break rule as score-history aggregation for duplicate `iteration-N-*-review.log` files; otherwise the score badge, summary, and trend chart can show conflicting data from the same iteration.
+- For iteration progress, parse `terminal.log` first for `🔄 迭代 N/M`; if that marker is missing, fall back to `log.md` by reading the last `### 迭代 N - ...` heading and the last `总迭代次数: N` entry.
+- `iteration-progress` 事件应携带 `issue_number` 和完整 `IterationProgress`，前端可以据此忽略非当前 Issue 的推送，避免全局 store 串数据。
+- `tasks.json` 的 `passes` 只能表达“已通过/未通过”；如果 UI 需要 `pending/passing/failing`，应在 Rust 侧基于当前 subtask 和最新 review / hard-gate 结果生成显式 `status` 字段。
+
+## Project Config Initialization
+- `init_project_config` should only create missing files under `<project>/.autoresearch/`; never overwrite an existing `program.md` or existing agent template file.
+- Reuse the repo-root `program.md` and `agents/*.md` as built-in templates via `include_str!`, so desktop init stays aligned with CLI defaults without runtime filesystem lookups.
+- Keep the command return type consistent with `detect_project_config` by returning the refreshed `ProjectConfig` after initialization; the frontend can use that directly to refresh badge state.
+
+## Tests
+- Keep process-management tests in `src/lib.rs` as pure helper tests where possible; use a short-lived `sh -c "exit 0"` child on Unix to verify shared state stores both PID and handle without adding sleeps.
+- Helper functions that only exist for unit tests should either be exercised by production code or annotated deliberately; this crate runs `cargo clippy -- -D warnings`, so otherwise `dead_code` will fail the build.
+- For review-text helpers, prefer deterministic line-based extraction around the matched score line: keep the score line itself plus the nearest non-empty context lines, instead of taking an arbitrary leading window that may drop the actual summary sentence after the score.
+
+exec
+/bin/zsh -lc "sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+# desktop_app/src
+
+## Architecture
+
+- **Router**: react-router-dom v7 with BrowserRouter wrapping in main.tsx, Routes/Route in App.tsx
+- **Layout**: AppShell component (three-column: Sidebar 240px | main flex-1 | RightPanel 300px collapsible)
+- **Pages**: Dashboard, Issues, History, Settings — each in src/pages/
+- **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
+- **Styling**: Tailwind CSS v4 via @tailwindcss/vite plugin (no tailwind.config.js)
+- **Theme**: Light theme (bg-white, text-gray-900, gray-50 for panels, gray-200 borders)
+
+## Conventions
+
+- Functional components with default exports
+- SVG icons inline in components (no icon library dependency)
+- NavLink for active route highlighting in navigation
+- Outlet pattern: AppShell renders `<Outlet />` for nested route content
+- Panel collapse state is local (useState), not global store
+
+## Dependencies
+
+- react-router-dom: routing (BrowserRouter, Routes, Route, NavLink, Outlet)
+- Tailwind CSS v4: utility-first styling via @tailwindcss/vite
+- zustand: global state management, stores in `src/stores/`
+
+## Testing
+
+- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- Persisted Zustand stores should also expose a factory (for example `createRunConfigStore`) so tests can inject in-memory storage and explicitly exercise hydration behavior.
+- `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
+- When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
+
+## State Management (Zustand)
+
+- Stores are in `src/stores/` directory
+- Use `create<State>()` from zustand to define stores
+- Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+- Async actions should handle loading and error states
+- Store pattern: state + actions + getters in one `create()` call
+- Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+- For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+- For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+- When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+- For persisted stores with value bounds, validate both setter input and persisted hydration (`merge`/`migrate`), otherwise invalid `localStorage` data can bypass runtime constraints.
+
+## Tauri Integration
+
+- Import `invoke` from `@tauri-apps/api/core` to call Rust commands
+- Commands return `Promise<T>` and can throw errors
+- Pattern: `await invoke<ReturnType>('command_name', { args })`
+- Tauri event subscriptions should be centralized in a store when multiple UI components need the same lifecycle state; `run-output` / `run-exit` are handled in `src/stores/runStore.ts`
+
+## Pitfalls
+
+- Backend `get_recent_project` stores only a single path (not a list). Frontend `recentProjects` is kept as an array for future extensibility but currently holds at most one item.
+- When adding store actions that load a specific project by path, always call `detect_project_config` + `save_recent_project` + update state in one action — don't split across multiple calls.
+- In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+- `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+- Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
+
+## IssuesPage 约定
+
+### 组件结构
+
+- `IssueListItem`: 单个 Issue 列表项，显示编号、标题、标签、创建时间、处理状态
+- `LabelBadge`: 可点击的标签徽章，支持选中高亮状态
+- `SearchIcon`/`CheckIcon`/`IssueIcon`/`ProcessedIcon`/`ClearIcon`: 内联 SVG 图标组件
+- `EmptyState`: 空状态提示组件
+
+### 功能实现
+
+- **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+- **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+- **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
+- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+- **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+- **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+- **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+- **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
+- **浏览器 fallback**: 非 Tauri 环境使用 mock issue 列表和 mock issue 详情，保证浏览器模式也能验证详情面板
+- **运行 fallback**: 非 Tauri 环境禁用启动/停止按钮，并明确提示“浏览器模式不支持运行任务”
+- **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
+- **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+- **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
+- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+- **日志来源**: 日志源列表统一由 Tauri `list_issue_log_sources` 返回，前端只拿 `source.id` 调 `read_issue_log_content`，不要自己拼 `.autoresearch/workflows/issue-N/...` 路径
+- **日志轮询**: `LogViewer` 需要同时轮询“日志源列表”和“当前选中文件内容”；否则运行中新增的 iteration 日志文件不会出现在下拉列表里
+- **刷新保态**: 同一 Issue 的日志源轮询不能重置 `searchQuery`、`selectedSourceId`、`autoScroll` 或 `hasPendingScroll`，这些都是用户当前阅读状态
+
+### 样式约定
+
+- Issue 列表项: `bg-white border-gray-200`，选中时 `bg-blue-50 border-blue-300`
+- 标签徽章: 使用 GitHub label 的 `color` 字段作为背景色，自动计算文字颜色（黑白）
+- 已处理标记: 绿色主题（`bg-green-50 text-green-700`）
+- 搜索框: `bg-white border-gray-200`，focus 时 `border-blue-500 ring-blue-500`
+- 空状态: 居中显示，灰色图标和文字
+- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+- Markdown 样式: 统一挂在 `.markdown-body`，代码块高亮 token 使用 `.md-token-*` 类名
+- Markdown 渲染: `react-markdown` 通过 Vite/TS alias 指向本地兼容实现 `src/vendor/react-markdown.tsx`，保证离线环境可构建；链接只允许 `http/https/mailto`
+- 骨架屏: 使用 `.skeleton-shimmer` 伪元素实现统一 shimmer 动效，避免在组件内重复写动画
+
+## DashboardPage 约定
+
+### 配置状态显示
+
+- 使用 `ConfigBadge` 组件显示 `.autoresearch/`、`program.md`、`agents/` 状态
+- `ConfigBadge` 使用勾/叉图标（`CheckIcon`/`XIcon`）替代圆点，符合验收条件要求
+- 配置完整时显示"配置完整"成功提示（绿色背景卡片）
+- 配置缺失时显示"是否从模板初始化"提示 UI（黄色背景卡片，仅 UI，不实际初始化）
+- 提示 UI 包含"稍后"和"了解"两个操作按钮
+
+### 组件结构
+
+- `WelcomeScreen`: 未选择项目时显示的欢迎页面
+- `ProjectInfoScreen`: 已选择项目时显示的项目信息页面
+- `ConfigBadge`: 配置状态徽章（用于显示单个配置项）
+- `InitTemplatePrompt`: 初始化模板提示（配置缺失时显示）
+- `ConfigCompleteNotification`: 配置完整提示（配置齐全时显示）
+- `CheckIcon`/`XIcon`: 状态图标组件
+
+### 样式约定
+
+- 配置存在：绿色主题（`bg-green-50`, `text-green-700`, `border-green-200`）
+- 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+- 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+## LogViewer 约定
+
+### 性能
+
+- `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+- `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+
+### 状态正确性
+
+- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
+- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
+
+### 搜索高亮
+
+- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
+- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
+
+### React Key
+
+- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+## IterationProgressPanel 约定
+
+### 数据来源
+
+- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+- 前端 TypeScript 接口必须匹配 snake_case 字段名（不是 camelCase）
+- 后端 `Phase` 枚举值为：`Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
+- 评分展示链路也走同一个 `IterationProgress` payload：新增字段时要同时更新 Rust struct、Tauri command 返回值、`iterationStore.ts` 接口和 `IDLE_PROGRESS` 默认值
+- 当前评分相关字段为 `last_score`, `passing_score`, `review_summary`；前端不自行提取评分，只消费后端结果
+- 评分趋势图使用同一条 `IterationProgress` 链路里的 `score_history` 数组；该字段元素保持 snake_case（`iteration`, `score`, `review_summary`），不要在 store 层改成 camelCase
+- 如果验收要求是“无 score 时不显示评分区域”，前端组件要以 `last_score` 为评分区块的唯一显隐条件，`review_summary` 不能单独触发渲染
+- 趋势图这类可视化组件优先做成独立可嵌入组件（如 `ScoreTrendChart`），由面板决定是否显示；这样同一组件可复用到 Dashboard 或右侧详情区
+
+### 更新策略
+
+- `iteration-progress` 事件由后端主动推送，前端 `iterationStore.ts` 负责集中订阅并按 `issue_number` 过滤
+- 组件切换 Issue 时先调用 `watchIssue(projectPath, issueNumber)` 主动拉取一次，再等待事件增量更新；不要再在组件里用 `setInterval` 轮询
+- 切换 Issue 或关闭详情时调用 `reset()`，清空当前 issue 绑定并使旧请求失效
+
+### Store 模式
+
+- 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+- 迭代进度 store 还需要注入 `listen`，测试使用 `createIterationStore({ isTauri: true, invoke: mockFn, listen: mockListen })` 隔离事件
+- `isTauri: false` 时 `watchIssue` 为 no-op，确保浏览器模式不报错
+- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
+- subtask 三态由后端提供 `status: pending | passing | failing`；前端只负责渲染，不要再用 `passes: boolean` 自行推导 `failing`
+- 评分 UI 的颜色映射约定放在 `iterationProgressView.ts` 这类纯函数里，用 `node --test --experimental-strip-types` 直接测阈值边界，比把颜色逻辑写死在 JSX 里更稳
+- 对这类小型 React UI，优先把关键显示区块提成纯组件，再用 `react-dom/server` 的 `renderToStaticMarkup` 做静态渲染测试；这样无需引入浏览器测试框架，也能覆盖文案、图标和显隐逻辑
+
+## 文案与中文化约定
+
+- “UI 全面中文化”类需求默认覆盖所有用户可见文案：页面标题、导航、按钮、空状态、提示语、状态标签、ARIA label 和占位符；不能只改局部组件
+- 中文化审核要覆盖未触碰的页面和可访问性文案，尤其是 `DashboardPage`、详情区图片 `alt`、搜索框 placeholder 这类容易漏掉的字符串
+- 做文案类改动时，必须同步更新受影响的字符串断言测试或静态渲染测试；如果常量语义变了（例如输出上限），对应测试里的边界值也要一起改
+- 审核此类需求时先看 `master...HEAD` 的实际 diff；如果 diff 与需求标题明显不符，优先按“需求未实现”处理，而不是假设代码落在别处
+- 纯文案 / 中文化需求不应顺手修改运行逻辑或容量阈值；如果确实需要顺带调整行为，必须在说明和测试里明确交代原因
+- `runStore` 的输出保留上限当前约定为 2000 行；若要调整属于独立行为/性能变更，不能夹带在 UI 文案类 Issue 里
+- 文案回归测试除了标题和正文，还要显式覆盖 placeholder、空状态、`aria-label`、图片 `alt`；这些字符串最容易漏。
+- 对前端 store 返回给 UI 的错误消息也要做中文化检查；这些字符串虽然不在 JSX 里，但会直接显示给用户，审核时不能漏掉
+- store 里的通用异常不要直接 `String(error)` / `error.message` 回传到 UI；统一通过 `src/stores/uiError.ts` 这类 helper 做“保留中文、英文回退到中文 fallback”的归一化
+- `iterationStore` 也属于直接面向用户的状态源；拉取迭代进度失败时不能直接透传后端异常原文，否则会在“迭代进度”面板泄漏英文报错
+- 后端枚举值如 `Phase`、`SubtaskStatus` 允许继续使用英文 key，但前端展示层必须通过单独映射输出中文，不能直接把 `Planning`、`pending` 之类的内部值渲染给用户
+- `LogViewer` 这类状态面板里的筛选标签同样属于用户可见文案，`info/warn/error` 不能直接 `toUpperCase()` 暴露给 UI，必须单独做展示映射
+- 中文化审核不能只看前端静态 JSX；像日志源下拉框这类由后端返回 `label` 的动态文案也必须检查，`iteration-*.log` 这种原始英文文件名如果直接展示给用户，同样算未完成中文化
+- 图标型按钮也属于中文化范围；像 Agent 标签的移除按钮这类仅显示 “×” 的控件，需要补充中文 `aria-label`，否则视觉上看似完成中文化但读屏仍缺失可理解文案
+- 中文化需求不得夹带运行行为改动；像 `runStore` / `logViewerStore` 的日志保留行数这种容量常量要保持一致，若要调整必须作为独立行为变更处理
+
+exec
+/bin/zsh -lc 'cat /Users/chaoyuepan/ai/autoresearch/desktop_app/package.json' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+{
+  "name": "desktop_app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.6.0",
+    "recharts": "^2.15.3",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^7.0.4"
+  }
+}
+
+exec
+/bin/zsh -lc "sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/AgentSelector.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useAgentStore, AVAILABLE_AGENTS, AGENT_METADATA, AgentId } from '../stores/agentStore';
+
+interface SortableTagProps {
+  id: AgentId;
+  name: string;
+  onRemove: () => void;
+}
+
+function SortableTag({ id, name, onRemove }: SortableTagProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 rounded-lg cursor-grab active:cursor-grabbing hover:bg-blue-500"
+      {...attributes}
+      {...listeners}
+    >
+      <span className="text-sm font-medium text-white">{name}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        aria-label={`移除 ${name}`}
+        className="w-4 h-4 flex items-center justify-center text-blue-200 hover:text-white hover:bg-blue-700 rounded"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+interface AgentTagProps {
+  name: string;
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+function AgentTag({ name, isSelected, onClick }: AgentTagProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+        isSelected
+          ? 'bg-blue-600 text-white hover:bg-blue-500'
+          : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+      }`}
+    >
+      {name}
+    </button>
+  );
+}
+
+export default function AgentSelector() {
+  const { selectedAgents, toggleAgent, reorderAgents, selectAll, clearAll } = useAgentStore();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // 需要 5px 移动才触发拖拽，避免误触
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = selectedAgents.indexOf(active.id as AgentId);
+      const newIndex = selectedAgents.indexOf(over.id as AgentId);
+      reorderAgents(oldIndex, newIndex);
+    }
+  };
+
+  const selected = selectedAgents;
+  const unselected = AVAILABLE_AGENTS.filter((agent) => !selectedAgents.includes(agent));
+
+  const handleToggle = (agentId: AgentId) => {
+    toggleAgent(agentId);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-gray-600">已选 Agent</h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
+            >
+              全选
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
+            >
+              清空
+            </button>
+          </div>
+        </div>
+
+        {selected.length > 0 ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={selected} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                {selected.map((agentId) => (
+                  <SortableTag
+                    key={agentId}
+                    id={agentId}
+                    name={AGENT_METADATA[agentId].name}
+                    onRemove={() => handleToggle(agentId)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-400 text-sm">
+            暂未选择 Agent，请在下方添加。
+          </div>
+        )}
+      </div>
+
+      {unselected.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-600 mb-3">可选 Agent</h3>
+          <div className="flex flex-wrap gap-2">
+            {unselected.map((agentId) => (
+              <AgentTag
+                key={agentId}
+                name={AGENT_METADATA[agentId].name}
+                isSelected={false}
+                onClick={() => handleToggle(agentId)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+exec
+/bin/zsh -lc "sed -n '1500,1785p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+            }
+        });
+    }
+
+    // Handle stderr streaming
+    if let Some(stderr) = stderr {
+        let app_clone = app.clone();
+        tokio::spawn(async move {
+            let mut reader = TokioBufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                let _ = app_clone.emit("run-output", &line);
+                emit_iteration_progress(&app_clone).await;
+            }
+        });
+    }
+
+    Ok(())
+}
+
+/// Stops the currently running run.sh process by sending SIGTERM to its process group.
+#[cfg(unix)]
+#[tauri::command]
+async fn stop_run(app: tauri::AppHandle) -> Result<(), String> {
+    let state = get_run_state();
+    let mut state_guard = state.lock().await;
+
+    let process = state_guard.process.take().ok_or("No run is in progress")?;
+    let pid = process.pid;
+
+    // Mark that we're killing via stop_run, so the wait task doesn't emit duplicate event
+    get_was_killed().store(true, Ordering::SeqCst);
+
+    // Send SIGTERM to the process group
+    // Use the PID as PGID since we set it in pre_exec
+    let pgid = pid as i32;
+
+    // Use nix to send signal to process group
+    use nix::sys::signal::{killpg, Signal};
+    use nix::unistd::Pid;
+
+    match killpg(Pid::from_raw(pgid), Signal::SIGTERM) {
+        Ok(()) => {
+            emit_iteration_progress(&app).await;
+            // Emit exit event with killed flag
+            let exit_event = RunExitEvent {
+                exit_code: None,
+                killed: true,
+            };
+            let _ = app.emit("run-exit", &exit_event);
+            Ok(())
+        }
+        Err(e) => {
+            // Restore process state on error
+            state_guard.process = Some(process);
+            get_was_killed().store(false, Ordering::SeqCst);
+            Err(format!("Failed to stop process: {e}"))
+        }
+    }
+}
+
+/// Current status of run.sh process management.
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum RunStatus {
+    /// No process is running.
+    Idle,
+    /// A run.sh process is currently executing.
+    Running,
+}
+
+/// Returns the current status of run.sh process management.
+#[cfg(unix)]
+#[tauri::command]
+async fn get_run_status() -> Result<RunStatus, String> {
+    let state = get_run_state();
+    let state_guard = state.lock().await;
+
+    if state_guard.process.is_some() {
+        Ok(RunStatus::Running)
+    } else {
+        Ok(RunStatus::Idle)
+    }
+}
+
+/// Non-Unix stub for get_run_status.
+#[cfg(not(unix))]
+#[tauri::command]
+async fn get_run_status() -> Result<RunStatus, String> {
+    Ok(RunStatus::Idle)
+}
+
+/// Non-Unix stub for start_run (not supported on Windows).
+#[cfg(not(unix))]
+#[tauri::command]
+async fn start_run(_app: tauri::AppHandle, _request: StartRunRequest) -> Result<(), String> {
+    Err("run.sh process management is only supported on Unix systems".to_string())
+}
+
+/// Non-Unix stub for stop_run (not supported on Windows).
+#[cfg(not(unix))]
+#[tauri::command]
+async fn stop_run(_app: tauri::AppHandle) -> Result<(), String> {
+    Err("run.sh process management is only supported on Unix systems".to_string())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            select_project_dir,
+            detect_project_config,
+            init_project_config,
+            get_recent_project,
+            save_recent_project,
+            list_issues,
+            check_processed_issues,
+            get_issue_detail,
+            list_issue_log_sources,
+            read_issue_log_content,
+            start_run,
+            stop_run,
+            get_run_status,
+            get_iteration_progress,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    use super::RunProcessState;
+    use super::{
+        build_iteration_progress, build_score_history, find_latest_review_content,
+        get_iteration_progress_sync, infer_phase, init_project_config_sync,
+        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
+        SubtaskStatus,
+    };
+    use super::{build_run_args, build_run_env_vars, StartRunRequest};
+    use super::{
+        classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
+        map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
+        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+    };
+    use super::{extract_review_summary, extract_score};
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn create_temp_project_dir(test_name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "autoresearch-log-viewer-{test_name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temp project dir should be created");
+        root
+    }
+
+    #[test]
+    fn init_project_config_creates_missing_template_files() {
+        let project_dir = create_temp_project_dir("init-project-config-full");
+
+        let config = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+            .expect("init should succeed");
+
+        assert!(config.has_autoresearch_dir);
+        assert!(config.has_program_md);
+        assert!(config.has_agents_dir);
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/program.md"))
+                .expect("program template should exist"),
+            super::PROGRAM_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/agents/claude.md"))
+                .expect("claude template should exist"),
+            super::CLAUDE_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/agents/codex.md"))
+                .expect("codex template should exist"),
+            super::CODEX_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(project_dir.join(".autoresearch/agents/opencode.md"))
+                .expect("opencode template should exist"),
+            super::OPENCODE_AGENT_TEMPLATE
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn init_project_config_only_fills_missing_files() {
+        let project_dir = create_temp_project_dir("init-project-config-partial");
+        let config_dir = project_dir.join(".autoresearch");
+        let agents_dir = config_dir.join("agents");
+        fs::create_dir_all(&agents_dir).expect("agents dir should exist");
+        fs::write(config_dir.join("program.md"), "custom program\n").expect("program should exist");
+        fs::write(agents_dir.join("codex.md"), "custom codex\n").expect("codex should exist");
+
+        let config = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+            .expect("init should succeed");
+
+        assert!(config.has_autoresearch_dir);
+        assert!(config.has_program_md);
+        assert!(config.has_agents_dir);
+        assert_eq!(
+            fs::read_to_string(config_dir.join("program.md")).expect("program should still exist"),
+            "custom program\n"
+        );
+        assert_eq!(
+            fs::read_to_string(agents_dir.join("codex.md")).expect("codex should still exist"),
+            "custom codex\n"
+        );
+        assert_eq!(
+            fs::read_to_string(agents_dir.join("claude.md")).expect("claude should be created"),
+            super::CLAUDE_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(agents_dir.join("opencode.md")).expect("opencode should be created"),
+            super::OPENCODE_AGENT_TEMPLATE
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn init_project_config_rejects_non_directory_project_path() {
+        let file_path = std::env::temp_dir().join(format!(
+            "autoresearch-init-project-config-file-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&file_path);
+        fs::write(&file_path, "not a directory").expect("temp file should exist");
+
+        let error = init_project_config_sync(&file_path, file_path.to_string_lossy().as_ref())
+            .expect_err("file path should fail");
+
+        assert_eq!(
+            error,
+            format!("Path is not a directory: {}", file_path.display())
+        );
+        fs::remove_file(file_path).expect("cleanup");
+    }
+
+    #[test]
+    fn init_project_config_reports_conflicting_config_paths() {
+        let project_dir = create_temp_project_dir("init-project-config-conflict");
+        fs::write(project_dir.join(".autoresearch"), "conflict")
+            .expect("conflict file should exist");
+
+        let error = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+            .expect_err("conflicting .autoresearch file should fail");
+
+        assert!(
+            error.contains("config directory"),
+            "expected config directory error, got: {error}"
+        );
+        assert!(
+            error.contains(".autoresearch"),
+            "expected path in error, got: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn parse_issue_detail_returns_structured_data() {
+        let detail = parse_issue_detail(
+            r#"{
+                "body": "Issue description",
+                "comments": [
+                    {
+                        "id": "IC_kwDOA",
+                        "author": { "login": "alice" },
+                        "body": "first comment",
+                        "createdAt": "2026-04-24T10:00:00Z"
+                    }
+                ]
+            }"#,
+        )
+        .expect("issue detail should parse");
+
+
+codex
+我已经看到一个关键点：这个功能依赖“当前项目目录”状态和已有模板常量，所以不适合把后端命令拆得过细，否则每个任务都卡在同一前置。再补一层项目状态和测试方式后，我给出可独立验收的 4 个子任务。
+exec
+/bin/zsh -lc "sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/tests/uiLocalization.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+function readSource(relativePath) {
+  return readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+}
+
+test('layout components use Chinese navigation and panel copy', () => {
+  const sidebarSource = readSource('../src/components/Sidebar.tsx');
+  const rightPanelSource = readSource('../src/components/RightPanel.tsx');
+
+  assert.match(sidebarSource, /label: "概览"/);
+  assert.match(sidebarSource, /label: "议题"/);
+  assert.match(sidebarSource, /label: "历史"/);
+  assert.match(sidebarSource, /label: "设置"/);
+  assert.doesNotMatch(sidebarSource, /label: "Dashboard"/);
+  assert.doesNotMatch(sidebarSource, /label: "History"/);
+
+  assert.match(rightPanelSource, /信息面板/);
+  assert.match(rightPanelSource, /展开面板/);
+  assert.match(rightPanelSource, /收起面板/);
+  assert.match(rightPanelSource, /选择一项后可在这里查看详情。/);
+  assert.doesNotMatch(rightPanelSource, /Info Panel/);
+  assert.doesNotMatch(rightPanelSource, /Expand panel/);
+});
+
+test('settings, history, and agent selection copy is localized', () => {
+  const settingsSource = readSource('../src/pages/SettingsPage.tsx');
+  const historySource = readSource('../src/pages/HistoryPage.tsx');
+  const dashboardSource = readSource('../src/pages/DashboardPage.tsx');
+  const agentSelectorSource = readSource('../src/components/AgentSelector.tsx');
+  const runConfigSource = readSource('../src/components/RunConfigPanel.tsx');
+  const logViewerSource = readSource('../src/components/LogViewer.tsx');
+
+  assert.match(settingsSource, />设置</);
+  assert.match(settingsSource, /配置应用偏好与 Agent 选择顺序。/);
+  assert.match(settingsSource, /Agent 配置/);
+  assert.doesNotMatch(settingsSource, />Settings</);
+
+  assert.match(historySource, />历史</);
+  assert.match(historySource, /查看过去的工作流执行记录与结果。/);
+  assert.doesNotMatch(historySource, />History</);
+
+  assert.match(dashboardSource, /欢迎使用 Autoresearch/);
+  assert.match(dashboardSource, /查看议题/);
+  assert.match(dashboardSource, /aria-label="关闭错误提示"/);
+  assert.doesNotMatch(dashboardSource, /查看 Issues/);
+
+  assert.match(agentSelectorSource, /已选 Agent/);
+  assert.match(agentSelectorSource, /全选/);
+  assert.match(agentSelectorSource, /清空/);
+  assert.match(agentSelectorSource, /暂未选择 Agent，请在下方添加。/);
+  assert.match(agentSelectorSource, /可选 Agent/);
+  assert.match(agentSelectorSource, /aria-label=\{`移除 \$\{name\}`\}/);
+  assert.doesNotMatch(agentSelectorSource, /Selected Agents/);
+  assert.doesNotMatch(agentSelectorSource, /Available Agents/);
+
+  assert.match(runConfigSource, /运行参数配置/);
+  assert.match(runConfigSource, /最大迭代次数/);
+  assert.match(runConfigSource, /通过分数/);
+  assert.match(runConfigSource, /继续模式/);
+
+  assert.match(logViewerSource, /日志查看器/);
+  assert.match(logViewerSource, /搜索日志内容/);
+  assert.match(logViewerSource, /等待新的运行输出/);
+  assert.match(logViewerSource, /跳到最新/);
+  assert.match(logViewerSource, /info: '信息'/);
+  assert.match(logViewerSource, /warn: '警告'/);
+  assert.match(logViewerSource, /error: '错误'/);
+  assert.doesNotMatch(logViewerSource, /level\.toUpperCase\(\)/);
+});
+
+test('issues page and issue detail copy is localized', () => {
+  const issuesSource = readSource('../src/pages/IssuesPage.tsx');
+  const issueDetailSource = readSource('../src/components/IssueDetailPanel.tsx');
+  const issueStoreSource = readSource('../src/stores/issueStore.ts');
+  const projectStoreSource = readSource('../src/stores/projectStore.ts');
+  const logViewerStoreSource = readSource('../src/stores/logViewerStore.ts');
+  const runStoreSource = readSource('../src/stores/runStore.ts');
+
+  assert.match(issuesSource, />议题</);
+  assert.match(issuesSource, /GitHub 未关闭议题/);
+  assert.match(issuesSource, /正在加载议题/);
+  assert.match(issuesSource, /没有匹配的议题/);
+  assert.match(issuesSource, /暂无议题/);
+  assert.match(issuesSource, /已关闭/);
+  assert.match(issuesSource, /搜索议题标题或编号/);
+  assert.match(issuesSource, /aria-label="关闭错误提示"/);
+  assert.match(issuesSource, /aria-label="清空搜索"/);
+  assert.doesNotMatch(issuesSource, />Issues</);
+  assert.doesNotMatch(issuesSource, /OPEN Issues/);
+  assert.doesNotMatch(issuesSource, /搜索 Issue 标题或编号/);
+
+  assert.match(issueDetailSource, /议题详情/);
+  assert.match(issueDetailSource, /选择一个议题/);
+  assert.match(issueDetailSource, /从左侧列表中点击议题后/);
+  assert.match(issueDetailSource, /进行中/);
+  assert.match(issueDetailSource, /已关闭/);
+  assert.match(issueDetailSource, /退出码/);
+  assert.match(issueDetailSource, /当前正在运行议题/);
+  assert.match(issueDetailSource, /该议题暂无描述/);
+  assert.match(issueDetailSource, /该议题暂无评论/);
+  assert.match(issueDetailSource, /的头像/);
+  assert.doesNotMatch(issueDetailSource, /Issue Detail/);
+  assert.doesNotMatch(issueDetailSource, /alt=\{`\$\{comment\.author\.login\} avatar`\}/);
+
+  assert.match(issueStoreSource, /浏览器模式不支持获取 GitHub 议题/);
+  assert.match(issueStoreSource, /未找到议题 #/);
+  assert.match(issueStoreSource, /normalizeIssueListError/);
+  assert.match(issueStoreSource, /normalizeIssueDetailError/);
+  assert.doesNotMatch(issueStoreSource, /GitHub Issues/);
+  assert.doesNotMatch(issueStoreSource, /Issue #\$\{_issueNumber\} not found/);
+  assert.doesNotMatch(issueStoreSource, /String\(e\)/);
+
+  assert.match(projectStoreSource, /normalizeProjectError/);
+  assert.doesNotMatch(projectStoreSource, /String\(e\)/);
+
+  assert.match(logViewerStoreSource, /normalizeLogViewerError/);
+  assert.doesNotMatch(logViewerStoreSource, /error\.message/);
+
+  assert.match(runStoreSource, /退出码/);
+  assert.match(runStoreSource, /const MAX_OUTPUT_LINES = 5000/);
+  assert.doesNotMatch(runStoreSource, /exit code/);
+});
+
+test('iteration progress copy is localized', () => {
+  const iterationProgressViewSource = readSource('../src/components/iterationProgressView.ts');
+  const iterationProgressPanelSource = readSource('../src/components/IterationProgressPanel.tsx');
+
+  assert.match(iterationProgressViewSource, /label: '规划'/);
+  assert.match(iterationProgressViewSource, /label: '实现'/);
+  assert.match(iterationProgressViewSource, /label: '审核'/);
+  assert.match(iterationProgressViewSource, /label: '构建·检查·测试'/);
+  assert.match(iterationProgressViewSource, /当前为空闲状态/);
+  assert.match(iterationProgressViewSource, /待处理/);
+  assert.match(iterationProgressViewSource, /通过/);
+  assert.match(iterationProgressViewSource, /失败/);
+  assert.doesNotMatch(iterationProgressViewSource, /label: 'Planning'/);
+  assert.doesNotMatch(iterationProgressViewSource, /idle 状态/);
+
+  assert.match(iterationProgressPanelSource, /暂无子任务信息/);
+  assert.match(iterationProgressPanelSource, /已通过 \{passed\}\/\{total\} 个子任务/);
+  assert.doesNotMatch(iterationProgressPanelSource, /暂无 subtask 信息/);
+  assert.doesNotMatch(iterationProgressPanelSource, /subtasks passed/);
+});
+
+exec
+/bin/zsh -lc "ls -la /Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores && sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+total 120
+drwxr-xr-x@ 10 chaoyuepan  staff    320 Apr 25 15:12 .
+drwxr-xr-x@ 12 chaoyuepan  staff    384 Apr 25 15:12 ..
+-rw-r--r--@  1 chaoyuepan  staff   2945 Apr 25 13:36 agentStore.ts
+-rw-r--r--@  1 chaoyuepan  staff   6148 Apr 25 14:27 issueStore.ts
+-rw-r--r--@  1 chaoyuepan  staff   4972 Apr 25 15:12 iterationStore.ts
+-rw-r--r--@  1 chaoyuepan  staff  11339 Apr 25 14:27 logViewerStore.ts
+-rw-r--r--@  1 chaoyuepan  staff   6131 Apr 25 14:27 projectStore.ts
+-rw-r--r--@  1 chaoyuepan  staff   3879 Apr 25 08:39 runConfigStore.ts
+-rw-r--r--@  1 chaoyuepan  staff   8694 Apr 25 14:27 runStore.ts
+-rw-r--r--@  1 chaoyuepan  staff    476 Apr 25 14:27 uiError.ts
+import { create } from 'zustand';
+import { normalizeUserFacingError } from './uiError.ts';
+
+// Detect if running inside Tauri (has native backend) or plain browser (vite dev only)
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// Lazy import to avoid crash when Tauri is not available
+async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+export interface ProjectConfig {
+  has_autoresearch_dir: boolean;
+  has_program_md: boolean;
+  has_agents_dir: boolean;
+}
+
+interface ProjectState {
+  projectPath: string | null;
+  config: ProjectConfig | null;
+  recentProjects: string[];
+  isLoading: boolean;
+  error: string | null;
+  selectProject: () => Promise<void>;
+  loadProject: (_path: string) => Promise<void>;
+  loadRecentProjects: () => Promise<void>;
+  clearError: () => void;
+}
+
+// Browser fallback: use localStorage and show/pickFolder API
+function isProjectPath(path: string): boolean {
+  return path.startsWith('/') || !!path.match(/^[A-Z]:\\/);
+}
+
+function detectConfigBrowser(projectPath: string): ProjectConfig {
+  // Best-effort: in browser mode we can't check the filesystem,
+  // so return a demo config for known project names
+  const name = projectPath.split(/[/\\]/).pop() || '';
+  const isAutoresearch = name === 'autoresearch' || projectPath.includes('autoresearch');
+  return {
+    has_autoresearch_dir: isAutoresearch,
+    has_program_md: isAutoresearch,
+    has_agents_dir: isAutoresearch,
+  };
+}
+
+function loadRecentFromStorage(): string | null {
+  try {
+    return localStorage.getItem('autoresearch_recent_project');
+  } catch {
+    return null;
+  }
+}
+
+function saveRecentToStorage(path: string) {
+  try {
+    localStorage.setItem('autoresearch_recent_project', path);
+  } catch {
+    // ignore
+  }
+}
+
+export function normalizeProjectError(error: unknown): string {
+  return normalizeUserFacingError(error, '加载项目失败，请重试。');
+}
+
+export const useProjectStore = create<ProjectState>((set, get) => ({
+  projectPath: null,
+  config: null,
+  recentProjects: [],
+  isLoading: false,
+  error: null,
+
+  selectProject: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      if (isTauri) {
+        const path = await tauriInvoke<string | null>('select_project_dir');
+        if (path) {
+          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+            projectPath: path,
+          });
+          await tauriInvoke('save_recent_project', { path });
+          set((state) => ({
+            projectPath: path,
+            config,
+            recentProjects: [path, ...state.recentProjects.filter((p) => p !== path)].slice(0, 5),
+          }));
+        }
+      } else {
+        // Browser fallback: use the File System Access API if available
+        if ('showDirectoryPicker' in window) {
+          const dirHandle = await (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker();
+          const path = dirHandle.name;
+          // We don't get the full path in browser, use the name as identifier
+          const fakePath = `/home/user/${path}`;
+          const config = detectConfigBrowser(fakePath);
+          saveRecentToStorage(fakePath);
+          set((state) => ({
+            projectPath: fakePath,
+            config,
+            recentProjects: [fakePath, ...state.recentProjects.filter((p) => p !== fakePath)].slice(0, 5),
+          }));
+        } else {
+          // Last resort: prompt user to type a path
+          const path = prompt('请输入项目目录路径（例如: /Users/smallnest/ai/autoresearch）:');
+          if (path && isProjectPath(path)) {
+            const config = detectConfigBrowser(path);
+            saveRecentToStorage(path);
+            set((state) => ({
+              projectPath: path,
+              config,
+              recentProjects: [path, ...state.recentProjects.filter((p) => p !== path)].slice(0, 5),
+            }));
+          } else if (path) {
+            set({ error: '路径格式无效，请输入绝对路径' });
+          }
+        }
+      }
+    } catch (e) {
+      set({ error: normalizeProjectError(e) });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  loadProject: async (path: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      if (isTauri) {
+        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+          projectPath: path,
+        });
+        await tauriInvoke('save_recent_project', { path });
+        set((state) => ({
+          projectPath: path,
+          config,
+          recentProjects: [path, ...state.recentProjects.filter((p) => p !== path)].slice(0, 5),
+        }));
+      } else {
+        const config = detectConfigBrowser(path);
+        saveRecentToStorage(path);
+        set((state) => ({
+          projectPath: path,
+          config,
+          recentProjects: [path, ...state.recentProjects.filter((p) => p !== path)].slice(0, 5),
+        }));
+      }
+    } catch (e) {
+      set({ error: normalizeProjectError(e) });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  loadRecentProjects: async () => {
+    try {
+      if (isTauri) {
+        const path = await tauriInvoke<string | null>('get_recent_project');
+        if (path) {
+          set({ recentProjects: [path] });
+          if (!get().projectPath) {
+            const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+              projectPath: path,
+            });
+            set({ projectPath: path, config });
+          }
+        }
+      } else {
+        // Browser fallback: read from localStorage
+        const path = loadRecentFromStorage();
+        if (path) {
+          const config = detectConfigBrowser(path);
+          set({
+            recentProjects: [path],
+            projectPath: path,
+            config,
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load recent projects:', e);
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));
+
+exec
+/bin/zsh -lc 'rg -n "useProjectStore|projectPath|detect_project_config|currentProject|selected project|recent project" /Users/chaoyuepan/ai/autoresearch/desktop_app/src /Users/chaoyuepan/ai/autoresearch/desktop_app/tests' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/issueRunRequest.test.mjs:13:    projectPath: '/tmp/project',
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:22:  projectPath: string | null;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:202:  projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:230:    Boolean(projectPath) && isSupported && !isRunActive;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:293:                  if (projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:295:                      buildIssueRunRequest(projectPath, issue.number, {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:357:            projectPath={projectPath}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:361:          <LogViewer issueNumber={issue.number} projectPath={projectPath} />
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/issueRunRequest.ts:4:  projectPath: string;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/issueRunRequest.ts:17:  projectPath: string,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/issueRunRequest.ts:22:    projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:37:- Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:57:- When adding store actions that load a specific project by path, always call `detect_project_config` + `save_recent_project` + update state in one action — don't split across multiple calls.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:58:- In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:59:- `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:73:- **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:74:- **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:156:- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:169:- 组件切换 Issue 时先调用 `watchIssue(projectPath, issueNumber)` 主动拉取一次，再等待事件增量更新；不要再在组件里用 `setInterval` 轮询
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx:19:  projectPath: string | null;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx:123:  projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx:129:    if (!projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx:134:    void initialize().then(() => watchIssue(projectPath, issueNumber));
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx:139:  }, [projectPath, issueNumber, initialize, watchIssue, reset]);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs:29:    projectPath: '/tmp/project',
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs:60:    projectPath: '/tmp/project',
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:2:import { useProjectStore } from '../stores/projectStore';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:256:  const { projectPath } = useProjectStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:285:    if (projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:286:      loadIssues(projectPath);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:288:  }, [projectPath, loadIssues]);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:291:    if (projectPath && selectedIssueNumber !== null) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:292:      loadIssueDetail(projectPath, selectedIssueNumber);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:294:  }, [projectPath, selectedIssueNumber, loadIssueDetail]);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:374:  if (!projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:403:          onClick={() => projectPath && loadIssues(projectPath)}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:606:            projectPath={projectPath}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:610:              if (projectPath && selectedIssueNumber !== null) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx:611:                loadIssueDetail(projectPath, selectedIssueNumber);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:20:  projectPath: string | null;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:36:function detectConfigBrowser(projectPath: string): ProjectConfig {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:39:  const name = projectPath.split(/[/\\]/).pop() || '';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:40:  const isAutoresearch = name === 'autoresearch' || projectPath.includes('autoresearch');
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:68:export const useProjectStore = create<ProjectState>((set, get) => ({
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:69:  projectPath: null,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:81:          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:82:            projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:86:            projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:101:            projectPath: fakePath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:112:              projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:132:        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:133:          projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:137:          projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:145:          projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:163:          if (!get().projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:164:            const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:165:              projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:167:            set({ projectPath: path, config });
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:177:            projectPath: path,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts:183:      console.error('Failed to load recent projects:', e);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:13:  projectPath: string | null;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:189:  projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:241:    if (!projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:250:    void loadSources(projectPath, issueNumber, {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:259:      void loadSources(projectPath, issueNumber, {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:270:  }, [clearIssue, isCurrentIssueRunning, issueNumber, loadSources, projectPath]);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:273:    if (!projectPath || selectedSourceId === DEFAULT_SELECTED_SOURCE_ID) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:277:    void refreshSelectedSource(projectPath, issueNumber);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:284:      void refreshSelectedSource(projectPath, issueNumber);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx:293:  }, [issueNumber, projectPath, refreshSelectedSource, selectedSourceId]);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:2:import { useProjectStore, ProjectConfig } from '../stores/projectStore';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:91:  } = useProjectStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:318:  projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:321:  projectPath: string;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:324:  const { selectProject } = useProjectStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:357:            {getDirName(projectPath)}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:359:          <p className="text-sm text-gray-500">{projectPath}</p>
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:496:  const { projectPath, config, loadRecentProjects } = useProjectStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:502:  if (!projectPath) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx:506:  return <ProjectInfoScreen projectPath={projectPath} config={config} />;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:19:  projectPath: string;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:243:            project_path: _request.projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts:62:    _projectPath: string,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts:66:  refreshSelectedSource: (_projectPath: string, _issueNumber: number) => Promise<void>;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts:225:      _projectPath: string,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts:265:            projectPath: _projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts:318:    refreshSelectedSource: async (_projectPath: string, _issueNumber: number) => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts:339:          projectPath: _projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:61:  loadIssues: (_projectPath: string) => Promise<void>;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:62:  loadIssueDetail: (_projectPath: string, _issueNumber: number) => Promise<void>;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:118:  loadIssues: async (_projectPath: string) => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:123:          projectPath: _projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:154:  loadIssueDetail: async (_projectPath: string, _issueNumber: number) => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts:167:            projectPath: _projectPath,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts:100:  watchIssue: (projectPath: string, issueNumber: number) => Promise<void>;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts:142:    watchIssue: async (projectPath: string, issueNumber: number) => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts:160:          { projectPath, issueNumber },
+
+exec
+/bin/zsh -lc "sed -n '80,110p' /Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+- [ ] 达到 passing score 时有明确的通过提示
+- [ ] Typecheck/lint passes
+
+### US-007: 配置管理
+**Description:** 作为开发者，我希望能通过 GUI 编辑 autoresearch 的配置文件，而不是手动编辑 markdown。
+
+**Acceptance Criteria:**
+- [ ] 可查看和编辑 `program.md`（代码规范部分）
+- [ ] 可查看和编辑各 agent 配置（`agents/claude.md`、`agents/codex.md` 等）
+- [ ] 可配置运行参数：passing score、agent 执行顺序、max iterations
+- [ ] 编辑后保存到对应文件，立即生效
+- [ ] 提供配置重置为默认值的选项
+- [ ] Typecheck/lint passes
+
+### US-008: 处理历史记录
+**Description:** 作为开发者，我希望能查看所有历史处理记录，了解每个 Issue 的处理结果。
+
+**Acceptance Criteria:**
+- [ ] 列表展示所有处理过的 Issue，包含编号、标题、状态、评分、耗时
+- [ ] 状态分为：成功（已合并）、进行中、失败、已中断
+- [ ] 点击记录查看详情：所有迭代日志、评分、review 反馈
+- [ ] 可导出某次处理的全量日志
+- [ ] Typecheck/lint passes
+
+### US-009: PR 审核与操作
+**Description:** 作为开发者，我希望能直接在 App 中查看 autoresearch 自动创建的 PR，并进行合并/关闭操作。
+
+**Acceptance Criteria:**
+- [ ] PR 创建后自动弹出通知
+- [ ] 展示 PR 信息：标题、描述、分支、文件变更统计
+- [ ] 可查看 PR 的 diff（文件列表 + 代码差异）
+
+codex
+基于现有代码结构，这个 Issue 适合拆成 4 个子任务，而不是按每个按钮/命令继续细分。原因是它天然分成两层边界：Rust 侧负责“受限文件读写 + 默认模板恢复”，前端 Settings 页负责“列表/编辑器/交互”，最后再做一次集中回归验证。这样依赖清晰，且每个任务都能独立验收。
+
+建议依赖顺序：
+1. 先做 Rust 侧“读取与路径解析”，把 `.autoresearch > 默认目录`、白名单文件、错误处理定下来。
+2. 再做 Rust 侧“写入/重置”，补齐备份和默认模板恢复。
+3. 然后接 Settings UI，把静态文件列表和编辑交互接到命令上。
+4. 最后做 typecheck/lint/test/browser verify，作为收口任务。
+
+```json
+{
+  "issueNumber": 34,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现配置文件读取能力与路径解析",
+      "description": "在 Tauri Rust 后端实现配置文件读取基础能力，新增 `read_config_file` command，并封装配置文件白名单与路径解析逻辑。读取时只允许 `program.md`、`agents/claude.md`、`agents/codex.md`、`agents/opencode.md` 四个目标文件；解析优先级遵循“项目目录 `.autoresearch/` > autoresearch 默认目录”。同时补充单元测试，覆盖优先级、默认回退、非法文件名拒绝等场景。",
+      "acceptanceCriteria": [
+        "新增 `read_config_file` command，并注册到 Tauri invoke handler",
+        "仅允许读取 program.md 与 3 个 agents/*.md 白名单文件，拒绝任意路径拼接和路径遍历",
+        "当项目目录 `.autoresearch/` 下存在目标文件时优先返回其内容，否则回退到 autoresearch 默认模板内容",
+        "Rust 单元测试覆盖项目配置优先、默认回退、非法文件名/非法路径失败"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现配置文件写入、备份与重置命令",
+      "description": "在 Rust 后端实现 `write_config_file` 与 `reset_config_file`。写入时将内容写到项目目录 `.autoresearch/` 对应文件，并在覆盖前为原文件生成 `.bak` 备份；重置时使用 autoresearch 内置默认模板恢复目标文件。需要复用 T-001 的白名单和路径解析逻辑，确保命令不会写入任意路径。",
+      "acceptanceCriteria": [
+        "新增 `write_config_file` 和 `reset_config_file` commands，并注册到 Tauri invoke handler",
+        "写入目标统一落到项目目录 `.autoresearch/` 下对应文件，不直接修改默认模板文件",
+        "保存前若目标文件已存在，则自动生成 `.bak` 备份文件",
+        "“重置为默认”会将目标文件内容恢复为 autoresearch 内置默认模板",
+        "Rust 单元测试覆盖首次写入、覆盖写入生成备份、重置为默认、非法文件名拒绝"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "在 Settings 页面接入配置文件编辑器 UI",
+      "description": "扩展现有 `SettingsPage`，在保留现有设置内容的前提下新增配置文件编辑器区域。页面展示固定配置文件列表，点击后加载文件内容并在等宽字体 textarea 中显示；支持编辑、保存、重置为默认，并处理加载中/保存中/错误/未选择项目等状态。前端通过 Tauri invoke 调用配置命令，读取当前 project store 中的项目路径。",
+      "acceptanceCriteria": [
+        "Settings 页面展示 4 个配置文件项：program.md、agents/claude.md、agents/codex.md、agents/opencode.md",
+        "点击文件项后自动加载当前内容，并在等宽字体编辑区域中显示",
+        "页面提供“保存”与“重置为默认”按钮，分别调用后端写入和重置命令",
+        "未选择项目目录时有明确提示，已选择项目时可正常加载和编辑配置",
+        "前端交互不会自行拼接任意文件系统路径，只传递受控文件标识给后端",
+        "补充前端测试或静态断言，覆盖文件列表、编辑器文案与关键交互状态"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "完成配置编辑器回归验证与浏览器验收",
+      "description": "对配置编辑器功能做完整收口验证，包括 Rust 测试、前端 typecheck/lint、已有测试回归，以及浏览器模式下的页面可用性验证。重点确认 Settings 页面能正常渲染，不出现白屏或明显控制台错误，并验证保存/重置流程在 Tauri 环境下的集成链路。",
+      "acceptanceCriteria": [
+        "执行 desktop_app 前端 typecheck 与 lint，结果通过",
+        "执行 Rust 相关测试，配置文件命令新增测试通过",
+        "Settings 页面在浏览器模式下可正常加载和展示配置编辑器区域，无白屏",
+        "完成一次手工或截图级验证，确认文件切换、内容展示、保存按钮、重置按钮的基本交互符合预期",
+        "若浏览器模式无法真实写文件，验收说明中明确区分浏览器验证范围与 Tauri 集成验证范围"
+      ],
+      "priority": 4,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```
+tokens used
+39,305
+基于现有代码结构，这个 Issue 适合拆成 4 个子任务，而不是按每个按钮/命令继续细分。原因是它天然分成两层边界：Rust 侧负责“受限文件读写 + 默认模板恢复”，前端 Settings 页负责“列表/编辑器/交互”，最后再做一次集中回归验证。这样依赖清晰，且每个任务都能独立验收。
+
+建议依赖顺序：
+1. 先做 Rust 侧“读取与路径解析”，把 `.autoresearch > 默认目录`、白名单文件、错误处理定下来。
+2. 再做 Rust 侧“写入/重置”，补齐备份和默认模板恢复。
+3. 然后接 Settings UI，把静态文件列表和编辑交互接到命令上。
+4. 最后做 typecheck/lint/test/browser verify，作为收口任务。
+
+```json
+{
+  "issueNumber": 34,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "实现配置文件读取能力与路径解析",
+      "description": "在 Tauri Rust 后端实现配置文件读取基础能力，新增 `read_config_file` command，并封装配置文件白名单与路径解析逻辑。读取时只允许 `program.md`、`agents/claude.md`、`agents/codex.md`、`agents/opencode.md` 四个目标文件；解析优先级遵循“项目目录 `.autoresearch/` > autoresearch 默认目录”。同时补充单元测试，覆盖优先级、默认回退、非法文件名拒绝等场景。",
+      "acceptanceCriteria": [
+        "新增 `read_config_file` command，并注册到 Tauri invoke handler",
+        "仅允许读取 program.md 与 3 个 agents/*.md 白名单文件，拒绝任意路径拼接和路径遍历",
+        "当项目目录 `.autoresearch/` 下存在目标文件时优先返回其内容，否则回退到 autoresearch 默认模板内容",
+        "Rust 单元测试覆盖项目配置优先、默认回退、非法文件名/非法路径失败"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现配置文件写入、备份与重置命令",
+      "description": "在 Rust 后端实现 `write_config_file` 与 `reset_config_file`。写入时将内容写到项目目录 `.autoresearch/` 对应文件，并在覆盖前为原文件生成 `.bak` 备份；重置时使用 autoresearch 内置默认模板恢复目标文件。需要复用 T-001 的白名单和路径解析逻辑，确保命令不会写入任意路径。",
+      "acceptanceCriteria": [
+        "新增 `write_config_file` 和 `reset_config_file` commands，并注册到 Tauri invoke handler",
+        "写入目标统一落到项目目录 `.autoresearch/` 下对应文件，不直接修改默认模板文件",
+        "保存前若目标文件已存在，则自动生成 `.bak` 备份文件",
+        "“重置为默认”会将目标文件内容恢复为 autoresearch 内置默认模板",
+        "Rust 单元测试覆盖首次写入、覆盖写入生成备份、重置为默认、非法文件名拒绝"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "在 Settings 页面接入配置文件编辑器 UI",
+      "description": "扩展现有 `SettingsPage`，在保留现有设置内容的前提下新增配置文件编辑器区域。页面展示固定配置文件列表，点击后加载文件内容并在等宽字体 textarea 中显示；支持编辑、保存、重置为默认，并处理加载中/保存中/错误/未选择项目等状态。前端通过 Tauri invoke 调用配置命令，读取当前 project store 中的项目路径。",
+      "acceptanceCriteria": [
+        "Settings 页面展示 4 个配置文件项：program.md、agents/claude.md、agents/codex.md、agents/opencode.md",
+        "点击文件项后自动加载当前内容，并在等宽字体编辑区域中显示",
+        "页面提供“保存”与“重置为默认”按钮，分别调用后端写入和重置命令",
+        "未选择项目目录时有明确提示，已选择项目时可正常加载和编辑配置",
+        "前端交互不会自行拼接任意文件系统路径，只传递受控文件标识给后端",
+        "补充前端测试或静态断言，覆盖文件列表、编辑器文案与关键交互状态"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "完成配置编辑器回归验证与浏览器验收",
+      "description": "对配置编辑器功能做完整收口验证，包括 Rust 测试、前端 typecheck/lint、已有测试回归，以及浏览器模式下的页面可用性验证。重点确认 Settings 页面能正常渲染，不出现白屏或明显控制台错误，并验证保存/重置流程在 Tauri 环境下的集成链路。",
+      "acceptanceCriteria": [
+        "执行 desktop_app 前端 typecheck 与 lint，结果通过",
+        "执行 Rust 相关测试，配置文件命令新增测试通过",
+        "Settings 页面在浏览器模式下可正常加载和展示配置编辑器区域，无白屏",
+        "完成一次手工或截图级验证，确认文件切换、内容展示、保存按钮、重置按钮的基本交互符合预期",
+        "若浏览器模式无法真实写文件，验收说明中明确区分浏览器验证范围与 Tauri 集成验证范围"
+      ],
+      "priority": 4,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```
