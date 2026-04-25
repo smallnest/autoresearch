@@ -4,6 +4,8 @@ import {
   idleMessage,
   PHASE_STEPS,
   phaseIndex,
+  scoreBadgeClass,
+  scoreColorClass,
   subtaskBadgeClass,
 } from '../src/components/iterationProgressView.ts';
 
@@ -27,4 +29,22 @@ test('idleMessage distinguishes loading from idle copy', () => {
   assert.equal(idleMessage(true, false), '正在加载迭代进度…');
   assert.equal(idleMessage(false, true), '正在加载迭代进度…');
   assert.equal(idleMessage(false, false), '暂无迭代进度，当前为 idle 状态。');
+});
+
+test('scoreColorClass returns correct color classes for score ranges', () => {
+  // Red: < 70
+  assert.match(scoreColorClass(0), /red/);
+  assert.match(scoreColorClass(69), /red/);
+  // Yellow: 70-84
+  assert.match(scoreColorClass(70), /yellow/);
+  assert.match(scoreColorClass(84), /yellow/);
+  // Green: >= 85
+  assert.match(scoreColorClass(85), /green/);
+  assert.match(scoreColorClass(100), /green/);
+});
+
+test('scoreBadgeClass returns correct badge classes for score ranges', () => {
+  assert.match(scoreBadgeClass(50), /red/);
+  assert.match(scoreBadgeClass(75), /yellow/);
+  assert.match(scoreBadgeClass(90), /green/);
 });

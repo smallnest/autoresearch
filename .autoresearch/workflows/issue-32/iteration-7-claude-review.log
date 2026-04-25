@@ -1,0 +1,119 @@
+I have now reviewed everything. Here is my full audit report.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #32
+- 标题: [desktop-app] 评分提取与展示
+- 子任务: T-003 - 前端评分展示 UI：颜色编码 + 通过 banner + 摘要
+- 迭代次数: 7
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+T-003 的实现质量优秀。整条数据链路完整贯通：Rust 后端新增 `last_score`/`passing_score`/`review_summary` 字段 → `IterationProgress` struct 正确序列化 → 前端 `iterationStore.ts` 接口匹配 → `ReviewScoreSection` 组件正确消费并渲染。颜色编码逻辑提取为纯函数（`scoreColorClass`/`scoreBadgeClass`），遵循已有的 `subtaskBadgeClass()` 模式。测试覆盖全面，包括 Rust 端评分提取 + 摘要提取 + 集成测试，前端端纯函数阈值测试 + 静态渲染测试。TypeScript 类型检查通过，Rust 全部 56 个测试通过，前端 15 个测试全通过。
+
+---
+
+### 验收条件逐项验证
+
+| 验收条件 | 状态 | 说明 |
+|---------|------|------|
+| 评分以 X/100 格式显示，字体突出 | ✅ | `reviewScoreSection.ts:38` 渲染 `` `${score}/100` ``，`text-sm font-semibold` |
+| 颜色编码正确：红(< 70)、黄(70-84)、绿(>= 85) | ✅ | `scoreBadgeClass()` 阈值正确，有测试覆盖边界值 |
+| 达到 passing_score 时显示绿色 banner + 勾号 + '通过' | ✅ | `ScoreDisplay` 判断 `isPassing = score >= passingScore`，渲染 SVG checkmark + '通过' |
+| review_summary 以摘要卡片形式展示 | ✅ | `ReviewSummaryCard` 组件，灰色边框卡片，标题'审核摘要' |
+| 无 score 时不显示评分区域 | ✅ | `ReviewScoreSection` 在 `score == null` 时返回 `null`，有测试验证 |
+| npx tsc --noEmit 通过 | ✅ | 已验证，无输出 |
+| 浏览器中渲染正常，无 console 错误 | ⏳ | 需浏览器截图验证 |
+
+---
+
+### 各维度评分
+
+#### 1. 正确性 (35%) — 92/100
+
+**优点**:
+- 全链路数据完整：Rust `IterationProgress` 新增三字段 → serde 序列化 → TS 接口匹配 → `IDLE_PROGRESS` 默认值正确
+- `scoreBadgeClass` 阈值 (< 70 红、70-84 黄、>= 85 绿) 与需求一致
+- `ReviewScoreSection` 以 `score == null` 作为唯一显隐条件，符合 CLAUDE.md 约定
+- 通过 banner 的判断 `score >= passingScore` 正确（使用 props 传入的 `passingScore`，非硬编码 85）
+- Rust 端 `extract_score` 实现了完整的 6 模式级联，`extract_review_summary` 提取分数行上下文
+
+**小问题**: 无
+
+#### 2. 测试质量 (25%) — 90/100
+
+**优点**:
+- Rust 端：`extract_score` 覆盖全部 6 种模式 + 无匹配 + 小数四舍五入 + 优先级测试；`extract_review_summary` 覆盖上下文提取、无分数、行数限制、空行跳过
+- Rust 端：`build_iteration_progress_includes_score_from_review` 和 `build_iteration_progress_no_score_when_no_review` 做了完整的端到端集成
+- 前端：`iterationProgressView.test.mjs` 覆盖 `scoreColorClass` 和 `scoreBadgeClass` 的全部三档阈值边界
+- 前端：`iterationProgressPanel.test.mjs` 使用 `renderToStaticMarkup` 测试了三种场景：分数+摘要渲染、通过 banner 渲染、null 分数不渲染
+- `iterationStore.test.mjs` 的 `SAMPLE_PROGRESS` 已扩展包含 score 相关字段
+
+**建议改进**（可选）:
+- `iterationProgressPanel.test.mjs` 可增加一个红色分数（如 score=50）的测试，验证红色样式类被输出
+
+#### 3. 代码质量 (20%) — 88/100
+
+**优点**:
+- `ReviewScoreSection` 抽取为独立文件，符合关注点分离原则
+- 颜色逻辑提取为纯函数放在 `iterationProgressView.ts`，与 `subtaskBadgeClass()` 模式一致
+- Rust 端 `OnceLock` 缓存编译正则，每个正则一个函数，是现代 Rust 惯用做法
+- `reviewScoreSection.ts` 使用 `createElement` 而非 JSX，保持 `.ts` 文件扩展名（因为它不需要 JSX 语法），这是合理的选择
+
+**小问题**:
+
+1. `scoreColorClass` 函数已导出并有测试，但在 `reviewScoreSection.ts` 中并未使用（使用的是 `scoreBadgeClass`）。这是一个潜在的 dead code 情况，但因为它是导出的 API 且有测试覆盖，可以保留供未来使用。
+
+**位置**: `iterationProgressView.ts:40-48`
+
+#### 4. 安全性 (10%) — 95/100
+
+- `review_summary` 通过 React 的 `createElement` 渲染为文本内容，不存在 XSS 风险（React 自动转义）
+- Rust 端 `find_latest_review_content` 只读取 workflow 目录内的文件，无路径穿越风险
+- `whitespace-pre-line` 处理换行显示是安全的
+
+#### 5. 性能 (10%) — 95/100
+
+- Rust 端正则使用 `OnceLock` 缓存，避免重复编译
+- 前端 `ReviewScoreSection` 在 `score == null` 时直接返回 `null`，避免不必要渲染
+- `find_latest_review_content` 只在构建进度时调用一次，不存在重复 IO
+
+---
+
+### 一般问题 (建议修复)
+
+无必须修复的问题。
+
+---
+
+### 建议改进 (可选)
+
+1. **`scoreColorClass` 未被使用**：当前只有 `scoreBadgeClass` 被 `reviewScoreSection.ts` 导入。`scoreColorClass` 有导出和测试但无消费者。如果确认未来会在其他地方使用（如分数趋势图），可保留；否则可考虑移除以减少维护面。
+
+2. **红色分数测试覆盖**：`iterationProgressPanel.test.mjs` 可增加 `score: 50` 的测试用例，断言输出包含 `/red/`，确保三种颜色在静态渲染中都有覆盖。
+
+3. **SVG 勾号图标**：当前使用手写 SVG path `d: 'M5 13l4 4L19 7'`，如果项目后续引入图标库，可考虑统一替换。
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+代码实现完整、测试充分、类型检查通过。建议进行浏览器截图验证以确认 UI 渲染效果。
+
+---
+
+## Learnings
+
+- **模式**: `ReviewScoreSection` 使用 `createElement` 而非 JSX 是合理的——当组件不需要 JSX 语法糖时保持 `.ts` 扩展名，避免不必要的构建步骤差异。配合 `renderToStaticMarkup` 测试，这是一种轻量但有效的 UI 测试模式。
+- **模式**: Rust 端评分提取使用 `OnceLock<Regex>` 每个正则一个函数的模式，而非 `lazy_static!` 宏，是更现代的做法，且每个正则独立缓存，便于测试和维护。
+- **经验**: T-003 的 `ReviewScoreSection` 以 `score == null` 作为整个区块的唯一显隐条件，即使 `review_summary` 有值也不会单独渲染。这符合 CLAUDE.md 中"前端不自行提取评分，只消费后端结果"的约定。

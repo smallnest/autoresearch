@@ -10,6 +10,7 @@ import {
   phaseIndex,
   subtaskBadgeClass,
 } from './iterationProgressView';
+import { ReviewScoreSection } from './reviewScoreSection';
 
 interface IterationProgressPanelProps {
   issueNumber: number;
@@ -159,6 +160,13 @@ export default function IterationProgressPanel({
 
       <PhaseSteps currentPhase={progress.phase} />
       <ProgressBar passed={progress.passed_count} total={progress.total_count} />
+
+      <ReviewScoreSection
+        score={progress.last_score}
+        passingScore={progress.passing_score}
+        summary={progress.review_summary}
+      />
+
       <SubtaskList subtasks={progress.subtasks} />
 
       {error && (

@@ -1,0 +1,3249 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc29b-c6b2-7dd1-b481-29fbc984a0a6
+--------
+user
+审核 Issue #32 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 评分提取与展示
+
+
+## 子任务审核
+
+子任务进度: 1/3 已完成 | 当前子任务: T-002 - 扩展 IterationProgress 加入 score 和 review_summary 字段
+
+请审核当前子任务的实现：
+
+- **ID**: T-002
+- **标题**: 扩展 IterationProgress 加入 score 和 review_summary 字段
+- **类型**: code
+- **描述**: 在 Rust 后端的 IterationProgress 结构体中新增 last_score: Option<i32>、passing_score: i32 和 review_summary: Option<String> 字段。修改 build_iteration_progress() 函数，利用 T-001 的 extract_score() 从最新的 review 日志中解析评分，并提取摘要。passing_score 从环境变量或默认值 85 获取。同步更新前端 iterationStore.ts 的 IterationProgress 接口以匹配新字段。更新 iterationProgressView.ts 添加评分颜色计算的纯函数。
+- **验收条件**:
+  - IterationProgress 包含 last_score、passing_score、review_summary 字段
+  - build_iteration_progress() 能从 review 日志中提取评分和摘要
+  - 前端 IterationProgress 接口与 Rust 序列化字段一致（snake_case）
+  - iterationProgressView.ts 新增 scoreColorClass(score, passingScore) 纯函数
+  - cargo test 和前端 store 测试通过
+  - cargo clippy 无警告
+
+
+请针对此子任务的验收条件进行审核。
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+... (中间迭代记录已省略)
+
+st `regex` crate 不支持 lookahead `(?!\d)` — 改用 `\b` word boundary 实现同样效果
+- **踩坑**: 对于小数评分（如 `8.5/10`），必须先乘以系数再取整（`(8.5 * 10).round() = 85`），而不是先取整再乘（`round(8.5) * 10 = 90`）。这是因为 Rust 的 `f64::round()` 对 `.5` 的处理是远离零取整
+- **模式**: 项目中所有 Rust 代码都在单文件 `lib.rs` 中，用 comment banner 分隔逻辑区域
+- **模式**: 纯函数抽取用于测试（如 `parse_score_str`），与 Tauri command 层分离
+- **经验**: `cargo fmt` 已自动修复了一些预先存在的格式问题（如 import 排序、行长度），在 `cargo fmt --check` 时会报出来
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（
+
+... (内容过长，已截断)
+
+
+## Iteration 3 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复 - T-002
+- **评分**: 87/100
+
+- **审核要点**:
+
+Now I have a complete picture. Let me write the review report.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #32
+- 标题: [desktop-app] 评分提取与展示
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 87/100**
+
+实现质量良好，6 种评分模式全部正确实现，测试覆盖完整（15 个测试，覆盖所有 6 种模式及边界情况），`cargo test` 全部通过，`cargo clippy` 无警告，`cargo fmt` 无问题。代码结构清晰，使用 `OnceLock` 缓存编译后的正则表达式，`extract_review_summary` 使用邻近非空行策略提取上下文。存在两个一般性问题需要注意但不影响核心功能。
+
+---
+
+### 维度评分
+
+| 维度 | 得分 | 权重 | 加权得分 | 说明 |
+|------|------|------|----------|------|
+| 正确性 | 85 | 35% | 29.75 | 
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: Rust 中 `OnceLock` + 静态函数模式（每个正则一个函数）是缓存编译正则的惯用做法，比 `lazy_static!` 更现代
+- **踩坑**: `awk printf "%.0f"` 的舍入行为（banker's rounding）与 Rust `f64::round()`（round-half-away-from-zero）不同，在 `.5` 边界会产生 1 分差异；对于 ≤10 再乘 10 的模式，差异可被放大到 10 分
+- **经验**: 跨语言移植评分逻辑时，舍入策略和正则 flag（case sensitivity）是最容易产生行为差异的两个点
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我先检查 T-002 相关改动、测试和 lint 状态，按验收条件逐项核对实现是否真的落地。
+exec
+/bin/zsh -lc "rg --files | rg \"iteration(Store|ProgressView)\\.ts|lib\\.rs|Cargo\\.toml|package\\.json|CLAUDE\\.md"'$|progress'"\\.md"'$"' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+CLAUDE.md
+lib/CLAUDE.md
+desktop_app/src/CLAUDE.md
+desktop_app/src/components/iterationProgressView.ts
+desktop_app/src/stores/iterationStore.ts
+desktop_app/CLAUDE.md
+desktop_app/package.json
+docs/package.json
+desktop_app/src-tauri/Cargo.toml
+desktop_app/src-tauri/CLAUDE.md
+desktop_app/src-tauri/src/lib.rs
+tests/CLAUDE.md
+
+exec
+/bin/zsh -lc 'rg -n "IterationProgress|build_iteration_progress|scoreColorClass|review_summary|last_score|passing_score" -S .' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+./desktop_app/src/CLAUDE.md:152:## IterationProgressPanel 约定
+./desktop_app/src/CLAUDE.md:157:- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+./run.sh:1671:        echo "0" > "$WORK_DIR/.last_score"
+./run.sh:1674:        echo "0" > "$WORK_DIR/.last_score"
+./run.sh:1711:    echo "$score" > "$WORK_DIR/.last_score"
+./run.sh:1794:        echo "0" > "$WORK_DIR/.last_score"
+./run.sh:1797:        echo "0" > "$WORK_DIR/.last_score"
+./run.sh:1834:    echo "$score" > "$WORK_DIR/.last_score"
+./run.sh:1889:        echo "0" > "$WORK_DIR/.last_score"
+./run.sh:1892:        echo "0" > "$WORK_DIR/.last_score"
+./run.sh:1929:    echo "$score" > "$WORK_DIR/.last_score"
+./run.sh:1950:get_last_score() {
+./run.sh:1951:    if [ -f "$WORK_DIR/.last_score" ]; then
+./run.sh:1952:        cat "$WORK_DIR/.last_score"
+./run.sh:2035:    if [ -f "$WORK_DIR/.last_score" ]; then
+./run.sh:2036:        FINAL_SCORE=$(cat "$WORK_DIR/.last_score" | tr -cd '0-9')
+./run.sh:2305:    SCORE=$(get_last_score)
+./lib/progress.sh:55:    local review_summary="$6"
+./lib/progress.sh:91:    if [ -n "$review_summary" ]; then
+./lib/progress.sh:94:        review_brief=$(printf '%s' "$review_summary" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null | head -c 800 || echo "$review_summary" | head -c 800)
+./desktop_app/src-tauri/src/lib.rs:25:    last_progress: Option<IterationProgress>,
+./desktop_app/src-tauri/src/lib.rs:131:struct IterationProgressEvent {
+./desktop_app/src-tauri/src/lib.rs:133:    progress: IterationProgress,
+./desktop_app/src-tauri/src/lib.rs:174:struct IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:372:fn extract_review_summary(review: &str) -> Option<String> {
+./desktop_app/src-tauri/src/lib.rs:446:fn read_last_score(workflow_dir: &Path) -> Option<i32> {
+./desktop_app/src-tauri/src/lib.rs:447:    let content = fs::read_to_string(workflow_dir.join(".last_score")).ok()?;
+./desktop_app/src-tauri/src/lib.rs:475:    let last_score = read_last_score(workflow_dir);
+./desktop_app/src-tauri/src/lib.rs:477:        || last_score.is_some_and(|score| score < 85);
+./desktop_app/src-tauri/src/lib.rs:648:/// Builds a complete IterationProgress for a given workflow directory.
+./desktop_app/src-tauri/src/lib.rs:649:fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:659:    IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:673:) -> Result<IterationProgress, String> {
+./desktop_app/src-tauri/src/lib.rs:686:        return Ok(IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:696:    Ok(build_iteration_progress(&workflow_dir))
+./desktop_app/src-tauri/src/lib.rs:704:) -> Result<IterationProgress, String> {
+./desktop_app/src-tauri/src/lib.rs:750:            &IterationProgressEvent {
+./desktop_app/src-tauri/src/lib.rs:1114:    passing_score: Option<i32>,
+./desktop_app/src-tauri/src/lib.rs:1149:    if let Some(passing_score) = request.passing_score {
+./desktop_app/src-tauri/src/lib.rs:1150:        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+./desktop_app/src-tauri/src/lib.rs:1170:/// - `passing_score` -> `PASSING_SCORE` environment variable
+./desktop_app/src-tauri/src/lib.rs:1446:        build_iteration_progress, get_iteration_progress_sync, infer_phase,
+./desktop_app/src-tauri/src/lib.rs:1456:    use super::{extract_review_summary, extract_score};
+./desktop_app/src-tauri/src/lib.rs:1673:            passing_score: Some(90),
+./desktop_app/src-tauri/src/lib.rs:1696:            passing_score: None,
+./desktop_app/src-tauri/src/lib.rs:1717:            passing_score: None,
+./desktop_app/src-tauri/src/lib.rs:1733:            passing_score: None,
+./desktop_app/src-tauri/src/lib.rs:1743:    fn build_run_env_vars_includes_passing_score() {
+./desktop_app/src-tauri/src/lib.rs:1749:            passing_score: Some(95),
+./desktop_app/src-tauri/src/lib.rs:1761:    fn build_run_env_vars_empty_when_no_passing_score() {
+./desktop_app/src-tauri/src/lib.rs:1767:            passing_score: None,
+./desktop_app/src-tauri/src/lib.rs:1943:    fn build_iteration_progress_aggregates_data() {
+./desktop_app/src-tauri/src/lib.rs:1958:        let progress = build_iteration_progress(&dir);
+./desktop_app/src-tauri/src/lib.rs:1974:    fn build_iteration_progress_falls_back_to_log_md_when_terminal_missing() {
+./desktop_app/src-tauri/src/lib.rs:1990:        let progress = build_iteration_progress(&dir);
+./desktop_app/src-tauri/src/lib.rs:1999:    fn build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match() {
+./desktop_app/src-tauri/src/lib.rs:2016:        let progress = build_iteration_progress(&dir);
+./desktop_app/src-tauri/src/lib.rs:2064:    fn build_iteration_progress_marks_current_subtask_failing_after_failed_review() {
+./desktop_app/src-tauri/src/lib.rs:2079:        fs::write(dir.join(".last_score"), "79\n").expect("write");
+./desktop_app/src-tauri/src/lib.rs:2081:        let progress = build_iteration_progress(&dir);
+./desktop_app/src-tauri/src/lib.rs:2167:    // extract_review_summary tests
+./desktop_app/src-tauri/src/lib.rs:2171:    fn extract_review_summary_returns_context_around_score() {
+./desktop_app/src-tauri/src/lib.rs:2173:        let summary = extract_review_summary(review);
+./desktop_app/src-tauri/src/lib.rs:2182:    fn extract_review_summary_none_for_no_score() {
+./desktop_app/src-tauri/src/lib.rs:2184:            extract_review_summary("just some text\nno scores here"),
+./desktop_app/src-tauri/src/lib.rs:2190:    fn extract_review_summary_limits_to_three_lines() {
+./desktop_app/src-tauri/src/lib.rs:2192:        let summary = extract_review_summary(review).unwrap();
+./desktop_app/src-tauri/src/lib.rs:2201:    fn extract_review_summary_prefers_immediate_non_empty_neighbors() {
+./desktop_app/src-tauri/src/lib.rs:2203:        let summary = extract_review_summary(review).unwrap();
+./desktop_app/src-tauri/src/lib.rs:2209:    fn extract_review_summary_supports_total_score_lines() {
+./desktop_app/src-tauri/src/lib.rs:2211:        let summary = extract_review_summary(review).unwrap();
+./desktop_app/src/stores/runStore.ts:241:            passing_score: _request.passingScore,
+./desktop_app/src-tauri/CLAUDE.md:23:- `iteration-progress` 事件应携带 `issue_number` 和完整 `IterationProgress`，前端可以据此忽略非当前 Issue 的推送，避免全局 store 串数据。
+./desktop_app/src/stores/iterationStore.ts:15:export interface IterationProgress {
+./desktop_app/src/stores/iterationStore.ts:24:export interface IterationProgressEvent {
+./desktop_app/src/stores/iterationStore.ts:26:  progress: IterationProgress;
+./desktop_app/src/stores/iterationStore.ts:69:export const IDLE_PROGRESS: IterationProgress = {
+./desktop_app/src/stores/iterationStore.ts:82:  progress: IterationProgress;
+./desktop_app/src/stores/iterationStore.ts:111:      await deps.listen<IterationProgressEvent>('iteration-progress', (event) => {
+./desktop_app/src/stores/iterationStore.ts:144:        const data = await deps.invoke<IterationProgress>(
+./desktop_app/src/components/IssueDetailPanel.tsx:14:import IterationProgressPanel from './IterationProgressPanel';
+./desktop_app/src/components/IssueDetailPanel.tsx:355:          <IterationProgressPanel
+./desktop_app/src/components/IterationProgressPanel.tsx:14:interface IterationProgressPanelProps {
+./desktop_app/src/components/IterationProgressPanel.tsx:118:export default function IterationProgressPanel({
+./desktop_app/src/components/IterationProgressPanel.tsx:122:}: IterationProgressPanelProps): JSX.Element {
+./tests/test_extract_score.sh:189:    local review_summary="$6"
+./tests/test_extract_score.sh:218:    if [ -n "$review_summary" ]; then
+./tests/test_extract_score.sh:220:        review_brief=$(echo "$review_summary" | head -c 800)
+./tests/test_context_overflow.sh:224:    local review_summary="$6"
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M desktop_app/src-tauri/CLAUDE.md
+ M desktop_app/src-tauri/Cargo.lock
+ M desktop_app/src-tauri/Cargo.toml
+ M desktop_app/src-tauri/src/lib.rs
+?? .autoresearch/workflows/issue-32/
+
+codex
+我已经定位到后端、store 和视图辅助函数的位置；下一步直接看 diff 和测试实现，判断验收项是否真实满足，而不是只看字段是否存在。
+exec
+/bin/zsh -lc "sed -n '640,740p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '160,260p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+
+    if current_iteration == 0 && total_iterations == 0 {
+        None
+    } else {
+        Some((current_iteration, total_iterations))
+    }
+}
+
+/// Builds a complete IterationProgress for a given workflow directory.
+fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+    let subtasks = build_subtask_infos(workflow_dir);
+    let passed_count = subtasks
+        .iter()
+        .filter(|s| s.status == SubtaskStatus::Passing)
+        .count();
+    let total_count = subtasks.len();
+    let phase = infer_phase(workflow_dir);
+    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
+
+    IterationProgress {
+        current_iteration,
+        total_iterations,
+        phase,
+        subtasks,
+        passed_count,
+        total_count,
+    }
+}
+
+/// Returns the iteration progress for a given issue's workflow.
+fn get_iteration_progress_sync(
+    project_path: &str,
+    issue_number: i64,
+) -> Result<IterationProgress, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let workflow_dir = base
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !workflow_dir.is_dir() {
+        // Return idle progress with empty data
+        return Ok(IterationProgress {
+            current_iteration: 0,
+            total_iterations: 0,
+            phase: Phase::Idle,
+            subtasks: Vec::new(),
+            passed_count: 0,
+            total_count: 0,
+        });
+    }
+
+    Ok(build_iteration_progress(&workflow_dir))
+}
+
+/// Returns the current iteration progress for a specific issue.
+#[tauri::command]
+async fn get_iteration_progress(
+    project_path: String,
+    issue_number: i64,
+) -> Result<IterationProgress, String> {
+    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[cfg(unix)]
+async fn emit_iteration_progress(app: &tauri::AppHandle) {
+    let (project_path, issue_number) = {
+        let state = get_run_state();
+        let state_guard = state.lock().await;
+        let Some(process) = state_guard.process.as_ref() else {
+            return;
+        };
+        (process.project_path.clone(), process.issue_number)
+    };
+
+    let progress = match tokio::task::spawn_blocking(move || {
+        get_iteration_progress_sync(&project_path, issue_number)
+    })
+    .await
+    {
+        Ok(Ok(progress)) => progress,
+        _ => return,
+    };
+
+    let should_emit = {
+        let state = get_run_state();
+        let mut state_guard = state.lock().await;
+        let Some(process) = state_guard.process.as_mut() else {
+            return;
+        };
+        if process.issue_number != issue_number {
+            return;
+        }
+        if process.last_progress.as_ref() == Some(&progress) {
+            false
+
+ succeeded in 0ms:
+    Passing,
+    Failing,
+}
+
+/// Information about a single subtask from tasks.json.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct SubtaskInfo {
+    id: String,
+    title: String,
+    status: SubtaskStatus,
+}
+
+/// Overall iteration progress data sent to the frontend.
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+struct IterationProgress {
+    /// Current iteration number (1-based), 0 if not started.
+    current_iteration: i32,
+    /// Total iterations configured (e.g. 42).
+    total_iterations: i32,
+    /// Current workflow phase.
+    phase: Phase,
+    /// List of subtasks with pass/fail status.
+    subtasks: Vec<SubtaskInfo>,
+    /// Number of subtasks that have passed.
+    passed_count: usize,
+    /// Total number of subtasks.
+    total_count: usize,
+}
+
+/// Raw tasks.json structure for deserialization.
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct TasksFile {
+    #[allow(dead_code)]
+    issue_number: Option<i64>,
+    subtasks: Vec<TasksFileSubtask>,
+}
+
+/// A subtask entry in tasks.json.
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct TasksFileSubtask {
+    id: String,
+    title: String,
+    passes: bool,
+}
+
+// ========================================
+// Score extraction helpers
+// ========================================
+
+use regex::Regex;
+
+fn score_number_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"\d+\.?\d*").expect("valid score number regex"))
+}
+
+fn explicit_hundred_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*100").expect("valid X/100 regex"))
+}
+
+fn bold_hundred_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)[^*]*100").expect("valid bold 100 regex"))
+}
+
+fn total_score_table_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r"(\*\*)?总分(\*\*)?\s*\|.*\*\*\d").expect("valid total score table regex")
+    })
+}
+
+fn total_score_arrow_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"总分.*→").expect("valid total score arrow regex"))
+}
+
+fn explicit_ten_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*10\b").expect("valid X/10 regex"))
+}
+
+fn bold_score_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)").expect("valid bold score regex"))
+}
+
+fn plain_score_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(?i)(评分|Score)\s*:").expect("valid plain score regex"))
+}
+
+fn dimension_exclude_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"各维度|维度").expect("valid dimension exclude regex"))
+}
+
+fn summary_score_patterns() -> &'static [Regex; 4] {
+
+exec
+/bin/zsh -lc 'git diff -- desktop_app/src-tauri/src/lib.rs desktop_app/src/stores/iterationStore.ts desktop_app/src/components/iterationProgressView.ts desktop_app/src-tauri/Cargo.toml desktop_app/src-tauri/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+diff --git a/desktop_app/src-tauri/CLAUDE.md b/desktop_app/src-tauri/CLAUDE.md
+index 2deb9f9..7a154ec 100644
+--- a/desktop_app/src-tauri/CLAUDE.md
++++ b/desktop_app/src-tauri/CLAUDE.md
+@@ -25,3 +25,5 @@
+ 
+ ## Tests
+ - Keep process-management tests in `src/lib.rs` as pure helper tests where possible; use a short-lived `sh -c "exit 0"` child on Unix to verify shared state stores both PID and handle without adding sleeps.
++- Helper functions that only exist for unit tests should either be exercised by production code or annotated deliberately; this crate runs `cargo clippy -- -D warnings`, so otherwise `dead_code` will fail the build.
++- For review-text helpers, prefer deterministic line-based extraction around the matched score line: keep the score line itself plus the nearest non-empty context lines, instead of taking an arbitrary leading window that may drop the actual summary sentence after the score.
+diff --git a/desktop_app/src-tauri/Cargo.toml b/desktop_app/src-tauri/Cargo.toml
+index 9250c54..576672f 100644
+--- a/desktop_app/src-tauri/Cargo.toml
++++ b/desktop_app/src-tauri/Cargo.toml
+@@ -25,6 +25,7 @@ tauri-plugin-store = "2"
+ serde = { version = "1", features = ["derive"] }
+ serde_json = "1"
+ tokio = { version = "1", features = ["full"] }
++regex = "1"
+ notify = "8"
+ 
+ [target.'cfg(unix)'.dependencies]
+diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+index 7a12785..850b4eb 100644
+--- a/desktop_app/src-tauri/src/lib.rs
++++ b/desktop_app/src-tauri/src/lib.rs
+@@ -3,6 +3,7 @@ use std::path::Path;
+ use std::process::Command;
+ use std::process::Stdio as StdStdio;
+ use std::sync::Arc;
++use std::sync::OnceLock;
+ use std::time::UNIX_EPOCH;
+ 
+ use tauri::Emitter;
+@@ -147,7 +148,7 @@ enum Phase {
+     Review,
+     /// Build/lint/test hard gate checks.
+     BuildLintTest,
+-/// No active run or unknown state.
++    /// No active run or unknown state.
+     Idle,
+ }
+ 
+@@ -203,6 +204,227 @@ struct TasksFileSubtask {
+     passes: bool,
+ }
+ 
++// ========================================
++// Score extraction helpers
++// ========================================
++
++use regex::Regex;
++
++fn score_number_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"\d+\.?\d*").expect("valid score number regex"))
++}
++
++fn explicit_hundred_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*100").expect("valid X/100 regex"))
++}
++
++fn bold_hundred_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)[^*]*100").expect("valid bold 100 regex"))
++}
++
++fn total_score_table_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| {
++        Regex::new(r"(\*\*)?总分(\*\*)?\s*\|.*\*\*\d").expect("valid total score table regex")
++    })
++}
++
++fn total_score_arrow_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"总分.*→").expect("valid total score arrow regex"))
++}
++
++fn explicit_ten_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*10\b").expect("valid X/10 regex"))
++}
++
++fn bold_score_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)").expect("valid bold score regex"))
++}
++
++fn plain_score_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"(?i)(评分|Score)\s*:").expect("valid plain score regex"))
++}
++
++fn dimension_exclude_regex() -> &'static Regex {
++    static REGEX: OnceLock<Regex> = OnceLock::new();
++    REGEX.get_or_init(|| Regex::new(r"各维度|维度").expect("valid dimension exclude regex"))
++}
++
++fn summary_score_patterns() -> &'static [Regex; 4] {
++    static REGEXES: OnceLock<[Regex; 4]> = OnceLock::new();
++    REGEXES.get_or_init(|| {
++        [
++            Regex::new(r"\d+\.?\d*\s*/\s*100").expect("valid summary 100 regex"),
++            Regex::new(r"(?i)\*\*(评分|Score)").expect("valid summary bold regex"),
++            Regex::new(r"(?i)(评分|Score)\s*:").expect("valid summary plain regex"),
++            Regex::new(r"总分").expect("valid summary total regex"),
++        ]
++    })
++}
++
++/// Extracts a score from free-text review output.
++///
++/// Mirrors the 6-pattern cascade in `lib/scoring.sh`'s `extract_score()`:
++///   1. Explicit `X/100`
++///   2. `**评分: X/100**` or `**Score: X/100**`
++///   3. 总分 table row (e.g. `| **总分** | ... | **8.5** |` or `总分 → 85`)
++///   4. `X/10` (converted ×10)
++///   5. `**评分: X**` or `**Score: X**` (≤10 converted ×10)
++///   6. `评分: X` or `Score: X` (excluding lines with 各维度/维度, ≤10 converted ×10)
++///
++/// Returns `None` when no pattern matches (caller can treat as 0).
++#[cfg_attr(not(test), allow(dead_code))]
++fn extract_score(review: &str) -> Option<i32> {
++    // Pattern 1: X/100
++    if let Some(caps) = explicit_hundred_regex().captures(review) {
++        if let Some(score) = parse_score_str(caps.get(1).unwrap().as_str()) {
++            return Some(score);
++        }
++    }
++
++    // Pattern 2: **评分: X/100** or **Score: X/100**
++    for line in review.lines() {
++        if bold_hundred_regex().is_match(line) {
++            if let Some(m) = score_number_regex().find(line) {
++                if let Some(score) = parse_score_str(m.as_str()) {
++                    return Some(score);
++                }
++            }
++        }
++    }
++
++    // Pattern 3: 总分 table row — either `| **总分** | ... | **8.5** |` or `总分.*→`
++    // The shell version takes the last number via `tail -1`, then multiplies by 10.
++    for line in review.lines() {
++        if total_score_table_regex().is_match(line) || total_score_arrow_regex().is_match(line) {
++            if let Some(m) = score_number_regex().find_iter(line).last() {
++                if let Some(score) = parse_score_str_scaled(m.as_str(), 10.0) {
++                    return Some(score);
++                }
++            }
++        }
++    }
++
++    // Pattern 4: X/10 (multiply by 10)
++    // Rust regex doesn't support lookahead, so use \b word boundary instead.
++    if let Some(caps) = explicit_ten_regex().captures(review) {
++        if let Some(score) = parse_score_str_scaled(caps.get(1).unwrap().as_str(), 10.0) {
++            return Some(score);
++        }
++    }
++
++    // Pattern 5: **评分: X** or **Score: X** (≤10 → ×10)
++    for line in review.lines() {
++        if bold_score_regex().is_match(line) {
++            if let Some(m) = score_number_regex().find(line) {
++                if let Some(score) = parse_score_str(m.as_str()) {
++                    if score == 0 {
++                        return Some(0);
++                    }
++                    return Some(if score <= 10 { score * 10 } else { score });
++                }
++            }
++        }
++    }
++
++    // Pattern 6: 评分: X or Score: X (exclude 各维度/维度 lines, ≤10 → ×10)
++    for line in review.lines() {
++        if plain_score_regex().is_match(line) && !dimension_exclude_regex().is_match(line) {
++            if let Some(m) = score_number_regex().find(line) {
++                if let Some(score) = parse_score_str(m.as_str()) {
++                    if score == 0 {
++                        return Some(0);
++                    }
++                    return Some(if score <= 10 { score * 10 } else { score });
++                }
++            }
++        }
++    }
++
++    None
++}
++
++/// Parse a numeric string (possibly with a decimal point) into an integer score.
++#[cfg_attr(not(test), allow(dead_code))]
++fn parse_score_str(s: &str) -> Option<i32> {
++    s.parse::<f64>().ok().map(|v| v.round() as i32)
++}
++
++/// Parse a numeric string and multiply by a factor before rounding.
++/// Used for scores on a 10-point scale that need ×10 conversion.
++#[cfg_attr(not(test), allow(dead_code))]
++fn parse_score_str_scaled(s: &str, factor: f64) -> Option<i32> {
++    s.parse::<f64>().ok().map(|v| (v * factor).round() as i32)
++}
++
++/// Extracts a brief review summary from the text surrounding the score line.
++///
++/// Finds the first line that looks like a score, then returns up to 3 non-empty
++/// lines around it as the key summary.
++#[cfg_attr(not(test), allow(dead_code))]
++fn extract_review_summary(review: &str) -> Option<String> {
++    let lines: Vec<&str> = review.lines().collect();
++
++    for (i, line) in lines.iter().enumerate() {
++        let is_score_line = summary_score_patterns().iter().any(|re| re.is_match(line));
++        if !is_score_line {
++            continue;
++        }
++
++        let mut selected = vec![i];
++
++        if let Some(previous) = nearest_non_empty_line(&lines, i, SearchDirection::Backward) {
++            selected.push(previous);
++        }
++        if let Some(next) = nearest_non_empty_line(&lines, i, SearchDirection::Forward) {
++            selected.push(next);
++        }
++
++        selected.sort_unstable();
++        selected.dedup();
++
++        let summary = selected
++            .into_iter()
++            .take(3)
++            .map(|idx| lines[idx].trim())
++            .filter(|line| !line.is_empty())
++            .collect::<Vec<_>>()
++            .join("\n");
++
++        if !summary.is_empty() {
++            return Some(summary);
++        }
++    }
++
++    None
++}
++
++#[derive(Clone, Copy)]
++enum SearchDirection {
++    Backward,
++    Forward,
++}
++
++fn nearest_non_empty_line(
++    lines: &[&str],
++    pivot: usize,
++    direction: SearchDirection,
++) -> Option<usize> {
++    match direction {
++        SearchDirection::Backward => (0..pivot).rev().find(|&idx| !lines[idx].trim().is_empty()),
++        SearchDirection::Forward => {
++            ((pivot + 1)..lines.len()).find(|&idx| !lines[idx].trim().is_empty())
++        }
++    }
++}
++
+ // ========================================
+ // Iteration progress helpers
+ // ========================================
+@@ -322,7 +544,11 @@ fn infer_phase(workflow_dir: &Path) -> Phase {
+     }
+ 
+     if max_iteration == 0 {
+-        return if has_planning { Phase::Planning } else { Phase::Idle };
++        return if has_planning {
++            Phase::Planning
++        } else {
++            Phase::Idle
++        };
+     }
+ 
+     if hard_gate_iterations.contains(&max_iteration) {
+@@ -368,8 +594,13 @@ fn parse_iteration_from_terminal(content: &str) -> Option<(i32, i32)> {
+                 let current_str = rest[..slash_pos].trim();
+                 let total_rest = &rest[slash_pos + 1..];
+                 // Total might be followed by other characters or end of line
+-                let total_str: String = total_rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+-                if let (Ok(current), Ok(total)) = (current_str.parse::<i32>(), total_str.parse::<i32>()) {
++                let total_str: String = total_rest
++                    .chars()
++                    .take_while(|c| c.is_ascii_digit())
++                    .collect();
++                if let (Ok(current), Ok(total)) =
++                    (current_str.parse::<i32>(), total_str.parse::<i32>())
++                {
+                     result = Some((current, total));
+                 }
+             }
+@@ -389,10 +620,7 @@ fn parse_iteration_from_log_md(content: &str) -> Option<(i32, i32)> {
+ 
+     for line in content.lines() {
+         if let Some(rest) = line.strip_prefix("### 迭代 ") {
+-            let iteration_str: String = rest
+-                .chars()
+-                .take_while(|c| c.is_ascii_digit())
+-                .collect();
++            let iteration_str: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+             if let Ok(iteration) = iteration_str.parse::<i32>() {
+                 current_iteration = iteration;
+             }
+@@ -583,8 +811,8 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String>
+         return Ok(Vec::new());
+     }
+     let mut numbers = Vec::new();
+-    let entries = fs::read_dir(&workflows_dir)
+-        .map_err(|e| format!("Failed to read workflows dir: {e}"))?;
++    let entries =
++        fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {e}"))?;
+     for entry in entries.flatten() {
+         let name = entry.file_name();
+         let name_str = name.to_string_lossy();
+@@ -602,11 +830,9 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String>
+ /// Also returns which Issue numbers have already been processed (have workflow directories).
+ #[tauri::command]
+ async fn list_issues(project_path: String) -> Result<IssuesResult, String> {
+-    tokio::task::spawn_blocking(move || {
+-        list_issues_sync(&project_path)
+-    })
+-    .await
+-    .map_err(|e| format!("Task join error: {e}"))?
++    tokio::task::spawn_blocking(move || list_issues_sync(&project_path))
++        .await
++        .map_err(|e| format!("Task join error: {e}"))?
+ }
+ 
+ fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
+@@ -618,9 +844,12 @@ fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
+     // Execute gh issue list
+     let output = Command::new("gh")
+         .args([
+-            "issue", "list",
+-            "--json", "number,title,labels,createdAt,state",
+-            "--limit", "100",
++            "issue",
++            "list",
++            "--json",
++            "number,title,labels,createdAt,state",
++            "--limit",
++            "100",
+         ])
+         .current_dir(base)
+         .output()
+@@ -658,7 +887,8 @@ async fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String
+ }
+ 
+ fn parse_issue_detail(stdout: &str) -> Result<IssueDetail, String> {
+-    serde_json::from_str(stdout).map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
++    serde_json::from_str(stdout)
++        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+ }
+ 
+ fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
+@@ -732,10 +962,13 @@ fn file_timestamp(metadata: &fs::Metadata) -> Option<String> {
+         .map(|duration| duration.as_secs().to_string())
+ }
+ 
+-fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
++fn list_issue_log_sources_sync(
++    project_path: &str,
++    issue_number: i64,
++) -> Result<Vec<IssueLogSource>, String> {
+     let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+-    let entries = fs::read_dir(&issue_dir)
+-        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
++    let entries =
++        fs::read_dir(&issue_dir).map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+ 
+     let mut sources = Vec::new();
+     for entry in entries {
+@@ -808,11 +1041,9 @@ fn read_issue_log_content_sync(
+ /// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+ #[tauri::command]
+ async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+-    tokio::task::spawn_blocking(move || {
+-        get_issue_detail_sync(&project_path, issue_number)
+-    })
+-    .await
+-    .map_err(|e| format!("Task join error: {e}"))?
++    tokio::task::spawn_blocking(move || get_issue_detail_sync(&project_path, issue_number))
++        .await
++        .map_err(|e| format!("Task join error: {e}"))?
+ }
+ 
+ fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
+@@ -824,9 +1055,11 @@ fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueD
+     // Execute gh issue view
+     let output = Command::new("gh")
+         .args([
+-            "issue", "view",
++            "issue",
++            "view",
+             &issue_number.to_string(),
+-            "--json", "body,comments",
++            "--json",
++            "body,comments",
+         ])
+         .current_dir(base)
+         .output()
+@@ -886,10 +1119,7 @@ struct StartRunRequest {
+ /// Builds command-line arguments for run.sh from the request parameters.
+ /// This is a pure function extracted for testability.
+ fn build_run_args(request: &StartRunRequest) -> Vec<String> {
+-    let mut args = vec![
+-        "-p".to_string(),
+-        request.project_path.clone(),
+-    ];
++    let mut args = vec!["-p".to_string(), request.project_path.clone()];
+ 
+     if let Some(ref agents) = request.agents {
+         if !agents.is_empty() {
+@@ -950,13 +1180,19 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
+ 
+     // Check if a process is already running
+     if state_guard.process.is_some() {
+-        return Err("A run is already in progress. Stop the current run before starting a new one.".to_string());
++        return Err(
++            "A run is already in progress. Stop the current run before starting a new one."
++                .to_string(),
++        );
+     }
+ 
+     // Validate project path
+     let project_path = Path::new(&request.project_path);
+     if !project_path.is_dir() {
+-        return Err(format!("Project path is not a directory: {}", request.project_path));
++        return Err(format!(
++            "Project path is not a directory: {}",
++            request.project_path
++        ));
+     }
+ 
+     // Find run.sh in autoresearch directory (relative to the app)
+@@ -994,7 +1230,10 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
+             let pid = libc::getpid();
+             if libc::setpgid(pid, pid) < 0 {
+                 // Log error but don't fail the spawn
+-                eprintln!("Warning: Failed to set process group: {}", std::io::Error::last_os_error());
++                eprintln!(
++                    "Warning: Failed to set process group: {}",
++                    std::io::Error::last_os_error()
++                );
+             }
+             Ok(())
+         });
+@@ -1201,25 +1440,28 @@ pub fn run() {
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{
+-        classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
+-        map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
+-        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+-    };
+-    use super::{build_run_args, build_run_env_vars, StartRunRequest};
++    #[cfg(unix)]
++    use super::RunProcessState;
+     use super::{
+         build_iteration_progress, get_iteration_progress_sync, infer_phase,
+         parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
+         SubtaskStatus,
+     };
+-    #[cfg(unix)]
+-    use super::RunProcessState;
++    use super::{build_run_args, build_run_env_vars, StartRunRequest};
++    use super::{
++        classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
++        map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
++        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
++    };
++    use super::{extract_review_summary, extract_score};
+     use std::fs;
+     use std::path::PathBuf;
+ 
+     fn create_temp_project_dir(test_name: &str) -> PathBuf {
+-        let root = std::env::temp_dir()
+-            .join(format!("autoresearch-log-viewer-{test_name}-{}", std::process::id()));
++        let root = std::env::temp_dir().join(format!(
++            "autoresearch-log-viewer-{test_name}-{}",
++            std::process::id()
++        ));
+         let _ = fs::remove_dir_all(&root);
+         fs::create_dir_all(&root).expect("temp project dir should be created");
+         root
+@@ -1268,8 +1510,10 @@ mod tests {
+ 
+     #[test]
+     fn issue_detail_error_maps_missing_issue() {
+-        let error =
+-            map_issue_detail_command_error(27, "GraphQL: Could not resolve to an issue with the number of 27.");
++        let error = map_issue_detail_command_error(
++            27,
++            "GraphQL: Could not resolve to an issue with the number of 27.",
++        );
+ 
+         assert_eq!(error, "Issue #27 not found");
+     }
+@@ -1291,8 +1535,14 @@ mod tests {
+ 
+     #[test]
+     fn classify_log_source_maps_known_workflow_files() {
+-        assert_eq!(classify_log_source("terminal.log"), ("terminal", "终端日志".to_string()));
+-        assert_eq!(classify_log_source("log.md"), ("summary", "工作流摘要".to_string()));
++        assert_eq!(
++            classify_log_source("terminal.log"),
++            ("terminal", "终端日志".to_string())
++        );
++        assert_eq!(
++            classify_log_source("log.md"),
++            ("summary", "工作流摘要".to_string())
++        );
+         assert_eq!(
+             classify_log_source("iteration-2-codex-review.log"),
+             ("iteration", "iteration-2-codex-review.log".to_string())
+@@ -1321,8 +1571,16 @@ mod tests {
+         let project_dir = create_temp_project_dir("list-sources");
+         let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+         fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+-        fs::write(workflow_dir.join("iteration-10-codex-review.log"), "iteration10").expect("iteration log");
+-        fs::write(workflow_dir.join("iteration-2-codex-review.log"), "iteration").expect("iteration log");
++        fs::write(
++            workflow_dir.join("iteration-10-codex-review.log"),
++            "iteration10",
++        )
++        .expect("iteration log");
++        fs::write(
++            workflow_dir.join("iteration-2-codex-review.log"),
++            "iteration",
++        )
++        .expect("iteration log");
+         fs::write(workflow_dir.join("terminal.log"), "terminal").expect("terminal log");
+         fs::write(workflow_dir.join("log.md"), "summary").expect("summary log");
+ 
+@@ -1390,12 +1648,9 @@ mod tests {
+         fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+         fs::write(workflow_dir.join("terminal.log"), b"line one\nline two").expect("terminal log");
+ 
+-        let content = read_issue_log_content_sync(
+-            project_dir.to_string_lossy().as_ref(),
+-            30,
+-            "terminal.log",
+-        )
+-        .expect("log content should load");
++        let content =
++            read_issue_log_content_sync(project_dir.to_string_lossy().as_ref(), 30, "terminal.log")
++                .expect("log content should load");
+ 
+         assert_eq!(content.source_id, "terminal.log");
+         assert_eq!(content.text, "line one\nline two");
+@@ -1831,4 +2086,133 @@ mod tests {
+ 
+         fs::remove_dir_all(dir).expect("cleanup");
+     }
++
++    // ========================================
++    // extract_score tests
++    // ========================================
++
++    #[test]
++    fn extract_score_pattern1_explicit_x_out_of_100() {
++        assert_eq!(extract_score("总评分 78/100"), Some(78));
++        assert_eq!(extract_score("得分：85 / 100"), Some(85));
++        assert_eq!(extract_score("score: 92.5/100"), Some(93));
++    }
++
++    #[test]
++    fn extract_score_pattern2_bold_score_100() {
++        assert_eq!(extract_score("**评分: 78/100**\n其他内容"), Some(78));
++        assert_eq!(extract_score("**Score: 85/100**"), Some(85));
++    }
++
++    #[test]
++    fn extract_score_pattern3_total_score_table() {
++        // Markdown table row with 总分
++        let input = "| **总分** | | **8.5** |";
++        assert_eq!(extract_score(input), Some(85));
++
++        // Arrow format
++        let input2 = "总分 → 7.8";
++        assert_eq!(extract_score(input2), Some(78));
++    }
++
++    #[test]
++    fn extract_score_pattern4_x_out_of_10() {
++        assert_eq!(extract_score("评分: 8/10"), Some(80));
++        assert_eq!(extract_score("得分 7.5 / 10"), Some(75));
++        // Should not match X/100 as pattern 4
++        assert_eq!(extract_score("85/100"), Some(85)); // matched by pattern 1
++    }
++
++    #[test]
++    fn extract_score_pattern5_bold_score_plain() {
++        assert_eq!(extract_score("**评分: 78**"), Some(78));
++        assert_eq!(extract_score("**Score: 8**"), Some(80)); // ≤10 → ×10
++        assert_eq!(extract_score("**评分: 0**"), Some(0));
++    }
++
++    #[test]
++    fn extract_score_pattern6_plain_score_colon() {
++        assert_eq!(extract_score("评分: 85"), Some(85));
++        assert_eq!(extract_score("Score: 7"), Some(70)); // ≤10 → ×10
++        assert_eq!(extract_score("Score: 0"), Some(0));
++    }
++
++    #[test]
++    fn extract_score_pattern6_excludes_dimension_lines() {
++        // Lines with 各维度 or 维度 should be excluded
++        let input = "各维度评分: 80\n评分: 75";
++        assert_eq!(extract_score(input), Some(75));
++    }
++
++    #[test]
++    fn extract_score_no_match() {
++        assert_eq!(extract_score("没有任何评分内容"), None);
++        assert_eq!(extract_score(""), None);
++    }
++
++    #[test]
++    fn extract_score_decimal_rounding() {
++        assert_eq!(extract_score("78.6/100"), Some(79));
++        assert_eq!(extract_score("78.4/100"), Some(78));
++    }
++
++    #[test]
++    fn extract_score_pattern1_takes_priority() {
++        // When multiple patterns match, pattern 1 should win
++        let input = "**评分: 60**\n总分 85/100";
++        assert_eq!(extract_score(input), Some(85));
++    }
++
++    // ========================================
++    // extract_review_summary tests
++    // ========================================
++
++    #[test]
++    fn extract_review_summary_returns_context_around_score() {
++        let review = "## 审核报告\n\n总体评价\n\n**评分: 78/100**\n\n代码质量不错";
++        let summary = extract_review_summary(review);
++        assert!(summary.is_some());
++        let s = summary.unwrap();
++        assert!(s.contains("总体评价"));
++        assert!(s.contains("78/100"));
++        assert!(s.contains("代码质量不错"));
++    }
++
++    #[test]
++    fn extract_review_summary_none_for_no_score() {
++        assert_eq!(
++            extract_review_summary("just some text\nno scores here"),
++            None
++        );
++    }
++
++    #[test]
++    fn extract_review_summary_limits_to_three_lines() {
++        let review = "line1\nline2\nline3\n评分: 85\nline5\nline6\nline7";
++        let summary = extract_review_summary(review).unwrap();
++        let count = summary.lines().count();
++        assert!(
++            count <= 3,
++            "summary should have at most 3 lines, got {count}"
++        );
++    }
++
++    #[test]
++    fn extract_review_summary_prefers_immediate_non_empty_neighbors() {
++        let review = "封面标题\n\n章节标题\n\n评分: 85\n\n关键问题：测试覆盖不足\n\n收尾段落";
++        let summary = extract_review_summary(review).unwrap();
++
++        assert_eq!(summary, "章节标题\n评分: 85\n关键问题：测试覆盖不足");
++    }
++
++    #[test]
++    fn extract_review_summary_supports_total_score_lines() {
++        let review = "总体评价\n| **总分** | | **8.5** |\n建议补充边界测试";
++        let summary = extract_review_summary(review).unwrap();
++
++        assert_eq!(
++            summary,
++            "总体评价\n| **总分** | | **8.5** |\n建议补充边界测试"
++        );
++    }
+ }
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/stores/iterationStore.ts" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/components/iterationProgressView.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import type { Phase, SubtaskStatus } from '../stores/iterationStore';
+
+export const PHASE_STEPS: { key: Exclude<Phase, 'Idle'>; label: string }[] = [
+  { key: 'Planning', label: 'Planning' },
+  { key: 'Implementation', label: 'Implementation' },
+  { key: 'Review', label: 'Review' },
+  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+];
+
+export function phaseIndex(phase: Phase): number {
+  const idx = PHASE_STEPS.findIndex((step) => step.key === phase);
+  return idx === -1 ? -1 : idx;
+}
+
+export function subtaskBadgeClass(status: SubtaskStatus): string {
+  switch (status) {
+    case 'passing':
+      return 'border-green-200 bg-green-50 text-green-700';
+    case 'failing':
+      return 'border-red-200 bg-red-50 text-red-700';
+    case 'pending':
+    default:
+      return 'border-gray-200 bg-gray-100 text-gray-500';
+  }
+}
+
+export function idleMessage(isRunning: boolean, isLoading: boolean): string {
+  if (isRunning || isLoading) {
+    return '正在加载迭代进度…';
+  }
+  return '暂无迭代进度，当前为 idle 状态。';
+}
+
+ succeeded in 0ms:
+import { create } from 'zustand';
+
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+export type Phase = 'Planning' | 'Implementation' | 'Review' | 'BuildLintTest' | 'Idle';
+export type SubtaskStatus = 'pending' | 'passing' | 'failing';
+
+export interface SubtaskInfo {
+  id: string;
+  title: string;
+  status: SubtaskStatus;
+}
+
+export interface IterationProgress {
+  current_iteration: number;
+  total_iterations: number;
+  phase: Phase;
+  subtasks: SubtaskInfo[];
+  passed_count: number;
+  total_count: number;
+}
+
+export interface IterationProgressEvent {
+  issue_number: number;
+  progress: IterationProgress;
+}
+
+type UnlistenFn = () => void;
+type IterationEventName = 'iteration-progress';
+type IterationEventCallback<TPayload> = (event: { payload: TPayload }) => void;
+
+interface IterationStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  listen: <TPayload>(
+    event: IterationEventName,
+    callback: IterationEventCallback<TPayload>,
+  ) => Promise<UnlistenFn>;
+}
+
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+async function tauriListen<TPayload>(
+  event: IterationEventName,
+  callback: IterationEventCallback<TPayload>,
+): Promise<UnlistenFn> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen(event, callback);
+}
+
+function createIterationStoreDeps(
+  overrides: Partial<IterationStoreDeps> = {},
+): IterationStoreDeps {
+  return {
+    isTauri,
+    invoke: tauriInvoke,
+    listen: tauriListen,
+    ...overrides,
+  };
+}
+
+export const IDLE_PROGRESS: IterationProgress = {
+  current_iteration: 0,
+  total_iterations: 0,
+  phase: 'Idle',
+  subtasks: [],
+  passed_count: 0,
+  total_count: 0,
+};
+
+export interface IterationState {
+  currentIssueNumber: number | null;
+  requestKey: number;
+  subscriptionsReady: boolean;
+  progress: IterationProgress;
+  isLoading: boolean;
+  error: string | null;
+  initialize: () => Promise<void>;
+  watchIssue: (projectPath: string, issueNumber: number) => Promise<void>;
+  reset: () => void;
+}
+
+export function createIterationStore(overrides: Partial<IterationStoreDeps> = {}) {
+  const deps = createIterationStoreDeps(overrides);
+
+  return create<IterationState>((set, get) => ({
+    currentIssueNumber: null,
+    requestKey: 0,
+    subscriptionsReady: false,
+    progress: IDLE_PROGRESS,
+    isLoading: false,
+    error: null,
+
+    initialize: async () => {
+      if (!deps.isTauri) {
+        set({ subscriptionsReady: true });
+        return;
+      }
+
+      if (get().subscriptionsReady) {
+        return;
+      }
+
+      await deps.listen<IterationProgressEvent>('iteration-progress', (event) => {
+        set((state) => {
+          if (state.currentIssueNumber !== event.payload.issue_number) {
+            return state;
+          }
+
+          return {
+            progress: event.payload.progress,
+            isLoading: false,
+            error: null,
+          };
+        });
+      });
+
+      set({ subscriptionsReady: true });
+    },
+
+    watchIssue: async (projectPath: string, issueNumber: number) => {
+      const nextRequestKey = get().requestKey + 1;
+      set({
+        currentIssueNumber: issueNumber,
+        requestKey: nextRequestKey,
+        progress: IDLE_PROGRESS,
+        isLoading: true,
+        error: null,
+      });
+
+      if (!deps.isTauri) {
+        set({ isLoading: false });
+        return;
+      }
+
+      try {
+        const data = await deps.invoke<IterationProgress>(
+          'get_iteration_progress',
+          { projectPath, issueNumber },
+        );
+
+        const { currentIssueNumber, requestKey } = get();
+        if (currentIssueNumber !== issueNumber || requestKey !== nextRequestKey) {
+          return;
+        }
+
+        set({
+          progress: data,
+          isLoading: false,
+          error: null,
+        });
+      } catch (err) {
+        const { currentIssueNumber, requestKey } = get();
+        if (currentIssueNumber !== issueNumber || requestKey !== nextRequestKey) {
+          return;
+        }
+
+        const message = err instanceof Error ? err.message : String(err);
+        set({
+          progress: IDLE_PROGRESS,
+          isLoading: false,
+          error: message,
+        });
+      }
+    },
+
+    reset: () => {
+      set((state) => ({
+        currentIssueNumber: null,
+        requestKey: state.requestKey + 1,
+        progress: IDLE_PROGRESS,
+        isLoading: false,
+        error: null,
+      }));
+    },
+  }));
+}
+
+export const useIterationStore = createIterationStore();
+
+codex
+当前已经看到一个明显问题：`IterationProgress` 的 Rust/TS 结构都还没加 `last_score` 和 `review_summary`，`build_iteration_progress()` 也没有填充它们。接着我会核对测试和 lint，确认这是“未实现”还是“实现后又被回退”。
+exec
+/bin/zsh -lc 'cat desktop_app/package.json' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+{
+  "name": "desktop_app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.6.0",
+    "recharts": "^2.15.3",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^7.0.4"
+  }
+}
+
+exec
+/bin/zsh -lc 'cargo test' in /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri
+exec
+/bin/zsh -lc 'cargo clippy -- -D warnings' in /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri
+exec
+/bin/zsh -lc 'rg -n "iterationStore|scoreColorClass|IterationProgress" desktop_app/src desktop_app/tests desktop_app/src/components -S' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/src/components/IssueDetailPanel.tsx:14:import IterationProgressPanel from './IterationProgressPanel';
+desktop_app/src/components/IssueDetailPanel.tsx:355:          <IterationProgressPanel
+desktop_app/src/components/IssueDetailPanel.tsx:14:import IterationProgressPanel from './IterationProgressPanel';
+desktop_app/src/components/IssueDetailPanel.tsx:355:          <IterationProgressPanel
+desktop_app/src/components/iterationProgressView.ts:1:import type { Phase, SubtaskStatus } from '../stores/iterationStore';
+desktop_app/src/components/IterationProgressPanel.tsx:6:} from '../stores/iterationStore';
+desktop_app/src/components/IterationProgressPanel.tsx:14:interface IterationProgressPanelProps {
+desktop_app/src/components/IterationProgressPanel.tsx:118:export default function IterationProgressPanel({
+desktop_app/src/components/IterationProgressPanel.tsx:122:}: IterationProgressPanelProps): JSX.Element {
+desktop_app/src/components/iterationProgressView.ts:1:import type { Phase, SubtaskStatus } from '../stores/iterationStore';
+desktop_app/src/CLAUDE.md:152:## IterationProgressPanel 约定
+desktop_app/src/CLAUDE.md:156:- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+desktop_app/src/CLAUDE.md:157:- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+desktop_app/src/CLAUDE.md:163:- `iteration-progress` 事件由后端主动推送，前端 `iterationStore.ts` 负责集中订阅并按 `issue_number` 过滤
+desktop_app/src/components/IterationProgressPanel.tsx:6:} from '../stores/iterationStore';
+desktop_app/src/components/IterationProgressPanel.tsx:14:interface IterationProgressPanelProps {
+desktop_app/src/components/IterationProgressPanel.tsx:118:export default function IterationProgressPanel({
+desktop_app/src/components/IterationProgressPanel.tsx:122:}: IterationProgressPanelProps): JSX.Element {
+desktop_app/tests/iterationStore.test.mjs:3:import { createIterationStore, IDLE_PROGRESS } from '../src/stores/iterationStore.ts';
+desktop_app/src/stores/iterationStore.ts:15:export interface IterationProgress {
+desktop_app/src/stores/iterationStore.ts:24:export interface IterationProgressEvent {
+desktop_app/src/stores/iterationStore.ts:26:  progress: IterationProgress;
+desktop_app/src/stores/iterationStore.ts:69:export const IDLE_PROGRESS: IterationProgress = {
+desktop_app/src/stores/iterationStore.ts:82:  progress: IterationProgress;
+desktop_app/src/stores/iterationStore.ts:111:      await deps.listen<IterationProgressEvent>('iteration-progress', (event) => {
+desktop_app/src/stores/iterationStore.ts:144:        const data = await deps.invoke<IterationProgress>(
+
+ succeeded in 689ms:
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s
+
+ succeeded in 1192ms:
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running unittests src/lib.rs (target/debug/deps/desktop_app_lib-38cd3b529e894603)
+
+running 52 tests
+test tests::build_run_env_vars_includes_passing_score ... ok
+test tests::build_run_env_vars_empty_when_no_passing_score ... ok
+test tests::classify_log_source_maps_known_workflow_files ... ok
+test tests::build_run_args_ignores_empty_agents ... ok
+test tests::build_run_args_omits_optional_when_none ... ok
+test tests::build_run_args_continue_mode_defaults_false ... ok
+test tests::build_run_args_includes_required_options ... ok
+test tests::build_iteration_progress_falls_back_to_log_md_when_terminal_missing ... ok
+test tests::build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match ... ok
+test tests::build_iteration_progress_marks_current_subtask_failing_after_failed_review ... ok
+test tests::build_iteration_progress_aggregates_data ... ok
+test tests::extract_score_pattern1_takes_priority ... ok
+test tests::extract_score_pattern2_bold_score_100 ... ok
+test tests::extract_score_decimal_rounding ... ok
+test tests::extract_score_pattern1_explicit_x_out_of_100 ... ok
+test tests::extract_review_summary_supports_total_score_lines ... ok
+test tests::extract_review_summary_prefers_immediate_non_empty_neighbors ... ok
+test tests::extract_review_summary_returns_context_around_score ... ok
+test tests::get_issue_detail_rejects_non_directory_path ... ok
+test tests::extract_review_summary_limits_to_three_lines ... ok
+test tests::extract_review_summary_none_for_no_score ... ok
+test tests::get_iteration_progress_returns_idle_for_missing_workflow ... ok
+test tests::infer_phase_idle_when_empty ... ok
+test tests::infer_phase_implementation_when_iteration_log_only ... ok
+test tests::infer_phase_build_lint_test_when_hard_gate_log ... ok
+test tests::get_iteration_progress_returns_data_for_existing_workflow ... ok
+test tests::issue_detail_error_maps_missing_issue ... ok
+test tests::issue_detail_error_preserves_other_gh_failures ... ok
+test tests::infer_phase_review_when_review_log_exists ... ok
+test tests::iteration_number_extracts_numeric_prefix ... ok
+test tests::extract_score_pattern4_x_out_of_10 ... ok
+test tests::infer_phase_uses_latest_iteration ... ok
+test tests::extract_score_pattern3_total_score_table ... ok
+test tests::parse_issue_detail_reports_invalid_json ... ok
+test tests::parse_issue_detail_returns_structured_data ... ok
+test tests::infer_phase_planning_when_only_planning_log ... ok
+test tests::parse_iteration_from_log_md_extracts_iteration_and_total ... ok
+test tests::parse_iteration_from_terminal_extracts_last_match ... ok
+test tests::parse_iteration_from_terminal_handles_continue_mode ... ok
+test tests::parse_iteration_from_terminal_returns_none_when_no_match ... ok
+test tests::extract_score_pattern5_bold_score_plain ... ok
+test tests::parse_tasks_json_returns_empty_when_missing ... ok
+test tests::run_process_state_default_is_idle ... ok
+test tests::parse_tasks_json_returns_empty_on_invalid_json ... ok
+test tests::workflow_issue_dir_requires_existing_issue_directory ... ok
+test tests::parse_tasks_json_returns_subtasks ... ok
+test tests::list_issue_log_sources_returns_sorted_sources ... ok
+test tests::resolve_issue_log_source_path_rejects_path_traversal ... ok
+test tests::read_issue_log_content_reads_utf8_lossy_text ... ok
+test tests::extract_score_no_match ... ok
+test tests::extract_score_pattern6_excludes_dimension_lines ... ok
+test tests::extract_score_pattern6_plain_score_colon ... ok
+
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/desktop_app-961d7fa979874e65)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests desktop_app_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+codex
+后端测试和 `clippy` 都过了，但这不代表子任务达标，因为现有测试并没有覆盖新增字段和前端颜色函数。我要补看前端测试与面板消费代码，确认哪些验收项是漏做、哪些是漏测。
+exec
+/bin/zsh -lc "sed -n '1,260p' desktop_app/src/components/IterationProgressPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,240p' desktop_app/tests/iterationStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { useEffect, type JSX } from 'react';
+import {
+  type Phase,
+  type SubtaskInfo,
+  useIterationStore,
+} from '../stores/iterationStore';
+import {
+  idleMessage,
+  PHASE_STEPS,
+  phaseIndex,
+  subtaskBadgeClass,
+} from './iterationProgressView';
+
+interface IterationProgressPanelProps {
+  issueNumber: number;
+  projectPath: string | null;
+  isRunning: boolean;
+}
+
+function PhaseSteps({ currentPhase }: { currentPhase: Phase }): JSX.Element {
+  const activeIdx = phaseIndex(currentPhase);
+
+  return (
+    <div className="flex items-center gap-1">
+      {PHASE_STEPS.map((step, idx) => {
+        const isActive = idx === activeIdx;
+        const isPast = activeIdx > idx;
+
+        let pillClass =
+          'rounded-full px-2.5 py-1 text-xs font-medium transition-colors';
+        if (isActive) {
+          pillClass += ' bg-blue-600 text-white';
+        } else if (isPast) {
+          pillClass += ' bg-blue-100 text-blue-700';
+        } else {
+          pillClass += ' bg-gray-100 text-gray-400';
+        }
+
+        return (
+          <span key={step.key}>
+            {idx > 0 && (
+              <span
+                className={`mx-1 inline-block text-xs ${
+                  isPast || isActive ? 'text-blue-400' : 'text-gray-300'
+                }`}
+              >
+                →
+              </span>
+            )}
+            <span className={pillClass}>{step.label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function SubtaskList({
+  subtasks,
+}: {
+  subtasks: SubtaskInfo[];
+}): JSX.Element {
+  if (subtasks.length === 0) {
+    return (
+      <p className="text-xs text-gray-400">暂无 subtask 信息。</p>
+    );
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {subtasks.map((subtask) => (
+        <li
+          key={subtask.id}
+          className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2 text-sm"
+        >
+          <span className="min-w-0 truncate text-gray-700">
+            <span className="mr-1.5 font-mono text-xs text-gray-400">{subtask.id}</span>
+            {subtask.title}
+          </span>
+          <span
+            className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${subtaskBadgeClass(subtask.status)}`}
+          >
+            {subtask.status}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ProgressBar({
+  passed,
+  total,
+}: {
+  passed: number;
+  total: number;
+}): JSX.Element {
+  const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="font-medium text-gray-600">
+          {passed}/{total} subtasks passed
+        </span>
+        <span className="text-gray-400">{pct}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+        <div
+          className="h-full rounded-full bg-blue-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default function IterationProgressPanel({
+  issueNumber,
+  projectPath,
+  isRunning,
+}: IterationProgressPanelProps): JSX.Element {
+  const { progress, error, isLoading, initialize, watchIssue, reset } = useIterationStore();
+
+  useEffect(() => {
+    if (!projectPath) {
+      reset();
+      return;
+    }
+
+    void initialize().then(() => watchIssue(projectPath, issueNumber));
+
+    return () => {
+      reset();
+    };
+  }, [projectPath, issueNumber, initialize, watchIssue, reset]);
+
+  const isIdle = progress.phase === 'Idle' && progress.current_iteration === 0;
+
+  if (isIdle) {
+    return (
+      <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-center text-sm text-gray-400">
+        {idleMessage(isRunning, isLoading)}
+        {error && (
+          <p className="mt-2 text-xs text-red-400">{error}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-4 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-gray-700">迭代进度</h4>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-mono font-medium text-gray-700">
+          {progress.current_iteration} / {progress.total_iterations}
+        </span>
+      </div>
+
+      <PhaseSteps currentPhase={progress.phase} />
+      <ProgressBar passed={progress.passed_count} total={progress.total_count} />
+      <SubtaskList subtasks={progress.subtasks} />
+
+      {error && (
+        <p className="text-xs text-red-500">{error}</p>
+      )}
+    </div>
+  );
+}
+
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createIterationStore, IDLE_PROGRESS } from '../src/stores/iterationStore.ts';
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function createInvokeMock(handlers) {
+  return async (cmd, args) => {
+    const handler = handlers[cmd];
+    if (!handler) {
+      throw new Error(`Unhandled command: ${cmd}`);
+    }
+    return handler(args);
+  };
+}
+
+const SAMPLE_PROGRESS = {
+  current_iteration: 3,
+  total_iterations: 16,
+  phase: 'Review',
+  subtasks: [
+    { id: 'T-001', title: 'Backend data model', status: 'passing' },
+    { id: 'T-002', title: 'File watcher', status: 'passing' },
+    { id: 'T-003', title: 'Frontend UI', status: 'failing' },
+  ],
+  passed_count: 2,
+  total_count: 3,
+};
+
+test('watchIssue stores iteration data from backend', async () => {
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => SAMPLE_PROGRESS,
+    }),
+    listen: async () => () => {},
+  });
+
+  await store.getState().watchIssue('/tmp/project', 31);
+
+  const state = store.getState();
+  assert.equal(state.progress.current_iteration, 3);
+  assert.equal(state.progress.total_iterations, 16);
+  assert.equal(state.progress.phase, 'Review');
+  assert.equal(state.progress.subtasks.length, 3);
+  assert.equal(state.progress.subtasks[2].status, 'failing');
+  assert.equal(state.isLoading, false);
+  assert.equal(state.error, null);
+});
+
+test('initialize wires iteration-progress event and applies matching payload', async () => {
+  let eventListener = null;
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => SAMPLE_PROGRESS,
+    }),
+    listen: async (_event, callback) => {
+      eventListener = callback;
+      return () => {};
+    },
+  });
+
+  await store.getState().initialize();
+  await store.getState().watchIssue('/tmp/project', 31);
+
+  eventListener({
+    payload: {
+      issue_number: 31,
+      progress: {
+        ...SAMPLE_PROGRESS,
+        current_iteration: 4,
+        phase: 'BuildLintTest',
+      },
+    },
+  });
+
+  const state = store.getState();
+  assert.equal(state.progress.current_iteration, 4);
+  assert.equal(state.progress.phase, 'BuildLintTest');
+  assert.equal(state.error, null);
+});
+
+test('iteration-progress event ignores other issues', async () => {
+  let eventListener = null;
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => SAMPLE_PROGRESS,
+    }),
+    listen: async (_event, callback) => {
+      eventListener = callback;
+      return () => {};
+    },
+  });
+
+  await store.getState().initialize();
+  await store.getState().watchIssue('/tmp/project', 31);
+
+  eventListener({
+    payload: {
+      issue_number: 99,
+      progress: {
+        ...SAMPLE_PROGRESS,
+        current_iteration: 10,
+      },
+    },
+  });
+
+  assert.equal(store.getState().progress.current_iteration, 3);
+});
+
+test('watchIssue ignores stale responses after switching issues', async () => {
+  const first = createDeferred();
+  const second = createDeferred();
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: async (_cmd, args) => {
+      if (args.issueNumber === 31) {
+        return first.promise;
+      }
+      return second.promise;
+    },
+    listen: async () => () => {},
+  });
+
+  const firstPromise = store.getState().watchIssue('/tmp/project', 31);
+  const secondPromise = store.getState().watchIssue('/tmp/project', 32);
+
+  second.resolve({
+    ...SAMPLE_PROGRESS,
+    current_iteration: 9,
+  });
+  await secondPromise;
+
+  first.resolve({
+    ...SAMPLE_PROGRESS,
+    current_iteration: 1,
+  });
+  await firstPromise;
+
+  const state = store.getState();
+  assert.equal(state.currentIssueNumber, 32);
+  assert.equal(state.progress.current_iteration, 9);
+});
+
+test('watchIssue sets error on backend failure', async () => {
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => {
+        throw new Error('Workflow dir not found');
+      },
+    }),
+    listen: async () => () => {},
+  });
+
+  await store.getState().watchIssue('/tmp/project', 99);
+
+  const state = store.getState();
+  assert.equal(state.error, 'Workflow dir not found');
+  assert.equal(state.isLoading, false);
+  assert.deepEqual(state.progress, IDLE_PROGRESS);
+});
+
+test('watchIssue is a no-op when isTauri is false', async () => {
+  const invoked = [];
+  const store = createIterationStore({
+    isTauri: false,
+    invoke: async (cmd) => {
+      invoked.push(cmd);
+      return {};
+    },
+    listen: async () => () => {},
+  });
+
+  await store.getState().watchIssue('/tmp/project', 31);
+
+  assert.equal(invoked.length, 0);
+  assert.equal(store.getState().progress.phase, 'Idle');
+});
+
+test('reset restores idle state and invalidates in-flight requests', async () => {
+  const deferred = createDeferred();
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: async () => deferred.promise,
+    listen: async () => () => {},
+  });
+
+  const pending = store.getState().watchIssue('/tmp/project', 31);
+  store.getState().reset();
+  deferred.resolve(SAMPLE_PROGRESS);
+  await pending;
+
+  const state = store.getState();
+  assert.equal(state.currentIssueNumber, null);
+  assert.deepEqual(state.progress, IDLE_PROGRESS);
+  assert.equal(state.error, null);
+});
+
+exec
+/bin/zsh -lc 'npm test -- --test-reporter=tap' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+ succeeded in 378ms:
+
+> desktop_app@0.1.0 test
+> node --test --experimental-strip-types tests/*.test.mjs --test-reporter=tap
+
+✔ buildIssueRunRequest maps the current run config into startRun payload (1.770666ms)
+✔ phaseIndex and PHASE_STEPS expose the expected iteration pipeline labels (1.175375ms)
+✔ subtaskBadgeClass maps all three statuses to distinct styles (0.0955ms)
+✔ idleMessage distinguishes loading from idle copy (0.050125ms)
+✔ watchIssue stores iteration data from backend (1.973334ms)
+✔ initialize wires iteration-progress event and applies matching payload (0.302666ms)
+✔ iteration-progress event ignores other issues (0.232167ms)
+✔ watchIssue ignores stale responses after switching issues (0.267875ms)
+✔ watchIssue sets error on backend failure (1.348375ms)
+✔ watchIssue is a no-op when isTauri is false (0.174917ms)
+✔ reset restores idle state and invalidates in-flight requests (0.201292ms)
+✔ classifyLogLevel detects info, warn, and error lines (0.75025ms)
+✔ filterLogEntries applies search query and level filters together (0.74825ms)
+✔ loadSources prepends live output and prefers terminal log when not running (0.42075ms)
+✔ loadSources prefers live output for active issue and refreshSelectedSource caches content (0.758958ms)
+✔ loadSources preserves viewer state while refreshing the same issue (0.470667ms)
+✔ loadSources preserves an explicit live-output selection while refreshing the same issue (0.255917ms)
+✔ loadSources ignores a stale response from a previous issue (0.392708ms)
+✔ refreshSelectedSource ignores a stale response from a previous issue (0.49975ms)
+✔ toggleLevel keeps at least one log level enabled (0.395083ms)
+✔ buildLogEntries truncates to last 5000 lines for large input (2.001708ms)
+✔ buildLogEntries keeps all lines when under 5000 (0.064958ms)
+(node:10774) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (1.7725ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.497791ms)
+✔ runConfigStore normalizes decimal values to integers before persisting (0.725625ms)
+✔ runConfigStore persists values under the required storage key (0.109667ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.087875ms)
+✔ runConfigStore rounds persisted decimal values during hydration (0.092416ms)
+✔ runConfigStore ignores NaN updates and preserves the previous valid values (0.088959ms)
+✔ sanitizeRunConfig rejects non-boolean and non-finite persisted values (0.045042ms)
+✔ startRun clears unknown active issue when backend already has another task (0.840834ms)
+✔ startRun restores previous running issue when stop/start race fails (0.64725ms)
+✔ initialize wires run events and caps output history (4.01475ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 169.372041
+
+codex
+前端测试也都通过，但同样只覆盖了原有 `phaseIndex/subtaskBadgeClass/idleMessage`，没有覆盖子任务要求的评分字段或 `scoreColorClass()`。这说明“测试通过”这一项目前是形式上成立，但并不能证明 T-002 的新增能力已实现。
+exec
+/bin/zsh -lc 'rg -n "phaseIndex and PHASE_STEPS|subtaskBadgeClass|idleMessage|scoreColorClass" desktop_app/tests -S' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/tests/iterationProgressView.test.mjs:4:  idleMessage,
+desktop_app/tests/iterationProgressView.test.mjs:7:  subtaskBadgeClass,
+desktop_app/tests/iterationProgressView.test.mjs:10:test('phaseIndex and PHASE_STEPS expose the expected iteration pipeline labels', () => {
+desktop_app/tests/iterationProgressView.test.mjs:20:test('subtaskBadgeClass maps all three statuses to distinct styles', () => {
+desktop_app/tests/iterationProgressView.test.mjs:21:  assert.match(subtaskBadgeClass('pending'), /gray/);
+desktop_app/tests/iterationProgressView.test.mjs:22:  assert.match(subtaskBadgeClass('passing'), /green/);
+desktop_app/tests/iterationProgressView.test.mjs:23:  assert.match(subtaskBadgeClass('failing'), /red/);
+desktop_app/tests/iterationProgressView.test.mjs:26:test('idleMessage distinguishes loading from idle copy', () => {
+desktop_app/tests/iterationProgressView.test.mjs:27:  assert.equal(idleMessage(true, false), '正在加载迭代进度…');
+desktop_app/tests/iterationProgressView.test.mjs:28:  assert.equal(idleMessage(false, true), '正在加载迭代进度…');
+desktop_app/tests/iterationProgressView.test.mjs:29:  assert.equal(idleMessage(false, false), '暂无迭代进度，当前为 idle 状态。');
+
+exec
+/bin/zsh -lc "sed -n '1920,2010p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/tests/iterationProgressView.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  idleMessage,
+  PHASE_STEPS,
+  phaseIndex,
+  subtaskBadgeClass,
+} from '../src/components/iterationProgressView.ts';
+
+test('phaseIndex and PHASE_STEPS expose the expected iteration pipeline labels', () => {
+  assert.deepEqual(
+    PHASE_STEPS.map((step) => step.label),
+    ['Planning', 'Implementation', 'Review', 'Build·Lint·Test'],
+  );
+  assert.equal(phaseIndex('Planning'), 0);
+  assert.equal(phaseIndex('Review'), 2);
+  assert.equal(phaseIndex('Idle'), -1);
+});
+
+test('subtaskBadgeClass maps all three statuses to distinct styles', () => {
+  assert.match(subtaskBadgeClass('pending'), /gray/);
+  assert.match(subtaskBadgeClass('passing'), /green/);
+  assert.match(subtaskBadgeClass('failing'), /red/);
+});
+
+test('idleMessage distinguishes loading from idle copy', () => {
+  assert.equal(idleMessage(true, false), '正在加载迭代进度…');
+  assert.equal(idleMessage(false, true), '正在加载迭代进度…');
+  assert.equal(idleMessage(false, false), '暂无迭代进度，当前为 idle 状态。');
+});
+
+ succeeded in 0ms:
+        let content = "\
+[2026-04-25 09:21:17] 继续运行: 已完成 1 轮，再跑 41 轮 (总计 42)\n\
+[2026-04-25 09:21:17] 🔄 迭代 2/42\n";
+
+        assert_eq!(parse_iteration_from_terminal(content), Some((2, 42)));
+    }
+
+    #[test]
+    fn parse_iteration_from_log_md_extracts_iteration_and_total() {
+        let content = "\
+# Issue #30 实现日志\n\
+\n\
+### 迭代 2 - Codex (实现)\n\
+\n\
+### 迭代 4 - Claude (实现)\n\
+\n\
+## 最终结果\n\
+- 总迭代次数: 5\n";
+
+        assert_eq!(parse_iteration_from_log_md(content), Some((4, 5)));
+    }
+
+    #[test]
+    fn build_iteration_progress_aggregates_data() {
+        let dir = create_temp_project_dir("build-progress");
+        fs::write(
+            dir.join("tasks.json"),
+            r#"{"issueNumber": 42, "subtasks": [
+                {"id": "T-001", "title": "A", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": true},
+                {"id": "T-002", "title": "B", "description": "", "acceptanceCriteria": [], "priority": 2, "passes": false},
+                {"id": "T-003", "title": "C", "description": "", "acceptanceCriteria": [], "priority": 3, "passes": true}
+            ]}"#,
+        )
+        .expect("write");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+        fs::write(dir.join("terminal.log"), "[time] 🔄 迭代 2/16\n").expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.current_iteration, 2);
+        assert_eq!(progress.total_iterations, 16);
+        assert_eq!(progress.phase, Phase::Implementation);
+        assert_eq!(progress.subtasks.len(), 3);
+        assert_eq!(progress.subtasks[0].status, SubtaskStatus::Passing);
+        assert_eq!(progress.subtasks[1].status, SubtaskStatus::Pending);
+        assert_eq!(progress.subtasks[2].status, SubtaskStatus::Passing);
+        assert_eq!(progress.passed_count, 2);
+        assert_eq!(progress.total_count, 3);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn build_iteration_progress_falls_back_to_log_md_when_terminal_missing() {
+        let dir = create_temp_project_dir("build-progress-log-md");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-3-claude.log"), "").expect("write");
+        fs::write(
+            dir.join("log.md"),
+            "\
+# Issue #31 实现日志\n\
+\n\
+### 迭代 3 - Claude (实现)\n\
+\n\
+## 最终结果\n\
+- 总迭代次数: 7\n",
+        )
+        .expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.current_iteration, 3);
+        assert_eq!(progress.total_iterations, 7);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn build_iteration_progress_falls_back_to_log_md_when_terminal_has_no_match() {
+        let dir = create_temp_project_dir("build-progress-terminal-fallback");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-2-claude.log"), "").expect("write");
+        fs::write(dir.join("terminal.log"), "no iteration marker here\n").expect("write");
+        fs::write(
+            dir.join("log.md"),
+            "\
+# Issue #31 实现日志\n\
+\n\
+### 迭代 2 - Codex (实现)\n\
+\n\
+
+codex
+我还在确认一个细节：代码里虽然已经有 `extract_score()` / `extract_review_summary()`，但 `build_iteration_progress()` 很可能根本没调用它们。这类“辅助函数写了但未接线”的情况，正是验收最容易漏掉的地方。
+exec
+/bin/zsh -lc "sed -n '430,520p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+// ========================================
+
+/// Parses tasks.json and returns a list of SubtaskInfo.
+fn parse_tasks_json(workflow_dir: &Path) -> Vec<TasksFileSubtask> {
+    let tasks_path = workflow_dir.join("tasks.json");
+    let bytes = match fs::read(&tasks_path) {
+        Ok(b) => b,
+        Err(_) => return Vec::new(),
+    };
+    let tasks_file: TasksFile = match serde_json::from_slice(&bytes) {
+        Ok(t) => t,
+        Err(_) => return Vec::new(),
+    };
+    tasks_file.subtasks
+}
+
+fn read_last_score(workflow_dir: &Path) -> Option<i32> {
+    let content = fs::read_to_string(workflow_dir.join(".last_score")).ok()?;
+    content.trim().parse::<i32>().ok()
+}
+
+fn current_iteration_has_review_or_hard_gate(workflow_dir: &Path, current_iteration: i32) -> bool {
+    if current_iteration <= 0 {
+        return false;
+    }
+
+    let review_prefix = format!("iteration-{current_iteration}-");
+    if let Ok(entries) = fs::read_dir(workflow_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(&review_prefix) && name.ends_with("-review.log") {
+                return true;
+            }
+        }
+    }
+
+    workflow_dir
+        .join(format!("hard-gate-{current_iteration}.log"))
+        .is_file()
+}
+
+fn build_subtask_infos(workflow_dir: &Path) -> Vec<SubtaskInfo> {
+    let raw_subtasks = parse_tasks_json(workflow_dir);
+    let current_iteration = extract_iteration_numbers(workflow_dir).0;
+    let last_score = read_last_score(workflow_dir);
+    let current_failed = current_iteration_has_review_or_hard_gate(workflow_dir, current_iteration)
+        || last_score.is_some_and(|score| score < 85);
+    let current_index = raw_subtasks.iter().position(|subtask| !subtask.passes);
+
+    raw_subtasks
+        .into_iter()
+        .enumerate()
+        .map(|(index, subtask)| {
+            let status = if subtask.passes {
+                SubtaskStatus::Passing
+            } else if Some(index) == current_index && current_failed {
+                SubtaskStatus::Failing
+            } else {
+                SubtaskStatus::Pending
+            };
+
+            SubtaskInfo {
+                id: subtask.id,
+                title: subtask.title,
+                status,
+            }
+        })
+        .collect()
+}
+
+/// Infers the current phase by examining files in the workflow directory.
+///
+/// Logic:
+/// 1. Find the highest iteration number N from `iteration-N-*.log` files.
+/// 2. If no iteration logs exist but `planning.log` exists → Planning.
+/// 3. If no iteration logs and no planning.log → Idle.
+/// 4. If `hard-gate-N.log` exists → BuildLintTest.
+/// 5. If `iteration-N-*-review.log` exists → Review.
+/// 6. Otherwise → Implementation.
+fn infer_phase(workflow_dir: &Path) -> Phase {
+    let entries = match fs::read_dir(workflow_dir) {
+        Ok(e) => e,
+        Err(_) => return Phase::Idle,
+    };
+
+    let mut max_iteration: i32 = 0;
+    let mut has_planning = false;
+    let mut review_iterations = std::collections::HashSet::new();
+    let mut hard_gate_iterations = std::collections::HashSet::new();
+
+
+exec
+/bin/zsh -lc "sed -n '520,620p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "planning.log" {
+            has_planning = true;
+            continue;
+        }
+        if let Some(n) = iteration_number(&name) {
+            if n > max_iteration {
+                max_iteration = n;
+            }
+            if name.contains("-review.log") {
+                review_iterations.insert(n);
+            }
+        }
+        if name.starts_with("hard-gate-") && name.ends_with(".log") {
+            if let Some(n) = name
+                .strip_prefix("hard-gate-")
+                .and_then(|s| s.strip_suffix(".log"))
+                .and_then(|s| s.parse::<i32>().ok())
+            {
+                hard_gate_iterations.insert(n);
+            }
+        }
+    }
+
+    if max_iteration == 0 {
+        return if has_planning {
+            Phase::Planning
+        } else {
+            Phase::Idle
+        };
+    }
+
+    if hard_gate_iterations.contains(&max_iteration) {
+        return Phase::BuildLintTest;
+    }
+    if review_iterations.contains(&max_iteration) {
+        return Phase::Review;
+    }
+    Phase::Implementation
+}
+
+/// Extracts the current iteration and total iterations from terminal.log.
+///
+/// Looks for the pattern `🔄 迭代 N/M` in terminal.log lines (last match wins).
+/// Falls back to parsing log.md if terminal.log is missing or has no match.
+fn extract_iteration_numbers(workflow_dir: &Path) -> (i32, i32) {
+    // Try terminal.log first (most reliable for iteration markers)
+    let terminal_path = workflow_dir.join("terminal.log");
+    if let Ok(content) = fs::read_to_string(&terminal_path) {
+        if let Some((current, total)) = parse_iteration_from_terminal(&content) {
+            return (current, total);
+        }
+    }
+
+    let log_md_path = workflow_dir.join("log.md");
+    if let Ok(content) = fs::read_to_string(&log_md_path) {
+        if let Some((current, total)) = parse_iteration_from_log_md(&content) {
+            return (current, total);
+        }
+    }
+
+    (0, 0)
+}
+
+/// Parses "迭代 N/M" from terminal.log content. Returns the last match.
+fn parse_iteration_from_terminal(content: &str) -> Option<(i32, i32)> {
+    let mut result = None;
+    for line in content.lines() {
+        // Look for "迭代 N/M" pattern
+        if let Some(pos) = line.find("迭代 ") {
+            let rest = &line[pos + "迭代 ".len()..];
+            if let Some(slash_pos) = rest.find('/') {
+                let current_str = rest[..slash_pos].trim();
+                let total_rest = &rest[slash_pos + 1..];
+                // Total might be followed by other characters or end of line
+                let total_str: String = total_rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                if let (Ok(current), Ok(total)) =
+                    (current_str.parse::<i32>(), total_str.parse::<i32>())
+                {
+                    result = Some((current, total));
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Parses iteration progress from log.md content.
+///
+/// Current iteration is inferred from the last `### 迭代 N - ...` heading.
+/// Total iterations is inferred from the last `总迭代次数: N` entry.
+/// If only one value is present, the other defaults to 0.
+fn parse_iteration_from_log_md(content: &str) -> Option<(i32, i32)> {
+    let mut current_iteration = 0;
+    let mut total_iterations = 0;
+
+
+exec
+/bin/zsh -lc "rg -n \"last_score|review_summary|passing_score|extract_review_summary\\(|extract_score\\(\" desktop_app/src-tauri/src/lib.rs -n -S" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+274:/// Mirrors the 6-pattern cascade in `lib/scoring.sh`'s `extract_score()`:
+284:fn extract_score(review: &str) -> Option<i32> {
+372:fn extract_review_summary(review: &str) -> Option<String> {
+446:fn read_last_score(workflow_dir: &Path) -> Option<i32> {
+447:    let content = fs::read_to_string(workflow_dir.join(".last_score")).ok()?;
+475:    let last_score = read_last_score(workflow_dir);
+477:        || last_score.is_some_and(|score| score < 85);
+1114:    passing_score: Option<i32>,
+1149:    if let Some(passing_score) = request.passing_score {
+1150:        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+1170:/// - `passing_score` -> `PASSING_SCORE` environment variable
+1456:    use super::{extract_review_summary, extract_score};
+1673:            passing_score: Some(90),
+1696:            passing_score: None,
+1717:            passing_score: None,
+1733:            passing_score: None,
+1743:    fn build_run_env_vars_includes_passing_score() {
+1749:            passing_score: Some(95),
+1756:        assert_eq!(env_vars[0].0, "PASSING_SCORE");
+1761:    fn build_run_env_vars_empty_when_no_passing_score() {
+1767:            passing_score: None,
+2079:        fs::write(dir.join(".last_score"), "79\n").expect("write");
+2096:        assert_eq!(extract_score("总评分 78/100"), Some(78));
+2097:        assert_eq!(extract_score("得分：85 / 100"), Some(85));
+2098:        assert_eq!(extract_score("score: 92.5/100"), Some(93));
+2103:        assert_eq!(extract_score("**评分: 78/100**\n其他内容"), Some(78));
+2104:        assert_eq!(extract_score("**Score: 85/100**"), Some(85));
+2111:        assert_eq!(extract_score(input), Some(85));
+2115:        assert_eq!(extract_score(input2), Some(78));
+2120:        assert_eq!(extract_score("评分: 8/10"), Some(80));
+2121:        assert_eq!(extract_score("得分 7.5 / 10"), Some(75));
+2123:        assert_eq!(extract_score("85/100"), Some(85)); // matched by pattern 1
+2128:        assert_eq!(extract_score("**评分: 78**"), Some(78));
+2129:        assert_eq!(extract_score("**Score: 8**"), Some(80)); // ≤10 → ×10
+2130:        assert_eq!(extract_score("**评分: 0**"), Some(0));
+2135:        assert_eq!(extract_score("评分: 85"), Some(85));
+2136:        assert_eq!(extract_score("Score: 7"), Some(70)); // ≤10 → ×10
+2137:        assert_eq!(extract_score("Score: 0"), Some(0));
+2144:        assert_eq!(extract_score(input), Some(75));
+2149:        assert_eq!(extract_score("没有任何评分内容"), None);
+2150:        assert_eq!(extract_score(""), None);
+2155:        assert_eq!(extract_score("78.6/100"), Some(79));
+2156:        assert_eq!(extract_score("78.4/100"), Some(78));
+2163:        assert_eq!(extract_score(input), Some(85));
+2167:    // extract_review_summary tests
+2171:    fn extract_review_summary_returns_context_around_score() {
+2173:        let summary = extract_review_summary(review);
+2182:    fn extract_review_summary_none_for_no_score() {
+2184:            extract_review_summary("just some text\nno scores here"),
+2190:    fn extract_review_summary_limits_to_three_lines() {
+2192:        let summary = extract_review_summary(review).unwrap();
+2201:    fn extract_review_summary_prefers_immediate_non_empty_neighbors() {
+2203:        let summary = extract_review_summary(review).unwrap();
+2209:    fn extract_review_summary_supports_total_score_lines() {
+2211:        let summary = extract_review_summary(review).unwrap();
+
+codex
+问题已经比较清楚了：这次提交把“评分解析辅助函数”和部分运行参数工作做进去了，但 T-002 本身要求的数据模型扩展和前端展示辅助并没有接上。我现在取精确行号，整理成可执行的审核结论。
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '170,230p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   170	}
+   171	
+   172	/// Overall iteration progress data sent to the frontend.
+   173	#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+   174	struct IterationProgress {
+   175	    /// Current iteration number (1-based), 0 if not started.
+   176	    current_iteration: i32,
+   177	    /// Total iterations configured (e.g. 42).
+   178	    total_iterations: i32,
+   179	    /// Current workflow phase.
+   180	    phase: Phase,
+   181	    /// List of subtasks with pass/fail status.
+   182	    subtasks: Vec<SubtaskInfo>,
+   183	    /// Number of subtasks that have passed.
+   184	    passed_count: usize,
+   185	    /// Total number of subtasks.
+   186	    total_count: usize,
+   187	}
+   188	
+   189	/// Raw tasks.json structure for deserialization.
+   190	#[derive(serde::Deserialize, Debug)]
+   191	#[serde(rename_all = "camelCase")]
+   192	struct TasksFile {
+   193	    #[allow(dead_code)]
+   194	    issue_number: Option<i64>,
+   195	    subtasks: Vec<TasksFileSubtask>,
+   196	}
+   197	
+   198	/// A subtask entry in tasks.json.
+   199	#[derive(serde::Deserialize, Debug)]
+   200	#[serde(rename_all = "camelCase")]
+   201	struct TasksFileSubtask {
+   202	    id: String,
+   203	    title: String,
+   204	    passes: bool,
+   205	}
+   206	
+   207	// ========================================
+   208	// Score extraction helpers
+   209	// ========================================
+   210	
+   211	use regex::Regex;
+   212	
+   213	fn score_number_regex() -> &'static Regex {
+   214	    static REGEX: OnceLock<Regex> = OnceLock::new();
+   215	    REGEX.get_or_init(|| Regex::new(r"\d+\.?\d*").expect("valid score number regex"))
+   216	}
+   217	
+   218	fn explicit_hundred_regex() -> &'static Regex {
+   219	    static REGEX: OnceLock<Regex> = OnceLock::new();
+   220	    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*100").expect("valid X/100 regex"))
+   221	}
+   222	
+   223	fn bold_hundred_regex() -> &'static Regex {
+   224	    static REGEX: OnceLock<Regex> = OnceLock::new();
+   225	    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)[^*]*100").expect("valid bold 100 regex"))
+   226	}
+   227	
+   228	fn total_score_table_regex() -> &'static Regex {
+   229	    static REGEX: OnceLock<Regex> = OnceLock::new();
+   230	    REGEX.get_or_init(|| {
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '468,490p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   468	        .join(format!("hard-gate-{current_iteration}.log"))
+   469	        .is_file()
+   470	}
+   471	
+   472	fn build_subtask_infos(workflow_dir: &Path) -> Vec<SubtaskInfo> {
+   473	    let raw_subtasks = parse_tasks_json(workflow_dir);
+   474	    let current_iteration = extract_iteration_numbers(workflow_dir).0;
+   475	    let last_score = read_last_score(workflow_dir);
+   476	    let current_failed = current_iteration_has_review_or_hard_gate(workflow_dir, current_iteration)
+   477	        || last_score.is_some_and(|score| score < 85);
+   478	    let current_index = raw_subtasks.iter().position(|subtask| !subtask.passes);
+   479	
+   480	    raw_subtasks
+   481	        .into_iter()
+   482	        .enumerate()
+   483	        .map(|(index, subtask)| {
+   484	            let status = if subtask.passes {
+   485	                SubtaskStatus::Passing
+   486	            } else if Some(index) == current_index && current_failed {
+   487	                SubtaskStatus::Failing
+   488	            } else {
+   489	                SubtaskStatus::Pending
+   490	            };
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '649,671p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   649	fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+   650	    let subtasks = build_subtask_infos(workflow_dir);
+   651	    let passed_count = subtasks
+   652	        .iter()
+   653	        .filter(|s| s.status == SubtaskStatus::Passing)
+   654	        .count();
+   655	    let total_count = subtasks.len();
+   656	    let phase = infer_phase(workflow_dir);
+   657	    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
+   658	
+   659	    IterationProgress {
+   660	        current_iteration,
+   661	        total_iterations,
+   662	        phase,
+   663	        subtasks,
+   664	        passed_count,
+   665	        total_count,
+   666	    }
+   667	}
+   668	
+   669	/// Returns the iteration progress for a given issue's workflow.
+   670	fn get_iteration_progress_sync(
+   671	    project_path: &str,
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/stores/iterationStore.ts | sed -n '10,30p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+    10	  id: string;
+    11	  title: string;
+    12	  status: SubtaskStatus;
+    13	}
+    14	
+    15	export interface IterationProgress {
+    16	  current_iteration: number;
+    17	  total_iterations: number;
+    18	  phase: Phase;
+    19	  subtasks: SubtaskInfo[];
+    20	  passed_count: number;
+    21	  total_count: number;
+    22	}
+    23	
+    24	export interface IterationProgressEvent {
+    25	  issue_number: number;
+    26	  progress: IterationProgress;
+    27	}
+    28	
+    29	type UnlistenFn = () => void;
+    30	type IterationEventName = 'iteration-progress';
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/tests/iterationStore.test.mjs | sed -n '1,70p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/components/iterationProgressView.ts | sed -n '1,120p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import test from 'node:test';
+     2	import assert from 'node:assert/strict';
+     3	import { createIterationStore, IDLE_PROGRESS } from '../src/stores/iterationStore.ts';
+     4	
+     5	function createDeferred() {
+     6	  let resolve;
+     7	  let reject;
+     8	  const promise = new Promise((res, rej) => {
+     9	    resolve = res;
+    10	    reject = rej;
+    11	  });
+    12	  return { promise, resolve, reject };
+    13	}
+    14	
+    15	function createInvokeMock(handlers) {
+    16	  return async (cmd, args) => {
+    17	    const handler = handlers[cmd];
+    18	    if (!handler) {
+    19	      throw new Error(`Unhandled command: ${cmd}`);
+    20	    }
+    21	    return handler(args);
+    22	  };
+    23	}
+    24	
+    25	const SAMPLE_PROGRESS = {
+    26	  current_iteration: 3,
+    27	  total_iterations: 16,
+    28	  phase: 'Review',
+    29	  subtasks: [
+    30	    { id: 'T-001', title: 'Backend data model', status: 'passing' },
+    31	    { id: 'T-002', title: 'File watcher', status: 'passing' },
+    32	    { id: 'T-003', title: 'Frontend UI', status: 'failing' },
+    33	  ],
+    34	  passed_count: 2,
+    35	  total_count: 3,
+    36	};
+    37	
+    38	test('watchIssue stores iteration data from backend', async () => {
+    39	  const store = createIterationStore({
+    40	    isTauri: true,
+    41	    invoke: createInvokeMock({
+    42	      get_iteration_progress: () => SAMPLE_PROGRESS,
+    43	    }),
+    44	    listen: async () => () => {},
+    45	  });
+    46	
+    47	  await store.getState().watchIssue('/tmp/project', 31);
+    48	
+    49	  const state = store.getState();
+    50	  assert.equal(state.progress.current_iteration, 3);
+    51	  assert.equal(state.progress.total_iterations, 16);
+    52	  assert.equal(state.progress.phase, 'Review');
+    53	  assert.equal(state.progress.subtasks.length, 3);
+    54	  assert.equal(state.progress.subtasks[2].status, 'failing');
+    55	  assert.equal(state.isLoading, false);
+    56	  assert.equal(state.error, null);
+    57	});
+    58	
+    59	test('initialize wires iteration-progress event and applies matching payload', async () => {
+    60	  let eventListener = null;
+    61	  const store = createIterationStore({
+    62	    isTauri: true,
+    63	    invoke: createInvokeMock({
+    64	      get_iteration_progress: () => SAMPLE_PROGRESS,
+    65	    }),
+    66	    listen: async (_event, callback) => {
+    67	      eventListener = callback;
+    68	      return () => {};
+    69	    },
+    70	  });
+
+ succeeded in 0ms:
+     1	import type { Phase, SubtaskStatus } from '../stores/iterationStore';
+     2	
+     3	export const PHASE_STEPS: { key: Exclude<Phase, 'Idle'>; label: string }[] = [
+     4	  { key: 'Planning', label: 'Planning' },
+     5	  { key: 'Implementation', label: 'Implementation' },
+     6	  { key: 'Review', label: 'Review' },
+     7	  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+     8	];
+     9	
+    10	export function phaseIndex(phase: Phase): number {
+    11	  const idx = PHASE_STEPS.findIndex((step) => step.key === phase);
+    12	  return idx === -1 ? -1 : idx;
+    13	}
+    14	
+    15	export function subtaskBadgeClass(status: SubtaskStatus): string {
+    16	  switch (status) {
+    17	    case 'passing':
+    18	      return 'border-green-200 bg-green-50 text-green-700';
+    19	    case 'failing':
+    20	      return 'border-red-200 bg-red-50 text-red-700';
+    21	    case 'pending':
+    22	    default:
+    23	      return 'border-gray-200 bg-gray-100 text-gray-500';
+    24	  }
+    25	}
+    26	
+    27	export function idleMessage(isRunning: boolean, isLoading: boolean): string {
+    28	  if (isRunning || isLoading) {
+    29	    return '正在加载迭代进度…';
+    30	  }
+    31	  return '暂无迭代进度，当前为 idle 状态。';
+    32	}
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/tests/iterationProgressView.test.mjs | sed -n '1,80p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import test from 'node:test';
+     2	import assert from 'node:assert/strict';
+     3	import {
+     4	  idleMessage,
+     5	  PHASE_STEPS,
+     6	  phaseIndex,
+     7	  subtaskBadgeClass,
+     8	} from '../src/components/iterationProgressView.ts';
+     9	
+    10	test('phaseIndex and PHASE_STEPS expose the expected iteration pipeline labels', () => {
+    11	  assert.deepEqual(
+    12	    PHASE_STEPS.map((step) => step.label),
+    13	    ['Planning', 'Implementation', 'Review', 'Build·Lint·Test'],
+    14	  );
+    15	  assert.equal(phaseIndex('Planning'), 0);
+    16	  assert.equal(phaseIndex('Review'), 2);
+    17	  assert.equal(phaseIndex('Idle'), -1);
+    18	});
+    19	
+    20	test('subtaskBadgeClass maps all three statuses to distinct styles', () => {
+    21	  assert.match(subtaskBadgeClass('pending'), /gray/);
+    22	  assert.match(subtaskBadgeClass('passing'), /green/);
+    23	  assert.match(subtaskBadgeClass('failing'), /red/);
+    24	});
+    25	
+    26	test('idleMessage distinguishes loading from idle copy', () => {
+    27	  assert.equal(idleMessage(true, false), '正在加载迭代进度…');
+    28	  assert.equal(idleMessage(false, true), '正在加载迭代进度…');
+    29	  assert.equal(idleMessage(false, false), '暂无迭代进度，当前为 idle 状态。');
+    30	});
+
+exec
+/bin/zsh -lc "rg -n \"PASSING_SCORE|passing_score|std::env::var\\(|env::var\\(\" desktop_app/src-tauri/src/lib.rs -S" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+1114:    passing_score: Option<i32>,
+1149:    if let Some(passing_score) = request.passing_score {
+1150:        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+1170:/// - `passing_score` -> `PASSING_SCORE` environment variable
+1673:            passing_score: Some(90),
+1696:            passing_score: None,
+1717:            passing_score: None,
+1733:            passing_score: None,
+1743:    fn build_run_env_vars_includes_passing_score() {
+1749:            passing_score: Some(95),
+1756:        assert_eq!(env_vars[0].0, "PASSING_SCORE");
+1761:    fn build_run_env_vars_empty_when_no_passing_score() {
+1767:            passing_score: None,
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '1108,1154p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+  1108	    issue_number: i64,
+  1109	    /// Maximum number of iterations (optional, defaults to 42).
+  1110	    max_iter: Option<i32>,
+  1111	    /// Comma-separated list of agents (optional).
+  1112	    agents: Option<String>,
+  1113	    /// Passing score threshold (optional, defaults to 85).
+  1114	    passing_score: Option<i32>,
+  1115	    /// Continue from last interrupted run (optional).
+  1116	    continue_mode: Option<bool>,
+  1117	}
+  1118	
+  1119	/// Builds command-line arguments for run.sh from the request parameters.
+  1120	/// This is a pure function extracted for testability.
+  1121	fn build_run_args(request: &StartRunRequest) -> Vec<String> {
+  1122	    let mut args = vec!["-p".to_string(), request.project_path.clone()];
+  1123	
+  1124	    if let Some(ref agents) = request.agents {
+  1125	        if !agents.is_empty() {
+  1126	            args.push("-a".to_string());
+  1127	            args.push(agents.clone());
+  1128	        }
+  1129	    }
+  1130	
+  1131	    if request.continue_mode.unwrap_or(false) {
+  1132	        args.push("-c".to_string());
+  1133	    }
+  1134	
+  1135	    args.push(request.issue_number.to_string());
+  1136	
+  1137	    if let Some(max_iter) = request.max_iter {
+  1138	        args.push(max_iter.to_string());
+  1139	    }
+  1140	
+  1141	    args
+  1142	}
+  1143	
+  1144	/// Builds environment variables for run.sh from the request parameters.
+  1145	/// Returns a vector of (key, value) pairs.
+  1146	/// This is a pure function extracted for testability.
+  1147	fn build_run_env_vars(request: &StartRunRequest) -> Vec<(&'static str, String)> {
+  1148	    let mut env_vars = vec![];
+  1149	    if let Some(passing_score) = request.passing_score {
+  1150	        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+  1151	    }
+  1152	    env_vars
+  1153	}
+  1154	
+
+codex
+## 审核报告
+
+### 主要问题
+
+1. 严重: `IterationProgress` 的后端/前端契约并没有按 T-002 扩展完成。Rust 结构体仍然只有 `current_iteration / total_iterations / phase / subtasks / passed_count / total_count`，`build_iteration_progress()` 也只回填这 6 个字段；前端 `IterationProgress` 接口同样缺少 `last_score`、`passing_score`、`review_summary`。这直接不满足核心验收条件。  
+   参考: [desktop_app/src-tauri/src/lib.rs:174](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L174), [desktop_app/src-tauri/src/lib.rs:649](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L649), [desktop_app/src/stores/iterationStore.ts:15](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L15)
+
+2. 严重: 评分来源和阈值逻辑没有按要求接到 `build_iteration_progress()` 上。当前状态里只是新增了 `extract_score()` / `extract_review_summary()` 辅助函数，但实际子任务状态判断仍然读取 `.last_score`，并把通过阈值硬编码为 `85`；代码中也没有在 progress 构建路径读取 `PASSING_SCORE` 或默认值生成 `passing_score` 字段。这与“从最新 review 日志解析评分/摘要”和“passing_score 从环境变量或默认值 85 获取”都不一致。  
+   参考: [desktop_app/src-tauri/src/lib.rs:472](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L472), [desktop_app/src-tauri/src/lib.rs:477](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L477), [desktop_app/src-tauri/src/lib.rs:1147](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L1147)
+
+3. 中等: 前端展示辅助函数未完成，测试也没有覆盖新增契约。`iterationProgressView.ts` 里不存在 `scoreColorClass(score, passingScore)`；现有前端测试样例也仍是旧结构，没有断言 `last_score / passing_score / review_summary`，因此“前端 store 测试通过”不能证明 T-002 的新增功能可用。  
+   参考: [desktop_app/src/components/iterationProgressView.ts:1](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/iterationProgressView.ts#L1), [desktop_app/tests/iterationProgressView.test.mjs:1](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationProgressView.test.mjs#L1), [desktop_app/tests/iterationStore.test.mjs:25](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs#L25)
+
+### 总体评价
+
+**评分: 62/100**
+
+这次提交把评分解析辅助逻辑和对应 Rust 单测补上了，`cargo test`、`cargo clippy -- -D warnings`、前端 `npm test` 也都通过；但 T-002 的核心交付物并没有真正落地，主要停留在“写了 helper，还没接入 IterationProgress 契约与前端展示”的状态，因此当前不达标。
+
+### 验收条件核对
+
+- `IterationProgress` 包含 `last_score`、`passing_score`、`review_summary` 字段: 未通过
+- `build_iteration_progress()` 能从 review 日志提取评分和摘要: 未通过
+- 前端 `IterationProgress` 接口与 Rust 序列化字段一致（snake_case）: 未通过
+- `iterationProgressView.ts` 新增 `scoreColorClass(score, passingScore)` 纯函数: 未通过
+- `cargo test` 和前端 store 测试通过: 通过
+- `cargo clippy` 无警告: 通过
+
+### 已验证
+
+- `cargo test`: 通过
+- `cargo clippy -- -D warnings`: 通过
+- `npm test -- --test-reporter=tap`（`desktop_app`）: 通过
+
+### 建议
+
+先把 `IterationProgress` 的 Rust/TS 结构补齐，并在 `build_iteration_progress()` 中真正读取“最新 review 日志 -> `extract_score()` / `extract_review_summary()` -> 回填 `last_score/review_summary`”，同时统一 `passing_score` 来源；然后补前端 `scoreColorClass()` 与对应测试。当前这版不建议合并。
+
+## Learnings
+
+- **模式**: 这个仓库的迭代进度契约是 Rust `IterationProgress` 与前端 `iterationStore.ts` 手工保持同步，任何字段扩展都必须双端一起改。
+- **踩坑**: “helper 已实现”不等于“功能已验收”；如果 `build_iteration_progress()` 没有真正接线，测试再多也只能证明局部函数可用。
+- **经验**: T-002 这类跨端契约任务，测试至少要覆盖 3 层：Rust 聚合结果、store 反序列化字段、view 辅助函数。
+tokens used
+49,835
+## 审核报告
+
+### 主要问题
+
+1. 严重: `IterationProgress` 的后端/前端契约并没有按 T-002 扩展完成。Rust 结构体仍然只有 `current_iteration / total_iterations / phase / subtasks / passed_count / total_count`，`build_iteration_progress()` 也只回填这 6 个字段；前端 `IterationProgress` 接口同样缺少 `last_score`、`passing_score`、`review_summary`。这直接不满足核心验收条件。  
+   参考: [desktop_app/src-tauri/src/lib.rs:174](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L174), [desktop_app/src-tauri/src/lib.rs:649](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L649), [desktop_app/src/stores/iterationStore.ts:15](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L15)
+
+2. 严重: 评分来源和阈值逻辑没有按要求接到 `build_iteration_progress()` 上。当前状态里只是新增了 `extract_score()` / `extract_review_summary()` 辅助函数，但实际子任务状态判断仍然读取 `.last_score`，并把通过阈值硬编码为 `85`；代码中也没有在 progress 构建路径读取 `PASSING_SCORE` 或默认值生成 `passing_score` 字段。这与“从最新 review 日志解析评分/摘要”和“passing_score 从环境变量或默认值 85 获取”都不一致。  
+   参考: [desktop_app/src-tauri/src/lib.rs:472](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L472), [desktop_app/src-tauri/src/lib.rs:477](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L477), [desktop_app/src-tauri/src/lib.rs:1147](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L1147)
+
+3. 中等: 前端展示辅助函数未完成，测试也没有覆盖新增契约。`iterationProgressView.ts` 里不存在 `scoreColorClass(score, passingScore)`；现有前端测试样例也仍是旧结构，没有断言 `last_score / passing_score / review_summary`，因此“前端 store 测试通过”不能证明 T-002 的新增功能可用。  
+   参考: [desktop_app/src/components/iterationProgressView.ts:1](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/iterationProgressView.ts#L1), [desktop_app/tests/iterationProgressView.test.mjs:1](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationProgressView.test.mjs#L1), [desktop_app/tests/iterationStore.test.mjs:25](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs#L25)
+
+### 总体评价
+
+**评分: 62/100**
+
+这次提交把评分解析辅助逻辑和对应 Rust 单测补上了，`cargo test`、`cargo clippy -- -D warnings`、前端 `npm test` 也都通过；但 T-002 的核心交付物并没有真正落地，主要停留在“写了 helper，还没接入 IterationProgress 契约与前端展示”的状态，因此当前不达标。
+
+### 验收条件核对
+
+- `IterationProgress` 包含 `last_score`、`passing_score`、`review_summary` 字段: 未通过
+- `build_iteration_progress()` 能从 review 日志提取评分和摘要: 未通过
+- 前端 `IterationProgress` 接口与 Rust 序列化字段一致（snake_case）: 未通过
+- `iterationProgressView.ts` 新增 `scoreColorClass(score, passingScore)` 纯函数: 未通过
+- `cargo test` 和前端 store 测试通过: 通过
+- `cargo clippy` 无警告: 通过
+
+### 已验证
+
+- `cargo test`: 通过
+- `cargo clippy -- -D warnings`: 通过
+- `npm test -- --test-reporter=tap`（`desktop_app`）: 通过
+
+### 建议
+
+先把 `IterationProgress` 的 Rust/TS 结构补齐，并在 `build_iteration_progress()` 中真正读取“最新 review 日志 -> `extract_score()` / `extract_review_summary()` -> 回填 `last_score/review_summary`”，同时统一 `passing_score` 来源；然后补前端 `scoreColorClass()` 与对应测试。当前这版不建议合并。
+
+## Learnings
+
+- **模式**: 这个仓库的迭代进度契约是 Rust `IterationProgress` 与前端 `iterationStore.ts` 手工保持同步，任何字段扩展都必须双端一起改。
+- **踩坑**: “helper 已实现”不等于“功能已验收”；如果 `build_iteration_progress()` 没有真正接线，测试再多也只能证明局部函数可用。
+- **经验**: T-002 这类跨端契约任务，测试至少要覆盖 3 层：Rust 聚合结果、store 反序列化字段、view 辅助函数。

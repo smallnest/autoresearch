@@ -19,6 +19,9 @@ export interface IterationProgress {
   subtasks: SubtaskInfo[];
   passed_count: number;
   total_count: number;
+  last_score: number | null;
+  passing_score: number;
+  review_summary: string | null;
 }
 
 export interface IterationProgressEvent {
@@ -73,6 +76,9 @@ export const IDLE_PROGRESS: IterationProgress = {
   subtasks: [],
   passed_count: 0,
   total_count: 0,
+  last_score: null,
+  passing_score: 85,
+  review_summary: null,
 };
 
 export interface IterationState {

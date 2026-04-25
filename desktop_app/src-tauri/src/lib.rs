@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio as StdStdio;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::UNIX_EPOCH;
 
 use tauri::Emitter;
@@ -147,7 +148,7 @@ enum Phase {
     Review,
     /// Build/lint/test hard gate checks.
     BuildLintTest,
-/// No active run or unknown state.
+    /// No active run or unknown state.
     Idle,
 }
 
@@ -183,6 +184,12 @@ struct IterationProgress {
     passed_count: usize,
     /// Total number of subtasks.
     total_count: usize,
+    /// Last review score (0–100), None if no review yet.
+    last_score: Option<i32>,
+    /// Score threshold for passing (default 85).
+    passing_score: i32,
+    /// Short summary extracted from the latest review.
+    review_summary: Option<String>,
 }
 
 /// Raw tasks.json structure for deserialization.
@@ -201,6 +208,223 @@ struct TasksFileSubtask {
     id: String,
     title: String,
     passes: bool,
+}
+
+// ========================================
+// Score extraction helpers
+// ========================================
+
+use regex::Regex;
+
+fn score_number_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"\d+\.?\d*").expect("valid score number regex"))
+}
+
+fn explicit_hundred_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*100").expect("valid X/100 regex"))
+}
+
+fn bold_hundred_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)[^*]*100").expect("valid bold 100 regex"))
+}
+
+fn total_score_table_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r"(\*\*)?总分(\*\*)?\s*\|.*\*\*\d").expect("valid total score table regex")
+    })
+}
+
+fn total_score_arrow_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"总分.*→").expect("valid total score arrow regex"))
+}
+
+fn explicit_ten_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(\d+\.?\d*)\s*/\s*10\b").expect("valid X/10 regex"))
+}
+
+fn bold_score_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(?i)\*\*(评分|Score)").expect("valid bold score regex"))
+}
+
+fn plain_score_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"(?i)(评分|Score)\s*:").expect("valid plain score regex"))
+}
+
+fn dimension_exclude_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"各维度|维度").expect("valid dimension exclude regex"))
+}
+
+fn summary_score_patterns() -> &'static [Regex; 4] {
+    static REGEXES: OnceLock<[Regex; 4]> = OnceLock::new();
+    REGEXES.get_or_init(|| {
+        [
+            Regex::new(r"\d+\.?\d*\s*/\s*100").expect("valid summary 100 regex"),
+            Regex::new(r"(?i)\*\*(评分|Score)").expect("valid summary bold regex"),
+            Regex::new(r"(?i)(评分|Score)\s*:").expect("valid summary plain regex"),
+            Regex::new(r"总分").expect("valid summary total regex"),
+        ]
+    })
+}
+
+/// Extracts a score from free-text review output.
+///
+/// Mirrors the 6-pattern cascade in `lib/scoring.sh`'s `extract_score()`:
+///   1. Explicit `X/100`
+///   2. `**评分: X/100**` or `**Score: X/100**`
+///   3. 总分 table row (e.g. `| **总分** | ... | **8.5** |` or `总分 → 85`)
+///   4. `X/10` (converted ×10)
+///   5. `**评分: X**` or `**Score: X**` (≤10 converted ×10)
+///   6. `评分: X` or `Score: X` (excluding lines with 各维度/维度, ≤10 converted ×10)
+///
+/// Returns `None` when no pattern matches (caller can treat as 0).
+fn extract_score(review: &str) -> Option<i32> {
+    // Pattern 1: X/100
+    if let Some(caps) = explicit_hundred_regex().captures(review) {
+        if let Some(score) = parse_score_str(caps.get(1).unwrap().as_str()) {
+            return Some(score);
+        }
+    }
+
+    // Pattern 2: **评分: X/100** or **Score: X/100**
+    for line in review.lines() {
+        if bold_hundred_regex().is_match(line) {
+            if let Some(m) = score_number_regex().find(line) {
+                if let Some(score) = parse_score_str(m.as_str()) {
+                    return Some(score);
+                }
+            }
+        }
+    }
+
+    // Pattern 3: 总分 table row — either `| **总分** | ... | **8.5** |` or `总分.*→`
+    // The shell version takes the last number via `tail -1`, then multiplies by 10.
+    for line in review.lines() {
+        if total_score_table_regex().is_match(line) || total_score_arrow_regex().is_match(line) {
+            if let Some(m) = score_number_regex().find_iter(line).last() {
+                if let Some(score) = parse_score_str_scaled(m.as_str(), 10.0) {
+                    return Some(score);
+                }
+            }
+        }
+    }
+
+    // Pattern 4: X/10 (multiply by 10)
+    // Rust regex doesn't support lookahead, so use \b word boundary instead.
+    if let Some(caps) = explicit_ten_regex().captures(review) {
+        if let Some(score) = parse_score_str_scaled(caps.get(1).unwrap().as_str(), 10.0) {
+            return Some(score);
+        }
+    }
+
+    // Pattern 5: **评分: X** or **Score: X** (≤10 → ×10)
+    for line in review.lines() {
+        if bold_score_regex().is_match(line) {
+            if let Some(m) = score_number_regex().find(line) {
+                if let Some(score) = parse_score_str(m.as_str()) {
+                    if score == 0 {
+                        return Some(0);
+                    }
+                    return Some(if score <= 10 { score * 10 } else { score });
+                }
+            }
+        }
+    }
+
+    // Pattern 6: 评分: X or Score: X (exclude 各维度/维度 lines, ≤10 → ×10)
+    for line in review.lines() {
+        if plain_score_regex().is_match(line) && !dimension_exclude_regex().is_match(line) {
+            if let Some(m) = score_number_regex().find(line) {
+                if let Some(score) = parse_score_str(m.as_str()) {
+                    if score == 0 {
+                        return Some(0);
+                    }
+                    return Some(if score <= 10 { score * 10 } else { score });
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Parse a numeric string (possibly with a decimal point) into an integer score.
+fn parse_score_str(s: &str) -> Option<i32> {
+    s.parse::<f64>().ok().map(|v| v.round() as i32)
+}
+
+/// Parse a numeric string and multiply by a factor before rounding.
+/// Used for scores on a 10-point scale that need ×10 conversion.
+fn parse_score_str_scaled(s: &str, factor: f64) -> Option<i32> {
+    s.parse::<f64>().ok().map(|v| (v * factor).round() as i32)
+}
+
+/// Extracts a brief review summary from the text surrounding the score line.
+///
+/// Finds the first line that looks like a score, then returns up to 3 non-empty
+/// lines around it as the key summary.
+fn extract_review_summary(review: &str) -> Option<String> {
+    let lines: Vec<&str> = review.lines().collect();
+
+    for (i, line) in lines.iter().enumerate() {
+        let is_score_line = summary_score_patterns().iter().any(|re| re.is_match(line));
+        if !is_score_line {
+            continue;
+        }
+
+        let mut selected = vec![i];
+
+        if let Some(previous) = nearest_non_empty_line(&lines, i, SearchDirection::Backward) {
+            selected.push(previous);
+        }
+        if let Some(next) = nearest_non_empty_line(&lines, i, SearchDirection::Forward) {
+            selected.push(next);
+        }
+
+        selected.sort_unstable();
+        selected.dedup();
+
+        let summary = selected
+            .into_iter()
+            .take(3)
+            .map(|idx| lines[idx].trim())
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if !summary.is_empty() {
+            return Some(summary);
+        }
+    }
+
+    None
+}
+
+#[derive(Clone, Copy)]
+enum SearchDirection {
+    Backward,
+    Forward,
+}
+
+fn nearest_non_empty_line(
+    lines: &[&str],
+    pivot: usize,
+    direction: SearchDirection,
+) -> Option<usize> {
+    match direction {
+        SearchDirection::Backward => (0..pivot).rev().find(|&idx| !lines[idx].trim().is_empty()),
+        SearchDirection::Forward => {
+            ((pivot + 1)..lines.len()).find(|&idx| !lines[idx].trim().is_empty())
+        }
+    }
 }
 
 // ========================================
@@ -245,6 +469,36 @@ fn current_iteration_has_review_or_hard_gate(workflow_dir: &Path, current_iterat
     workflow_dir
         .join(format!("hard-gate-{current_iteration}.log"))
         .is_file()
+}
+
+/// Finds the latest review log file in the workflow directory and returns its content.
+/// Looks for `iteration-N-*-review.log` files and picks the one with the highest N.
+fn find_latest_review_content(workflow_dir: &Path) -> Option<String> {
+    let entries = fs::read_dir(workflow_dir).ok()?;
+    let mut best: Option<(i32, std::path::PathBuf)> = None;
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if name_str.ends_with("-review.log") {
+            if let Some(n) = iteration_number(&name_str) {
+                if best.as_ref().is_none_or(|(prev_n, _)| n > *prev_n) {
+                    best = Some((n, entry.path()));
+                }
+            }
+        }
+    }
+
+    let (_, path) = best?;
+    fs::read_to_string(path).ok()
+}
+
+/// Reads the passing score from environment variable PASSING_SCORE, defaulting to 85.
+fn get_passing_score() -> i32 {
+    std::env::var("PASSING_SCORE")
+        .ok()
+        .and_then(|v| v.trim().parse::<i32>().ok())
+        .unwrap_or(85)
 }
 
 fn build_subtask_infos(workflow_dir: &Path) -> Vec<SubtaskInfo> {
@@ -322,7 +576,11 @@ fn infer_phase(workflow_dir: &Path) -> Phase {
     }
 
     if max_iteration == 0 {
-        return if has_planning { Phase::Planning } else { Phase::Idle };
+        return if has_planning {
+            Phase::Planning
+        } else {
+            Phase::Idle
+        };
     }
 
     if hard_gate_iterations.contains(&max_iteration) {
@@ -368,8 +626,13 @@ fn parse_iteration_from_terminal(content: &str) -> Option<(i32, i32)> {
                 let current_str = rest[..slash_pos].trim();
                 let total_rest = &rest[slash_pos + 1..];
                 // Total might be followed by other characters or end of line
-                let total_str: String = total_rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-                if let (Ok(current), Ok(total)) = (current_str.parse::<i32>(), total_str.parse::<i32>()) {
+                let total_str: String = total_rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect();
+                if let (Ok(current), Ok(total)) =
+                    (current_str.parse::<i32>(), total_str.parse::<i32>())
+                {
                     result = Some((current, total));
                 }
             }
@@ -389,10 +652,7 @@ fn parse_iteration_from_log_md(content: &str) -> Option<(i32, i32)> {
 
     for line in content.lines() {
         if let Some(rest) = line.strip_prefix("### 迭代 ") {
-            let iteration_str: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
+            let iteration_str: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
             if let Ok(iteration) = iteration_str.parse::<i32>() {
                 current_iteration = iteration;
             }
@@ -428,6 +688,15 @@ fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
     let phase = infer_phase(workflow_dir);
     let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
 
+    let review_content = find_latest_review_content(workflow_dir);
+    let last_score = review_content
+        .as_deref()
+        .and_then(extract_score);
+    let review_summary = review_content
+        .as_deref()
+        .and_then(extract_review_summary);
+    let passing_score = get_passing_score();
+
     IterationProgress {
         current_iteration,
         total_iterations,
@@ -435,6 +704,9 @@ fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
         subtasks,
         passed_count,
         total_count,
+        last_score,
+        passing_score,
+        review_summary,
     }
 }
 
@@ -462,6 +734,9 @@ fn get_iteration_progress_sync(
             subtasks: Vec::new(),
             passed_count: 0,
             total_count: 0,
+            last_score: None,
+            passing_score: get_passing_score(),
+            review_summary: None,
         });
     }
 
@@ -583,8 +858,8 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> 
         return Ok(Vec::new());
     }
     let mut numbers = Vec::new();
-    let entries = fs::read_dir(&workflows_dir)
-        .map_err(|e| format!("Failed to read workflows dir: {e}"))?;
+    let entries =
+        fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {e}"))?;
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
@@ -602,11 +877,9 @@ fn get_processed_issue_numbers(project_path: &Path) -> Result<Vec<i64>, String> 
 /// Also returns which Issue numbers have already been processed (have workflow directories).
 #[tauri::command]
 async fn list_issues(project_path: String) -> Result<IssuesResult, String> {
-    tokio::task::spawn_blocking(move || {
-        list_issues_sync(&project_path)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    tokio::task::spawn_blocking(move || list_issues_sync(&project_path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
 }
 
 fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
@@ -618,9 +891,12 @@ fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
     // Execute gh issue list
     let output = Command::new("gh")
         .args([
-            "issue", "list",
-            "--json", "number,title,labels,createdAt,state",
-            "--limit", "100",
+            "issue",
+            "list",
+            "--json",
+            "number,title,labels,createdAt,state",
+            "--limit",
+            "100",
         ])
         .current_dir(base)
         .output()
@@ -658,7 +934,8 @@ async fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String
 }
 
 fn parse_issue_detail(stdout: &str) -> Result<IssueDetail, String> {
-    serde_json::from_str(stdout).map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+    serde_json::from_str(stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
 }
 
 fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
@@ -732,10 +1009,13 @@ fn file_timestamp(metadata: &fs::Metadata) -> Option<String> {
         .map(|duration| duration.as_secs().to_string())
 }
 
-fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
+fn list_issue_log_sources_sync(
+    project_path: &str,
+    issue_number: i64,
+) -> Result<Vec<IssueLogSource>, String> {
     let issue_dir = workflow_issue_dir(project_path, issue_number)?;
-    let entries = fs::read_dir(&issue_dir)
-        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+    let entries =
+        fs::read_dir(&issue_dir).map_err(|e| format!("Failed to read workflow dir: {e}"))?;
 
     let mut sources = Vec::new();
     for entry in entries {
@@ -808,11 +1088,9 @@ fn read_issue_log_content_sync(
 /// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
 #[tauri::command]
 async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
-    tokio::task::spawn_blocking(move || {
-        get_issue_detail_sync(&project_path, issue_number)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    tokio::task::spawn_blocking(move || get_issue_detail_sync(&project_path, issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
 }
 
 fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
@@ -824,9 +1102,11 @@ fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueD
     // Execute gh issue view
     let output = Command::new("gh")
         .args([
-            "issue", "view",
+            "issue",
+            "view",
             &issue_number.to_string(),
-            "--json", "body,comments",
+            "--json",
+            "body,comments",
         ])
         .current_dir(base)
         .output()
@@ -886,10 +1166,7 @@ struct StartRunRequest {
 /// Builds command-line arguments for run.sh from the request parameters.
 /// This is a pure function extracted for testability.
 fn build_run_args(request: &StartRunRequest) -> Vec<String> {
-    let mut args = vec![
-        "-p".to_string(),
-        request.project_path.clone(),
-    ];
+    let mut args = vec!["-p".to_string(), request.project_path.clone()];
 
     if let Some(ref agents) = request.agents {
         if !agents.is_empty() {
@@ -950,13 +1227,19 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
 
     // Check if a process is already running
     if state_guard.process.is_some() {
-        return Err("A run is already in progress. Stop the current run before starting a new one.".to_string());
+        return Err(
+            "A run is already in progress. Stop the current run before starting a new one."
+                .to_string(),
+        );
     }
 
     // Validate project path
     let project_path = Path::new(&request.project_path);
     if !project_path.is_dir() {
-        return Err(format!("Project path is not a directory: {}", request.project_path));
+        return Err(format!(
+            "Project path is not a directory: {}",
+            request.project_path
+        ));
     }
 
     // Find run.sh in autoresearch directory (relative to the app)
@@ -994,7 +1277,10 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
             let pid = libc::getpid();
             if libc::setpgid(pid, pid) < 0 {
                 // Log error but don't fail the spawn
-                eprintln!("Warning: Failed to set process group: {}", std::io::Error::last_os_error());
+                eprintln!(
+                    "Warning: Failed to set process group: {}",
+                    std::io::Error::last_os_error()
+                );
             }
             Ok(())
         });
@@ -1201,25 +1487,28 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::RunProcessState;
+    use super::{
+        build_iteration_progress, find_latest_review_content, get_iteration_progress_sync,
+        infer_phase, parse_iteration_from_log_md, parse_iteration_from_terminal,
+        parse_tasks_json, Phase, SubtaskStatus,
+    };
+    use super::{build_run_args, build_run_env_vars, StartRunRequest};
     use super::{
         classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
         map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
         resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
     };
-    use super::{build_run_args, build_run_env_vars, StartRunRequest};
-    use super::{
-        build_iteration_progress, get_iteration_progress_sync, infer_phase,
-        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
-        SubtaskStatus,
-    };
-    #[cfg(unix)]
-    use super::RunProcessState;
+    use super::{extract_review_summary, extract_score};
     use std::fs;
     use std::path::PathBuf;
 
     fn create_temp_project_dir(test_name: &str) -> PathBuf {
-        let root = std::env::temp_dir()
-            .join(format!("autoresearch-log-viewer-{test_name}-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "autoresearch-log-viewer-{test_name}-{}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("temp project dir should be created");
         root
@@ -1268,8 +1557,10 @@ mod tests {
 
     #[test]
     fn issue_detail_error_maps_missing_issue() {
-        let error =
-            map_issue_detail_command_error(27, "GraphQL: Could not resolve to an issue with the number of 27.");
+        let error = map_issue_detail_command_error(
+            27,
+            "GraphQL: Could not resolve to an issue with the number of 27.",
+        );
 
         assert_eq!(error, "Issue #27 not found");
     }
@@ -1291,8 +1582,14 @@ mod tests {
 
     #[test]
     fn classify_log_source_maps_known_workflow_files() {
-        assert_eq!(classify_log_source("terminal.log"), ("terminal", "终端日志".to_string()));
-        assert_eq!(classify_log_source("log.md"), ("summary", "工作流摘要".to_string()));
+        assert_eq!(
+            classify_log_source("terminal.log"),
+            ("terminal", "终端日志".to_string())
+        );
+        assert_eq!(
+            classify_log_source("log.md"),
+            ("summary", "工作流摘要".to_string())
+        );
         assert_eq!(
             classify_log_source("iteration-2-codex-review.log"),
             ("iteration", "iteration-2-codex-review.log".to_string())
@@ -1321,8 +1618,16 @@ mod tests {
         let project_dir = create_temp_project_dir("list-sources");
         let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
         fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
-        fs::write(workflow_dir.join("iteration-10-codex-review.log"), "iteration10").expect("iteration log");
-        fs::write(workflow_dir.join("iteration-2-codex-review.log"), "iteration").expect("iteration log");
+        fs::write(
+            workflow_dir.join("iteration-10-codex-review.log"),
+            "iteration10",
+        )
+        .expect("iteration log");
+        fs::write(
+            workflow_dir.join("iteration-2-codex-review.log"),
+            "iteration",
+        )
+        .expect("iteration log");
         fs::write(workflow_dir.join("terminal.log"), "terminal").expect("terminal log");
         fs::write(workflow_dir.join("log.md"), "summary").expect("summary log");
 
@@ -1390,12 +1695,9 @@ mod tests {
         fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
         fs::write(workflow_dir.join("terminal.log"), b"line one\nline two").expect("terminal log");
 
-        let content = read_issue_log_content_sync(
-            project_dir.to_string_lossy().as_ref(),
-            30,
-            "terminal.log",
-        )
-        .expect("log content should load");
+        let content =
+            read_issue_log_content_sync(project_dir.to_string_lossy().as_ref(), 30, "terminal.log")
+                .expect("log content should load");
 
         assert_eq!(content.source_id, "terminal.log");
         assert_eq!(content.text, "line one\nline two");
@@ -1828,6 +2130,222 @@ mod tests {
         assert_eq!(progress.subtasks[0].status, SubtaskStatus::Passing);
         assert_eq!(progress.subtasks[1].status, SubtaskStatus::Failing);
         assert_eq!(progress.subtasks[2].status, SubtaskStatus::Pending);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    // ========================================
+    // extract_score tests
+    // ========================================
+
+    #[test]
+    fn extract_score_pattern1_explicit_x_out_of_100() {
+        assert_eq!(extract_score("总评分 78/100"), Some(78));
+        assert_eq!(extract_score("得分：85 / 100"), Some(85));
+        assert_eq!(extract_score("score: 92.5/100"), Some(93));
+    }
+
+    #[test]
+    fn extract_score_pattern2_bold_score_100() {
+        assert_eq!(extract_score("**评分: 78/100**\n其他内容"), Some(78));
+        assert_eq!(extract_score("**Score: 85/100**"), Some(85));
+    }
+
+    #[test]
+    fn extract_score_pattern3_total_score_table() {
+        // Markdown table row with 总分
+        let input = "| **总分** | | **8.5** |";
+        assert_eq!(extract_score(input), Some(85));
+
+        // Arrow format
+        let input2 = "总分 → 7.8";
+        assert_eq!(extract_score(input2), Some(78));
+    }
+
+    #[test]
+    fn extract_score_pattern4_x_out_of_10() {
+        assert_eq!(extract_score("评分: 8/10"), Some(80));
+        assert_eq!(extract_score("得分 7.5 / 10"), Some(75));
+        // Should not match X/100 as pattern 4
+        assert_eq!(extract_score("85/100"), Some(85)); // matched by pattern 1
+    }
+
+    #[test]
+    fn extract_score_pattern5_bold_score_plain() {
+        assert_eq!(extract_score("**评分: 78**"), Some(78));
+        assert_eq!(extract_score("**Score: 8**"), Some(80)); // ≤10 → ×10
+        assert_eq!(extract_score("**评分: 0**"), Some(0));
+    }
+
+    #[test]
+    fn extract_score_pattern6_plain_score_colon() {
+        assert_eq!(extract_score("评分: 85"), Some(85));
+        assert_eq!(extract_score("Score: 7"), Some(70)); // ≤10 → ×10
+        assert_eq!(extract_score("Score: 0"), Some(0));
+    }
+
+    #[test]
+    fn extract_score_pattern6_excludes_dimension_lines() {
+        // Lines with 各维度 or 维度 should be excluded
+        let input = "各维度评分: 80\n评分: 75";
+        assert_eq!(extract_score(input), Some(75));
+    }
+
+    #[test]
+    fn extract_score_no_match() {
+        assert_eq!(extract_score("没有任何评分内容"), None);
+        assert_eq!(extract_score(""), None);
+    }
+
+    #[test]
+    fn extract_score_decimal_rounding() {
+        assert_eq!(extract_score("78.6/100"), Some(79));
+        assert_eq!(extract_score("78.4/100"), Some(78));
+    }
+
+    #[test]
+    fn extract_score_pattern1_takes_priority() {
+        // When multiple patterns match, pattern 1 should win
+        let input = "**评分: 60**\n总分 85/100";
+        assert_eq!(extract_score(input), Some(85));
+    }
+
+    // ========================================
+    // extract_review_summary tests
+    // ========================================
+
+    #[test]
+    fn extract_review_summary_returns_context_around_score() {
+        let review = "## 审核报告\n\n总体评价\n\n**评分: 78/100**\n\n代码质量不错";
+        let summary = extract_review_summary(review);
+        assert!(summary.is_some());
+        let s = summary.unwrap();
+        assert!(s.contains("总体评价"));
+        assert!(s.contains("78/100"));
+        assert!(s.contains("代码质量不错"));
+    }
+
+    #[test]
+    fn extract_review_summary_none_for_no_score() {
+        assert_eq!(
+            extract_review_summary("just some text\nno scores here"),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_review_summary_limits_to_three_lines() {
+        let review = "line1\nline2\nline3\n评分: 85\nline5\nline6\nline7";
+        let summary = extract_review_summary(review).unwrap();
+        let count = summary.lines().count();
+        assert!(
+            count <= 3,
+            "summary should have at most 3 lines, got {count}"
+        );
+    }
+
+    #[test]
+    fn extract_review_summary_prefers_immediate_non_empty_neighbors() {
+        let review = "封面标题\n\n章节标题\n\n评分: 85\n\n关键问题：测试覆盖不足\n\n收尾段落";
+        let summary = extract_review_summary(review).unwrap();
+
+        assert_eq!(summary, "章节标题\n评分: 85\n关键问题：测试覆盖不足");
+    }
+
+    #[test]
+    fn extract_review_summary_supports_total_score_lines() {
+        let review = "总体评价\n| **总分** | | **8.5** |\n建议补充边界测试";
+        let summary = extract_review_summary(review).unwrap();
+
+        assert_eq!(
+            summary,
+            "总体评价\n| **总分** | | **8.5** |\n建议补充边界测试"
+        );
+    }
+
+    // ========================================
+    // find_latest_review_content tests
+    // ========================================
+
+    #[test]
+    fn find_latest_review_content_picks_highest_iteration() {
+        let dir = create_temp_project_dir("find-review");
+        fs::write(
+            dir.join("iteration-1-codex-review.log"),
+            "评分: 60/100\n旧审核",
+        )
+        .expect("write");
+        fs::write(
+            dir.join("iteration-3-claude-review.log"),
+            "**评分: 85/100**\n新审核内容",
+        )
+        .expect("write");
+        fs::write(dir.join("iteration-2-claude.log"), "implementation only").expect("write");
+
+        let content = find_latest_review_content(&dir);
+        assert!(content.is_some());
+        assert!(content.unwrap().contains("85/100"));
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn find_latest_review_content_returns_none_when_no_review() {
+        let dir = create_temp_project_dir("find-review-none");
+        fs::write(dir.join("iteration-1-claude.log"), "implementation").expect("write");
+
+        assert!(find_latest_review_content(&dir).is_none());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn build_iteration_progress_includes_score_from_review() {
+        let dir = create_temp_project_dir("build-progress-score");
+        fs::write(
+            dir.join("tasks.json"),
+            r#"{"issueNumber": 42, "subtasks": [
+                {"id": "T-001", "title": "A", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false}
+            ]}"#,
+        )
+        .expect("write");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-1-claude.log"), "").expect("write");
+        fs::write(
+            dir.join("iteration-1-codex-review.log"),
+            "## 审核报告\n\n总体评价\n\n**评分: 78/100**\n\n代码质量不错",
+        )
+        .expect("write");
+        fs::write(dir.join("terminal.log"), "[time] 🔄 迭代 1/16\n").expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.last_score, Some(78));
+        assert_eq!(progress.passing_score, 85);
+        assert!(progress.review_summary.is_some());
+        let summary = progress.review_summary.unwrap();
+        assert!(summary.contains("78/100"));
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn build_iteration_progress_no_score_when_no_review() {
+        let dir = create_temp_project_dir("build-progress-no-score");
+        fs::write(
+            dir.join("tasks.json"),
+            r#"{"issueNumber": 42, "subtasks": [
+                {"id": "T-001", "title": "A", "description": "", "acceptanceCriteria": [], "priority": 1, "passes": false}
+            ]}"#,
+        )
+        .expect("write");
+        fs::write(dir.join("planning.log"), "").expect("write");
+        fs::write(dir.join("iteration-1-claude.log"), "implementation").expect("write");
+        fs::write(dir.join("terminal.log"), "[time] 🔄 迭代 1/16\n").expect("write");
+
+        let progress = build_iteration_progress(&dir);
+
+        assert_eq!(progress.last_score, None);
+        assert_eq!(progress.review_summary, None);
 
         fs::remove_dir_all(dir).expect("cleanup");
     }

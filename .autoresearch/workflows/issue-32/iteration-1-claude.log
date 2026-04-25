@@ -1,0 +1,39 @@
+## Summary
+
+### What was implemented
+
+**T-001: Rust 侧实现评分解析函数 extract_score()**
+
+#### Changes made:
+
+1. **`desktop_app/src-tauri/Cargo.toml`** — Added `regex = "1"` dependency
+
+2. **`desktop_app/src-tauri/src/lib.rs`** — Added 3 new functions + 13 new tests:
+
+   - **`extract_score(review: &str) -> Option<i32>`** (line 223) — Mirrors all 6 regex patterns from `lib/scoring.sh`:
+     - Pattern 1: `X/100` (explicit percentage)
+     - Pattern 2: `**评分: X/100**` / `**Score: X/100**` (bold markdown)
+     - Pattern 3: 总分 table rows (`| **总分** | ... |` or `总分 → X`)
+     - Pattern 4: `X/10` with `\b` word boundary (converted ×10)
+     - Pattern 5: `**评分: X**` / `**Score: X**` (≤10 → ×10)
+     - Pattern 6: `评分: X` / `Score: X` excluding 维度 lines (≤10 → ×10)
+   
+   - **`parse_score_str(s: &str) -> Option<i32>`** — Integer score parser
+   - **`parse_score_str_scaled(s: &str, factor: f64) -> Option<i32>`** — Multiplies before rounding (matches shell's `awk` behavior for decimal scores like `8.5 * 10 = 85`)
+   
+   - **`extract_review_summary(review: &str) -> Option<String>`** (line 318) — Extracts up to 3 non-empty lines around the first score-containing line
+
+   - **13 unit tests** covering all 6 patterns, edge cases (no match, decimal rounding, pattern priority, dimension line exclusion, summary extraction)
+
+#### Verification:
+- `cargo fmt --check` — pass
+- `cargo clippy -W clippy::all` — only expected `dead_code` warnings (functions not yet wired to Tauri commands)
+- `cargo test` — 50/50 pass
+
+## Learnings
+
+- **踩坑**: Rust `regex` crate 不支持 lookahead `(?!\d)` — 改用 `\b` word boundary 实现同样效果
+- **踩坑**: 对于小数评分（如 `8.5/10`），必须先乘以系数再取整（`(8.5 * 10).round() = 85`），而不是先取整再乘（`round(8.5) * 10 = 90`）。这是因为 Rust 的 `f64::round()` 对 `.5` 的处理是远离零取整
+- **模式**: 项目中所有 Rust 代码都在单文件 `lib.rs` 中，用 comment banner 分隔逻辑区域
+- **模式**: 纯函数抽取用于测试（如 `parse_score_str`），与 Tauri command 层分离
+- **经验**: `cargo fmt` 已自动修复了一些预先存在的格式问题（如 import 排序、行长度），在 `cargo fmt --check` 时会报出来
