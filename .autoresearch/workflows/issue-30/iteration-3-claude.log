@@ -1,0 +1,29 @@
+All 4 fixes are complete. Here's a summary of what was done:
+
+### Changes Made
+
+**1. Search keyword highlighting** (`LogViewer.tsx`)
+- Added `escapeRegExp` helper and `HighlightedText` component that splits text on the search query and wraps matches in `<mark className="bg-yellow-400/40 text-inherit">`
+- Updated the log line rendering to use `<HighlightedText>` instead of plain text
+
+**2. 5000-line log truncation** (`logViewerStore.ts`)
+- Added `MAX_LOG_LINES = 5000` constant
+- `buildLogEntries` now keeps only the last 5000 lines, with `lineNumber` reflecting the actual position in the original file
+
+**3. Memoized `buildLogEntries`** (`LogViewer.tsx`)
+- Split into two `useMemo` calls: `totalEntries` (memoized on `rawText`) and `visibleEntries` (memoized on `totalEntries` + filters)
+- Footer now uses `totalEntries.length` instead of re-calling `buildLogEntries(rawText).length`
+
+**4. Fixed React key** (`LogViewer.tsx`)
+- Changed from `key={\`${entry.lineNumber}-${entry.text}\`}` to `key={entry.lineNumber}` (unique within a log file, avoids duplicate keys from repeated log lines)
+
+### Tests
+- All 8 frontend tests pass (including 2 new truncation tests)
+- All 18 Rust backend tests pass
+- TypeScript type check clean
+
+## Learnings
+
+- **踩坑**: 搜索过滤（filter）和搜索高亮（highlight）是两个独立需求——仅实现 filter 不满足"高亮匹配项"的验收条件
+- **模式**: 当组件中多处使用同一个计算结果时，应将 `useMemo` 拆分为两层（raw → entries → filtered），避免在 JSX 中重复调用纯函数
+- **经验**: 日志类组件中 React key 不要拼接行文本——日志中空行和重复输出非常常见，会导致重复 key

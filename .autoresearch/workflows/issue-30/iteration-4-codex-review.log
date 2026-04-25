@@ -1,0 +1,4988 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc250-4d16-7621-8a71-3807652bf572
+--------
+user
+审核 Issue #30 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 实时日志查看器
+
+
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+# Issue #30 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 2 - 2026-04-25
+
+- **Agent**: codex
+- **类型**: 审核+修复
+- **评分**: 78/100
+
+- **审核要点**:
+
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc23a-0eac-7151-94c0-eb2cdefffb14
+--------
+user
+审核 Issue #30 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 实时日志查看器
+
+
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc23a-0eac-7151-94c0-eb2cdefffb14
+--------
+user
+审核 Issue #30 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 实时日志查看器
+
+
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+
+## Iteration 3 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复
+- **评分**: 82/100
+
+- **审核要点**:
+
+Confirmed: `buildLogEntries(rawText)` is called again at line 426 on every render without memoization.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #30
+- 标题: [desktop-app] 实时日志查看器
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 82/100**
+
+整体实现质量较好，后端 Rust 代码结构清晰、安全性到位（路径遍历防护、文件名验证），前端 Zustand store 的可测试性设计（依赖注入工厂模式）和状态保持逻辑处理得当。但存在几个需要修复的问题：缺少 Issue 要求的搜索高亮功能、缺少 5000 行日志截断保护、`buildLogEntries` 在 footer 中重复调用导致性能问题。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少搜索关键词高亮
+
+**位置**: `desktop_app/src/components/LogView
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: `logViewerStore` 使用工厂函数 `createLogViewerStore(overrides)` 注入 `isTauri` 和 `invoke` 依赖，使得 Node.js 环境可以直接测试 Zustand store 逻辑，无需浏览器运行时。这与 `runStore` 和 `runConfigStore` 的模式一致。
+- **踩坑**: Issue 验收条件中的"高亮匹配项"和"5000 行限制"容易被忽略——搜索过滤（filter）和搜索高亮（highlight）是两个不同的功能。
+- **经验**: 后端 Rust 的日志源排序逻辑（`sort_log_sources`）通过 `iteration_number()` 解析数字前缀实现自然排序，避免了字典序将 `iteration-10` 排在 `iteration-2` 前面的问题——这是一个值得在 CLAUDE.md 中记录的约定。
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我先定位 Issue #30 的相关实现、测试和历史经验，确认这次审核是基于当前工作区状态而不是上次结论复述。
+exec
+/bin/zsh -lc 'pwd && rg -n "Issue #30|实时日志查看器|log viewer|LogViewer|logViewer|log viewer" -S .' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch
+./desktop_app/src/CLAUDE.md:87:- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+./desktop_app/src/CLAUDE.md:89:- **日志轮询**: `LogViewer` 需要同时轮询“日志源列表”和“当前选中文件内容”；否则运行中新增的 iteration 日志文件不会出现在下拉列表里
+./desktop_app/src/CLAUDE.md:130:## LogViewer 约定
+./docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+./desktop_app/src-tauri/src/lib.rs:892:        assert_eq!(error, "Workflow logs for Issue #30 not found");
+./desktop_app/tests/logViewerStore.test.mjs:6:  createLogViewerStore,
+./desktop_app/tests/logViewerStore.test.mjs:8:} from '../src/stores/logViewerStore.ts';
+./desktop_app/tests/logViewerStore.test.mjs:41:  const store = createLogViewerStore({
+./desktop_app/tests/logViewerStore.test.mjs:73:  const store = createLogViewerStore({
+./desktop_app/tests/logViewerStore.test.mjs:106:  const store = createLogViewerStore({
+./desktop_app/tests/logViewerStore.test.mjs:143:  const store = createLogViewerStore({
+./desktop_app/src/components/IssueDetailPanel.tsx:14:import LogViewer from './LogViewer';
+./desktop_app/src/components/IssueDetailPanel.tsx:354:          <LogViewer issueNumber={issue.number} projectPath={projectPath} />
+./desktop_app/src/components/LogViewer.tsx:8:  useLogViewerStore,
+./desktop_app/src/components/LogViewer.tsx:9:} from '../stores/logViewerStore';
+./desktop_app/src/components/LogViewer.tsx:11:interface LogViewerProps {
+./desktop_app/src/components/LogViewer.tsx:182:export default function LogViewer({
+./desktop_app/src/components/LogViewer.tsx:185:}: LogViewerProps): JSX.Element {
+./desktop_app/src/components/LogViewer.tsx:214:  } = useLogViewerStore();
+./desktop_app/src/stores/logViewerStore.ts:37:interface LogViewerDeps {
+./desktop_app/src/stores/logViewerStore.ts:46:interface LogViewerState {
+./desktop_app/src/stores/logViewerStore.ts:193:function createLogViewerDeps(
+./desktop_app/src/stores/logViewerStore.ts:194:  overrides: Partial<LogViewerDeps> = {}
+./desktop_app/src/stores/logViewerStore.ts:195:): LogViewerDeps {
+./desktop_app/src/stores/logViewerStore.ts:203:export function createLogViewerStore(
+./desktop_app/src/stores/logViewerStore.ts:204:  overrides: Partial<LogViewerDeps> = {}
+./desktop_app/src/stores/logViewerStore.ts:206:  const deps = createLogViewerDeps(overrides);
+./desktop_app/src/stores/logViewerStore.ts:208:  return create<LogViewerState>((set, get) => ({
+./desktop_app/src/stores/logViewerStore.ts:393:export const useLogViewerStore = createLogViewerStore();
+
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M desktop_app/src-tauri/CLAUDE.md
+ M desktop_app/src-tauri/src/lib.rs
+ M desktop_app/src/CLAUDE.md
+ M desktop_app/src/components/IssueDetailPanel.tsx
+?? .autoresearch/workflows/issue-30/
+?? desktop_app/src/components/LogViewer.tsx
+?? desktop_app/src/stores/logViewerStore.ts
+?? desktop_app/tests/logViewerStore.test.mjs
+
+exec
+/bin/zsh -lc "rg --files | rg \"CLAUDE\\.md"'$|progress'"\\.md"'$|desktop_app|log"' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+CLAUDE.md
+lib/CLAUDE.md
+lib/agent_logic.sh
+desktop_app/src/vendor/react-markdown.tsx
+desktop_app/src/CLAUDE.md
+desktop_app/src/pages/DashboardPage.tsx
+desktop_app/src/pages/SettingsPage.tsx
+desktop_app/src/pages/IssuesPage.tsx
+desktop_app/src/pages/HistoryPage.tsx
+desktop_app/src/assets/react.svg
+desktop_app/src/vite-env.d.ts
+desktop_app/src/components/IssueDetailPanel.tsx
+desktop_app/src/components/issueRunRequest.ts
+desktop_app/src/components/RunConfigPanel.tsx
+desktop_app/src/components/Sidebar.tsx
+desktop_app/src/components/MarkdownRenderer.tsx
+desktop_app/src/components/RightPanel.tsx
+desktop_app/src/components/AgentSelector.tsx
+desktop_app/src/components/AppShell.tsx
+desktop_app/src/components/LogViewer.tsx
+desktop_app/src/index.css
+desktop_app/src/stores/agentStore.ts
+desktop_app/src/stores/issueStore.ts
+desktop_app/src/stores/runStore.ts
+desktop_app/src/stores/projectStore.ts
+desktop_app/src/stores/runConfigStore.ts
+desktop_app/src/stores/logViewerStore.ts
+desktop_app/src/main.tsx
+desktop_app/src/App.tsx
+desktop_app/CLAUDE.md
+desktop_app/vite.config.ts
+desktop_app/eslint.config.js
+desktop_app/tsconfig.json
+desktop_app/src-tauri/src/main.rs
+desktop_app/src-tauri/src/lib.rs
+desktop_app/src-tauri/CLAUDE.md
+desktop_app/src-tauri/icons/128x128@2x.png
+desktop_app/src-tauri/icons/Square71x71Logo.png
+desktop_app/src-tauri/icons/Square44x44Logo.png
+desktop_app/src-tauri/icons/32x32.png
+desktop_app/src-tauri/icons/Square284x284Logo.png
+desktop_app/src-tauri/icons/128x128.png
+desktop_app/src-tauri/icons/Square142x142Logo.png
+desktop_app/src-tauri/icons/icon.ico
+desktop_app/src-tauri/icons/Square310x310Logo.png
+desktop_app/src-tauri/icons/Square89x89Logo.png
+desktop_app/src-tauri/icons/Square107x107Logo.png
+desktop_app/src-tauri/icons/StoreLogo.png
+desktop_app/src-tauri/icons/icon.icns
+desktop_app/src-tauri/icons/Square150x150Logo.png
+desktop_app/src-tauri/icons/Square30x30Logo.png
+desktop_app/src-tauri/icons/icon.png
+desktop_app/src-tauri/build.rs
+desktop_app/src-tauri/Cargo.lock
+desktop_app/src-tauri/capabilities/default.json
+desktop_app/src-tauri/tauri.conf.json
+desktop_app/src-tauri/Cargo.toml
+desktop_app/package.json
+desktop_app/package-lock.json
+desktop_app/public/tauri.svg
+desktop_app/public/vite.svg
+desktop_app/ui-verify-before.png
+desktop_app/README.md
+desktop_app/tests/runConfigStore.test.mjs
+desktop_app/tests/issueRunRequest.test.mjs
+desktop_app/tests/logViewerStore.test.mjs
+desktop_app/tests/runStore.test.mjs
+desktop_app/index.html
+desktop_app/tsconfig.node.json
+desktop_app/pnpm-lock.yaml
+tests/CLAUDE.md
+tests/test_agent_logic.sh
+
+codex
+我已经看到这次实现主要集中在 `desktop_app` 的前后端两侧，下一步会对照 Issue 需求、组件实现和测试覆盖逐项核对。
+exec
+/bin/zsh -lc "sed -n '120,170p' desktop_app/src/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '96,140p' docs/desktop-app-prd-to-issues.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+- `ConfigCompleteNotification`: 配置完整提示（配置齐全时显示）
+- `CheckIcon`/`XIcon`: 状态图标组件
+
+### 样式约定
+
+- 配置存在：绿色主题（`bg-green-50`, `text-green-700`, `border-green-200`）
+- 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+- 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+## LogViewer 约定
+
+### 性能
+
+- `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+- `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+
+### 搜索高亮
+
+- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
+- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
+
+### React Key
+
+- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+ succeeded in 0ms:
+└── #27 Issue 详情查看
+
+P4 进程控制 (2)
+├── #28 run.sh 进程管理（启动/停止）
+└── #29 运行参数配置 UI
+
+P5 实时监控 (4)
+├── #30 实时日志查看器
+├── #31 迭代进度与阶段展示
+├── #32 评分提取与展示
+└── #33 评分趋势折线图
+
+P6 配置 (1)
+└── #34 配置文件编辑器
+
+P7 历史 (2)
+├── #35 处理历史列表
+└── #36 历史详情查看与日志导出
+
+P8 PR (2)
+├── #37 PR 信息查看与 Diff 展示
+└── #38 PR 操作（合并/关闭）
+
+P9 系统集成 (2)
+├── #39 系统托盘集成
+└── #40 桌面通知系统
+```
+
+### 依赖关系图
+
+```
+#22 (脚手架)
+ ├── #23 (布局)
+ ├── #24 (目录选择) ── #26 (Issue 列表) ── #27 (Issue 详情)
+ │                 ── #34 (配置编辑器)
+ │                 ── #35 (历史列表) ── #36 (历史详情)
+ │                 ── #37 (PR 查看) ── #38 (PR 操作)
+ ├── #25 (Agent 选择器) ── #29 (参数 UI) ── #28 (进程管理)
+ │                                              ├── #30 (日志查看器)
+ │                                              ├── #31 (迭代进度) ── #32 (评分) ── #33 (趋势图)
+ │                                              │                 ── #40 (通知)
+ │                                              └── ...
+ └── #39 (系统托盘)
+```
+
+
+exec
+/bin/zsh -lc "sed -n '1,260p' desktop_app/src/components/LogViewer.tsx" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,240p' desktop_app/tests/logViewerStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  buildLogEntries,
+  classifyLogLevel,
+  createLogViewerStore,
+  filterLogEntries,
+} from '../src/stores/logViewerStore.ts';
+
+function createInvokeMock(handlers) {
+  return async (cmd) => {
+    const handler = handlers[cmd];
+    if (!handler) {
+      throw new Error(`Unhandled command: ${cmd}`);
+    }
+    return handler();
+  };
+}
+
+test('classifyLogLevel detects info, warn, and error lines', () => {
+  assert.equal(classifyLogLevel('[2026-04-25 09:21:17] 调用 codex'), 'info');
+  assert.equal(classifyLogLevel('Warning: retrying request'), 'warn');
+  assert.equal(classifyLogLevel('❌ 构建失败'), 'error');
+});
+
+test('filterLogEntries applies search query and level filters together', () => {
+  const entries = buildLogEntries('start\nWarning: retry\nbuild failed');
+  const filtered = filterLogEntries(entries, 'retry', {
+    info: true,
+    warn: true,
+    error: false,
+  });
+
+  assert.deepEqual(
+    filtered.map((entry) => entry.text),
+    ['Warning: retry']
+  );
+});
+
+test('loadSources prepends live output and prefers terminal log when not running', async () => {
+  const store = createLogViewerStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      list_issue_log_sources: () => [
+        {
+          id: 'iteration-2-codex-review.log',
+          label: 'iteration-2-codex-review.log',
+          kind: 'iteration',
+          updated_at: '10',
+          size_bytes: 10,
+        },
+        {
+          id: 'terminal.log',
+          label: '终端日志',
+          kind: 'terminal',
+          updated_at: '20',
+          size_bytes: 20,
+        },
+      ],
+    }),
+  });
+
+  await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+
+  assert.deepEqual(
+    store.getState().sources.map((source) => source.id),
+    ['live-output', 'iteration-2-codex-review.log', 'terminal.log']
+  );
+  assert.equal(store.getState().selectedSourceId, 'terminal.log');
+});
+
+test('loadSources prefers live output for active issue and refreshSelectedSource caches content', async () => {
+  const store = createLogViewerStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      list_issue_log_sources: () => [
+        {
+          id: 'terminal.log',
+          label: '终端日志',
+          kind: 'terminal',
+          updated_at: '20',
+          size_bytes: 20,
+        },
+      ],
+      read_issue_log_content: () => ({
+        source_id: 'terminal.log',
+        text: 'line one\nline two',
+        updated_at: '30',
+      }),
+    }),
+  });
+
+  await store.getState().loadSources('/tmp/project', 30, { preferLive: true });
+  assert.equal(store.getState().selectedSourceId, 'live-output');
+
+  store.getState().selectSource('terminal.log');
+  await store.getState().refreshSelectedSource('/tmp/project', 30);
+
+  assert.equal(
+    store.getState().sourceContents['terminal.log'].text,
+    'line one\nline two'
+  );
+});
+
+test('loadSources preserves viewer state while refreshing the same issue', async () => {
+  const store = createLogViewerStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      list_issue_log_sources: () => [
+        {
+          id: 'terminal.log',
+          label: '终端日志',
+          kind: 'terminal',
+          updated_at: '20',
+          size_bytes: 20,
+        },
+        {
+          id: 'iteration-2-codex-review.log',
+          label: 'iteration-2-codex-review.log',
+          kind: 'iteration',
+          updated_at: '30',
+          size_bytes: 30,
+        },
+      ],
+    }),
+  });
+
+  await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+  store.getState().selectSource('iteration-2-codex-review.log');
+  store.getState().setSearchQuery('failed');
+  store.getState().setAutoScroll(false);
+  store.getState().markScrollPending(true);
+
+  await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+
+  assert.equal(store.getState().selectedSourceId, 'iteration-2-codex-review.log');
+  assert.equal(store.getState().searchQuery, 'failed');
+  assert.equal(store.getState().autoScroll, false);
+  assert.equal(store.getState().hasPendingScroll, true);
+});
+
+test('toggleLevel keeps at least one log level enabled', () => {
+  const store = createLogViewerStore({
+    isTauri: false,
+    invoke: async () => {
+      throw new Error('invoke should not be called');
+    },
+  });
+
+  store.getState().toggleLevel('info');
+  store.getState().toggleLevel('warn');
+  store.getState().toggleLevel('error');
+
+  assert.deepEqual(store.getState().levelFilters, {
+    info: false,
+    warn: false,
+    error: true,
+  });
+});
+
+test('buildLogEntries truncates to last 5000 lines for large input', () => {
+  const lineCount = 6000;
+  const lines = Array.from({ length: lineCount }, (_, i) => `line ${i + 1}`);
+  const text = lines.join('\n');
+  const entries = buildLogEntries(text);
+
+  assert.equal(entries.length, 5000);
+  assert.equal(entries[0].lineNumber, 1001);
+  assert.equal(entries[0].text, 'line 1001');
+  assert.equal(entries[entries.length - 1].lineNumber, 6000);
+  assert.equal(entries[entries.length - 1].text, 'line 6000');
+});
+
+test('buildLogEntries keeps all lines when under 5000', () => {
+  const entries = buildLogEntries('a\nb\nc');
+  assert.equal(entries.length, 3);
+  assert.equal(entries[0].lineNumber, 1);
+  assert.equal(entries[2].lineNumber, 3);
+});
+
+ succeeded in 0ms:
+import { useEffect, useMemo, useRef, type JSX } from 'react';
+import { useRunStore } from '../stores/runStore';
+import {
+  buildLogEntries,
+  DEFAULT_SELECTED_SOURCE_ID,
+  filterLogEntries,
+  type LogLevel,
+  useLogViewerStore,
+} from '../stores/logViewerStore';
+
+interface LogViewerProps {
+  issueNumber: number;
+  projectPath: string | null;
+}
+
+function SearchIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0a7 7 0 0114 0z"
+      />
+    </svg>
+  );
+}
+
+function TerminalIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 9l3 3-3 3m5 0h3M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+      />
+    </svg>
+  );
+}
+
+function PauseIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M7 5h3v14H7zm7 0h3v14h-3z" />
+    </svg>
+  );
+}
+
+function PlayIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M8 5.14v13.72a1 1 0 001.5.86l10.29-6.86a1 1 0 000-1.72L9.5 4.28A1 1 0 008 5.14z" />
+    </svg>
+  );
+}
+
+function LevelBadge({
+  level,
+  isActive,
+  onClick,
+}: {
+  level: LogLevel;
+  isActive: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  const styleMap: Record<LogLevel, string> = {
+    info: isActive
+      ? 'border-slate-700 bg-slate-700 text-white'
+      : 'border-slate-600 text-slate-300',
+    warn: isActive
+      ? 'border-amber-400 bg-amber-400 text-slate-950'
+      : 'border-amber-500/60 text-amber-300',
+    error: isActive
+      ? 'border-rose-500 bg-rose-500 text-white'
+      : 'border-rose-500/60 text-rose-300',
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${styleMap[level]}`}
+    >
+      {level.toUpperCase()}
+    </button>
+  );
+}
+
+function sourceDescription(kind: string): string {
+  switch (kind) {
+    case 'live':
+      return '来自当前 run.sh 进程的 stdout/stderr';
+    case 'terminal':
+      return '`.autoresearch/workflows/issue-N/terminal.log`';
+    case 'summary':
+      return '工作流摘要与评分记录';
+    case 'iteration':
+      return '单轮 agent 日志';
+    default:
+      return '工作流文件';
+  }
+}
+
+function formatUpdatedAt(value: string | null): string {
+  if (!value) {
+    return '未记录';
+  }
+
+  const timestamp = Number(value) * 1000;
+  if (Number.isNaN(timestamp)) {
+    return value;
+  }
+
+  return new Date(timestamp).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function lineClassName(level: LogLevel): string {
+  switch (level) {
+    case 'warn':
+      return 'text-amber-200';
+    case 'error':
+      return 'text-rose-200';
+    case 'info':
+    default:
+      return 'text-slate-100';
+  }
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function HighlightedText({ text, query }: { text: string; query: string }): JSX.Element {
+  if (!query.trim()) return <>{text || ' '}</>;
+  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark key={i} className="bg-yellow-400/40 text-inherit">{part}</mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
+function isNearBottom(element: HTMLDivElement): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+}
+
+export default function LogViewer({
+  issueNumber,
+  projectPath,
+}: LogViewerProps): JSX.Element {
+  const outputContainerRef = useRef<HTMLDivElement | null>(null);
+  const sourceRefreshTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  const {
+    status: runStatus,
+    activeIssueNumber,
+    outputLines,
+  } = useRunStore();
+  const {
+    sources,
+    selectedSourceId,
+    searchQuery,
+    levelFilters,
+    autoScroll,
+    hasPendingScroll,
+    sourceContents,
+    isLoadingSources,
+    isLoadingContent,
+    error,
+    loadSources,
+    refreshSelectedSource,
+    selectSource,
+    setSearchQuery,
+    toggleLevel,
+    setAutoScroll,
+    markScrollPending,
+    clearError,
+    clearIssue,
+  } = useLogViewerStore();
+
+  const isCurrentIssueRunning =
+    activeIssueNumber === issueNumber &&
+    (runStatus === 'running' || runStatus === 'stopping');
+  const selectedSource =
+    sources.find((source) => source.id === selectedSourceId) ?? sources[0];
+
+  const rawText =
+    selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
+      ? outputLines.join('\n')
+      : (sourceContents[selectedSourceId]?.text ?? '');
+  const totalEntries = useMemo(
+    () => buildLogEntries(rawText),
+    [rawText]
+  );
+  const visibleEntries = useMemo(
+    () => filterLogEntries(totalEntries, searchQuery, levelFilters),
+    [totalEntries, searchQuery, levelFilters]
+  );
+
+  useEffect(() => {
+    if (!projectPath) {
+      if (sourceRefreshTimerRef.current !== null) {
+        window.clearInterval(sourceRefreshTimerRef.current);
+        sourceRefreshTimerRef.current = null;
+      }
+      clearIssue();
+      return;
+    }
+
+    void loadSources(projectPath, issueNumber, {
+      preferLive: isCurrentIssueRunning,
+    });
+
+    if (sourceRefreshTimerRef.current !== null) {
+      window.clearInterval(sourceRefreshTimerRef.current);
+    }
+
+    sourceRefreshTimerRef.current = window.setInterval(() => {
+      void loadSources(projectPath, issueNumber, {
+        preferLive: isCurrentIssueRunning,
+      });
+    }, 1500);
+
+    return () => {
+      if (sourceRefreshTimerRef.current !== null) {
+
+exec
+/bin/zsh -lc "sed -n '1,260p' desktop_app/src/stores/logViewerStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { create } from 'zustand';
+import { isTauri as issueStoreIsTauri } from './issueStore.ts';
+
+export type LogLevel = 'info' | 'warn' | 'error';
+export type LogSourceKind = 'live' | 'terminal' | 'summary' | 'iteration' | 'file';
+
+export interface IssueLogSource {
+  id: string;
+  label: string;
+  kind: Exclude<LogSourceKind, 'live'>;
+  updated_at: string | null;
+  size_bytes: number;
+}
+
+export interface IssueLogContent {
+  source_id: string;
+  text: string;
+  updated_at: string | null;
+}
+
+export interface LogSourceOption {
+  id: string;
+  label: string;
+  kind: LogSourceKind;
+  updatedAt: string | null;
+  sizeBytes: number | null;
+}
+
+export interface LogEntry {
+  lineNumber: number;
+  text: string;
+  level: LogLevel;
+}
+
+type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+
+interface LogViewerDeps {
+  isTauri: boolean;
+  invoke: InvokeFn;
+}
+
+interface LoadSourcesOptions {
+  preferLive: boolean;
+}
+
+interface LogViewerState {
+  currentIssueNumber: number | null;
+  sources: LogSourceOption[];
+  selectedSourceId: string;
+  searchQuery: string;
+  levelFilters: Record<LogLevel, boolean>;
+  autoScroll: boolean;
+  hasPendingScroll: boolean;
+  sourceContents: Record<string, IssueLogContent>;
+  isLoadingSources: boolean;
+  isLoadingContent: boolean;
+  error: string | null;
+  loadSources: (
+    _projectPath: string,
+    _issueNumber: number,
+    _options?: Partial<LoadSourcesOptions>
+  ) => Promise<void>;
+  refreshSelectedSource: (_projectPath: string, _issueNumber: number) => Promise<void>;
+  selectSource: (_sourceId: string) => void;
+  setSearchQuery: (_query: string) => void;
+  toggleLevel: (_level: LogLevel) => void;
+  setAutoScroll: (_enabled: boolean) => void;
+  markScrollPending: (_pending: boolean) => void;
+  clearError: () => void;
+  clearIssue: () => void;
+}
+
+const DEFAULT_SELECTED_SOURCE_ID = 'live-output';
+
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+function normalizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function createLiveSource(): LogSourceOption {
+  return {
+    id: DEFAULT_SELECTED_SOURCE_ID,
+    label: '当前运行输出',
+    kind: 'live',
+    updatedAt: null,
+    sizeBytes: null,
+  };
+}
+
+export function classifyLogLevel(line: string): LogLevel {
+  const normalized = line.toLowerCase();
+  if (
+    normalized.includes('error') ||
+    normalized.includes('failed') ||
+    normalized.includes('failure') ||
+    normalized.includes('fatal') ||
+    normalized.includes('❌') ||
+    normalized.includes('错误') ||
+    normalized.includes('失败')
+  ) {
+    return 'error';
+  }
+
+  if (
+    normalized.includes('warn') ||
+    normalized.includes('warning') ||
+    normalized.includes('⚠️') ||
+    normalized.includes('警告')
+  ) {
+    return 'warn';
+  }
+
+  return 'info';
+}
+
+const MAX_LOG_LINES = 5000;
+
+export function buildLogEntries(text: string): LogEntry[] {
+  if (!text) {
+    return [];
+  }
+
+  const lines = text.split(/\r?\n/);
+  const start = Math.max(0, lines.length - MAX_LOG_LINES);
+  return lines.slice(start).map((line, index) => ({
+    lineNumber: start + index + 1,
+    text: line,
+    level: classifyLogLevel(line),
+  }));
+}
+
+export function filterLogEntries(
+  entries: LogEntry[],
+  searchQuery: string,
+  levelFilters: Record<LogLevel, boolean>
+): LogEntry[] {
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  return entries.filter((entry) => {
+    if (!levelFilters[entry.level]) {
+      return false;
+    }
+    if (!normalizedQuery) {
+      return true;
+    }
+    return entry.text.toLowerCase().includes(normalizedQuery);
+  });
+}
+
+function mapBackendSource(source: IssueLogSource): LogSourceOption {
+  return {
+    id: source.id,
+    label: source.label,
+    kind: source.kind,
+    updatedAt: source.updated_at,
+    sizeBytes: source.size_bytes,
+  };
+}
+
+function nextSelectedSourceId(
+  availableSources: LogSourceOption[],
+  currentSelectedSourceId: string,
+  preferLive: boolean
+): string {
+  if (
+    currentSelectedSourceId !== DEFAULT_SELECTED_SOURCE_ID &&
+    availableSources.some((source) => source.id === currentSelectedSourceId)
+  ) {
+    return currentSelectedSourceId;
+  }
+
+  if (preferLive) {
+    return DEFAULT_SELECTED_SOURCE_ID;
+  }
+
+  const terminalSource = availableSources.find((source) => source.kind === 'terminal');
+  if (terminalSource) {
+    return terminalSource.id;
+  }
+
+  return availableSources[0]?.id ?? DEFAULT_SELECTED_SOURCE_ID;
+}
+
+function createLogViewerDeps(
+  overrides: Partial<LogViewerDeps> = {}
+): LogViewerDeps {
+  return {
+    isTauri: issueStoreIsTauri,
+    invoke: tauriInvoke,
+    ...overrides,
+  };
+}
+
+export function createLogViewerStore(
+  overrides: Partial<LogViewerDeps> = {}
+) {
+  const deps = createLogViewerDeps(overrides);
+
+  return create<LogViewerState>((set, get) => ({
+    currentIssueNumber: null,
+    sources: [createLiveSource()],
+    selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+    searchQuery: '',
+    levelFilters: {
+      info: true,
+      warn: true,
+      error: true,
+    },
+    autoScroll: true,
+    hasPendingScroll: false,
+    sourceContents: {},
+    isLoadingSources: false,
+    isLoadingContent: false,
+    error: null,
+
+    loadSources: async (
+      _projectPath: string,
+      _issueNumber: number,
+      _options: Partial<LoadSourcesOptions> = {}
+    ) => {
+      const preferLive = _options.preferLive ?? false;
+      const issueChanged = get().currentIssueNumber !== _issueNumber;
+
+      set((state) => ({
+        currentIssueNumber: _issueNumber,
+        isLoadingSources: true,
+        error: null,
+        autoScroll: issueChanged ? true : state.autoScroll,
+        hasPendingScroll: issueChanged ? false : state.hasPendingScroll,
+        selectedSourceId: issueChanged
+          ? DEFAULT_SELECTED_SOURCE_ID
+          : state.selectedSourceId,
+        sourceContents: issueChanged ? {} : state.sourceContents,
+        searchQuery: issueChanged ? '' : state.searchQuery,
+      }));
+
+      if (!deps.isTauri) {
+        set({
+          sources: [createLiveSource()],
+          selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+          isLoadingSources: false,
+          isLoadingContent: false,
+        });
+        return;
+      }
+
+      try {
+        const backendSources = await deps.invoke<IssueLogSource[]>(
+          'list_issue_log_sources',
+          {
+            projectPath: _projectPath,
+
+exec
+/bin/zsh -lc "sed -n '820,980p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+        .expect("issue detail should parse");
+
+        assert_eq!(
+            detail,
+            IssueDetail {
+                body: "Issue description".to_string(),
+                comments: vec![super::GhComment {
+                    id: "IC_kwDOA".to_string(),
+                    author: super::GhCommentAuthor {
+                        login: "alice".to_string(),
+                    },
+                    body: "first comment".to_string(),
+                    created_at: "2026-04-24T10:00:00Z".to_string(),
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn parse_issue_detail_reports_invalid_json() {
+        let error = parse_issue_detail("{invalid json").expect_err("invalid json should fail");
+
+        assert!(error.contains("Failed to parse gh output"));
+        assert!(error.contains("{invalid json"));
+    }
+
+    #[test]
+    fn issue_detail_error_maps_missing_issue() {
+        let error =
+            map_issue_detail_command_error(27, "GraphQL: Could not resolve to an issue with the number of 27.");
+
+        assert_eq!(error, "Issue #27 not found");
+    }
+
+    #[test]
+    fn issue_detail_error_preserves_other_gh_failures() {
+        let error = map_issue_detail_command_error(27, "network timeout");
+
+        assert_eq!(error, "gh issue view failed: network timeout");
+    }
+
+    #[test]
+    fn get_issue_detail_rejects_non_directory_path() {
+        let error = get_issue_detail_sync("/path/that/does/not/exist", 27)
+            .expect_err("invalid path should fail");
+
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn classify_log_source_maps_known_workflow_files() {
+        assert_eq!(classify_log_source("terminal.log"), ("terminal", "终端日志".to_string()));
+        assert_eq!(classify_log_source("log.md"), ("summary", "工作流摘要".to_string()));
+        assert_eq!(
+            classify_log_source("iteration-2-codex-review.log"),
+            ("iteration", "iteration-2-codex-review.log".to_string())
+        );
+    }
+
+    #[test]
+    fn iteration_number_extracts_numeric_prefix() {
+        assert_eq!(iteration_number("iteration-2-codex-review.log"), Some(2));
+        assert_eq!(iteration_number("iteration-10-claude.log"), Some(10));
+        assert_eq!(iteration_number("terminal.log"), None);
+    }
+
+    #[test]
+    fn workflow_issue_dir_requires_existing_issue_directory() {
+        let project_dir = create_temp_project_dir("workflow-dir");
+        let error = workflow_issue_dir(project_dir.to_string_lossy().as_ref(), 30)
+            .expect_err("missing workflow dir should fail");
+
+        assert_eq!(error, "Workflow logs for Issue #30 not found");
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn list_issue_log_sources_returns_sorted_sources() {
+        let project_dir = create_temp_project_dir("list-sources");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+        fs::write(workflow_dir.join("iteration-10-codex-review.log"), "iteration10").expect("iteration log");
+        fs::write(workflow_dir.join("iteration-2-codex-review.log"), "iteration").expect("iteration log");
+        fs::write(workflow_dir.join("terminal.log"), "terminal").expect("terminal log");
+        fs::write(workflow_dir.join("log.md"), "summary").expect("summary log");
+
+        let sources = list_issue_log_sources_sync(project_dir.to_string_lossy().as_ref(), 30)
+            .expect("sources should load");
+
+        assert_eq!(
+            sources,
+            vec![
+                IssueLogSource {
+                    id: "terminal.log".to_string(),
+                    label: "终端日志".to_string(),
+                    kind: "terminal".to_string(),
+                    updated_at: sources[0].updated_at.clone(),
+                    size_bytes: 8,
+                },
+                IssueLogSource {
+                    id: "log.md".to_string(),
+                    label: "工作流摘要".to_string(),
+                    kind: "summary".to_string(),
+                    updated_at: sources[1].updated_at.clone(),
+                    size_bytes: 7,
+                },
+                IssueLogSource {
+                    id: "iteration-2-codex-review.log".to_string(),
+                    label: "iteration-2-codex-review.log".to_string(),
+                    kind: "iteration".to_string(),
+                    updated_at: sources[2].updated_at.clone(),
+                    size_bytes: 9,
+                },
+                IssueLogSource {
+                    id: "iteration-10-codex-review.log".to_string(),
+                    label: "iteration-10-codex-review.log".to_string(),
+                    kind: "iteration".to_string(),
+                    updated_at: sources[3].updated_at.clone(),
+                    size_bytes: 11,
+                },
+            ]
+        );
+
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn resolve_issue_log_source_path_rejects_path_traversal() {
+        let project_dir = create_temp_project_dir("reject-traversal");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+
+        let error = resolve_issue_log_source_path(
+            project_dir.to_string_lossy().as_ref(),
+            30,
+            "../terminal.log",
+        )
+        .expect_err("traversal should fail");
+
+        assert_eq!(error, "Invalid log source id: ../terminal.log");
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn read_issue_log_content_reads_utf8_lossy_text() {
+        let project_dir = create_temp_project_dir("read-content");
+        let workflow_dir = project_dir.join(".autoresearch/workflows/issue-30");
+        fs::create_dir_all(&workflow_dir).expect("workflow dir should be created");
+        fs::write(workflow_dir.join("terminal.log"), b"line one\nline two").expect("terminal log");
+
+        let content = read_issue_log_content_sync(
+            project_dir.to_string_lossy().as_ref(),
+            30,
+            "terminal.log",
+        )
+        .expect("log content should load");
+
+        assert_eq!(content.source_id, "terminal.log");
+        assert_eq!(content.text, "line one\nline two");
+        assert!(content.updated_at.is_some());
+
+
+exec
+/bin/zsh -lc "sed -n '260,520p' desktop_app/src/components/LogViewer.tsx" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '260,520p' desktop_app/src/stores/logViewerStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+            projectPath: _projectPath,
+            issueNumber: _issueNumber,
+          }
+        );
+        const sources = [createLiveSource(), ...backendSources.map(mapBackendSource)];
+        const selectedSourceId = nextSelectedSourceId(
+          sources,
+          get().selectedSourceId,
+          preferLive
+        );
+
+        set((state) => {
+          const nextSourceContents =
+            selectedSourceId === state.selectedSourceId ||
+            selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
+              ? state.sourceContents
+              : Object.fromEntries(
+                  Object.entries(state.sourceContents).filter(([sourceId]) =>
+                    sources.some((source) => source.id === sourceId)
+                  )
+                );
+
+          return {
+            sources,
+            selectedSourceId,
+            sourceContents: nextSourceContents,
+            isLoadingSources: false,
+          };
+        });
+      } catch (error) {
+        set({
+          sources: [createLiveSource()],
+          selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+          isLoadingSources: false,
+          error: normalizeError(error),
+        });
+      }
+    },
+
+    refreshSelectedSource: async (_projectPath: string, _issueNumber: number) => {
+      if (!deps.isTauri) {
+        return;
+      }
+
+      const { selectedSourceId } = get();
+      if (selectedSourceId === DEFAULT_SELECTED_SOURCE_ID) {
+        return;
+      }
+
+      set({ isLoadingContent: true, error: null });
+
+      try {
+        const content = await deps.invoke<IssueLogContent>('read_issue_log_content', {
+          projectPath: _projectPath,
+          issueNumber: _issueNumber,
+          sourceId: selectedSourceId,
+        });
+
+        set((state) => ({
+          sourceContents: {
+            ...state.sourceContents,
+            [content.source_id]: content,
+          },
+          isLoadingContent: false,
+        }));
+      } catch (error) {
+        set({
+          isLoadingContent: false,
+          error: normalizeError(error),
+        });
+      }
+    },
+
+    selectSource: (_sourceId: string) => {
+      set({
+        selectedSourceId: _sourceId,
+        error: null,
+        hasPendingScroll: false,
+      });
+    },
+
+    setSearchQuery: (_query: string) => {
+      set({ searchQuery: _query });
+    },
+
+    toggleLevel: (_level: LogLevel) => {
+      set((state) => {
+        const nextLevelFilters = {
+          ...state.levelFilters,
+          [_level]: !state.levelFilters[_level],
+        };
+        if (Object.values(nextLevelFilters).some(Boolean)) {
+          return { levelFilters: nextLevelFilters };
+        }
+        return state;
+      });
+    },
+
+    setAutoScroll: (_enabled: boolean) => {
+      set({
+        autoScroll: _enabled,
+        hasPendingScroll: _enabled ? false : get().hasPendingScroll,
+      });
+    },
+
+    markScrollPending: (_pending: boolean) => {
+      set({ hasPendingScroll: _pending });
+    },
+
+    clearError: () => set({ error: null }),
+
+    clearIssue: () => {
+      set({
+        currentIssueNumber: null,
+        sources: [createLiveSource()],
+        selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+        searchQuery: '',
+        levelFilters: {
+          info: true,
+          warn: true,
+          error: true,
+        },
+        autoScroll: true,
+        hasPendingScroll: false,
+        sourceContents: {},
+        isLoadingSources: false,
+        isLoadingContent: false,
+        error: null,
+      });
+    },
+  }));
+}
+
+export const useLogViewerStore = createLogViewerStore();
+
+export { DEFAULT_SELECTED_SOURCE_ID };
+
+ succeeded in 0ms:
+      if (sourceRefreshTimerRef.current !== null) {
+        window.clearInterval(sourceRefreshTimerRef.current);
+        sourceRefreshTimerRef.current = null;
+      }
+    };
+  }, [clearIssue, isCurrentIssueRunning, issueNumber, loadSources, projectPath]);
+
+  useEffect(() => {
+    if (!projectPath || selectedSourceId === DEFAULT_SELECTED_SOURCE_ID) {
+      return;
+    }
+
+    void refreshSelectedSource(projectPath, issueNumber);
+
+    if (refreshTimerRef.current !== null) {
+      window.clearInterval(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = window.setInterval(() => {
+      void refreshSelectedSource(projectPath, issueNumber);
+    }, 1500);
+
+    return () => {
+      if (refreshTimerRef.current !== null) {
+        window.clearInterval(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [issueNumber, projectPath, refreshSelectedSource, selectedSourceId]);
+
+  useEffect(() => {
+    const element = outputContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    if (autoScroll) {
+      element.scrollTop = element.scrollHeight;
+      markScrollPending(false);
+      return;
+    }
+
+    if (!isNearBottom(element)) {
+      markScrollPending(true);
+    }
+  }, [autoScroll, markScrollPending, selectedSourceId, visibleEntries]);
+
+  const headerMeta = selectedSource
+    ? `${sourceDescription(selectedSource.kind)} · 更新于 ${formatUpdatedAt(selectedSource.updatedAt)}`
+    : '选择一个日志源开始查看';
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 text-slate-100">
+      <div className="border-b border-gray-800 px-4 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-200">
+            <TerminalIcon className="h-4 w-4" />
+            日志查看器
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedSourceId}
+              onChange={(event) => {
+                clearError();
+                selectSource(event.target.value);
+              }}
+              className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+            >
+              {sources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                const nextAutoScroll = !autoScroll;
+                setAutoScroll(nextAutoScroll);
+                if (nextAutoScroll && outputContainerRef.current) {
+                  outputContainerRef.current.scrollTop =
+                    outputContainerRef.current.scrollHeight;
+                }
+              }}
+              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                autoScroll
+                  ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+                  : 'border-gray-700 text-gray-300 hover:bg-gray-900'
+              }`}
+            >
+              {autoScroll ? (
+                <PauseIcon className="h-3.5 w-3.5" />
+              ) : (
+                <PlayIcon className="h-3.5 w-3.5" />
+              )}
+              {autoScroll ? '自动滚动中' : '已暂停滚动'}
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-2 text-xs text-gray-400">{headerMeta}</p>
+
+        <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative max-w-md flex-1">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索日志内容..."
+              className="w-full rounded-md border border-gray-700 bg-gray-900 py-2 pl-9 pr-3 text-sm text-gray-100 placeholder:text-gray-500 focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <LevelBadge
+              level="info"
+              isActive={levelFilters.info}
+              onClick={() => toggleLevel('info')}
+            />
+            <LevelBadge
+              level="warn"
+              isActive={levelFilters.warn}
+              onClick={() => toggleLevel('warn')}
+            />
+            <LevelBadge
+              level="error"
+              isActive={levelFilters.error}
+              onClick={() => toggleLevel('error')}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            {error}
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={outputContainerRef}
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          if (isNearBottom(element)) {
+            markScrollPending(false);
+            return;
+          }
+
+          if (autoScroll) {
+            setAutoScroll(false);
+          }
+        }}
+        className="relative max-h-[28rem] overflow-y-auto px-4 py-3"
+      >
+        {(isLoadingSources || isLoadingContent) && (
+          <div className="mb-3 text-xs text-blue-200">日志加载中...</div>
+        )}
+
+        {visibleEntries.length > 0 ? (
+          <div className="space-y-1 font-mono text-xs leading-6">
+            {visibleEntries.map((entry) => (
+              <div
+                key={entry.lineNumber}
+                className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3"
+              >
+                <span className="select-none text-right text-gray-500">
+                  {entry.lineNumber}
+                </span>
+                <span className={`whitespace-pre-wrap break-words ${lineClassName(entry.level)}`}>
+                  <HighlightedText text={entry.text || ' '} query={searchQuery} />
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-gray-800 bg-gray-950/80 px-4 py-6 text-sm text-gray-400">
+            {rawText
+              ? '当前过滤条件下没有匹配的日志。'
+              : selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
+                ? isCurrentIssueRunning
+                  ? '等待新的运行输出...'
+                  : '当前没有运行中的实时输出，可切换到历史日志文件。'
+                : '该日志文件当前为空。'}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-800 px-4 py-3 text-xs text-gray-400">
+        <span>
+          显示 {visibleEntries.length} / {totalEntries.length} 行
+        </span>
+        {hasPendingScroll && (
+          <button
+            type="button"
+            onClick={() => {
+              setAutoScroll(true);
+              if (outputContainerRef.current) {
+                outputContainerRef.current.scrollTop =
+                  outputContainerRef.current.scrollHeight;
+              }
+            }}
+            className="rounded-md border border-blue-400/40 px-2.5 py-1 text-blue-200 transition-colors hover:bg-blue-500/10"
+          >
+            跳到最新
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+exec
+/bin/zsh -lc "sed -n '980,1100p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+
+        fs::remove_dir_all(project_dir).expect("temp dir cleanup should succeed");
+    }
+
+    // ========================================
+    // Process management tests
+    // ========================================
+
+    #[test]
+    fn build_run_args_includes_required_options() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: Some(10),
+            agents: Some("claude,codex".to_string()),
+            passing_score: Some(90),
+            continue_mode: Some(true),
+        };
+
+        let args = build_run_args(&request);
+
+        // Check required options
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"/test/project".to_string()));
+        assert!(args.contains(&"-a".to_string()));
+        assert!(args.contains(&"claude,codex".to_string()));
+        assert!(args.contains(&"-c".to_string()));
+        assert!(args.contains(&"42".to_string()));
+        assert!(args.contains(&"10".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_omits_optional_when_none() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let args = build_run_args(&request);
+
+        assert!(args.contains(&"-p".to_string()));
+        assert!(args.contains(&"/test/project".to_string()));
+        assert!(args.contains(&"42".to_string()));
+        // Optional args should not be present
+        assert!(!args.contains(&"-a".to_string()));
+        assert!(!args.contains(&"-c".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_ignores_empty_agents() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: Some("".to_string()),
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let args = build_run_args(&request);
+
+        assert!(!args.contains(&"-a".to_string()));
+    }
+
+    #[test]
+    fn build_run_args_continue_mode_defaults_false() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let args = build_run_args(&request);
+
+        assert!(!args.contains(&"-c".to_string()));
+    }
+
+    #[test]
+    fn build_run_env_vars_includes_passing_score() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: Some(95),
+            continue_mode: None,
+        };
+
+        let env_vars = build_run_env_vars(&request);
+
+        assert_eq!(env_vars.len(), 1);
+        assert_eq!(env_vars[0].0, "PASSING_SCORE");
+        assert_eq!(env_vars[0].1, "95");
+    }
+
+    #[test]
+    fn build_run_env_vars_empty_when_no_passing_score() {
+        let request = StartRunRequest {
+            project_path: "/test/project".to_string(),
+            issue_number: 42,
+            max_iter: None,
+            agents: None,
+            passing_score: None,
+            continue_mode: None,
+        };
+
+        let env_vars = build_run_env_vars(&request);
+
+        assert!(env_vars.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_process_state_default_is_idle() {
+
+exec
+/bin/zsh -lc "sed -n '320,390p' desktop_app/src/components/IssueDetailPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <RunConfigPanel
+              defaultConfig={{
+                maxIterations: DEFAULT_MAX_ITERATIONS,
+                passingScore: DEFAULT_PASSING_SCORE,
+                continueMode: DEFAULT_CONTINUE_MODE,
+              }}
+            />
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <AgentSelector />
+            </div>
+          </div>
+
+          {!isSupported && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+            </div>
+          )}
+
+          {isSupported && !isCurrentIssueRunning && isRunActive && activeIssueNumber !== null && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              当前正在运行 Issue #{activeIssueNumber}，一次只能处理一个任务。
+            </div>
+          )}
+
+          {runError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {runError}
+            </div>
+          )}
+
+          <LogViewer issueNumber={issue.number} projectPath={projectPath} />
+        </section>
+
+        {isLoading ? (
+          <DetailSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={onRetry} />
+        ) : (
+          <>
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  描述
+                </h3>
+              </div>
+              {detail?.body.trim() ? (
+                <ReactMarkdown className="markdown-body">
+                  {detail.body}
+                </ReactMarkdown>
+              ) : (
+                <EmptyContentState title="该 Issue 暂无描述。" />
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <CommentIcon className="h-4 w-4 text-gray-400" />
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  评论
+                </h3>
+                <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">
+                  {detail?.comments.length ?? 0}
+                </span>
+              </div>
+
+              {detail && detail.comments.length > 0 ? (
+                <div className="space-y-4">
+
+codex
+实现里已经补上了上次经验里提到的三项缺口：高亮、5000 行截断、`useMemo` 缓存。现在我在查更隐蔽的问题，重点看状态隔离、轮询行为和测试是否覆盖回归点。
+exec
+/bin/zsh -lc 'rg -n "list_issue_log_sources|read_issue_log_content|resolve_issue_log_source_path|workflow_issue_dir|sort_log_sources|classify_log_source" desktop_app/src-tauri/src/lib.rs' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+267:fn workflow_issue_dir(project_path: &str, issue_number: i64) -> Result<std::path::PathBuf, String> {
+285:fn classify_log_source(filename: &str) -> (&'static str, String) {
+301:fn sort_log_sources(left: &IssueLogSource, right: &IssueLogSource) -> std::cmp::Ordering {
+330:fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
+331:    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+347:        let (kind, label) = classify_log_source(&filename);
+358:    sources.sort_by(sort_log_sources);
+362:fn resolve_issue_log_source_path(
+376:    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+385:fn read_issue_log_content_sync(
+390:    let source_path = resolve_issue_log_source_path(project_path, issue_number, source_id)?;
+441:async fn list_issue_log_sources(
+445:    tokio::task::spawn_blocking(move || list_issue_log_sources_sync(&project_path, issue_number))
+452:async fn read_issue_log_content(
+458:        read_issue_log_content_sync(&project_path, issue_number, &source_id)
+774:            list_issue_log_sources,
+775:            read_issue_log_content,
+787:        classify_log_source, get_issue_detail_sync, iteration_number, list_issue_log_sources_sync,
+788:        map_issue_detail_command_error, parse_issue_detail, read_issue_log_content_sync,
+789:        resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
+870:    fn classify_log_source_maps_known_workflow_files() {
+871:        assert_eq!(classify_log_source("terminal.log"), ("terminal", "终端日志".to_string()));
+872:        assert_eq!(classify_log_source("log.md"), ("summary", "工作流摘要".to_string()));
+874:            classify_log_source("iteration-2-codex-review.log"),
+887:    fn workflow_issue_dir_requires_existing_issue_directory() {
+889:        let error = workflow_issue_dir(project_dir.to_string_lossy().as_ref(), 30)
+897:    fn list_issue_log_sources_returns_sorted_sources() {
+906:        let sources = list_issue_log_sources_sync(project_dir.to_string_lossy().as_ref(), 30)
+947:    fn resolve_issue_log_source_path_rejects_path_traversal() {
+952:        let error = resolve_issue_log_source_path(
+964:    fn read_issue_log_content_reads_utf8_lossy_text() {
+970:        let content = read_issue_log_content_sync(
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/components/IssueDetailPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cat desktop_app/package.json' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+{
+  "name": "desktop_app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.6.0",
+    "recharts": "^2.15.3",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^7.0.4"
+  }
+}
+
+ succeeded in 0ms:
+import { type JSX } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { formatDateTime, GhIssue, IssueDetail } from '../stores/issueStore';
+import { useRunStore } from '../stores/runStore';
+import {
+  DEFAULT_CONTINUE_MODE,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  useRunConfigStore,
+} from '../stores/runConfigStore';
+import RunConfigPanel from './RunConfigPanel';
+import AgentSelector from './AgentSelector';
+import { buildIssueRunRequest } from './issueRunRequest';
+import LogViewer from './LogViewer';
+
+interface IssueDetailPanelProps {
+  issue: GhIssue | null;
+  detail: IssueDetail | null;
+  isLoading: boolean;
+  error: string | null;
+  projectPath: string | null;
+  onClose: () => void;
+  onRetry: () => void;
+}
+
+function CloseIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M6 18L18 6M6 6l12 12"
+      />
+    </svg>
+  );
+}
+
+function CommentIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z"
+      />
+    </svg>
+  );
+}
+
+function PlayIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M8 5.14v13.72a1 1 0 001.5.86l10.29-6.86a1 1 0 000-1.72L9.5 4.28A1 1 0 008 5.14z" />
+    </svg>
+  );
+}
+
+function StopIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
+function DetailSkeleton(): JSX.Element {
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="skeleton-shimmer mb-4 h-6 w-1/3 rounded bg-gray-100" />
+        <div className="skeleton-shimmer mb-3 h-4 w-full rounded bg-gray-100" />
+        <div className="skeleton-shimmer mb-3 h-4 w-11/12 rounded bg-gray-100" />
+        <div className="skeleton-shimmer h-28 w-full rounded-2xl bg-gray-50" />
+      </div>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="skeleton-shimmer mb-4 h-5 w-24 rounded bg-gray-100" />
+        <div className="space-y-4">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="skeleton-shimmer h-10 w-10 rounded-full bg-gray-200" />
+              <div className="flex-1 space-y-2">
+                <div className="skeleton-shimmer h-4 w-32 rounded bg-gray-100" />
+                <div className="skeleton-shimmer h-3 w-24 rounded bg-gray-100" />
+              </div>
+            </div>
+            <div className="skeleton-shimmer mb-2 h-4 w-full rounded bg-gray-100" />
+            <div className="skeleton-shimmer h-4 w-4/5 rounded bg-gray-100" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptySelectionState(): JSX.Element {
+  return (
+    <div className="flex h-full min-h-[420px] items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-gray-50/50 p-8 text-center">
+      <div>
+        <CommentIcon className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+        <h2 className="mb-2 text-lg font-semibold text-gray-700">选择一个 Issue</h2>
+        <p className="max-w-sm text-sm leading-6 text-gray-500">
+          从左侧列表中点击 Issue 后，这里会展示描述、评论和最新状态。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EmptyContentState({ title }: { title: string }): JSX.Element {
+  return (
+    <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-400">
+      {title}
+    </div>
+  );
+}
+
+function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}): JSX.Element {
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+      <h3 className="mb-2 text-sm font-semibold text-red-700">详情加载失败</h3>
+      <p className="mb-4 text-sm leading-6 text-red-600">{message}</p>
+      <button
+        onClick={onRetry}
+        className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+      >
+        重试
+      </button>
+    </div>
+  );
+}
+
+function avatarUrl(login: string): string {
+  return `https://github.com/${encodeURIComponent(login)}.png?size=80`;
+}
+
+function getRunStatusLabel(status: ReturnType<typeof useRunStore.getState>['status']): string {
+  switch (status) {
+    case 'running':
+      return '运行中';
+    case 'stopping':
+      return '停止中';
+    case 'finished':
+      return '已结束';
+    case 'error':
+      return '错误';
+    case 'idle':
+    default:
+      return '空闲';
+  }
+}
+
+function getRunStatusClass(status: ReturnType<typeof useRunStore.getState>['status']): string {
+  switch (status) {
+    case 'running':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    case 'stopping':
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+    case 'finished':
+      return 'border-slate-200 bg-slate-100 text-slate-700';
+    case 'error':
+      return 'border-red-200 bg-red-50 text-red-700';
+    case 'idle':
+    default:
+      return 'border-gray-200 bg-gray-100 text-gray-600';
+  }
+}
+
+function IssueDetailPanel({
+  issue,
+  detail,
+  isLoading,
+  error,
+  projectPath,
+  onClose,
+  onRetry,
+}: IssueDetailPanelProps): JSX.Element {
+  const {
+    status: runStatus,
+    activeIssueNumber,
+    exitCode,
+    error: runError,
+    isSupported,
+    startRun,
+    stopRun,
+    clearError: clearRunError,
+  } = useRunStore();
+
+  const {
+    maxIterations,
+    passingScore,
+    continueMode,
+  } = useRunConfigStore();
+
+ succeeded in 0ms:
+# desktop_app/src
+
+## Architecture
+
+- **Router**: react-router-dom v7 with BrowserRouter wrapping in main.tsx, Routes/Route in App.tsx
+- **Layout**: AppShell component (three-column: Sidebar 240px | main flex-1 | RightPanel 300px collapsible)
+- **Pages**: Dashboard, Issues, History, Settings — each in src/pages/
+- **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
+- **Styling**: Tailwind CSS v4 via @tailwindcss/vite plugin (no tailwind.config.js)
+- **Theme**: Light theme (bg-white, text-gray-900, gray-50 for panels, gray-200 borders)
+
+## Conventions
+
+- Functional components with default exports
+- SVG icons inline in components (no icon library dependency)
+- NavLink for active route highlighting in navigation
+- Outlet pattern: AppShell renders `<Outlet />` for nested route content
+- Panel collapse state is local (useState), not global store
+
+## Dependencies
+
+- react-router-dom: routing (BrowserRouter, Routes, Route, NavLink, Outlet)
+- Tailwind CSS v4: utility-first styling via @tailwindcss/vite
+- zustand: global state management, stores in `src/stores/`
+
+## Testing
+
+- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- Persisted Zustand stores should also expose a factory (for example `createRunConfigStore`) so tests can inject in-memory storage and explicitly exercise hydration behavior.
+- `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
+- When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
+
+## State Management (Zustand)
+
+- Stores are in `src/stores/` directory
+- Use `create<State>()` from zustand to define stores
+- Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+- Async actions should handle loading and error states
+- Store pattern: state + actions + getters in one `create()` call
+- Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+- When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+- For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+- For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+- When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+- For persisted stores with value bounds, validate both setter input and persisted hydration (`merge`/`migrate`), otherwise invalid `localStorage` data can bypass runtime constraints.
+
+## Tauri Integration
+
+- Import `invoke` from `@tauri-apps/api/core` to call Rust commands
+- Commands return `Promise<T>` and can throw errors
+- Pattern: `await invoke<ReturnType>('command_name', { args })`
+- Tauri event subscriptions should be centralized in a store when multiple UI components need the same lifecycle state; `run-output` / `run-exit` are handled in `src/stores/runStore.ts`
+
+## Pitfalls
+
+- Backend `get_recent_project` stores only a single path (not a list). Frontend `recentProjects` is kept as an array for future extensibility but currently holds at most one item.
+- When adding store actions that load a specific project by path, always call `detect_project_config` + `save_recent_project` + update state in one action — don't split across multiple calls.
+- In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+- `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+- Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
+
+## IssuesPage 约定
+
+### 组件结构
+
+- `IssueListItem`: 单个 Issue 列表项，显示编号、标题、标签、创建时间、处理状态
+- `LabelBadge`: 可点击的标签徽章，支持选中高亮状态
+- `SearchIcon`/`CheckIcon`/`IssueIcon`/`ProcessedIcon`/`ClearIcon`: 内联 SVG 图标组件
+- `EmptyState`: 空状态提示组件
+
+### 功能实现
+
+- **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+- **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+- **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
+- **运行参数配置**: `RunConfigPanel` 默认折叠，使用 `useRunConfigStore` 持久化 `maxIterations`、`passingScore`、`continueMode`；数值输入必须保持整数语义，并在 store 层统一校验
+- **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+- **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+- **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+- **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
+- **浏览器 fallback**: 非 Tauri 环境使用 mock issue 列表和 mock issue 详情，保证浏览器模式也能验证详情面板
+- **运行 fallback**: 非 Tauri 环境禁用启动/停止按钮，并明确提示“浏览器模式不支持运行任务”
+- **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
+- **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+- **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
+- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+- **日志来源**: 日志源列表统一由 Tauri `list_issue_log_sources` 返回，前端只拿 `source.id` 调 `read_issue_log_content`，不要自己拼 `.autoresearch/workflows/issue-N/...` 路径
+- **日志轮询**: `LogViewer` 需要同时轮询“日志源列表”和“当前选中文件内容”；否则运行中新增的 iteration 日志文件不会出现在下拉列表里
+- **刷新保态**: 同一 Issue 的日志源轮询不能重置 `searchQuery`、`selectedSourceId`、`autoScroll` 或 `hasPendingScroll`，这些都是用户当前阅读状态
+
+### 样式约定
+
+- Issue 列表项: `bg-white border-gray-200`，选中时 `bg-blue-50 border-blue-300`
+- 标签徽章: 使用 GitHub label 的 `color` 字段作为背景色，自动计算文字颜色（黑白）
+- 已处理标记: 绿色主题（`bg-green-50 text-green-700`）
+- 搜索框: `bg-white border-gray-200`，focus 时 `border-blue-500 ring-blue-500`
+- 空状态: 居中显示，灰色图标和文字
+- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+- Markdown 样式: 统一挂在 `.markdown-body`，代码块高亮 token 使用 `.md-token-*` 类名
+- Markdown 渲染: `react-markdown` 通过 Vite/TS alias 指向本地兼容实现 `src/vendor/react-markdown.tsx`，保证离线环境可构建；链接只允许 `http/https/mailto`
+- 骨架屏: 使用 `.skeleton-shimmer` 伪元素实现统一 shimmer 动效，避免在组件内重复写动画
+
+## DashboardPage 约定
+
+### 配置状态显示
+
+- 使用 `ConfigBadge` 组件显示 `.autoresearch/`、`program.md`、`agents/` 状态
+- `ConfigBadge` 使用勾/叉图标（`CheckIcon`/`XIcon`）替代圆点，符合验收条件要求
+- 配置完整时显示"配置完整"成功提示（绿色背景卡片）
+- 配置缺失时显示"是否从模板初始化"提示 UI（黄色背景卡片，仅 UI，不实际初始化）
+- 提示 UI 包含"稍后"和"了解"两个操作按钮
+
+### 组件结构
+
+- `WelcomeScreen`: 未选择项目时显示的欢迎页面
+- `ProjectInfoScreen`: 已选择项目时显示的项目信息页面
+- `ConfigBadge`: 配置状态徽章（用于显示单个配置项）
+- `InitTemplatePrompt`: 初始化模板提示（配置缺失时显示）
+- `ConfigCompleteNotification`: 配置完整提示（配置齐全时显示）
+- `CheckIcon`/`XIcon`: 状态图标组件
+
+### 样式约定
+
+- 配置存在：绿色主题（`bg-green-50`, `text-green-700`, `border-green-200`）
+- 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+- 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+## LogViewer 约定
+
+### 性能
+
+- `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+- `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+
+### 搜索高亮
+
+- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
+- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
+
+### React Key
+
+- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+exec
+/bin/zsh -lc "sed -n '240,470p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+
+/// Returns a list of Issue numbers that have already been processed by autoresearch.
+#[tauri::command]
+async fn check_processed_issues(project_path: String) -> Result<Vec<i64>, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        if !base.is_dir() {
+            return Err(format!("Path is not a directory: {project_path}"));
+        }
+        get_processed_issue_numbers(base)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn parse_issue_detail(stdout: &str) -> Result<IssueDetail, String> {
+    serde_json::from_str(stdout).map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+}
+
+fn map_issue_detail_command_error(issue_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Issue #{issue_number} not found");
+    }
+
+    format!("gh issue view failed: {}", stderr.trim())
+}
+
+fn workflow_issue_dir(project_path: &str, issue_number: i64) -> Result<std::path::PathBuf, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let issue_dir = base
+        .join(".autoresearch")
+        .join("workflows")
+        .join(format!("issue-{issue_number}"));
+
+    if !issue_dir.is_dir() {
+        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+    }
+
+    Ok(issue_dir)
+}
+
+fn classify_log_source(filename: &str) -> (&'static str, String) {
+    match filename {
+        "terminal.log" => ("terminal", "终端日志".to_string()),
+        "log.md" => ("summary", "工作流摘要".to_string()),
+        _ if filename.starts_with("iteration-") => ("iteration", filename.to_string()),
+        _ => ("file", filename.to_string()),
+    }
+}
+
+fn iteration_number(filename: &str) -> Option<i32> {
+    filename
+        .strip_prefix("iteration-")
+        .and_then(|rest| rest.split('-').next())
+        .and_then(|value| value.parse::<i32>().ok())
+}
+
+fn sort_log_sources(left: &IssueLogSource, right: &IssueLogSource) -> std::cmp::Ordering {
+    fn rank(kind: &str) -> i32 {
+        match kind {
+            "terminal" => 0,
+            "summary" => 1,
+            "iteration" => 2,
+            _ => 3,
+        }
+    }
+
+    rank(&left.kind)
+        .cmp(&rank(&right.kind))
+        .then_with(|| match (left.kind.as_str(), right.kind.as_str()) {
+            ("iteration", "iteration") => iteration_number(&left.id)
+                .cmp(&iteration_number(&right.id))
+                .then_with(|| left.label.cmp(&right.label)),
+            _ => std::cmp::Ordering::Equal,
+        })
+        .then_with(|| left.label.cmp(&right.label))
+}
+
+fn file_timestamp(metadata: &fs::Metadata) -> Option<String> {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs().to_string())
+}
+
+fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
+    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+    let entries = fs::read_dir(&issue_dir)
+        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+
+    let mut sources = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read workflow entry: {e}"))?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+
+        let filename = entry.file_name().to_string_lossy().to_string();
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read metadata for {filename}: {e}"))?;
+        let (kind, label) = classify_log_source(&filename);
+
+        sources.push(IssueLogSource {
+            id: filename,
+            label,
+            kind: kind.to_string(),
+            updated_at: file_timestamp(&metadata),
+            size_bytes: metadata.len(),
+        });
+    }
+
+    sources.sort_by(sort_log_sources);
+    Ok(sources)
+}
+
+fn resolve_issue_log_source_path(
+    project_path: &str,
+    issue_number: i64,
+    source_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    if source_id.is_empty()
+        || source_id.contains('/')
+        || source_id.contains('\\')
+        || source_id == "."
+        || source_id == ".."
+    {
+        return Err(format!("Invalid log source id: {source_id}"));
+    }
+
+    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+    let path = issue_dir.join(source_id);
+    if !path.is_file() {
+        return Err(format!("Log source not found: {source_id}"));
+    }
+
+    Ok(path)
+}
+
+fn read_issue_log_content_sync(
+    project_path: &str,
+    issue_number: i64,
+    source_id: &str,
+) -> Result<IssueLogContent, String> {
+    let source_path = resolve_issue_log_source_path(project_path, issue_number, source_id)?;
+    let metadata = fs::metadata(&source_path)
+        .map_err(|e| format!("Failed to read metadata for {source_id}: {e}"))?;
+    let bytes = fs::read(&source_path)
+        .map_err(|e| format!("Failed to read log source {source_id}: {e}"))?;
+
+    Ok(IssueLogContent {
+        source_id: source_id.to_string(),
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+        updated_at: file_timestamp(&metadata),
+    })
+}
+
+/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+#[tauri::command]
+async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+    tokio::task::spawn_blocking(move || {
+        get_issue_detail_sync(&project_path, issue_number)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    // Execute gh issue view
+    let output = Command::new("gh")
+        .args([
+            "issue", "view",
+            &issue_number.to_string(),
+            "--json", "body,comments",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(map_issue_detail_command_error(issue_number, &stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_issue_detail(&stdout)
+}
+
+/// Lists available workflow log sources for a processed Issue.
+#[tauri::command]
+async fn list_issue_log_sources(
+    project_path: String,
+    issue_number: i64,
+) -> Result<Vec<IssueLogSource>, String> {
+    tokio::task::spawn_blocking(move || list_issue_log_sources_sync(&project_path, issue_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Reads the content of a workflow log source under `.autoresearch/workflows/issue-N/`.
+#[tauri::command]
+async fn read_issue_log_content(
+    project_path: String,
+    issue_number: i64,
+    source_id: String,
+) -> Result<IssueLogContent, String> {
+    tokio::task::spawn_blocking(move || {
+        read_issue_log_content_sync(&project_path, issue_number, &source_id)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Request parameters for starting a run.sh process.
+#[derive(serde::Deserialize, Debug)]
+struct StartRunRequest {
+    /// Project directory path where run.sh will execute.
+    project_path: String,
+    /// GitHub Issue number to process.
+    issue_number: i64,
+
+exec
+/bin/zsh -lc 'cargo test' in /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri
+exec
+/bin/zsh -lc 'npm test' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+exec
+/bin/zsh -lc 'npm run typecheck' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+exec
+/bin/zsh -lc 'npm run lint' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+ succeeded in 385ms:
+
+> desktop_app@0.1.0 test
+> node --test --experimental-strip-types tests/*.test.mjs
+
+✔ buildIssueRunRequest maps the current run config into startRun payload (1.331834ms)
+✔ classifyLogLevel detects info, warn, and error lines (1.26625ms)
+✔ filterLogEntries applies search query and level filters together (1.056208ms)
+✔ loadSources prepends live output and prefers terminal log when not running (0.710291ms)
+✔ loadSources prefers live output for active issue and refreshSelectedSource caches content (1.553208ms)
+✔ loadSources preserves viewer state while refreshing the same issue (0.737417ms)
+✔ toggleLevel keeps at least one log level enabled (0.1665ms)
+✔ buildLogEntries truncates to last 5000 lines for large input (5.156416ms)
+✔ buildLogEntries keeps all lines when under 5000 (0.252625ms)
+(node:37939) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (0.771542ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.161167ms)
+✔ runConfigStore normalizes decimal values to integers before persisting (1.526041ms)
+✔ runConfigStore persists values under the required storage key (0.279125ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.392833ms)
+✔ runConfigStore rounds persisted decimal values during hydration (0.354666ms)
+✔ runConfigStore ignores NaN updates and preserves the previous valid values (0.517541ms)
+✔ sanitizeRunConfig rejects non-boolean and non-finite persisted values (0.184375ms)
+✔ startRun clears unknown active issue when backend already has another task (0.893542ms)
+✔ startRun restores previous running issue when stop/start race fails (0.636875ms)
+✔ initialize wires run events and caps output history (7.036458ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 190.434083
+
+ succeeded in 1065ms:
+
+> desktop_app@0.1.0 typecheck
+> tsc --noEmit
+
+
+ succeeded in 1150ms:
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.46s
+     Running unittests src/lib.rs (target/debug/deps/desktop_app_lib-d89ea694633b560d)
+
+running 18 tests
+test tests::classify_log_source_maps_known_workflow_files ... ok
+test tests::build_run_env_vars_empty_when_no_passing_score ... ok
+test tests::build_run_args_omits_optional_when_none ... ok
+test tests::build_run_args_includes_required_options ... ok
+test tests::build_run_args_continue_mode_defaults_false ... ok
+test tests::build_run_args_ignores_empty_agents ... ok
+test tests::get_issue_detail_rejects_non_directory_path ... ok
+test tests::issue_detail_error_preserves_other_gh_failures ... ok
+test tests::build_run_env_vars_includes_passing_score ... ok
+test tests::issue_detail_error_maps_missing_issue ... ok
+test tests::iteration_number_extracts_numeric_prefix ... ok
+test tests::run_process_state_default_is_idle ... ok
+test tests::parse_issue_detail_returns_structured_data ... ok
+test tests::parse_issue_detail_reports_invalid_json ... ok
+test tests::workflow_issue_dir_requires_existing_issue_directory ... ok
+test tests::resolve_issue_log_source_path_rejects_path_traversal ... ok
+test tests::read_issue_log_content_reads_utf8_lossy_text ... ok
+test tests::list_issue_log_sources_returns_sorted_sources ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/desktop_app-83fd22e0354b85e4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests desktop_app_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+ succeeded in 1069ms:
+
+> desktop_app@0.1.0 lint
+> eslint .
+
+
+codex
+基础自检是过的：Rust 单测、前端测试、类型检查和 lint 都没报错。接下来我在找“测试都绿但功能仍可能偏题”的点，尤其是多 Issue 切换和非运行场景的行为。
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/stores/runStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { create } from 'zustand';
+import { useAgentStore } from './agentStore.ts';
+
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const MAX_OUTPUT_LINES = 2000;
+
+type RunLifecycleStatus = 'idle' | 'running' | 'stopping' | 'finished' | 'error';
+type BackendRunStatus = 'Idle' | 'Running';
+
+interface RunExitEvent {
+  exit_code: number | null;
+  killed: boolean;
+}
+
+interface StartRunRequest {
+  projectPath: string;
+  issueNumber: number;
+  agents?: string;
+  maxIter?: number;
+  passingScore?: number;
+  continueMode?: boolean;
+}
+
+type UnlistenFn = () => void;
+type RunEventName = 'run-output' | 'run-exit';
+type RunEventCallback<TPayload> = (event: { payload: TPayload }) => void;
+
+interface RunStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  listen: <TPayload>(
+    event: RunEventName,
+    callback: RunEventCallback<TPayload>
+  ) => Promise<UnlistenFn>;
+  getSelectedAgents: () => string[];
+}
+
+interface RunStateSnapshot {
+  status: RunLifecycleStatus;
+  activeIssueNumber: number | null;
+  outputLines: string[];
+  exitCode: number | null;
+}
+
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+function normalizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function mapBackendStatus(status: BackendRunStatus): RunLifecycleStatus {
+  return status === 'Running' ? 'running' : 'idle';
+}
+
+function appendLine(lines: string[], line: string): string[] {
+  const nextLines = [...lines, line];
+  if (nextLines.length <= MAX_OUTPUT_LINES) {
+    return nextLines;
+  }
+  return nextLines.slice(nextLines.length - MAX_OUTPUT_LINES);
+}
+
+function snapshotState(state: RunState): RunStateSnapshot {
+  return {
+    status: state.status,
+    activeIssueNumber: state.activeIssueNumber,
+    outputLines: state.outputLines,
+    exitCode: state.exitCode,
+  };
+}
+
+function restoreKnownIssue(snapshot: RunStateSnapshot): number | null {
+  return snapshot.status === 'running' || snapshot.status === 'stopping'
+    ? snapshot.activeIssueNumber
+    : null;
+}
+
+interface RunState {
+  status: RunLifecycleStatus;
+  activeIssueNumber: number | null;
+  outputLines: string[];
+  exitCode: number | null;
+  error: string | null;
+  isSupported: boolean;
+  subscriptionsReady: boolean;
+  initialize: () => Promise<void>;
+  refreshStatus: () => Promise<void>;
+  startRun: (_request: StartRunRequest) => Promise<void>;
+  stopRun: () => Promise<void>;
+  clearOutput: () => void;
+  clearError: () => void;
+  isIssueRunning: (_issueNumber: number | null) => boolean;
+}
+
+async function tauriListen<TPayload>(
+  event: RunEventName,
+  callback: RunEventCallback<TPayload>
+): Promise<UnlistenFn> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen(event, callback);
+}
+
+function createRunStoreDeps(overrides: Partial<RunStoreDeps> = {}): RunStoreDeps {
+  return {
+    isTauri,
+    invoke: tauriInvoke,
+    listen: tauriListen,
+    getSelectedAgents: () => [...useAgentStore.getState().selectedAgents],
+    ...overrides,
+  };
+}
+
+export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
+  const deps = createRunStoreDeps(overrides);
+
+  return create<RunState>((set, get) => ({
+    status: 'idle',
+    activeIssueNumber: null,
+    outputLines: [],
+    exitCode: null,
+    error: null,
+    isSupported: deps.isTauri,
+    subscriptionsReady: false,
+
+    initialize: async () => {
+      if (!deps.isTauri) {
+        set({ subscriptionsReady: true });
+        return;
+      }
+
+      if (get().subscriptionsReady) {
+        return;
+      }
+
+      await Promise.all<UnlistenFn>([
+        deps.listen<string>('run-output', (event) => {
+          set((state) => ({
+            outputLines: appendLine(state.outputLines, event.payload),
+          }));
+        }),
+        deps.listen<RunExitEvent>('run-exit', (event) => {
+          const { exit_code: exitCode, killed } = event.payload;
+          set((state) => ({
+            status: killed || exitCode === 0 ? 'finished' : 'error',
+            exitCode,
+            activeIssueNumber: state.activeIssueNumber,
+            error:
+              killed || exitCode === 0
+                ? null
+                : `运行失败${exitCode === null ? '' : ` (exit code ${exitCode})`}`,
+          }));
+        }),
+      ]);
+
+      set({ subscriptionsReady: true });
+      await get().refreshStatus();
+    },
+
+    refreshStatus: async () => {
+      if (!deps.isTauri) {
+        set({ status: 'idle' });
+        return;
+      }
+
+      try {
+        const backendStatus = await deps.invoke<BackendRunStatus>('get_run_status');
+        set((state) => {
+          const nextStatus = mapBackendStatus(backendStatus);
+          if (nextStatus === 'running') {
+            return {
+              status: nextStatus,
+              error: null,
+            };
+          }
+
+          if (state.status === 'running' || state.status === 'stopping') {
+            return {
+              status: 'idle',
+              activeIssueNumber: null,
+            };
+          }
+
+          return {
+            status: state.status === 'idle' ? 'idle' : state.status,
+          };
+        });
+      } catch (error) {
+        set({
+          status: 'error',
+          error: normalizeError(error),
+        });
+      }
+    },
+
+    startRun: async (_request: StartRunRequest) => {
+      if (!deps.isTauri) {
+        set({
+          status: 'error',
+          error: '浏览器模式不支持运行任务，请通过 tauri dev 启动桌面应用。',
+        });
+        return;
+      }
+
+      const currentStatus = get().status;
+      if (currentStatus === 'running' || currentStatus === 'stopping') {
+        set({ error: '当前已有任务在运行，请先停止后再启动新任务。' });
+        return;
+      }
+
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+# desktop_app
+
+## Architecture
+- Tauri v2 desktop application with Rust backend and web frontend
+- Rust commands are defined in `src-tauri/src/lib.rs` using `#[tauri::command]` macro
+- Plugins are registered in the `tauri::Builder` chain in `run()`
+- Capabilities (permissions) are configured in `src-tauri/capabilities/default.json`
+
+## Dependencies
+- `tauri-plugin-dialog`: Native file/folder dialogs (`DialogExt`)
+- `tauri-plugin-store`: Key-value persistence (`StoreExt`, stored in `app.json`)
+- `tauri-plugin-opener`: Default opener plugin
+
+## Tauri Commands
+- Commands use `tauri::AppHandle` for accessing plugins
+- Async commands should avoid blocking calls in production; `blocking_pick_folder()` is acceptable for dialog simplicity
+- Store plugin path: `"app.json"` stores app-level data like `recent_project`
+
+## Notes
+- `detect_project_config` checks for `.autoresearch/`, `.autoresearch/program.md`, `.autoresearch/agents/`
+- `select_project_dir` returns `Option<String>` (None if user cancels)
+- The lib name is `desktop_app_lib` (not `desktop_app`) to avoid Windows naming conflict
+- `list_issues` calls `gh issue list --json` and also scans `.autoresearch/workflows/issue-*` for processed status
+- `check_processed_issues` is a standalone command that only scans processed Issue numbers
+- `gh` CLI errors (not installed, no repo, no auth) are surfaced as `Result::Err` strings
+- `GhIssue` and `GhLabel` structs use `serde::Deserialize` to parse `gh` JSON output; `createdAt` is renamed via `#[serde(rename)]`
+
+## Error Handling Patterns
+- Tauri commands consistently use `Result<T, String>` for error handling
+- All errors are surfaced as descriptive strings via `map_err(|e| format!("...", e))`
+- External command errors (gh CLI) are checked via `output.status.success()` before parsing stdout
+- File system errors include context about which path failed (e.g., "Failed to read workflows dir")
+
+## JSON Parsing Patterns
+- External command JSON output uses `serde_json::from_str()` with explicit error messages
+- Include the raw output in parse error messages for easier debugging
+- Use `#[serde(rename = "camelCase")]` for fields that differ from Rust naming conventions
+
+## Testing Patterns
+- When a Tauri command shells out to `gh`, extract pure helper functions for JSON parsing and stderr-to-user-error mapping so unit tests do not depend on a live GitHub CLI session
+- For backend command tests, cover both success parsing and representative failure modes (invalid input path, malformed JSON, known `gh` stderr patterns such as missing issues)
+- Keep the `#[cfg(test)] mod tests` block at the end of `src-tauri/src/lib.rs` to satisfy clippy's `items_after_test_module` lint
+
+exec
+/bin/zsh -lc 'rg -n "#30|实时日志查看器|日志查看器" -S docs .autoresearch desktop_app README.md' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+desktop_app/src/CLAUDE.md:87:- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+desktop_app/src-tauri/src/lib.rs:892:        assert_eq!(error, "Workflow logs for Issue #30 not found");
+docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+docs/desktop-app-prd-to-issues.md:134: │                                              ├── #30 (日志查看器)
+desktop_app/src/components/LogViewer.tsx:317:            日志查看器
+.autoresearch/workflows/issue-30/progress.md:1:# Issue #30 经验日志
+.autoresearch/workflows/issue-30/progress.md:29:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/progress.md:33:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/progress.md:55:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/progress.md:59:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/progress.md:112:- 编号: #30
+.autoresearch/workflows/issue-30/progress.md:113:- 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:14:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:18:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:40:# Issue #30 经验日志
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:68:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:72:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:94:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:98:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:151:- 编号: #30
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:152:- 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:582:我先定位 Issue #30 的相关实现、测试和历史经验，确认这次审核是基于当前工作区状态而不是上次结论复述。
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:584:/bin/zsh -lc 'pwd && rg -n "Issue #30|实时日志查看器|log viewer|LogViewer|logViewer|log viewer" -S .' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:587:./desktop_app/src/CLAUDE.md:87:- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:590:./docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:591:./desktop_app/src-tauri/src/lib.rs:892:        assert_eq!(error, "Workflow logs for Issue #30 not found");
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:747:├── #30 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:778: │                                              ├── #30 (日志查看器)
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:1572:        assert_eq!(error, "Workflow logs for Issue #30 not found");
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:1862:            日志查看器
+.autoresearch/workflows/issue-30/iteration-4-codex-review.log:2615:- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-3-claude-review.log:8:- 编号: #30
+.autoresearch/workflows/issue-30/iteration-3-claude-review.log:9:- 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:14:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:18:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:440:我先检查仓库状态、分支差异和与 Issue #30 相关的改动范围，确认这次实现具体改了哪些文件，再进入代码审核。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:468:/bin/zsh -lc 'rg -n "实时日志|日志查看|log viewer|viewer|Issue #30|desktop-app" -S .' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:476:./docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:477:./docs/desktop-app-prd-to-issues.md:134: │                                              ├── #30 (日志查看器)
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:617:[2026-04-25 08:45:40] ⚠️ 未找到 Issue #30 的工作日志，回退为全新运行
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:623:[2026-04-25 08:45:40] 规划阶段: 拆分 Issue #30 为子任务...
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:691:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:695:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:920:仓库状态基本确认了：Issue #30 的工作流已经启动，但实现分支没有新增提交，日志里也没有实现报告。接下来我读取桌面端页面、store 和 Tauri 命令层，核对“实时日志查看器”所需的 UI 和后端接口是否存在。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:3954:     2	[2026-04-25 08:45:40] ⚠️ 未找到 Issue #30 的工作日志，回退为全新运行
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:3960:     8	[2026-04-25 08:45:40] 规划阶段: 拆分 Issue #30 为子任务...
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4026:/bin/zsh -lc 'rg -n "LogViewer|日志查看器|日志搜索|级别过滤|自动滚动|pause scroll|scroll pause" desktop_app/src desktop_app/src-tauri/src -S' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4155:测试和 lint 已通过；这说明当前仓库是健康的，但也进一步说明 Issue #30 还没有落地对应的新能力。构建还在跑，我等结果后给出最终审核。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4159:1. 严重: Issue #30 的核心需求没有实现，当前代码只是在 Issue 详情页里显示“当前运行进程的输出”，并不是“实时日志查看器”。PRD 要求包括按迭代查看日志文件、搜索、级别过滤、自动滚动可暂停等能力，但当前面板只有启动/停止、清空和一个纯文本输出区。[tasks/prd-desktop-app.md](/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md#L63) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L243) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L385)
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4165:4. 中等: 没有任何针对 Issue #30 新需求的测试。现有测试只覆盖运行配置和 `runStore` 的进程状态/事件上限，不覆盖日志文件读取、搜索、过滤、滚动控制，也没有组件级测试验证 UI 交互。[desktop_app/tests/runStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs#L15)
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4173:不达标。当前仓库本身可以通过 `test`、`lint`、`build`，说明已有桌面端代码质量尚可，但就 Issue #30 而言，交付物基本不存在，Acceptance Criteria 只满足了“运行时 stdout/stderr 能显示在一个文本区域里”的很小一部分，而且还是现有 run 控制能力的延伸，不足以称为“实时日志查看器”。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4182:我本地复核结果是 `pnpm --dir desktop_app test`、`lint`、`build` 都通过，但没有证据表明实现者针对 Issue #30 完成过相应自检。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4202:三者均通过，但这只能证明当前基线健康，不能证明 Issue #30 已实现。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4207:1. 严重: Issue #30 的核心需求没有实现，当前代码只是在 Issue 详情页里显示“当前运行进程的输出”，并不是“实时日志查看器”。PRD 要求包括按迭代查看日志文件、搜索、级别过滤、自动滚动可暂停等能力，但当前面板只有启动/停止、清空和一个纯文本输出区。[tasks/prd-desktop-app.md](/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md#L63) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L243) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L385)
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4213:4. 中等: 没有任何针对 Issue #30 新需求的测试。现有测试只覆盖运行配置和 `runStore` 的进程状态/事件上限，不覆盖日志文件读取、搜索、过滤、滚动控制，也没有组件级测试验证 UI 交互。[desktop_app/tests/runStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs#L15)
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4221:不达标。当前仓库本身可以通过 `test`、`lint`、`build`，说明已有桌面端代码质量尚可，但就 Issue #30 而言，交付物基本不存在，Acceptance Criteria 只满足了“运行时 stdout/stderr 能显示在一个文本区域里”的很小一部分，而且还是现有 run 控制能力的延伸，不足以称为“实时日志查看器”。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4230:我本地复核结果是 `pnpm --dir desktop_app test`、`lint`、`build` 都通过，但没有证据表明实现者针对 Issue #30 完成过相应自检。
+.autoresearch/workflows/issue-30/iteration-2-codex-review.log:4250:三者均通过，但这只能证明当前基线健康，不能证明 Issue #30 已实现。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:14:根据审核反馈改进 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-2-codex.log:18:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:34:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-2-codex.log:38:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:460:我先检查仓库状态、分支差异和与 Issue #30 相关的改动范围，确认这次实现具体改了哪些文件，再进入代码审核。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:488:/bin/zsh -lc 'rg -n "实时日志|日志查看|log viewer|viewer|Issue #30|desktop-app" -S .' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-30/iteration-2-codex.log:496:./docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:497:./docs/desktop-app-prd-to-issues.md:134: │                                              ├── #30 (日志查看器)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:637:[2026-04-25 08:45:40] ⚠️ 未找到 Issue #30 的工作日志，回退为全新运行
+.autoresearch/workflows/issue-30/iteration-2-codex.log:643:[2026-04-25 08:45:40] 规划阶段: 拆分 Issue #30 为子任务...
+.autoresearch/workflows/issue-30/iteration-2-codex.log:711:审核 Issue #30 的实现
+.autoresearch/workflows/issue-30/iteration-2-codex.log:715:Issue 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:940:仓库状态基本确认了：Issue #30 的工作流已经启动，但实现分支没有新增提交，日志里也没有实现报告。接下来我读取桌面端页面、store 和 Tauri 命令层，核对“实时日志查看器”所需的 UI 和后端接口是否存在。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:3974:     2	[2026-04-25 08:45:40] ⚠️ 未找到 Issue #30 的工作日志，回退为全新运行
+.autoresearch/workflows/issue-30/iteration-2-codex.log:3980:     8	[2026-04-25 08:45:40] 规划阶段: 拆分 Issue #30 为子任务...
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4046:/bin/zsh -lc 'rg -n "LogViewer|日志查看器|日志搜索|级别过滤|自动滚动|pause scroll|scroll pause" desktop_app/src desktop_app/src-tauri/src -S' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4175:测试和 lint 已通过；这说明当前仓库是健康的，但也进一步说明 Issue #30 还没有落地对应的新能力。构建还在跑，我等结果后给出最终审核。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4179:1. 严重: Issue #30 的核心需求没有实现，当前代码只是在 Issue 详情页里显示“当前运行进程的输出”，并不是“实时日志查看器”。PRD 要求包括按迭代查看日志文件、搜索、级别过滤、自动滚动可暂停等能力，但当前面板只有启动/停止、清空和一个纯文本输出区。[tasks/prd-desktop-app.md](/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md#L63) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L243) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L385)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4185:4. 中等: 没有任何针对 Issue #30 新需求的测试。现有测试只覆盖运行配置和 `runStore` 的进程状态/事件上限，不覆盖日志文件读取、搜索、过滤、滚动控制，也没有组件级测试验证 UI 交互。[desktop_app/tests/runStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs#L15)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4193:不达标。当前仓库本身可以通过 `test`、`lint`、`build`，说明已有桌面端代码质量尚可，但就 Issue #30 而言，交付物基本不存在，Acceptance Criteria 只满足了“运行时 stdout/stderr 能显示在一个文本区域里”的很小一部分，而且还是现有 run 控制能力的延伸，不足以称为“实时日志查看器”。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4202:我本地复核结果是 `pnpm --dir desktop_app test`、`lint`、`build` 都通过，但没有证据表明实现者针对 Issue #30 完成过相应自检。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4222:三者均通过，但这只能证明当前基线健康，不能证明 Issue #30 已实现。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4227:1. 严重: Issue #30 的核心需求没有实现，当前代码只是在 Issue 详情页里显示“当前运行进程的输出”，并不是“实时日志查看器”。PRD 要求包括按迭代查看日志文件、搜索、级别过滤、自动滚动可暂停等能力，但当前面板只有启动/停止、清空和一个纯文本输出区。[tasks/prd-desktop-app.md](/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md#L63) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L243) [desktop_app/src/components/IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L385)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4233:4. 中等: 没有任何针对 Issue #30 新需求的测试。现有测试只覆盖运行配置和 `runStore` 的进程状态/事件上限，不覆盖日志文件读取、搜索、过滤、滚动控制，也没有组件级测试验证 UI 交互。[desktop_app/tests/runStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs#L15)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4241:不达标。当前仓库本身可以通过 `test`、`lint`、`build`，说明已有桌面端代码质量尚可，但就 Issue #30 而言，交付物基本不存在，Acceptance Criteria 只满足了“运行时 stdout/stderr 能显示在一个文本区域里”的很小一部分，而且还是现有 run 控制能力的延伸，不足以称为“实时日志查看器”。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4250:我本地复核结果是 `pnpm --dir desktop_app test`、`lint`、`build` 都通过，但没有证据表明实现者针对 Issue #30 完成过相应自检。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4270:三者均通过，但这只能证明当前基线健康，不能证明 Issue #30 已实现。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4690:根据审核反馈开始补齐 Issue #30，先确认现有桌面端结构，再分步补后端日志接口、前端日志状态与 UI，最后补测试和目录知识。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4691:  → 梳理 Issue #30 相关前后端结构与约束，确定改动点
+.autoresearch/workflows/issue-30/iteration-2-codex.log:4813:- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:5710:            日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:5804:desktop_app/src/CLAUDE.md:87:- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:5842:我发现主干代码已经带上了日志查看器相关骨架和后端命令，和审核日志里的旧结论不一致。接下来我核对这些新增实现是否完整、哪里还缺测试或边界处理，再做针对性修补。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:6443:        assert_eq!(error, "Workflow logs for Issue #30 not found");
+.autoresearch/workflows/issue-30/iteration-2-codex.log:7174:我已经确认这批未提交改动里其实已经实现了大部分日志查看器。现在剩下的是补足真实运行场景下的缺口，我重点看“日志源列表是否会随新文件出现而更新”和相关边界测试。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:7569:+        assert_eq!(error, "Workflow logs for Issue #30 not found");
+.autoresearch/workflows/issue-30/iteration-2-codex.log:7680:+- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:8939: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:9165: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:9406: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:9644: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:9789:  ✓ 梳理 Issue #30 相关前后端结构与约束，确定改动点
+.autoresearch/workflows/issue-30/iteration-2-codex.log:9887: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:10175: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:10430: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:10739: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11249: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11393:前后端日志查看器补强、自检和目录知识更新已完成。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11394:  ✓ 梳理 Issue #30 相关前后端结构与约束，确定改动点
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11492: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11639:- 问题 2: 审核认为缺少搜索、级别过滤、暂停自动滚动。我的理解：这些能力要落到独立日志查看器状态里，不能继续依赖 `runStore.outputLines`。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11643:- [x] 核对当前未提交实现，确认日志查看器相关前后端骨架已存在
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11657:- 缺少独立日志查看器: 在 [LogViewer.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx) 和 [logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts) 实现日志源切换、搜索、级别过滤、自动滚动、暂停滚动、跳到最新。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11662:- 测试缺口: 在 [logViewerStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs) 和 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs) 补了日志查看器相关单测。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11670:- 编号: #30
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11671:- 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11716:- **模式**: 这个仓库里“运行态”和“查看态”要分离，`runStore` 负责进程生命周期，日志查看器应使用单独 store 承载搜索、过滤和滚动状态。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11813: - **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11961:- 问题 2: 审核认为缺少搜索、级别过滤、暂停自动滚动。我的理解：这些能力要落到独立日志查看器状态里，不能继续依赖 `runStore.outputLines`。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11965:- [x] 核对当前未提交实现，确认日志查看器相关前后端骨架已存在
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11979:- 缺少独立日志查看器: 在 [LogViewer.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx) 和 [logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts) 实现日志源切换、搜索、级别过滤、自动滚动、暂停滚动、跳到最新。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11984:- 测试缺口: 在 [logViewerStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs) 和 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs) 补了日志查看器相关单测。
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11992:- 编号: #30
+.autoresearch/workflows/issue-30/iteration-2-codex.log:11993:- 标题: [desktop-app] 实时日志查看器
+.autoresearch/workflows/issue-30/iteration-2-codex.log:12038:- **模式**: 这个仓库里“运行态”和“查看态”要分离，`runStore` 负责进程生命周期，日志查看器应使用单独 store 承载搜索、过滤和滚动状态。
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:812:├── #30 实时日志查看器
+.autoresearch/workflows/issue-29/iteration-6-codex.log:2574:├── #30 实时日志查看器
+.autoresearch/workflows/issue-29/iteration-6-codex.log:2605: │                                              ├── #30 (日志查看器)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:832:├── #30 实时日志查看器
+.autoresearch/archive/2026-04-23-issue-50/iteration-8-codex.log:799:/Users/chaoyuepan/ai/autoresearch/docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+.autoresearch/archive/2026-04-23-issue-50/iteration-8-codex.log:801:/Users/chaoyuepan/ai/autoresearch/docs/desktop-app-prd-to-issues.md:134: │                                              ├── #30 (日志查看器)
+.autoresearch/archive/2026-04-23-issue-50/iteration-8-codex-review.log:779:/Users/chaoyuepan/ai/autoresearch/docs/desktop-app-prd-to-issues.md:103:├── #30 实时日志查看器
+.autoresearch/archive/2026-04-23-issue-50/iteration-8-codex-review.log:781:/Users/chaoyuepan/ai/autoresearch/docs/desktop-app-prd-to-issues.md:134: │                                              ├── #30 (日志查看器)
+
+exec
+/bin/zsh -lc 'ls -R .autoresearch/workflows/issue-30' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+hard-gate-2.log
+hard-gate-3.log
+iteration-2-codex-review.log
+iteration-2-codex.log
+iteration-3-claude-review.log
+iteration-3-claude.log
+iteration-4-codex-review.log
+log.md
+progress.md
+terminal.log
+
+exec
+/bin/zsh -lc "sed -n '55,90p' tasks/prd-desktop-app.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+
+**Acceptance Criteria:**
+- [ ] 展示当前迭代编号和总迭代数（如 `3/16`）
+- [ ] 显示当前阶段：Planning / Implementation / Review / Build/Lint/Test
+- [ ] 如果有 subtask 系统，显示 subtask 进度条和各 subtask 状态（pending/passing/failing）
+- [ ] 实时更新，无需手动刷新
+- [ ] Typecheck/lint passes
+
+### US-005: 实时日志查看
+**Description:** 作为开发者，我希望能实时查看 agent 的输出日志，了解实现和 review 的详细过程。
+
+**Acceptance Criteria:**
+- [ ] 主日志区域实时滚动显示 `run.sh` 的 stdout/stderr
+- [ ] 可按迭代查看各 agent 的输出日志（对应 `.autoresearch/workflows/issue-N/` 下的 log 文件）
+- [ ] 支持日志搜索和按级别过滤（info/warn/error）
+- [ ] 日志支持自动滚动到底部，也可手动暂停滚动
+- [ ] Typecheck/lint passes
+
+### US-006: 评分结果展示
+**Description:** 作为开发者，我希望能直观看到每次 review 的评分，以及评分趋势。
+
+**Acceptance Criteria:**
+- [ ] 每次迭代完成后显示评分（如 `78/100`），用颜色区分（红 < 70、黄 70-84、绿 >= 85）
+- [ ] 评分历史折线图，展示从第 1 次到当前迭代的评分变化
+- [ ] 显示 review 的关键反馈摘要
+- [ ] 达到 passing score 时有明确的通过提示
+- [ ] Typecheck/lint passes
+
+### US-007: 配置管理
+**Description:** 作为开发者，我希望能通过 GUI 编辑 autoresearch 的配置文件，而不是手动编辑 markdown。
+
+**Acceptance Criteria:**
+- [ ] 可查看和编辑 `program.md`（代码规范部分）
+- [ ] 可查看和编辑各 agent 配置（`agents/claude.md`、`agents/codex.md` 等）
+- [ ] 可配置运行参数：passing score、agent 执行顺序、max iterations
+- [ ] 编辑后保存到对应文件，立即生效
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/components/LogViewer.tsx | sed -n '1,360p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import { useEffect, useMemo, useRef, type JSX } from 'react';
+     2	import { useRunStore } from '../stores/runStore';
+     3	import {
+     4	  buildLogEntries,
+     5	  DEFAULT_SELECTED_SOURCE_ID,
+     6	  filterLogEntries,
+     7	  type LogLevel,
+     8	  useLogViewerStore,
+     9	} from '../stores/logViewerStore';
+    10	
+    11	interface LogViewerProps {
+    12	  issueNumber: number;
+    13	  projectPath: string | null;
+    14	}
+    15	
+    16	function SearchIcon({ className }: { className?: string }): JSX.Element {
+    17	  return (
+    18	    <svg
+    19	      className={className}
+    20	      fill="none"
+    21	      stroke="currentColor"
+    22	      viewBox="0 0 24 24"
+    23	      aria-hidden="true"
+    24	    >
+    25	      <path
+    26	        strokeLinecap="round"
+    27	        strokeLinejoin="round"
+    28	        strokeWidth={2}
+    29	        d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0a7 7 0 0114 0z"
+    30	      />
+    31	    </svg>
+    32	  );
+    33	}
+    34	
+    35	function TerminalIcon({ className }: { className?: string }): JSX.Element {
+    36	  return (
+    37	    <svg
+    38	      className={className}
+    39	      fill="none"
+    40	      stroke="currentColor"
+    41	      viewBox="0 0 24 24"
+    42	      aria-hidden="true"
+    43	    >
+    44	      <path
+    45	        strokeLinecap="round"
+    46	        strokeLinejoin="round"
+    47	        strokeWidth={2}
+    48	        d="M8 9l3 3-3 3m5 0h3M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+    49	      />
+    50	    </svg>
+    51	  );
+    52	}
+    53	
+    54	function PauseIcon({ className }: { className?: string }): JSX.Element {
+    55	  return (
+    56	    <svg
+    57	      className={className}
+    58	      fill="currentColor"
+    59	      viewBox="0 0 24 24"
+    60	      aria-hidden="true"
+    61	    >
+    62	      <path d="M7 5h3v14H7zm7 0h3v14h-3z" />
+    63	    </svg>
+    64	  );
+    65	}
+    66	
+    67	function PlayIcon({ className }: { className?: string }): JSX.Element {
+    68	  return (
+    69	    <svg
+    70	      className={className}
+    71	      fill="currentColor"
+    72	      viewBox="0 0 24 24"
+    73	      aria-hidden="true"
+    74	    >
+    75	      <path d="M8 5.14v13.72a1 1 0 001.5.86l10.29-6.86a1 1 0 000-1.72L9.5 4.28A1 1 0 008 5.14z" />
+    76	    </svg>
+    77	  );
+    78	}
+    79	
+    80	function LevelBadge({
+    81	  level,
+    82	  isActive,
+    83	  onClick,
+    84	}: {
+    85	  level: LogLevel;
+    86	  isActive: boolean;
+    87	  onClick: () => void;
+    88	}): JSX.Element {
+    89	  const styleMap: Record<LogLevel, string> = {
+    90	    info: isActive
+    91	      ? 'border-slate-700 bg-slate-700 text-white'
+    92	      : 'border-slate-600 text-slate-300',
+    93	    warn: isActive
+    94	      ? 'border-amber-400 bg-amber-400 text-slate-950'
+    95	      : 'border-amber-500/60 text-amber-300',
+    96	    error: isActive
+    97	      ? 'border-rose-500 bg-rose-500 text-white'
+    98	      : 'border-rose-500/60 text-rose-300',
+    99	  };
+   100	
+   101	  return (
+   102	    <button
+   103	      type="button"
+   104	      onClick={onClick}
+   105	      className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${styleMap[level]}`}
+   106	    >
+   107	      {level.toUpperCase()}
+   108	    </button>
+   109	  );
+   110	}
+   111	
+   112	function sourceDescription(kind: string): string {
+   113	  switch (kind) {
+   114	    case 'live':
+   115	      return '来自当前 run.sh 进程的 stdout/stderr';
+   116	    case 'terminal':
+   117	      return '`.autoresearch/workflows/issue-N/terminal.log`';
+   118	    case 'summary':
+   119	      return '工作流摘要与评分记录';
+   120	    case 'iteration':
+   121	      return '单轮 agent 日志';
+   122	    default:
+   123	      return '工作流文件';
+   124	  }
+   125	}
+   126	
+   127	function formatUpdatedAt(value: string | null): string {
+   128	  if (!value) {
+   129	    return '未记录';
+   130	  }
+   131	
+   132	  const timestamp = Number(value) * 1000;
+   133	  if (Number.isNaN(timestamp)) {
+   134	    return value;
+   135	  }
+   136	
+   137	  return new Date(timestamp).toLocaleString('zh-CN', {
+   138	    month: '2-digit',
+   139	    day: '2-digit',
+   140	    hour: '2-digit',
+   141	    minute: '2-digit',
+   142	    second: '2-digit',
+   143	  });
+   144	}
+   145	
+   146	function lineClassName(level: LogLevel): string {
+   147	  switch (level) {
+   148	    case 'warn':
+   149	      return 'text-amber-200';
+   150	    case 'error':
+   151	      return 'text-rose-200';
+   152	    case 'info':
+   153	    default:
+   154	      return 'text-slate-100';
+   155	  }
+   156	}
+   157	
+   158	function escapeRegExp(s: string): string {
+   159	  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+   160	}
+   161	
+   162	function HighlightedText({ text, query }: { text: string; query: string }): JSX.Element {
+   163	  if (!query.trim()) return <>{text || ' '}</>;
+   164	  const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, 'gi'));
+   165	  return (
+   166	    <>
+   167	      {parts.map((part, i) =>
+   168	        part.toLowerCase() === query.toLowerCase() ? (
+   169	          <mark key={i} className="bg-yellow-400/40 text-inherit">{part}</mark>
+   170	        ) : (
+   171	          part
+   172	        )
+   173	      )}
+   174	    </>
+   175	  );
+   176	}
+   177	
+   178	function isNearBottom(element: HTMLDivElement): boolean {
+   179	  return element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+   180	}
+   181	
+   182	export default function LogViewer({
+   183	  issueNumber,
+   184	  projectPath,
+   185	}: LogViewerProps): JSX.Element {
+   186	  const outputContainerRef = useRef<HTMLDivElement | null>(null);
+   187	  const sourceRefreshTimerRef = useRef<number | null>(null);
+   188	  const refreshTimerRef = useRef<number | null>(null);
+   189	  const {
+   190	    status: runStatus,
+   191	    activeIssueNumber,
+   192	    outputLines,
+   193	  } = useRunStore();
+   194	  const {
+   195	    sources,
+   196	    selectedSourceId,
+   197	    searchQuery,
+   198	    levelFilters,
+   199	    autoScroll,
+   200	    hasPendingScroll,
+   201	    sourceContents,
+   202	    isLoadingSources,
+   203	    isLoadingContent,
+   204	    error,
+   205	    loadSources,
+   206	    refreshSelectedSource,
+   207	    selectSource,
+   208	    setSearchQuery,
+   209	    toggleLevel,
+   210	    setAutoScroll,
+   211	    markScrollPending,
+   212	    clearError,
+   213	    clearIssue,
+   214	  } = useLogViewerStore();
+   215	
+   216	  const isCurrentIssueRunning =
+   217	    activeIssueNumber === issueNumber &&
+   218	    (runStatus === 'running' || runStatus === 'stopping');
+   219	  const selectedSource =
+   220	    sources.find((source) => source.id === selectedSourceId) ?? sources[0];
+   221	
+   222	  const rawText =
+   223	    selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
+   224	      ? outputLines.join('\n')
+   225	      : (sourceContents[selectedSourceId]?.text ?? '');
+   226	  const totalEntries = useMemo(
+   227	    () => buildLogEntries(rawText),
+   228	    [rawText]
+   229	  );
+   230	  const visibleEntries = useMemo(
+   231	    () => filterLogEntries(totalEntries, searchQuery, levelFilters),
+   232	    [totalEntries, searchQuery, levelFilters]
+   233	  );
+   234	
+   235	  useEffect(() => {
+   236	    if (!projectPath) {
+   237	      if (sourceRefreshTimerRef.current !== null) {
+   238	        window.clearInterval(sourceRefreshTimerRef.current);
+   239	        sourceRefreshTimerRef.current = null;
+   240	      }
+   241	      clearIssue();
+   242	      return;
+   243	    }
+   244	
+   245	    void loadSources(projectPath, issueNumber, {
+   246	      preferLive: isCurrentIssueRunning,
+   247	    });
+   248	
+   249	    if (sourceRefreshTimerRef.current !== null) {
+   250	      window.clearInterval(sourceRefreshTimerRef.current);
+   251	    }
+   252	
+   253	    sourceRefreshTimerRef.current = window.setInterval(() => {
+   254	      void loadSources(projectPath, issueNumber, {
+   255	        preferLive: isCurrentIssueRunning,
+   256	      });
+   257	    }, 1500);
+   258	
+   259	    return () => {
+   260	      if (sourceRefreshTimerRef.current !== null) {
+   261	        window.clearInterval(sourceRefreshTimerRef.current);
+   262	        sourceRefreshTimerRef.current = null;
+   263	      }
+   264	    };
+   265	  }, [clearIssue, isCurrentIssueRunning, issueNumber, loadSources, projectPath]);
+   266	
+   267	  useEffect(() => {
+   268	    if (!projectPath || selectedSourceId === DEFAULT_SELECTED_SOURCE_ID) {
+   269	      return;
+   270	    }
+   271	
+   272	    void refreshSelectedSource(projectPath, issueNumber);
+   273	
+   274	    if (refreshTimerRef.current !== null) {
+   275	      window.clearInterval(refreshTimerRef.current);
+   276	    }
+   277	
+   278	    refreshTimerRef.current = window.setInterval(() => {
+   279	      void refreshSelectedSource(projectPath, issueNumber);
+   280	    }, 1500);
+   281	
+   282	    return () => {
+   283	      if (refreshTimerRef.current !== null) {
+   284	        window.clearInterval(refreshTimerRef.current);
+   285	        refreshTimerRef.current = null;
+   286	      }
+   287	    };
+   288	  }, [issueNumber, projectPath, refreshSelectedSource, selectedSourceId]);
+   289	
+   290	  useEffect(() => {
+   291	    const element = outputContainerRef.current;
+   292	    if (!element) {
+   293	      return;
+   294	    }
+   295	
+   296	    if (autoScroll) {
+   297	      element.scrollTop = element.scrollHeight;
+   298	      markScrollPending(false);
+   299	      return;
+   300	    }
+   301	
+   302	    if (!isNearBottom(element)) {
+   303	      markScrollPending(true);
+   304	    }
+   305	  }, [autoScroll, markScrollPending, selectedSourceId, visibleEntries]);
+   306	
+   307	  const headerMeta = selectedSource
+   308	    ? `${sourceDescription(selectedSource.kind)} · 更新于 ${formatUpdatedAt(selectedSource.updatedAt)}`
+   309	    : '选择一个日志源开始查看';
+   310	
+   311	  return (
+   312	    <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 text-slate-100">
+   313	      <div className="border-b border-gray-800 px-4 py-3">
+   314	        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+   315	          <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-200">
+   316	            <TerminalIcon className="h-4 w-4" />
+   317	            日志查看器
+   318	          </div>
+   319	          <div className="flex flex-wrap items-center gap-2">
+   320	            <select
+   321	              value={selectedSourceId}
+   322	              onChange={(event) => {
+   323	                clearError();
+   324	                selectSource(event.target.value);
+   325	              }}
+   326	              className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+   327	            >
+   328	              {sources.map((source) => (
+   329	                <option key={source.id} value={source.id}>
+   330	                  {source.label}
+   331	                </option>
+   332	              ))}
+   333	            </select>
+   334	            <button
+   335	              type="button"
+   336	              onClick={() => {
+   337	                const nextAutoScroll = !autoScroll;
+   338	                setAutoScroll(nextAutoScroll);
+   339	                if (nextAutoScroll && outputContainerRef.current) {
+   340	                  outputContainerRef.current.scrollTop =
+   341	                    outputContainerRef.current.scrollHeight;
+   342	                }
+   343	              }}
+   344	              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+   345	                autoScroll
+   346	                  ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+   347	                  : 'border-gray-700 text-gray-300 hover:bg-gray-900'
+   348	              }`}
+   349	            >
+   350	              {autoScroll ? (
+   351	                <PauseIcon className="h-3.5 w-3.5" />
+   352	              ) : (
+   353	                <PlayIcon className="h-3.5 w-3.5" />
+   354	              )}
+   355	              {autoScroll ? '自动滚动中' : '已暂停滚动'}
+   356	            </button>
+   357	          </div>
+   358	        </div>
+   359	
+   360	        <p className="mt-2 text-xs text-gray-400">{headerMeta}</p>
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/stores/logViewerStore.ts | sed -n '1,430p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba desktop_app/src-tauri/src/lib.rs | sed -n '260,470p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import { create } from 'zustand';
+     2	import { isTauri as issueStoreIsTauri } from './issueStore.ts';
+     3	
+     4	export type LogLevel = 'info' | 'warn' | 'error';
+     5	export type LogSourceKind = 'live' | 'terminal' | 'summary' | 'iteration' | 'file';
+     6	
+     7	export interface IssueLogSource {
+     8	  id: string;
+     9	  label: string;
+    10	  kind: Exclude<LogSourceKind, 'live'>;
+    11	  updated_at: string | null;
+    12	  size_bytes: number;
+    13	}
+    14	
+    15	export interface IssueLogContent {
+    16	  source_id: string;
+    17	  text: string;
+    18	  updated_at: string | null;
+    19	}
+    20	
+    21	export interface LogSourceOption {
+    22	  id: string;
+    23	  label: string;
+    24	  kind: LogSourceKind;
+    25	  updatedAt: string | null;
+    26	  sizeBytes: number | null;
+    27	}
+    28	
+    29	export interface LogEntry {
+    30	  lineNumber: number;
+    31	  text: string;
+    32	  level: LogLevel;
+    33	}
+    34	
+    35	type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+    36	
+    37	interface LogViewerDeps {
+    38	  isTauri: boolean;
+    39	  invoke: InvokeFn;
+    40	}
+    41	
+    42	interface LoadSourcesOptions {
+    43	  preferLive: boolean;
+    44	}
+    45	
+    46	interface LogViewerState {
+    47	  currentIssueNumber: number | null;
+    48	  sources: LogSourceOption[];
+    49	  selectedSourceId: string;
+    50	  searchQuery: string;
+    51	  levelFilters: Record<LogLevel, boolean>;
+    52	  autoScroll: boolean;
+    53	  hasPendingScroll: boolean;
+    54	  sourceContents: Record<string, IssueLogContent>;
+    55	  isLoadingSources: boolean;
+    56	  isLoadingContent: boolean;
+    57	  error: string | null;
+    58	  loadSources: (
+    59	    _projectPath: string,
+    60	    _issueNumber: number,
+    61	    _options?: Partial<LoadSourcesOptions>
+    62	  ) => Promise<void>;
+    63	  refreshSelectedSource: (_projectPath: string, _issueNumber: number) => Promise<void>;
+    64	  selectSource: (_sourceId: string) => void;
+    65	  setSearchQuery: (_query: string) => void;
+    66	  toggleLevel: (_level: LogLevel) => void;
+    67	  setAutoScroll: (_enabled: boolean) => void;
+    68	  markScrollPending: (_pending: boolean) => void;
+    69	  clearError: () => void;
+    70	  clearIssue: () => void;
+    71	}
+    72	
+    73	const DEFAULT_SELECTED_SOURCE_ID = 'live-output';
+    74	
+    75	async function tauriInvoke<T>(
+    76	  cmd: string,
+    77	  args?: Record<string, unknown>
+    78	): Promise<T> {
+    79	  const { invoke } = await import('@tauri-apps/api/core');
+    80	  return invoke<T>(cmd, args);
+    81	}
+    82	
+    83	function normalizeError(error: unknown): string {
+    84	  if (error instanceof Error) {
+    85	    return error.message;
+    86	  }
+    87	  return String(error);
+    88	}
+    89	
+    90	function createLiveSource(): LogSourceOption {
+    91	  return {
+    92	    id: DEFAULT_SELECTED_SOURCE_ID,
+    93	    label: '当前运行输出',
+    94	    kind: 'live',
+    95	    updatedAt: null,
+    96	    sizeBytes: null,
+    97	  };
+    98	}
+    99	
+   100	export function classifyLogLevel(line: string): LogLevel {
+   101	  const normalized = line.toLowerCase();
+   102	  if (
+   103	    normalized.includes('error') ||
+   104	    normalized.includes('failed') ||
+   105	    normalized.includes('failure') ||
+   106	    normalized.includes('fatal') ||
+   107	    normalized.includes('❌') ||
+   108	    normalized.includes('错误') ||
+   109	    normalized.includes('失败')
+   110	  ) {
+   111	    return 'error';
+   112	  }
+   113	
+   114	  if (
+   115	    normalized.includes('warn') ||
+   116	    normalized.includes('warning') ||
+   117	    normalized.includes('⚠️') ||
+   118	    normalized.includes('警告')
+   119	  ) {
+   120	    return 'warn';
+   121	  }
+   122	
+   123	  return 'info';
+   124	}
+   125	
+   126	const MAX_LOG_LINES = 5000;
+   127	
+   128	export function buildLogEntries(text: string): LogEntry[] {
+   129	  if (!text) {
+   130	    return [];
+   131	  }
+   132	
+   133	  const lines = text.split(/\r?\n/);
+   134	  const start = Math.max(0, lines.length - MAX_LOG_LINES);
+   135	  return lines.slice(start).map((line, index) => ({
+   136	    lineNumber: start + index + 1,
+   137	    text: line,
+   138	    level: classifyLogLevel(line),
+   139	  }));
+   140	}
+   141	
+   142	export function filterLogEntries(
+   143	  entries: LogEntry[],
+   144	  searchQuery: string,
+   145	  levelFilters: Record<LogLevel, boolean>
+   146	): LogEntry[] {
+   147	  const normalizedQuery = searchQuery.trim().toLowerCase();
+   148	  return entries.filter((entry) => {
+   149	    if (!levelFilters[entry.level]) {
+   150	      return false;
+   151	    }
+   152	    if (!normalizedQuery) {
+   153	      return true;
+   154	    }
+   155	    return entry.text.toLowerCase().includes(normalizedQuery);
+   156	  });
+   157	}
+   158	
+   159	function mapBackendSource(source: IssueLogSource): LogSourceOption {
+   160	  return {
+   161	    id: source.id,
+   162	    label: source.label,
+   163	    kind: source.kind,
+   164	    updatedAt: source.updated_at,
+   165	    sizeBytes: source.size_bytes,
+   166	  };
+   167	}
+   168	
+   169	function nextSelectedSourceId(
+   170	  availableSources: LogSourceOption[],
+   171	  currentSelectedSourceId: string,
+   172	  preferLive: boolean
+   173	): string {
+   174	  if (
+   175	    currentSelectedSourceId !== DEFAULT_SELECTED_SOURCE_ID &&
+   176	    availableSources.some((source) => source.id === currentSelectedSourceId)
+   177	  ) {
+   178	    return currentSelectedSourceId;
+   179	  }
+   180	
+   181	  if (preferLive) {
+   182	    return DEFAULT_SELECTED_SOURCE_ID;
+   183	  }
+   184	
+   185	  const terminalSource = availableSources.find((source) => source.kind === 'terminal');
+   186	  if (terminalSource) {
+   187	    return terminalSource.id;
+   188	  }
+   189	
+   190	  return availableSources[0]?.id ?? DEFAULT_SELECTED_SOURCE_ID;
+   191	}
+   192	
+   193	function createLogViewerDeps(
+   194	  overrides: Partial<LogViewerDeps> = {}
+   195	): LogViewerDeps {
+   196	  return {
+   197	    isTauri: issueStoreIsTauri,
+   198	    invoke: tauriInvoke,
+   199	    ...overrides,
+   200	  };
+   201	}
+   202	
+   203	export function createLogViewerStore(
+   204	  overrides: Partial<LogViewerDeps> = {}
+   205	) {
+   206	  const deps = createLogViewerDeps(overrides);
+   207	
+   208	  return create<LogViewerState>((set, get) => ({
+   209	    currentIssueNumber: null,
+   210	    sources: [createLiveSource()],
+   211	    selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+   212	    searchQuery: '',
+   213	    levelFilters: {
+   214	      info: true,
+   215	      warn: true,
+   216	      error: true,
+   217	    },
+   218	    autoScroll: true,
+   219	    hasPendingScroll: false,
+   220	    sourceContents: {},
+   221	    isLoadingSources: false,
+   222	    isLoadingContent: false,
+   223	    error: null,
+   224	
+   225	    loadSources: async (
+   226	      _projectPath: string,
+   227	      _issueNumber: number,
+   228	      _options: Partial<LoadSourcesOptions> = {}
+   229	    ) => {
+   230	      const preferLive = _options.preferLive ?? false;
+   231	      const issueChanged = get().currentIssueNumber !== _issueNumber;
+   232	
+   233	      set((state) => ({
+   234	        currentIssueNumber: _issueNumber,
+   235	        isLoadingSources: true,
+   236	        error: null,
+   237	        autoScroll: issueChanged ? true : state.autoScroll,
+   238	        hasPendingScroll: issueChanged ? false : state.hasPendingScroll,
+   239	        selectedSourceId: issueChanged
+   240	          ? DEFAULT_SELECTED_SOURCE_ID
+   241	          : state.selectedSourceId,
+   242	        sourceContents: issueChanged ? {} : state.sourceContents,
+   243	        searchQuery: issueChanged ? '' : state.searchQuery,
+   244	      }));
+   245	
+   246	      if (!deps.isTauri) {
+   247	        set({
+   248	          sources: [createLiveSource()],
+   249	          selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+   250	          isLoadingSources: false,
+   251	          isLoadingContent: false,
+   252	        });
+   253	        return;
+   254	      }
+   255	
+   256	      try {
+   257	        const backendSources = await deps.invoke<IssueLogSource[]>(
+   258	          'list_issue_log_sources',
+   259	          {
+   260	            projectPath: _projectPath,
+   261	            issueNumber: _issueNumber,
+   262	          }
+   263	        );
+   264	        const sources = [createLiveSource(), ...backendSources.map(mapBackendSource)];
+   265	        const selectedSourceId = nextSelectedSourceId(
+   266	          sources,
+   267	          get().selectedSourceId,
+   268	          preferLive
+   269	        );
+   270	
+   271	        set((state) => {
+   272	          const nextSourceContents =
+   273	            selectedSourceId === state.selectedSourceId ||
+   274	            selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
+   275	              ? state.sourceContents
+   276	              : Object.fromEntries(
+   277	                  Object.entries(state.sourceContents).filter(([sourceId]) =>
+   278	                    sources.some((source) => source.id === sourceId)
+   279	                  )
+   280	                );
+   281	
+   282	          return {
+   283	            sources,
+   284	            selectedSourceId,
+   285	            sourceContents: nextSourceContents,
+   286	            isLoadingSources: false,
+   287	          };
+   288	        });
+   289	      } catch (error) {
+   290	        set({
+   291	          sources: [createLiveSource()],
+   292	          selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+   293	          isLoadingSources: false,
+   294	          error: normalizeError(error),
+   295	        });
+   296	      }
+   297	    },
+   298	
+   299	    refreshSelectedSource: async (_projectPath: string, _issueNumber: number) => {
+   300	      if (!deps.isTauri) {
+   301	        return;
+   302	      }
+   303	
+   304	      const { selectedSourceId } = get();
+   305	      if (selectedSourceId === DEFAULT_SELECTED_SOURCE_ID) {
+   306	        return;
+   307	      }
+   308	
+   309	      set({ isLoadingContent: true, error: null });
+   310	
+   311	      try {
+   312	        const content = await deps.invoke<IssueLogContent>('read_issue_log_content', {
+   313	          projectPath: _projectPath,
+   314	          issueNumber: _issueNumber,
+   315	          sourceId: selectedSourceId,
+   316	        });
+   317	
+   318	        set((state) => ({
+   319	          sourceContents: {
+   320	            ...state.sourceContents,
+   321	            [content.source_id]: content,
+   322	          },
+   323	          isLoadingContent: false,
+   324	        }));
+   325	      } catch (error) {
+   326	        set({
+   327	          isLoadingContent: false,
+   328	          error: normalizeError(error),
+   329	        });
+   330	      }
+   331	    },
+   332	
+   333	    selectSource: (_sourceId: string) => {
+   334	      set({
+   335	        selectedSourceId: _sourceId,
+   336	        error: null,
+   337	        hasPendingScroll: false,
+   338	      });
+   339	    },
+   340	
+   341	    setSearchQuery: (_query: string) => {
+   342	      set({ searchQuery: _query });
+   343	    },
+   344	
+   345	    toggleLevel: (_level: LogLevel) => {
+   346	      set((state) => {
+   347	        const nextLevelFilters = {
+   348	          ...state.levelFilters,
+   349	          [_level]: !state.levelFilters[_level],
+   350	        };
+   351	        if (Object.values(nextLevelFilters).some(Boolean)) {
+   352	          return { levelFilters: nextLevelFilters };
+   353	        }
+   354	        return state;
+   355	      });
+   356	    },
+   357	
+   358	    setAutoScroll: (_enabled: boolean) => {
+   359	      set({
+   360	        autoScroll: _enabled,
+   361	        hasPendingScroll: _enabled ? false : get().hasPendingScroll,
+   362	      });
+   363	    },
+   364	
+   365	    markScrollPending: (_pending: boolean) => {
+   366	      set({ hasPendingScroll: _pending });
+   367	    },
+   368	
+   369	    clearError: () => set({ error: null }),
+   370	
+   371	    clearIssue: () => {
+   372	      set({
+   373	        currentIssueNumber: null,
+   374	        sources: [createLiveSource()],
+   375	        selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+   376	        searchQuery: '',
+   377	        levelFilters: {
+   378	          info: true,
+   379	          warn: true,
+   380	          error: true,
+   381	        },
+   382	        autoScroll: true,
+   383	        hasPendingScroll: false,
+   384	        sourceContents: {},
+   385	        isLoadingSources: false,
+   386	        isLoadingContent: false,
+   387	        error: null,
+   388	      });
+   389	    },
+   390	  }));
+   391	}
+   392	
+   393	export const useLogViewerStore = createLogViewerStore();
+   394	
+   395	export { DEFAULT_SELECTED_SOURCE_ID };
+
+ succeeded in 0ms:
+   260	    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+   261	        return format!("Issue #{issue_number} not found");
+   262	    }
+   263	
+   264	    format!("gh issue view failed: {}", stderr.trim())
+   265	}
+   266	
+   267	fn workflow_issue_dir(project_path: &str, issue_number: i64) -> Result<std::path::PathBuf, String> {
+   268	    let base = Path::new(project_path);
+   269	    if !base.is_dir() {
+   270	        return Err(format!("Path is not a directory: {project_path}"));
+   271	    }
+   272	
+   273	    let issue_dir = base
+   274	        .join(".autoresearch")
+   275	        .join("workflows")
+   276	        .join(format!("issue-{issue_number}"));
+   277	
+   278	    if !issue_dir.is_dir() {
+   279	        return Err(format!("Workflow logs for Issue #{issue_number} not found"));
+   280	    }
+   281	
+   282	    Ok(issue_dir)
+   283	}
+   284	
+   285	fn classify_log_source(filename: &str) -> (&'static str, String) {
+   286	    match filename {
+   287	        "terminal.log" => ("terminal", "终端日志".to_string()),
+   288	        "log.md" => ("summary", "工作流摘要".to_string()),
+   289	        _ if filename.starts_with("iteration-") => ("iteration", filename.to_string()),
+   290	        _ => ("file", filename.to_string()),
+   291	    }
+   292	}
+   293	
+   294	fn iteration_number(filename: &str) -> Option<i32> {
+   295	    filename
+   296	        .strip_prefix("iteration-")
+   297	        .and_then(|rest| rest.split('-').next())
+   298	        .and_then(|value| value.parse::<i32>().ok())
+   299	}
+   300	
+   301	fn sort_log_sources(left: &IssueLogSource, right: &IssueLogSource) -> std::cmp::Ordering {
+   302	    fn rank(kind: &str) -> i32 {
+   303	        match kind {
+   304	            "terminal" => 0,
+   305	            "summary" => 1,
+   306	            "iteration" => 2,
+   307	            _ => 3,
+   308	        }
+   309	    }
+   310	
+   311	    rank(&left.kind)
+   312	        .cmp(&rank(&right.kind))
+   313	        .then_with(|| match (left.kind.as_str(), right.kind.as_str()) {
+   314	            ("iteration", "iteration") => iteration_number(&left.id)
+   315	                .cmp(&iteration_number(&right.id))
+   316	                .then_with(|| left.label.cmp(&right.label)),
+   317	            _ => std::cmp::Ordering::Equal,
+   318	        })
+   319	        .then_with(|| left.label.cmp(&right.label))
+   320	}
+   321	
+   322	fn file_timestamp(metadata: &fs::Metadata) -> Option<String> {
+   323	    metadata
+   324	        .modified()
+   325	        .ok()
+   326	        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+   327	        .map(|duration| duration.as_secs().to_string())
+   328	}
+   329	
+   330	fn list_issue_log_sources_sync(project_path: &str, issue_number: i64) -> Result<Vec<IssueLogSource>, String> {
+   331	    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+   332	    let entries = fs::read_dir(&issue_dir)
+   333	        .map_err(|e| format!("Failed to read workflow dir: {e}"))?;
+   334	
+   335	    let mut sources = Vec::new();
+   336	    for entry in entries {
+   337	        let entry = entry.map_err(|e| format!("Failed to read workflow entry: {e}"))?;
+   338	        let path = entry.path();
+   339	        if !path.is_file() {
+   340	            continue;
+   341	        }
+   342	
+   343	        let filename = entry.file_name().to_string_lossy().to_string();
+   344	        let metadata = entry
+   345	            .metadata()
+   346	            .map_err(|e| format!("Failed to read metadata for {filename}: {e}"))?;
+   347	        let (kind, label) = classify_log_source(&filename);
+   348	
+   349	        sources.push(IssueLogSource {
+   350	            id: filename,
+   351	            label,
+   352	            kind: kind.to_string(),
+   353	            updated_at: file_timestamp(&metadata),
+   354	            size_bytes: metadata.len(),
+   355	        });
+   356	    }
+   357	
+   358	    sources.sort_by(sort_log_sources);
+   359	    Ok(sources)
+   360	}
+   361	
+   362	fn resolve_issue_log_source_path(
+   363	    project_path: &str,
+   364	    issue_number: i64,
+   365	    source_id: &str,
+   366	) -> Result<std::path::PathBuf, String> {
+   367	    if source_id.is_empty()
+   368	        || source_id.contains('/')
+   369	        || source_id.contains('\\')
+   370	        || source_id == "."
+   371	        || source_id == ".."
+   372	    {
+   373	        return Err(format!("Invalid log source id: {source_id}"));
+   374	    }
+   375	
+   376	    let issue_dir = workflow_issue_dir(project_path, issue_number)?;
+   377	    let path = issue_dir.join(source_id);
+   378	    if !path.is_file() {
+   379	        return Err(format!("Log source not found: {source_id}"));
+   380	    }
+   381	
+   382	    Ok(path)
+   383	}
+   384	
+   385	fn read_issue_log_content_sync(
+   386	    project_path: &str,
+   387	    issue_number: i64,
+   388	    source_id: &str,
+   389	) -> Result<IssueLogContent, String> {
+   390	    let source_path = resolve_issue_log_source_path(project_path, issue_number, source_id)?;
+   391	    let metadata = fs::metadata(&source_path)
+   392	        .map_err(|e| format!("Failed to read metadata for {source_id}: {e}"))?;
+   393	    let bytes = fs::read(&source_path)
+   394	        .map_err(|e| format!("Failed to read log source {source_id}: {e}"))?;
+   395	
+   396	    Ok(IssueLogContent {
+   397	        source_id: source_id.to_string(),
+   398	        text: String::from_utf8_lossy(&bytes).into_owned(),
+   399	        updated_at: file_timestamp(&metadata),
+   400	    })
+   401	}
+   402	
+   403	/// Retrieves detailed information about a specific GitHub Issue using `gh issue view`.
+   404	#[tauri::command]
+   405	async fn get_issue_detail(project_path: String, issue_number: i64) -> Result<IssueDetail, String> {
+   406	    tokio::task::spawn_blocking(move || {
+   407	        get_issue_detail_sync(&project_path, issue_number)
+   408	    })
+   409	    .await
+   410	    .map_err(|e| format!("Task join error: {e}"))?
+   411	}
+   412	
+   413	fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueDetail, String> {
+   414	    let base = Path::new(project_path);
+   415	    if !base.is_dir() {
+   416	        return Err(format!("Path is not a directory: {project_path}"));
+   417	    }
+   418	
+   419	    // Execute gh issue view
+   420	    let output = Command::new("gh")
+   421	        .args([
+   422	            "issue", "view",
+   423	            &issue_number.to_string(),
+   424	            "--json", "body,comments",
+   425	        ])
+   426	        .current_dir(base)
+   427	        .output()
+   428	        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+   429	
+   430	    if !output.status.success() {
+   431	        let stderr = String::from_utf8_lossy(&output.stderr);
+   432	        return Err(map_issue_detail_command_error(issue_number, &stderr));
+   433	    }
+   434	
+   435	    let stdout = String::from_utf8_lossy(&output.stdout);
+   436	    parse_issue_detail(&stdout)
+   437	}
+   438	
+   439	/// Lists available workflow log sources for a processed Issue.
+   440	#[tauri::command]
+   441	async fn list_issue_log_sources(
+   442	    project_path: String,
+   443	    issue_number: i64,
+   444	) -> Result<Vec<IssueLogSource>, String> {
+   445	    tokio::task::spawn_blocking(move || list_issue_log_sources_sync(&project_path, issue_number))
+   446	        .await
+   447	        .map_err(|e| format!("Task join error: {e}"))?
+   448	}
+   449	
+   450	/// Reads the content of a workflow log source under `.autoresearch/workflows/issue-N/`.
+   451	#[tauri::command]
+   452	async fn read_issue_log_content(
+   453	    project_path: String,
+   454	    issue_number: i64,
+   455	    source_id: String,
+   456	) -> Result<IssueLogContent, String> {
+   457	    tokio::task::spawn_blocking(move || {
+   458	        read_issue_log_content_sync(&project_path, issue_number, &source_id)
+   459	    })
+   460	    .await
+   461	    .map_err(|e| format!("Task join error: {e}"))?
+   462	}
+   463	
+   464	/// Request parameters for starting a run.sh process.
+   465	#[derive(serde::Deserialize, Debug)]
+   466	struct StartRunRequest {
+   467	    /// Project directory path where run.sh will execute.
+   468	    project_path: String,
+   469	    /// GitHub Issue number to process.
+   470	    issue_number: i64,
+
+codex
+我已经定位到两个实际缺陷，不是样式层面而是状态正确性问题：同一 Issue 刷新时无法稳定保留用户主动选中的 `live-output`，以及切换 Issue 时缺少异步请求隔离，旧请求可能覆盖新 Issue 的日志状态。我先把这两个模式写进目录级 `CLAUDE.md`，避免后续迭代重复踩坑。
+apply patch
+patch: completed
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/CLAUDE.md | sed -n '128,150p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   128	- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+   129	
+   130	## LogViewer 约定
+   131	
+   132	### 性能
+   133	
+   134	- `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+   135	- `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+   136	
+   137	### 状态正确性
+   138	
+   139	- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
+   140	- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
+   141	
+   142	### 搜索高亮
+   143	
+   144	- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+   145	- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
+   146	- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
+   147	
+   148	### React Key
+   149	
+   150	- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+exec
+/bin/zsh -lc 'git diff -- desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index 88bfc4c..70c785b 100644
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -37,15 +37,12 @@
+ - Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
+-<<<<<<< Updated upstream
+ - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+ - When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
+ - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
+ - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+-=======
+ - For persisted stores with value bounds, validate both setter input and persisted hydration (`merge`/`migrate`), otherwise invalid `localStorage` data can bypass runtime constraints.
+->>>>>>> Stashed changes
+ 
+ ## Tauri Integration
+ 
+@@ -87,6 +84,10 @@
+ - **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
+ - **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+ - **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
++- **日志查看器**: 历史日志不要直接塞进 `runStore.outputLines`；单独用 `useLogViewerStore` 管理日志源、搜索词、级别过滤和自动滚动状态，实时输出只作为其中一个 source (`live-output`)
++- **日志来源**: 日志源列表统一由 Tauri `list_issue_log_sources` 返回，前端只拿 `source.id` 调 `read_issue_log_content`，不要自己拼 `.autoresearch/workflows/issue-N/...` 路径
++- **日志轮询**: `LogViewer` 需要同时轮询“日志源列表”和“当前选中文件内容”；否则运行中新增的 iteration 日志文件不会出现在下拉列表里
++- **刷新保态**: 同一 Issue 的日志源轮询不能重置 `searchQuery`、`selectedSourceId`、`autoScroll` 或 `hasPendingScroll`，这些都是用户当前阅读状态
+ 
+ ### 样式约定
+ 
+@@ -125,3 +126,25 @@
+ - 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+ - 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+ - 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
++
++## LogViewer 约定
++
++### 性能
++
++- `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
++- `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
++
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
++### 搜索高亮
++
++- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
++- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
++- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
++
++### React Key
++
++- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+codex
+我顺手复核了目录知识文件，确认新增条目已写入；同时注意到这个仓库里 `desktop_app/src/CLAUDE.md` 本来就带有一段未清理的冲突标记历史，这和本次 Issue #30 实现无直接关系，我不会在这次审核里把它算到实现者头上。
+exec
+/bin/zsh -lc 'rg -n "<<<<<<<|=======|>>>>>>>" desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+ exited 1 in 0ms:
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+exec
+/bin/zsh -lc "node --experimental-strip-types - <<'EOF'
+import { createLogViewerStore } from './desktop_app/src/stores/logViewerStore.ts';
+
+function createInvokeMock(handlers) {
+  return async (cmd) => handlers[cmd]();
+}
+
+const store = createLogViewerStore({
+  isTauri: true,
+  invoke: createInvokeMock({
+    list_issue_log_sources: () => [
+      { id: 'terminal.log', label: '终端日志', kind: 'terminal', updated_at: '1', size_bytes: 1 },
+    ],
+  }),
+});
+
+await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+console.log('after first load', store.getState().selectedSourceId);
+store.getState().selectSource('live-output');
+await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+console.log('after refresh', store.getState().selectedSourceId);
+EOF" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+after first load terminal.log
+after refresh terminal.log
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+exec
+/bin/zsh -lc "node --experimental-strip-types - <<'EOF'
+import { createLogViewerStore } from './desktop_app/src/stores/logViewerStore.ts';
+
+let resolver30;
+const promise30 = new Promise((resolve) => { resolver30 = resolve; });
+const store = createLogViewerStore({
+  isTauri: true,
+  invoke: async (cmd, args) => {
+    if (cmd "'!== '"'list_issue_log_sources') throw new Error('unexpected');
+    if (args.issueNumber === 30) return promise30;
+    if (args.issueNumber === 31) return [
+      { id: 'iteration-31.log', label: 'iteration-31.log', kind: 'iteration', updated_at: '31', size_bytes: 31 },
+    ];
+    throw new Error('bad issue');
+  },
+});
+
+const p30 = store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+const p31 = store.getState().loadSources('/tmp/project', 31, { preferLive: false });
+await p31;
+console.log('after 31', store.getState().currentIssueNumber, store.getState().sources.map(s => s.id));
+resolver30([
+  { id: 'iteration-30.log', label: 'iteration-30.log', kind: 'iteration', updated_at: '30', size_bytes: 30 },
+]);
+await p30;
+console.log('after late 30', store.getState().currentIssueNumber, store.getState().sources.map(s => s.id));
+EOF" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+after 31 31 [ 'live-output', 'iteration-31.log' ]
+after late 30 31 [ 'live-output', 'iteration-30.log' ]
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+exec
+/bin/zsh -lc "nl -ba desktop_app/tests/logViewerStore.test.mjs | sed -n '1,220p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import test from 'node:test';
+     2	import assert from 'node:assert/strict';
+     3	import {
+     4	  buildLogEntries,
+     5	  classifyLogLevel,
+     6	  createLogViewerStore,
+     7	  filterLogEntries,
+     8	} from '../src/stores/logViewerStore.ts';
+     9	
+    10	function createInvokeMock(handlers) {
+    11	  return async (cmd) => {
+    12	    const handler = handlers[cmd];
+    13	    if (!handler) {
+    14	      throw new Error(`Unhandled command: ${cmd}`);
+    15	    }
+    16	    return handler();
+    17	  };
+    18	}
+    19	
+    20	test('classifyLogLevel detects info, warn, and error lines', () => {
+    21	  assert.equal(classifyLogLevel('[2026-04-25 09:21:17] 调用 codex'), 'info');
+    22	  assert.equal(classifyLogLevel('Warning: retrying request'), 'warn');
+    23	  assert.equal(classifyLogLevel('❌ 构建失败'), 'error');
+    24	});
+    25	
+    26	test('filterLogEntries applies search query and level filters together', () => {
+    27	  const entries = buildLogEntries('start\nWarning: retry\nbuild failed');
+    28	  const filtered = filterLogEntries(entries, 'retry', {
+    29	    info: true,
+    30	    warn: true,
+    31	    error: false,
+    32	  });
+    33	
+    34	  assert.deepEqual(
+    35	    filtered.map((entry) => entry.text),
+    36	    ['Warning: retry']
+    37	  );
+    38	});
+    39	
+    40	test('loadSources prepends live output and prefers terminal log when not running', async () => {
+    41	  const store = createLogViewerStore({
+    42	    isTauri: true,
+    43	    invoke: createInvokeMock({
+    44	      list_issue_log_sources: () => [
+    45	        {
+    46	          id: 'iteration-2-codex-review.log',
+    47	          label: 'iteration-2-codex-review.log',
+    48	          kind: 'iteration',
+    49	          updated_at: '10',
+    50	          size_bytes: 10,
+    51	        },
+    52	        {
+    53	          id: 'terminal.log',
+    54	          label: '终端日志',
+    55	          kind: 'terminal',
+    56	          updated_at: '20',
+    57	          size_bytes: 20,
+    58	        },
+    59	      ],
+    60	    }),
+    61	  });
+    62	
+    63	  await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+    64	
+    65	  assert.deepEqual(
+    66	    store.getState().sources.map((source) => source.id),
+    67	    ['live-output', 'iteration-2-codex-review.log', 'terminal.log']
+    68	  );
+    69	  assert.equal(store.getState().selectedSourceId, 'terminal.log');
+    70	});
+    71	
+    72	test('loadSources prefers live output for active issue and refreshSelectedSource caches content', async () => {
+    73	  const store = createLogViewerStore({
+    74	    isTauri: true,
+    75	    invoke: createInvokeMock({
+    76	      list_issue_log_sources: () => [
+    77	        {
+    78	          id: 'terminal.log',
+    79	          label: '终端日志',
+    80	          kind: 'terminal',
+    81	          updated_at: '20',
+    82	          size_bytes: 20,
+    83	        },
+    84	      ],
+    85	      read_issue_log_content: () => ({
+    86	        source_id: 'terminal.log',
+    87	        text: 'line one\nline two',
+    88	        updated_at: '30',
+    89	      }),
+    90	    }),
+    91	  });
+    92	
+    93	  await store.getState().loadSources('/tmp/project', 30, { preferLive: true });
+    94	  assert.equal(store.getState().selectedSourceId, 'live-output');
+    95	
+    96	  store.getState().selectSource('terminal.log');
+    97	  await store.getState().refreshSelectedSource('/tmp/project', 30);
+    98	
+    99	  assert.equal(
+   100	    store.getState().sourceContents['terminal.log'].text,
+   101	    'line one\nline two'
+   102	  );
+   103	});
+   104	
+   105	test('loadSources preserves viewer state while refreshing the same issue', async () => {
+   106	  const store = createLogViewerStore({
+   107	    isTauri: true,
+   108	    invoke: createInvokeMock({
+   109	      list_issue_log_sources: () => [
+   110	        {
+   111	          id: 'terminal.log',
+   112	          label: '终端日志',
+   113	          kind: 'terminal',
+   114	          updated_at: '20',
+   115	          size_bytes: 20,
+   116	        },
+   117	        {
+   118	          id: 'iteration-2-codex-review.log',
+   119	          label: 'iteration-2-codex-review.log',
+   120	          kind: 'iteration',
+   121	          updated_at: '30',
+   122	          size_bytes: 30,
+   123	        },
+   124	      ],
+   125	    }),
+   126	  });
+   127	
+   128	  await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+   129	  store.getState().selectSource('iteration-2-codex-review.log');
+   130	  store.getState().setSearchQuery('failed');
+   131	  store.getState().setAutoScroll(false);
+   132	  store.getState().markScrollPending(true);
+   133	
+   134	  await store.getState().loadSources('/tmp/project', 30, { preferLive: false });
+   135	
+   136	  assert.equal(store.getState().selectedSourceId, 'iteration-2-codex-review.log');
+   137	  assert.equal(store.getState().searchQuery, 'failed');
+   138	  assert.equal(store.getState().autoScroll, false);
+   139	  assert.equal(store.getState().hasPendingScroll, true);
+   140	});
+   141	
+   142	test('toggleLevel keeps at least one log level enabled', () => {
+   143	  const store = createLogViewerStore({
+   144	    isTauri: false,
+   145	    invoke: async () => {
+   146	      throw new Error('invoke should not be called');
+   147	    },
+   148	  });
+   149	
+   150	  store.getState().toggleLevel('info');
+   151	  store.getState().toggleLevel('warn');
+   152	  store.getState().toggleLevel('error');
+   153	
+   154	  assert.deepEqual(store.getState().levelFilters, {
+   155	    info: false,
+   156	    warn: false,
+   157	    error: true,
+   158	  });
+   159	});
+   160	
+   161	test('buildLogEntries truncates to last 5000 lines for large input', () => {
+   162	  const lineCount = 6000;
+   163	  const lines = Array.from({ length: lineCount }, (_, i) => `line ${i + 1}`);
+   164	  const text = lines.join('\n');
+   165	  const entries = buildLogEntries(text);
+   166	
+   167	  assert.equal(entries.length, 5000);
+   168	  assert.equal(entries[0].lineNumber, 1001);
+   169	  assert.equal(entries[0].text, 'line 1001');
+   170	  assert.equal(entries[entries.length - 1].lineNumber, 6000);
+   171	  assert.equal(entries[entries.length - 1].text, 'line 6000');
+   172	});
+   173	
+   174	test('buildLogEntries keeps all lines when under 5000', () => {
+   175	  const entries = buildLogEntries('a\nb\nc');
+   176	  assert.equal(entries.length, 3);
+   177	  assert.equal(entries[0].lineNumber, 1);
+   178	  assert.equal(entries[2].lineNumber, 3);
+   179	});
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+codex
+## 审核报告
+
+### 实现者自检确认
+- [x] 已执行编译/类型检查
+- [x] 已执行 Lint 检查
+- [x] 已运行相关测试
+- [ ] 已确认测试覆盖充分
+
+我复核到 `cargo test`、`npm test`、`npm run typecheck`、`npm run lint` 均通过。
+
+### 主要问题
+
+1. 严重: 切换 Issue 时缺少异步请求隔离，旧 Issue 的迟到响应会污染当前 Issue 的日志状态。`loadSources` 和 `refreshSelectedSource` 都直接在请求返回后写入全局 store，没有校验“这次响应是否仍属于当前 Issue”。我本地复现了 `issue 30` 的慢请求在 `issue 31` 已加载完成后仍然把 `sources` 覆盖回旧数据。这个问题会直接导致查看 A Issue 时看到 B Issue 的日志文件列表/内容，属于功能正确性缺陷。[logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L225) [logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L299)
+
+2. 中等: 同一 Issue 刷新时，用户主动选择 `live-output` 无法被保留。`nextSelectedSourceId()` 只保留“非 live 的现有选项”；当 Issue 非运行态且存在 `terminal.log` 时，后台轮询会把用户手动切到的 `live-output` 自动改回 `terminal.log`，与“刷新保态”约定冲突，也会让 UI 行为显得不稳定。[logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L169) [logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L265)
+
+3. 中等: 测试没有覆盖上面两个最容易回归的状态问题。现有测试验证了“同一 Issue 保留迭代日志选择”和 5000 行截断，但没有验证“手动选择 `live-output` 后刷新仍保持该选择”，也没有验证“快速切换 Issue 时旧请求不会覆写新状态”。这使得当前测试集无法拦截最关键的日志查看器竞态问题。[logViewerStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs#L40) [logViewerStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs#L105)
+
+### 总体评价
+
+**评分: 79/100**
+
+这版实现已经补齐了上轮审核指出的核心能力，前后端结构也基本合理：Tauri 端提供了日志源枚举与内容读取，前端有独立 `logViewerStore`、搜索高亮、级别过滤、自动滚动和 5000 行截断，类型检查、lint、单测也都通过。  
+但目前仍不达标，主要卡在两个正确性问题：Issue 切换竞态会导致旧日志覆盖新状态，以及同一 Issue 下无法稳定保留用户手动选择的 `live-output`。这两个问题都发生在高频交互路径上，建议优先修复，并补上对应 store 测试后再进入验收。
+
+### 其他说明
+我已把这次审核里可复用的结论写入 [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md#L137)，新增了日志查看器的“状态正确性”约定。也建议把“异步请求需要按 issue 隔离”和“必须保留用户显式选择的 `live-output`”同步记入 `.autoresearch/workflows/issue-30/progress.md` 的 `Codebase Patterns`。
+
+## Learnings
+
+- **模式**: 日志查看器这类“轮询 + 全局 store”功能，除了保留搜索词/滚动状态，还必须保留用户显式选择的 source，本质上属于阅读上下文的一部分。
+- **踩坑**: “同一 Issue 刷新保态”并不等于“切换 Issue 安全”；如果没有 request key 或 issue guard，迟到响应会把新 Issue 的状态污染回旧数据。
+- **经验**: `logViewerStore` 这种可注入依赖的 Zustand 工厂很适合做竞态测试，后续可直接补“late response 不得覆写当前 issue”这类纯 store 用例，无需浏览器测试框架。
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index e0f7c447aaa05135bd7f73c41641491e679a4d4b..70c785b0f8e16e31354de1f54219eec0e419cffa
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -134,6 +134,11 @@
+ - `buildLogEntries` 结果必须通过 `useMemo` 缓存（`totalEntries`），然后 `filterLogEntries` 基于缓存结果再 memo；footer 中显示总行数用 `totalEntries.length`，不要重新调用 `buildLogEntries`
+ - `buildLogEntries` 内置 `MAX_LOG_LINES = 5000` 截断保护，只保留最近 5000 行，`lineNumber` 从实际起始行号开始计数（不是从 1）
+ 
++### 状态正确性
++
++- 同一 Issue 的日志源刷新必须保留用户当前选择的 source，包括用户主动切到 `live-output` 的情况；不要在后台轮询时自动切回 `terminal.log`
++- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
++
+ ### 搜索高亮
+ 
+ - 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+
+tokens used
+63,069
+## 审核报告
+
+### 实现者自检确认
+- [x] 已执行编译/类型检查
+- [x] 已执行 Lint 检查
+- [x] 已运行相关测试
+- [ ] 已确认测试覆盖充分
+
+我复核到 `cargo test`、`npm test`、`npm run typecheck`、`npm run lint` 均通过。
+
+### 主要问题
+
+1. 严重: 切换 Issue 时缺少异步请求隔离，旧 Issue 的迟到响应会污染当前 Issue 的日志状态。`loadSources` 和 `refreshSelectedSource` 都直接在请求返回后写入全局 store，没有校验“这次响应是否仍属于当前 Issue”。我本地复现了 `issue 30` 的慢请求在 `issue 31` 已加载完成后仍然把 `sources` 覆盖回旧数据。这个问题会直接导致查看 A Issue 时看到 B Issue 的日志文件列表/内容，属于功能正确性缺陷。[logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L225) [logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L299)
+
+2. 中等: 同一 Issue 刷新时，用户主动选择 `live-output` 无法被保留。`nextSelectedSourceId()` 只保留“非 live 的现有选项”；当 Issue 非运行态且存在 `terminal.log` 时，后台轮询会把用户手动切到的 `live-output` 自动改回 `terminal.log`，与“刷新保态”约定冲突，也会让 UI 行为显得不稳定。[logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L169) [logViewerStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts#L265)
+
+3. 中等: 测试没有覆盖上面两个最容易回归的状态问题。现有测试验证了“同一 Issue 保留迭代日志选择”和 5000 行截断，但没有验证“手动选择 `live-output` 后刷新仍保持该选择”，也没有验证“快速切换 Issue 时旧请求不会覆写新状态”。这使得当前测试集无法拦截最关键的日志查看器竞态问题。[logViewerStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs#L40) [logViewerStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs#L105)
+
+### 总体评价
+
+**评分: 79/100**
+
+这版实现已经补齐了上轮审核指出的核心能力，前后端结构也基本合理：Tauri 端提供了日志源枚举与内容读取，前端有独立 `logViewerStore`、搜索高亮、级别过滤、自动滚动和 5000 行截断，类型检查、lint、单测也都通过。  
+但目前仍不达标，主要卡在两个正确性问题：Issue 切换竞态会导致旧日志覆盖新状态，以及同一 Issue 下无法稳定保留用户手动选择的 `live-output`。这两个问题都发生在高频交互路径上，建议优先修复，并补上对应 store 测试后再进入验收。
+
+### 其他说明
+我已把这次审核里可复用的结论写入 [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md#L137)，新增了日志查看器的“状态正确性”约定。也建议把“异步请求需要按 issue 隔离”和“必须保留用户显式选择的 `live-output`”同步记入 `.autoresearch/workflows/issue-30/progress.md` 的 `Codebase Patterns`。
+
+## Learnings
+
+- **模式**: 日志查看器这类“轮询 + 全局 store”功能，除了保留搜索词/滚动状态，还必须保留用户显式选择的 source，本质上属于阅读上下文的一部分。
+- **踩坑**: “同一 Issue 刷新保态”并不等于“切换 Issue 安全”；如果没有 request key 或 issue guard，迟到响应会把新 Issue 的状态污染回旧数据。
+- **经验**: `logViewerStore` 这种可注入依赖的 Zustand 工厂很适合做竞态测试，后续可直接补“late response 不得覆写当前 issue”这类纯 store 用例，无需浏览器测试框架。

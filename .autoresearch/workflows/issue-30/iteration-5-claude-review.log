@@ -1,0 +1,97 @@
+I now have a complete picture of the implementation. Let me compile the review.
+
+## 审核报告
+
+### Issue
+- 编号: #30
+- 标题: [desktop-app] 实时日志查看器
+- 迭代次数: 1
+
+---
+
+### 总体评价
+
+**评分: 90/100**
+
+实现质量优秀。后端（Rust）新增了 `list_issue_log_sources` 和 `read_issue_log_content` 两个 Tauri command，含路径遍历防护和排序逻辑；前端新增了完整的 `LogViewer` 组件和 `logViewerStore`，支持多日志源切换、关键词搜索高亮、级别过滤、自动滚动与暂停、5000 行截断、请求竞态隔离。所有 Issue 验收条件均已覆盖。TypeScript typecheck、ESLint、Rust cargo test、Node.js store 测试全部通过（共 29 个测试，0 失败）。
+
+---
+
+### 各维度得分
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 90 | 所有验收条件覆盖，竞态保护、截断、搜索、过滤均正确实现；有少量可改进之处 |
+| 测试质量 (25%) | 90 | 前端 11 个 store 测试 + 后端 18 个 Rust 测试，覆盖核心逻辑和竞态场景 |
+| 代码质量 (20%) | 90 | 结构清晰，命名规范，与项目既有模式一致 |
+| 安全性 (10%) | 95 | 路径遍历防护完善，正则输入安全转义 |
+| 性能 (10%) | 85 | 5000 行截断和 useMemo 缓存合理，轮询间隔可优化 |
+
+加权总分: 90 × 0.35 + 90 × 0.25 + 90 × 0.20 + 95 × 0.10 + 85 × 0.10 = 31.5 + 22.5 + 18.0 + 9.5 + 8.5 = **90**
+
+---
+
+### 严重问题 (必须修复)
+
+无严重问题。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: 1.5 秒双轮询可能产生不必要的后端请求
+
+**位置**: `LogViewer.tsx:253-257` 和 `LogViewer.tsx:278-280`
+
+**问题描述**:
+`LogViewer` 同时维护了两个 `setInterval`：一个每 1.5s 刷新日志源列表 (`loadSources`)，另一个每 1.5s 刷新当前选中文件内容 (`refreshSelectedSource`)。当选中的是非 `live-output` 的文件源时，两个轮询同时运行，每 1.5 秒发出 2 次 Tauri invoke。对于磁盘文件的场景，可以适当降低频率（如 3-5 秒），或在非运行状态下降低到更长间隔。
+
+**建议修复**:
+根据 `isCurrentIssueRunning` 状态动态调整轮询间隔，运行中 1.5s，非运行中 5s。
+
+**原因**: 非关键功能，但可改善资源利用率。
+
+#### 问题 2: `classifyLogLevel` 使用 `includes` 可能导致误判
+
+**位置**: `logViewerStore.ts:102-126`
+
+**问题描述**:
+`classifyLogLevel` 使用 `line.toLowerCase().includes('error')` 来检测 error 级别。这意味着包含 "error" 子串的普通日志也会被标记为 error（如 `"Fixing errorMessage variable"` 或 `"No errors found"`）。Issue 原始需求要求通过正则匹配 `[ERROR]`、`[WARN]` 等标记来过滤。
+
+**建议修复**:
+优先匹配结构化标记（如 `[ERROR]`、`[WARN]`），仅在没有标记时再 fallback 到宽松关键词匹配：
+```typescript
+// Prioritize structured markers
+if (/\[(ERROR|FATAL)\]/i.test(line)) return 'error';
+if (/\[(WARN|WARNING)\]/i.test(line)) return 'warn';
+// Fallback to loose matching
+...
+```
+
+**原因**: 当前实现对真实 run.sh 输出应该够用（因为 run.sh 的日志通常带有明确的级别标记），但可能在某些日志内容中产生误分类。
+
+---
+
+### 建议改进 (可选)
+
+- **轮询优化**: 可以在 `loadSources` 返回的 sources 的 `updated_at` 没变化时跳过 `refreshSelectedSource`，减少不必要的文件读取。
+- **大文件保护**: 后端 `read_issue_log_content_sync` 直接 `fs::read` 整个文件，对于特别大的日志文件（>10MB）可能造成瞬间内存尖峰。可以考虑在后端限制读取大小或只读取最后 N 行。
+- **非 Tauri 环境 mock**: `logViewerStore` 在非 Tauri 环境下只返回 `live-output` 源，无法演示日志源切换功能。如果需要浏览器模式 demo，可以添加 mock 数据。
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+代码已达到可接受标准。上述一般问题为建议性改进，不阻塞合并。
+
+---
+
+## Learnings
+
+- **模式**: `logViewerStore` 采用工厂函数 `createLogViewerStore(overrides)` 注入 `isTauri` 和 `invoke` 依赖，使得 Node.js 环境可以直接用 `node --test` 测试 Zustand store 逻辑。这与 `runStore`、`runConfigStore` 的模式一致，是该项目前端 store 的标准可测试性模式。
+- **模式**: 异步请求竞态保护使用递增的 `requestKey` + issue number 双重 guard，在 async/await 返回后检查两者是否仍与当前状态匹配，不匹配则丢弃响应。该模式在 `issueStore` 中也有使用。
+- **模式**: Rust 后端的 `resolve_issue_log_source_path` 使用路径分隔符检查 + `..` 检查来防止目录遍历攻击，这是该项目处理用户提供的文件标识符的安全标准模式。
+- **经验**: 后端日志源排序通过 `rank()` 函数给 kind 赋权重，然后 `then_with` 链式比较，实现稳定的多级排序。iteration 日志解析数字前缀来保证 `iteration-2` 排在 `iteration-10` 之前。

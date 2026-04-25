@@ -1,0 +1,60 @@
+根据我对项目的分析，Issue #30 需要创建一个完整的日志查看器组件。现有的 `IssueDetailPanel.tsx` 中已有基础的日志输出区域，但缺少搜索、过滤和自动滚动控制等功能。
+
+以下是我的子任务拆分：
+
+```json
+{
+  "issueNumber": 30,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "创建 LogViewer 组件基础结构",
+      "description": "创建独立的 LogViewer 组件，实现日志实时显示和等宽字体渲染。修改 runStore 的 MAX_OUTPUT_LINES 从 2000 改为 5000。组件接收 outputLines 作为 props，使用等宽字体（font-mono）展示日志，支持清空操作，并实现基础自动滚动到底部功能。",
+      "acceptanceCriteria": [
+        "创建 LogViewer 组件，接收 outputLines props",
+        "使用 font-mono 等宽字体展示日志",
+        "MAX_OUTPUT_LINES 修改为 5000",
+        "保留清空日志按钮功能",
+        "新日志到来时自动滚动到底部",
+        "Typecheck/lint passes"
+      ],
+      "priority": 1,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现日志搜索与级别过滤功能",
+      "description": "在 LogViewer 组件中添加搜索框和级别过滤按钮。搜索功能支持关键词匹配并高亮显示匹配项。级别过滤支持 All / Info / Warn / Error 四个选项，通过正则匹配日志行中的 [ERROR]、[WARN]、[INFO] 等标记。过滤后的结果应保持自动滚动功能。",
+      "acceptanceCriteria": [
+        "添加搜索输入框，支持实时搜索",
+        "搜索匹配项在日志中高亮显示（如黄色背景）",
+        "添加级别过滤按钮组：All / Info / Warn / Error",
+        "正则匹配 [ERROR]、[WARN]、[INFO] 等标记",
+        "过滤后日志行数正确，无重复或遗漏",
+        "Typecheck/lint passes"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "实现自动滚动控制与跳转按钮",
+      "description": "实现智能自动滚动控制：默认自动滚动到底部；用户点击日志区域或手动滚动时暂停自动滚动；暂停期间新日志到来时显示\"跳到底部\"按钮；点击按钮后恢复自动滚动并滚动到底部。需要在组件中维护 isAutoScroll 状态。",
+      "acceptanceCriteria": [
+        "默认开启自动滚动，新日志自动滚动到底部",
+        "用户滚动或点击日志区域时暂停自动滚动",
+        "暂停状态下新日志到来时显示\"跳到底部\"按钮",
+        "点击按钮后恢复自动滚动并定位到底部",
+        "按钮样式美观，不影响日志阅读",
+        "Typecheck/lint passes",
+        "Verify in browser"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

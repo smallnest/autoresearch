@@ -14,5 +14,11 @@
 - In desktop-app commands, `projectPath` refers to the repository being processed, not the autoresearch installation directory. Resolve the `run.sh` executable relative to the autoresearch app/repo root, then pass the selected repository via `-p <projectPath>` when the target project is outside the autoresearch repo itself.
 - Keep argument-building tests separate from process-spawn tests; pure tests can cover flag ordering, but start/exit event behavior needs at least one integration-style backend test that exercises real child stdout/stderr forwarding.
 
+## Workflow Logs
+- Workflow log browsing should stay inside `.autoresearch/workflows/issue-N/`; expose file metadata and file contents through Tauri commands rather than letting the frontend assemble arbitrary filesystem paths.
+- Validate `source_id` as a single filename (no path separators or `..`) before reading a workflow log file to avoid traversal bugs.
+- Keep workflow log ordering stable for the UI: `terminal.log` first, `log.md` second, then iteration logs, then other files alphabetically.
+- When sorting iteration logs, parse the numeric prefix from `iteration-N-...` and sort by `N`; plain lexicographic ordering will put `iteration-10` before `iteration-2`.
+
 ## Tests
 - Keep process-management tests in `src/lib.rs` as pure helper tests where possible; use a short-lived `sh -c "exit 0"` child on Unix to verify shared state stores both PID and handle without adding sleeps.
