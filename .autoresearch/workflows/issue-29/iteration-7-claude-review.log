@@ -1,0 +1,101 @@
+无控制台错误。现在让我完成审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #29
+- 标题: [desktop-app] 运行参数配置 UI
+- 迭代次数: 7
+
+---
+
+### 总体评价
+
+**评分: 92/100**
+
+Issue #29 的实现**全面且高质量**。所有验收条件均已满足：创建了独立的 `runConfigStore` 持久化配置存储、可折叠的 `RunConfigPanel` 组件、集成了 Agent 选择器、参数正确传递到后端。代码结构清晰，测试覆盖全面，TypeScript/ESLint 检查通过。
+
+---
+
+### 验收条件检查
+
+| 验收条件 | 状态 |
+|---------|------|
+| 启动任务前显示参数配置面板（可折叠形式） | ✅ `RunConfigPanel` 可折叠，默认收起 |
+| max iterations：数字输入框，默认 16，范围 1-50 | ✅ 滑块+数字输入，range 限制正确 |
+| passing score：滑块或数字输入，默认 85，范围 1-100 | ✅ 滑块+数字输入，range 限制正确 |
+| continue 模式：开关按钮，开启后传 `-c` 参数给 run.sh | ✅ Toggle switch，后端 `build_run_args` 处理 `-c` |
+| 集成 agent 选择器（Issue #25 的组件） | ✅ `IssueDetailPanel:351` 集成 `AgentSelector` |
+| 参数保存到 Zustand store，下次打开自动填充上次值 | ✅ `runConfigStore` 使用 `persist` 中间件 |
+| 点击"开始处理"按钮调用 Issue #28 的 start_run command | ✅ `IssueDetailPanel:318-324` 调用 `startRun` |
+| Typecheck/lint passes | ✅ `tsc --noEmit` 和 `eslint` 均通过 |
+| Verify in browser | ✅ 页面加载无错误，HMR 正常 |
+
+---
+
+### 代码质量亮点
+
+1. **Store 设计优秀** (`runConfigStore.ts`)
+   - 工厂函数 `createRunConfigStore(deps)` 支持依赖注入，方便测试
+   - `sanitizeRunConfig()` 在 setter 和 rehydration 时都进行 clamp 校验
+   - 常量导出（`MIN_*`, `MAX_*`, `DEFAULT_*`）便于 UI 复用
+
+2. **测试覆盖全面** (`runConfigStore.test.mjs`)
+   - 覆盖默认值、边界 clamp、持久化、hydration sanitization
+   - 使用内存 storage 注入，无需浏览器环境
+
+3. **UI 组件设计良好** (`RunConfigPanel.tsx`)
+   - 支持受控和非受控模式（`collapsed`/`onCollapsedChange`）
+   - "已修改"徽章提示用户配置已偏离默认值
+   - 重置按钮在默认状态时 disabled
+
+4. **后端集成正确** (`lib.rs`)
+   - `build_run_args` 和 `build_run_env_vars` 纯函数提取便于测试
+   - `PASSING_SCORE` 通过环境变量传递，`-c` 通过命令行参数传递
+
+---
+
+### 建议改进 (可选)
+
+1. **数字输入框增加 step 属性**
+   - `maxIterations` 可设置 `step={1}`，`passingScore` 可设置 `step={5}` 提升用户体验
+
+2. **考虑添加 aria-label**
+   - `RunConfigPanel.tsx:220-235` 的 toggle switch 已有 `aria-checked`，可补充 `aria-label="继续模式开关"`
+
+3. **面板状态持久化 (可选)**
+   - 当前 `collapsed` 状态未持久化，如需求变更可加入 store
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入人工审核
+
+**下一步行动**:
+代码已达到可接受标准（92/100 > 85），建议合并 PR。
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 95 | 所有验收条件满足，参数传递链路完整 |
+| 测试质量 (25%) | 90 | 前端 store 测试全面，后端 Rust 测试覆盖参数构建 |
+| 代码质量 (20%) | 95 | 结构清晰，命名规范，导出常量便于复用 |
+| 安全性 (10%) | 90 | 数值 clamp 防止越界，无注入风险 |
+| 性能 (10%) | 90 | 无明显性能问题，localStorage 持久化轻量 |
+
+**加权总分**: 95×0.35 + 90×0.25 + 95×0.20 + 90×0.10 + 90×0.10 = **92.25 ≈ 92/100**
+
+---
+
+## Learnings
+
+- **模式**: `createXxxStore(deps)` 工厂函数 + 依赖注入是 Zustand 测试的最佳实践，避免 mock `localStorage`
+- **模式**: 持久化 store 应在 setter 和 `merge` (rehydration) 两处都做数值校验，防止旧数据绕过 UI 约束
+- **经验**: `RunConfigPanel` 采用受控/非受控双模式设计，父组件可选择性接管 `collapsed` 状态
+- **经验**: 后端参数分为 CLI args (`-c`, `-a`, `-p`) 和 env vars (`PASSING_SCORE`)，需分别处理

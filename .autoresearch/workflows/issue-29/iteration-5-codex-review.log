@@ -1,0 +1,3499 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc20f-0db4-7e61-a0e9-1da44f45ad25
+--------
+user
+审核 Issue #29 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 运行参数配置 UI
+
+
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+# Issue #29 经验日志
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+
+## Iteration 3 - 2026-04-25
+
+- **Agent**: opencode
+- **类型**: 审核+修复
+- **评分**: 0/100
+
+- **审核要点**:
+
+[91m[1mError: [0mYou've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade
+
+- **经验与发现**:
+
+[91m[1mError: [0mYou've reached your usage limit for this billing cycle. Your quota will be refreshed in the next cycle. Upgrade to get more: https://www.kimi.com/code/console?from=quota-upgrade
+
+
+## Iteration 5 - 2026-04-25
+
+- **Agent**: codex
+- **类型**: 审核+修复
+- **评分**: 50/100
+
+- **审核要点**:
+
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc20a-825c-7622-beb7-4ac2f1eccb4f
+--------
+user
+审核 Issue #29 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 运行参数配置 UI
+
+
+## 子任务审核
+
+子任务进度: 0/3 已完成 | 当前子任务: T-001 - 创建 RunConfigStore 持久化配置存储
+
+请审核当前子任务的实现：
+
+- **ID**: T-001
+- **标题**: 创建 RunConfigStore 持久化配置存储
+- **类型**: code
+- **描述**: 创
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`
+- **模式**: 数值约束使用 `clamp` 函数在 setter 中处理，确保存入的值始终有效
+- **模式**: 导出默认值和约束常量供 UI 组件使用，避免魔法数字
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```ma
+
+... (内容过长，已截断)
+
+
+## Iteration 4 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复
+- **评分**: 15/100
+
+- **审核要点**:
+
+现在我已经完整了解了当前的实现状态。让我输出审核报告。
+
+## 审核报告
+
+### Issue
+- 编号: #29
+- 标题: [desktop-app] 运行参数配置 UI
+- 迭代次数: 4（继续模式）
+
+---
+
+### 总体评价
+
+**评分: 15/100**
+
+Issue #29 的核心需求几乎**完全未实现**。虽然 `runStore.ts` 中已有 `maxIter`、`passingScore`、`continueMode` 参数的传递支持，但缺少关键的独立持久化配置存储（`runConfigStore`）和参数配置 UI 面板。用户无法在启动任务前配置这些参数。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少 runConfigStore 持久化配置存储
+
+**位置**: `desktop_app/src/stores/` (应创建 `runConfigStore.ts`)
+
+**问题描述**:
+Issue 要求创建独立的配置存储，使用 zustand persis
+
+- **经验与发现**:
+
+## Learnings
+
+- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`
+- **踩坑**: 之前迭代因 OpenCode 配额问题未能正常完成审核，导致进度丢失
+- **经验**: `runStore.ts` 已预留了配置参数的接口（`StartRunRequest`），实现时应直接使用这些接口，避免重复定义
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我先查看仓库状态并定位 Issue #29 相关实现，重点核对运行参数配置 UI、持久化 store 和测试覆盖。
+exec
+/bin/zsh -lc 'git status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M desktop_app/package.json
+ M desktop_app/src/CLAUDE.md
+ M desktop_app/src/components/IssueDetailPanel.tsx
+ M run.sh
+?? .autoresearch/workflows/issue-29/
+?? desktop_app/src/components/RunConfigPanel.tsx
+?? desktop_app/src/stores/runConfigStore.ts
+?? desktop_app/tests/runConfigStore.test.mjs
+
+exec
+/bin/zsh -lc "rg --files /Users/chaoyuepan/ai/autoresearch | rg \"desktop_app|CLAUDE\\.md|progress\\.md|runStore|store|Run\"" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/lib/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/vendor/react-markdown.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/SettingsPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/HistoryPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/assets/react.svg
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/vite-env.d.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/Sidebar.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/MarkdownRenderer.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RightPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/AgentSelector.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/AppShell.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/index.css
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/agentStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/main.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/App.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/vite.config.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/eslint.config.js
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/main.rs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/128x128@2x.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square71x71Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square44x44Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/32x32.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square284x284Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/128x128.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square142x142Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/icon.ico
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square310x310Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square89x89Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square107x107Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/StoreLogo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/icon.icns
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square150x150Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/Square30x30Logo.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/icon.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/build.rs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/Cargo.lock
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/capabilities/default.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/tauri.conf.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/Cargo.toml
+/Users/chaoyuepan/ai/autoresearch/desktop_app/package.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/package-lock.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/public/tauri.svg
+/Users/chaoyuepan/ai/autoresearch/desktop_app/public/vite.svg
+/Users/chaoyuepan/ai/autoresearch/desktop_app/ui-verify-before.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/README.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/index.html
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.node.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/pnpm-lock.yaml
+/Users/chaoyuepan/ai/autoresearch/tests/CLAUDE.md
+
+exec
+/bin/zsh -lc 'rg -n "runConfig|continueMode|maxIter|passingScore|运行参数|RunConfig|StartRunRequest" /Users/chaoyuepan/ai/autoresearch' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/docs/desktop-app-prd-to-issues.md:100:└── #29 运行参数配置 UI
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:89:- [ ] 可配置运行参数：passing score、agent 执行顺序、max iterations
+/Users/chaoyuepan/ai/autoresearch/tasks/prd-desktop-app.md:134:- FR-8: 运行参数（passing score、max iterations）通过 `run.sh` 的 CLI 参数或环境变量传递
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:4:  createRunConfigStore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:9:} from '../src/stores/runConfigStore.ts';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:26:test('runConfigStore exposes required default values', () => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:28:  const store = createRunConfigStore({ storage });
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:30:  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:31:  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:32:  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:35:test('runConfigStore clamps numeric setters to accepted ranges', () => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:37:  const store = createRunConfigStore({ storage });
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:42:  assert.equal(store.getState().maxIterations, 1);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:43:  assert.equal(store.getState().passingScore, 100);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:48:  assert.equal(store.getState().maxIterations, 50);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:49:  assert.equal(store.getState().passingScore, 1);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:52:test('runConfigStore persists values under the required storage key', () => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:54:  const store = createRunConfigStore({ storage });
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:63:    maxIterations: 24,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:64:    passingScore: 90,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:65:    continueMode: true,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:69:test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:73:        maxIterations: -10,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:74:        passingScore: 999,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:75:        continueMode: true,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:81:  const store = createRunConfigStore({ storage });
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:84:  assert.equal(store.getState().maxIterations, 1);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:85:  assert.equal(store.getState().passingScore, 100);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:86:  assert.equal(store.getState().continueMode, true);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:286:struct StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:303:fn build_run_args(request: &StartRunRequest) -> Vec<String> {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:332:fn build_run_env_vars(request: &StartRunRequest) -> Vec<(&'static str, String)> {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:362:async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<(), String> {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:569:async fn start_run(_app: tauri::AppHandle, _request: StartRunRequest) -> Result<(), String> {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:605:    use super::{build_run_args, build_run_env_vars, StartRunRequest};
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:679:        let request = StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:702:        let request = StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:723:        let request = StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:739:        let request = StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:755:        let request = StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:773:        let request = StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:17:interface StartRunRequest {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:21:  maxIter?: number;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:22:  passingScore?: number;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:23:  continueMode?: boolean;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:99:  startRun: (_request: StartRunRequest) => Promise<void>;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:206:    startRun: async (_request: StartRunRequest) => {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:240:            max_iter: _request.maxIter,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:241:            passing_score: _request.passingScore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:242:            continue_mode: _request.continueMode,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:21:interface RunConfigValues {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:22:  maxIterations: number;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:23:  passingScore: number;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:24:  continueMode: boolean;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:27:export interface RunConfigState extends RunConfigValues {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:34:interface RunConfigStoreDeps {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:38:const DEFAULT_CONFIG: RunConfigValues = {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:39:  maxIterations: DEFAULT_MAX_ITERATIONS,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:40:  passingScore: DEFAULT_PASSING_SCORE,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:41:  continueMode: DEFAULT_CONTINUE_MODE,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:54:export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigValues {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:56:    maxIterations: clamp(
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:57:      values.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:61:    passingScore: clamp(
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:62:      values.passingScore ?? DEFAULT_PASSING_SCORE,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:66:    continueMode: values.continueMode ?? DEFAULT_CONTINUE_MODE,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:70:function createRunConfigState(
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:71:  set: Parameters<StateCreator<RunConfigState>>[0]
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:72:): RunConfigState {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:77:        maxIterations: clamp(value, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS),
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:82:        passingScore: clamp(value, MIN_PASSING_SCORE, MAX_PASSING_SCORE),
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:86:      set({ continueMode: value });
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:95:  deps: RunConfigStoreDeps
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:96:): PersistOptions<RunConfigState, RunConfigValues> {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:103:      maxIterations: state.maxIterations,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:104:      passingScore: state.passingScore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:105:      continueMode: state.continueMode,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:109:      ...sanitizeRunConfig((persistedState as Partial<RunConfigValues>) ?? {}),
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:114:export function createRunConfigStore(deps: RunConfigStoreDeps = {}) {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:115:  return create<RunConfigState>()(
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:116:    persist((set) => createRunConfigState(set), createPersistOptions(deps))
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:120:export const useRunConfigStore = createRunConfigStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:3:  useRunConfigStore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:10:} from '../stores/runConfigStore';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:72:interface RunConfigPanelProps {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:77:export default function RunConfigPanel({
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:80:}: RunConfigPanelProps): JSX.Element {
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:96:    maxIterations,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:97:    passingScore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:98:    continueMode,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:103:  } = useRunConfigStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:106:    maxIterations === DEFAULT_MAX_ITERATIONS &&
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:107:    passingScore === DEFAULT_PASSING_SCORE &&
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:108:    continueMode === false;
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:119:          <span className="text-sm font-medium text-gray-700">运行参数配置</span>
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:138:                htmlFor="maxIterations"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:150:                id="maxIterations"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:153:                value={maxIterations}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:161:                value={maxIterations}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:174:                htmlFor="passingScore"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:186:                id="passingScore"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:189:                value={passingScore}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:197:                value={passingScore}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:211:                  htmlFor="continueMode"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:222:                id="continueMode"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:224:                aria-checked={continueMode}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:225:                onClick={() => setContinueMode(!continueMode)}
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:227:                  continueMode ? 'bg-blue-600' : 'bg-gray-200'
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:232:                    continueMode ? 'translate-x-5' : 'translate-x-0'
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:5:import { useRunConfigStore } from '../stores/runConfigStore';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:6:import RunConfigPanel from './RunConfigPanel';
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:232:    maxIterations,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:233:    passingScore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:234:    continueMode,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:235:  } = useRunConfigStore();
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:321:                      maxIter: maxIterations,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:322:                      passingScore,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:323:                      continueMode,
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:349:            <RunConfigPanel />
+
+codex
+我已经定位到本次实现涉及的 4 个关键文件和 1 个新增测试。下一步直接对照需求文档、现有调用链和测试结果，判断有没有功能缺口或回归风险。
+exec
+/bin/zsh -lc "sed -n '90,120p' docs/desktop-app-prd-to-issues.md" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '80,150p' tasks/prd-desktop-app.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+P2 项目设置 (2)
+├── #24 项目目录选择与配置检测
+└── #25 Agent 选择器（拖拽排序）
+
+P3 GitHub 集成 (2)
+├── #26 GitHub Issue 列表展示
+└── #27 Issue 详情查看
+
+P4 进程控制 (2)
+├── #28 run.sh 进程管理（启动/停止）
+└── #29 运行参数配置 UI
+
+P5 实时监控 (4)
+├── #30 实时日志查看器
+├── #31 迭代进度与阶段展示
+├── #32 评分提取与展示
+└── #33 评分趋势折线图
+
+P6 配置 (1)
+└── #34 配置文件编辑器
+
+P7 历史 (2)
+├── #35 处理历史列表
+└── #36 历史详情查看与日志导出
+
+P8 PR (2)
+├── #37 PR 信息查看与 Diff 展示
+└── #38 PR 操作（合并/关闭）
+
+P9 系统集成 (2)
+├── #39 系统托盘集成
+
+ succeeded in 0ms:
+- [ ] 达到 passing score 时有明确的通过提示
+- [ ] Typecheck/lint passes
+
+### US-007: 配置管理
+**Description:** 作为开发者，我希望能通过 GUI 编辑 autoresearch 的配置文件，而不是手动编辑 markdown。
+
+**Acceptance Criteria:**
+- [ ] 可查看和编辑 `program.md`（代码规范部分）
+- [ ] 可查看和编辑各 agent 配置（`agents/claude.md`、`agents/codex.md` 等）
+- [ ] 可配置运行参数：passing score、agent 执行顺序、max iterations
+- [ ] 编辑后保存到对应文件，立即生效
+- [ ] 提供配置重置为默认值的选项
+- [ ] Typecheck/lint passes
+
+### US-008: 处理历史记录
+**Description:** 作为开发者，我希望能查看所有历史处理记录，了解每个 Issue 的处理结果。
+
+**Acceptance Criteria:**
+- [ ] 列表展示所有处理过的 Issue，包含编号、标题、状态、评分、耗时
+- [ ] 状态分为：成功（已合并）、进行中、失败、已中断
+- [ ] 点击记录查看详情：所有迭代日志、评分、review 反馈
+- [ ] 可导出某次处理的全量日志
+- [ ] Typecheck/lint passes
+
+### US-009: PR 审核与操作
+**Description:** 作为开发者，我希望能直接在 App 中查看 autoresearch 自动创建的 PR，并进行合并/关闭操作。
+
+**Acceptance Criteria:**
+- [ ] PR 创建后自动弹出通知
+- [ ] 展示 PR 信息：标题、描述、分支、文件变更统计
+- [ ] 可查看 PR 的 diff（文件列表 + 代码差异）
+- [ ] 提供"合并"和"关闭"按钮，调用 `gh` CLI 执行
+- [ ] 操作前需确认弹窗
+- [ ] Typecheck/lint passes
+
+### US-010: 系统托盘与通知
+**Description:** 作为开发者，我希望 App 在后台运行时能通过系统通知获知关键事件，无需一直盯着界面。
+
+**Acceptance Criteria:**
+- [ ] 最小化到系统托盘，后台持续运行
+- [ ] 关键事件发送系统通知：迭代完成、达到 passing score、PR 已创建、处理失败
+- [ ] 托盘图标右键菜单：显示主窗口、停止当前任务、退出
+- [ ] 点击通知跳转到 App 对应页面
+- [ ] Typecheck/lint passes
+
+## Functional Requirements
+
+- FR-1: App 启动时加载上次打开的项目目录，如无则显示项目选择引导页
+- FR-2: 通过 GitHub CLI (`gh`) 获取 Issue 列表和 PR 信息，不直接调用 GitHub API
+- FR-3: 通过 Tauri sidecar 或 shell command 调用 `run.sh`，捕获 stdout/stderr 用于实时展示
+- FR-4: 实时监听 `.autoresearch/workflows/issue-N/` 目录变化，解析 log 文件更新 UI 状态
+- FR-5: 解析 `tasks.json` 获取 subtask 结构和状态，渲染进度视图
+- FR-6: 解析 `log.md` 和各迭代 log 文件提取评分和 review 反馈
+- FR-7: 配置编辑器直接读写文件系统中的 `program.md` 和 `agents/*.md`
+- FR-8: 运行参数（passing score、max iterations）通过 `run.sh` 的 CLI 参数或环境变量传递
+- FR-8.1: 提供可视化 agent 选择器（标签选择框），支持勾选要使用的 agent 并通过拖拽调整执行顺序，所选 agent 列表作为参数传给 `run.sh`
+- FR-9: 停止任务时发送 SIGTERM 给 `run.sh` 进程组，等待优雅退出
+- FR-10: 支持 `run.sh -c` 续跑模式，从上次中断处继续
+- FR-11: 系统通知通过 Tauri notification API 实现
+- FR-12: 所有用户操作（启动、停止、合并 PR 等）需二次确认
+
+## Non-Goals
+
+- 不支持多项目管理（一次只绑定一个项目目录）
+- 不支持团队协作功能（多用户、权限管理）
+- 不内置 AI agent（仍然依赖外部 CLI 工具如 claude、codex、opencode）
+- 不修改 `run.sh` 的核心逻辑，仅作为 GUI 前端调用它
+- 不实现自动定时调度（如 cron 式定时处理 Issue）
+- 不支持自定义主题/插件系统
+- 不内置代码编辑器（PR diff 查看仅只读）
+
+
+exec
+/bin/zsh -lc "sed -n '200,380p' desktop_app/src/components/IssueDetailPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/stores/runConfigStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { create, type StateCreator } from 'zustand';
+import {
+  createJSONStorage,
+  persist,
+  type PersistOptions,
+  type StateStorage,
+} from 'zustand/middleware';
+
+export const RUN_CONFIG_STORE_KEY = 'autoresearch-run-config';
+
+export const MIN_MAX_ITERATIONS = 1;
+export const MAX_MAX_ITERATIONS = 50;
+export const DEFAULT_MAX_ITERATIONS = 16;
+
+export const MIN_PASSING_SCORE = 1;
+export const MAX_PASSING_SCORE = 100;
+export const DEFAULT_PASSING_SCORE = 85;
+
+export const DEFAULT_CONTINUE_MODE = false;
+
+interface RunConfigValues {
+  maxIterations: number;
+  passingScore: number;
+  continueMode: boolean;
+}
+
+export interface RunConfigState extends RunConfigValues {
+  setMaxIterations: (value: number) => void;
+  setPassingScore: (value: number) => void;
+  setContinueMode: (value: boolean) => void;
+  reset: () => void;
+}
+
+interface RunConfigStoreDeps {
+  storage?: StateStorage;
+}
+
+const DEFAULT_CONFIG: RunConfigValues = {
+  maxIterations: DEFAULT_MAX_ITERATIONS,
+  passingScore: DEFAULT_PASSING_SCORE,
+  continueMode: DEFAULT_CONTINUE_MODE,
+};
+
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigValues {
+  return {
+    maxIterations: clamp(
+      values.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+      MIN_MAX_ITERATIONS,
+      MAX_MAX_ITERATIONS
+    ),
+    passingScore: clamp(
+      values.passingScore ?? DEFAULT_PASSING_SCORE,
+      MIN_PASSING_SCORE,
+      MAX_PASSING_SCORE
+    ),
+    continueMode: values.continueMode ?? DEFAULT_CONTINUE_MODE,
+  };
+}
+
+function createRunConfigState(
+  set: Parameters<StateCreator<RunConfigState>>[0]
+): RunConfigState {
+  return {
+    ...DEFAULT_CONFIG,
+    setMaxIterations: (value) => {
+      set({
+        maxIterations: clamp(value, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS),
+      });
+    },
+    setPassingScore: (value) => {
+      set({
+        passingScore: clamp(value, MIN_PASSING_SCORE, MAX_PASSING_SCORE),
+      });
+    },
+    setContinueMode: (value) => {
+      set({ continueMode: value });
+    },
+    reset: () => {
+      set({ ...DEFAULT_CONFIG });
+    },
+  };
+}
+
+function createPersistOptions(
+  deps: RunConfigStoreDeps
+): PersistOptions<RunConfigState, RunConfigValues> {
+  return {
+    name: RUN_CONFIG_STORE_KEY,
+    storage: createJSONStorage(() =>
+      deps.storage ?? (typeof localStorage === 'undefined' ? noopStorage : localStorage)
+    ),
+    partialize: (state) => ({
+      maxIterations: state.maxIterations,
+      passingScore: state.passingScore,
+      continueMode: state.continueMode,
+    }),
+    merge: (persistedState, currentState) => ({
+      ...currentState,
+      ...sanitizeRunConfig((persistedState as Partial<RunConfigValues>) ?? {}),
+    }),
+  };
+}
+
+export function createRunConfigStore(deps: RunConfigStoreDeps = {}) {
+  return create<RunConfigState>()(
+    persist((set) => createRunConfigState(set), createPersistOptions(deps))
+  );
+}
+
+export const useRunConfigStore = createRunConfigStore();
+
+ succeeded in 0ms:
+    case 'error':
+      return 'border-red-200 bg-red-50 text-red-700';
+    case 'idle':
+    default:
+      return 'border-gray-200 bg-gray-100 text-gray-600';
+  }
+}
+
+function IssueDetailPanel({
+  issue,
+  detail,
+  isLoading,
+  error,
+  projectPath,
+  onClose,
+  onRetry,
+}: IssueDetailPanelProps): JSX.Element {
+  const outputContainerRef = useRef<HTMLDivElement | null>(null);
+  const {
+    status: runStatus,
+    activeIssueNumber,
+    outputLines,
+    exitCode,
+    error: runError,
+    isSupported,
+    startRun,
+    stopRun,
+    clearOutput,
+    clearError: clearRunError,
+  } = useRunStore();
+
+  const {
+    maxIterations,
+    passingScore,
+    continueMode,
+  } = useRunConfigStore();
+
+  useEffect(() => {
+    const container = outputContainerRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }, [outputLines, runStatus]);
+
+  if (!issue) {
+    return <EmptySelectionState />;
+  }
+
+  const isRunActive = runStatus === 'running' || runStatus === 'stopping';
+  const isCurrentIssueRunning = activeIssueNumber === issue.number && isRunActive;
+  const canStart =
+    Boolean(projectPath) && isSupported && !isRunActive;
+  const canStop = isSupported && isRunActive;
+  const outputText =
+    outputLines.length > 0 ? outputLines.join('\n') : '等待运行输出...';
+  const showRunMeta =
+    activeIssueNumber !== null &&
+    (isRunActive || runStatus === 'finished' || runStatus === 'error');
+
+  return (
+    <aside className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+      <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
+        <div className="min-w-0">
+          <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-blue-600">
+            Issue Detail
+          </p>
+          <h2 className="truncate text-lg font-semibold text-gray-900">
+            #{issue.number} {issue.title}
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            {issue.state === 'OPEN' ? 'Open' : 'Closed'} · 创建于{' '}
+            {formatDateTime(issue.createdAt)}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+          aria-label="关闭 Issue 详情"
+        >
+          <CloseIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="space-y-6 p-5">
+        <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getRunStatusClass(runStatus)}`}
+                >
+                  {(runStatus === 'running' || runStatus === 'stopping') && (
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                  )}
+                  {getRunStatusLabel(runStatus)}
+                </span>
+                {showRunMeta && (
+                  <span className="text-xs text-gray-500">
+                    当前任务 #{activeIssueNumber}
+                    {exitCode !== null ? ` · exit code ${exitCode}` : ''}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                运行控制
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-gray-500">
+                选择当前 Issue 后可直接启动 `run.sh`，输出会实时显示在下方。
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  clearRunError();
+                  if (projectPath) {
+                    void startRun({
+                      projectPath,
+                      issueNumber: issue.number,
+                      maxIter: maxIterations,
+                      passingScore,
+                      continueMode,
+                    });
+                  }
+                }}
+                disabled={!canStart}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                <PlayIcon className="h-4 w-4" />
+                启动
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearRunError();
+                  void stopRun();
+                }}
+                disabled={!canStop}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <StopIcon className="h-4 w-4" />
+                停止
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <RunConfigPanel />
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <AgentSelector />
+            </div>
+          </div>
+
+          {!isSupported && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+            </div>
+          )}
+
+          {isSupported && !isCurrentIssueRunning && isRunActive && activeIssueNumber !== null && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              当前正在运行 Issue #{activeIssueNumber}，一次只能处理一个任务。
+            </div>
+          )}
+
+          {runError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {runError}
+            </div>
+          )}
+
+          <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 text-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
+                <TerminalIcon className="h-4 w-4" />
+                实时输出
+              </div>
+              <button
+                type="button"
+
+exec
+/bin/zsh -lc "sed -n '1,280p' desktop_app/src/components/RunConfigPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { useState, type JSX } from 'react';
+import {
+  useRunConfigStore,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  MIN_MAX_ITERATIONS,
+  MAX_MAX_ITERATIONS,
+  MIN_PASSING_SCORE,
+  MAX_PASSING_SCORE,
+} from '../stores/runConfigStore';
+
+function ChevronDownIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 9l-7 7-7-7"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+    </svg>
+  );
+}
+
+function ResetIcon({ className }: { className?: string }): JSX.Element {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+      />
+    </svg>
+  );
+}
+
+interface RunConfigPanelProps {
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
+}
+
+export default function RunConfigPanel({
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
+}: RunConfigPanelProps): JSX.Element {
+  const [internalCollapsed, setInternalCollapsed] = useState(true);
+
+  const isControlled = controlledCollapsed !== undefined;
+  const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+
+  const toggleCollapse = () => {
+    const nextCollapsed = !collapsed;
+    if (isControlled && onCollapsedChange) {
+      onCollapsedChange(nextCollapsed);
+    } else {
+      setInternalCollapsed(nextCollapsed);
+    }
+  };
+
+  const {
+    maxIterations,
+    passingScore,
+    continueMode,
+    setMaxIterations,
+    setPassingScore,
+    setContinueMode,
+    reset,
+  } = useRunConfigStore();
+
+  const isDefault =
+    maxIterations === DEFAULT_MAX_ITERATIONS &&
+    passingScore === DEFAULT_PASSING_SCORE &&
+    continueMode === false;
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <button
+        type="button"
+        onClick={toggleCollapse}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <SettingsIcon className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">运行参数配置</span>
+          {!isDefault && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              已修改
+            </span>
+          )}
+        </div>
+        <ChevronDownIcon
+          className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+            collapsed ? '' : 'rotate-180'
+          }`}
+        />
+      </button>
+
+      {!collapsed && (
+        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+          <div className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label
+                htmlFor="maxIterations"
+                className="text-sm font-medium text-gray-700"
+              >
+                最大迭代次数
+              </label>
+              <span className="text-xs text-gray-500">
+                {MIN_MAX_ITERATIONS}-{MAX_MAX_ITERATIONS}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                id="maxIterations"
+                min={MIN_MAX_ITERATIONS}
+                max={MAX_MAX_ITERATIONS}
+                value={maxIterations}
+                onChange={(e) => setMaxIterations(Number(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <input
+                type="number"
+                min={MIN_MAX_ITERATIONS}
+                max={MAX_MAX_ITERATIONS}
+                value={maxIterations}
+                onChange={(e) => setMaxIterations(Number(e.target.value))}
+                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              每个任务最多执行的迭代次数（默认 {DEFAULT_MAX_ITERATIONS}）
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label
+                htmlFor="passingScore"
+                className="text-sm font-medium text-gray-700"
+              >
+                通过分数
+              </label>
+              <span className="text-xs text-gray-500">
+                {MIN_PASSING_SCORE}-{MAX_PASSING_SCORE}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                id="passingScore"
+                min={MIN_PASSING_SCORE}
+                max={MAX_PASSING_SCORE}
+                value={passingScore}
+                onChange={(e) => setPassingScore(Number(e.target.value))}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+              <input
+                type="number"
+                min={MIN_PASSING_SCORE}
+                max={MAX_PASSING_SCORE}
+                value={passingScore}
+                onChange={(e) => setPassingScore(Number(e.target.value))}
+                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              审核评分达到此分数才算通过（默认 {DEFAULT_PASSING_SCORE}）
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label
+                  htmlFor="continueMode"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  继续模式
+                </label>
+                <p className="text-xs text-gray-500">
+                  从上次中断的地方继续执行
+                </p>
+              </div>
+              <button
+                type="button"
+                id="continueMode"
+                role="switch"
+                aria-checked={continueMode}
+                onClick={() => setContinueMode(!continueMode)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  continueMode ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    continueMode ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={reset}
+              disabled={isDefault}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ResetIcon className="h-4 w-4" />
+              重置为默认值
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+codex
+需求文档里对 Issue #29 的核心要求很明确：参数配置、默认值、重置、持久化、启动时透传，以及 typecheck/lint。现在我继续核对 store 与 UI 之间是否存在未满足的边界行为，并验证测试和脚本是否真正覆盖到了。
+exec
+/bin/zsh -lc "sed -n '1,320p' desktop_app/src/stores/runStore.ts" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { create } from 'zustand';
+import { useAgentStore } from './agentStore.ts';
+
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const MAX_OUTPUT_LINES = 2000;
+
+type RunLifecycleStatus = 'idle' | 'running' | 'stopping' | 'finished' | 'error';
+type BackendRunStatus = 'Idle' | 'Running';
+
+interface RunExitEvent {
+  exit_code: number | null;
+  killed: boolean;
+}
+
+interface StartRunRequest {
+  projectPath: string;
+  issueNumber: number;
+  agents?: string;
+  maxIter?: number;
+  passingScore?: number;
+  continueMode?: boolean;
+}
+
+type UnlistenFn = () => void;
+type RunEventName = 'run-output' | 'run-exit';
+type RunEventCallback<TPayload> = (event: { payload: TPayload }) => void;
+
+interface RunStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  listen: <TPayload>(
+    event: RunEventName,
+    callback: RunEventCallback<TPayload>
+  ) => Promise<UnlistenFn>;
+  getSelectedAgents: () => string[];
+}
+
+interface RunStateSnapshot {
+  status: RunLifecycleStatus;
+  activeIssueNumber: number | null;
+  outputLines: string[];
+  exitCode: number | null;
+}
+
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+function normalizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function mapBackendStatus(status: BackendRunStatus): RunLifecycleStatus {
+  return status === 'Running' ? 'running' : 'idle';
+}
+
+function appendLine(lines: string[], line: string): string[] {
+  const nextLines = [...lines, line];
+  if (nextLines.length <= MAX_OUTPUT_LINES) {
+    return nextLines;
+  }
+  return nextLines.slice(nextLines.length - MAX_OUTPUT_LINES);
+}
+
+function snapshotState(state: RunState): RunStateSnapshot {
+  return {
+    status: state.status,
+    activeIssueNumber: state.activeIssueNumber,
+    outputLines: state.outputLines,
+    exitCode: state.exitCode,
+  };
+}
+
+function restoreKnownIssue(snapshot: RunStateSnapshot): number | null {
+  return snapshot.status === 'running' || snapshot.status === 'stopping'
+    ? snapshot.activeIssueNumber
+    : null;
+}
+
+interface RunState {
+  status: RunLifecycleStatus;
+  activeIssueNumber: number | null;
+  outputLines: string[];
+  exitCode: number | null;
+  error: string | null;
+  isSupported: boolean;
+  subscriptionsReady: boolean;
+  initialize: () => Promise<void>;
+  refreshStatus: () => Promise<void>;
+  startRun: (_request: StartRunRequest) => Promise<void>;
+  stopRun: () => Promise<void>;
+  clearOutput: () => void;
+  clearError: () => void;
+  isIssueRunning: (_issueNumber: number | null) => boolean;
+}
+
+async function tauriListen<TPayload>(
+  event: RunEventName,
+  callback: RunEventCallback<TPayload>
+): Promise<UnlistenFn> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen(event, callback);
+}
+
+function createRunStoreDeps(overrides: Partial<RunStoreDeps> = {}): RunStoreDeps {
+  return {
+    isTauri,
+    invoke: tauriInvoke,
+    listen: tauriListen,
+    getSelectedAgents: () => [...useAgentStore.getState().selectedAgents],
+    ...overrides,
+  };
+}
+
+export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
+  const deps = createRunStoreDeps(overrides);
+
+  return create<RunState>((set, get) => ({
+    status: 'idle',
+    activeIssueNumber: null,
+    outputLines: [],
+    exitCode: null,
+    error: null,
+    isSupported: deps.isTauri,
+    subscriptionsReady: false,
+
+    initialize: async () => {
+      if (!deps.isTauri) {
+        set({ subscriptionsReady: true });
+        return;
+      }
+
+      if (get().subscriptionsReady) {
+        return;
+      }
+
+      await Promise.all<UnlistenFn>([
+        deps.listen<string>('run-output', (event) => {
+          set((state) => ({
+            outputLines: appendLine(state.outputLines, event.payload),
+          }));
+        }),
+        deps.listen<RunExitEvent>('run-exit', (event) => {
+          const { exit_code: exitCode, killed } = event.payload;
+          set((state) => ({
+            status: killed || exitCode === 0 ? 'finished' : 'error',
+            exitCode,
+            activeIssueNumber: state.activeIssueNumber,
+            error:
+              killed || exitCode === 0
+                ? null
+                : `运行失败${exitCode === null ? '' : ` (exit code ${exitCode})`}`,
+          }));
+        }),
+      ]);
+
+      set({ subscriptionsReady: true });
+      await get().refreshStatus();
+    },
+
+    refreshStatus: async () => {
+      if (!deps.isTauri) {
+        set({ status: 'idle' });
+        return;
+      }
+
+      try {
+        const backendStatus = await deps.invoke<BackendRunStatus>('get_run_status');
+        set((state) => {
+          const nextStatus = mapBackendStatus(backendStatus);
+          if (nextStatus === 'running') {
+            return {
+              status: nextStatus,
+              error: null,
+            };
+          }
+
+          if (state.status === 'running' || state.status === 'stopping') {
+            return {
+              status: 'idle',
+              activeIssueNumber: null,
+            };
+          }
+
+          return {
+            status: state.status === 'idle' ? 'idle' : state.status,
+          };
+        });
+      } catch (error) {
+        set({
+          status: 'error',
+          error: normalizeError(error),
+        });
+      }
+    },
+
+    startRun: async (_request: StartRunRequest) => {
+      if (!deps.isTauri) {
+        set({
+          status: 'error',
+          error: '浏览器模式不支持运行任务，请通过 tauri dev 启动桌面应用。',
+        });
+        return;
+      }
+
+      const currentStatus = get().status;
+      if (currentStatus === 'running' || currentStatus === 'stopping') {
+        set({ error: '当前已有任务在运行，请先停止后再启动新任务。' });
+        return;
+      }
+
+      const previousState = snapshotState(get());
+      const selectedAgents = deps.getSelectedAgents();
+      const agents =
+        _request.agents ?? (selectedAgents.length > 0 ? selectedAgents.join(',') : undefined);
+
+      set({
+        status: 'running',
+        activeIssueNumber: _request.issueNumber,
+        outputLines: [],
+        exitCode: null,
+        error: null,
+      });
+
+      try {
+        await deps.invoke('start_run', {
+          request: {
+            project_path: _request.projectPath,
+            issue_number: _request.issueNumber,
+            agents,
+            max_iter: _request.maxIter,
+            passing_score: _request.passingScore,
+            continue_mode: _request.continueMode,
+          },
+        });
+      } catch (error) {
+        const message = normalizeError(error);
+        await get().refreshStatus();
+        set((state) => {
+          const backendStillRunning = state.status === 'running';
+          return {
+            status: backendStillRunning ? 'running' : 'error',
+            activeIssueNumber: backendStillRunning
+              ? restoreKnownIssue(previousState)
+              : previousState.activeIssueNumber,
+            outputLines: previousState.outputLines,
+            exitCode: previousState.exitCode,
+            error: message,
+          };
+        });
+      }
+    },
+
+    stopRun: async () => {
+      if (!deps.isTauri) {
+        return;
+      }
+
+      const previousIssueNumber = get().activeIssueNumber;
+      set({
+        status: 'stopping',
+        error: null,
+        activeIssueNumber: previousIssueNumber,
+      });
+
+      try {
+        await deps.invoke('stop_run');
+      } catch (error) {
+        const message = normalizeError(error);
+        await get().refreshStatus();
+        set((state) => ({
+          status: state.status === 'running' ? 'running' : 'error',
+          error: message,
+        }));
+      }
+    },
+
+    clearOutput: () => {
+      set({ outputLines: [] });
+    },
+
+    clearError: () => {
+      set({ error: null });
+    },
+
+    isIssueRunning: (_issueNumber: number | null) => {
+      if (_issueNumber === null) {
+        return false;
+      }
+      return get().status === 'running' && get().activeIssueNumber === _issueNumber;
+    },
+  }));
+}
+
+export const useRunStore = createRunStore();
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/tests/runConfigStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cat desktop_app/package.json' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  createRunConfigStore,
+  DEFAULT_CONTINUE_MODE,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  RUN_CONFIG_STORE_KEY,
+} from '../src/stores/runConfigStore.ts';
+
+function createMemoryStorage(initialState = {}) {
+  const data = new Map(Object.entries(initialState));
+
+  return {
+    getItem: (name) => data.get(name) ?? null,
+    setItem: (name, value) => {
+      data.set(name, value);
+    },
+    removeItem: (name) => {
+      data.delete(name);
+    },
+    dump: () => Object.fromEntries(data.entries()),
+  };
+}
+
+test('runConfigStore exposes required default values', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+});
+
+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(0);
+  store.getState().setPassingScore(101);
+
+  assert.equal(store.getState().maxIterations, 1);
+  assert.equal(store.getState().passingScore, 100);
+
+  store.getState().setMaxIterations(99);
+  store.getState().setPassingScore(-20);
+
+  assert.equal(store.getState().maxIterations, 50);
+  assert.equal(store.getState().passingScore, 1);
+});
+
+test('runConfigStore persists values under the required storage key', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(24);
+  store.getState().setPassingScore(90);
+  store.getState().setContinueMode(true);
+
+  const persisted = JSON.parse(storage.dump()[RUN_CONFIG_STORE_KEY]);
+
+  assert.deepEqual(persisted.state, {
+    maxIterations: 24,
+    passingScore: 90,
+    continueMode: true,
+  });
+});
+
+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+  const storage = createMemoryStorage({
+    [RUN_CONFIG_STORE_KEY]: JSON.stringify({
+      state: {
+        maxIterations: -10,
+        passingScore: 999,
+        continueMode: true,
+      },
+      version: 0,
+    }),
+  });
+
+  const store = createRunConfigStore({ storage });
+  await store.persist.rehydrate();
+
+  assert.equal(store.getState().maxIterations, 1);
+  assert.equal(store.getState().passingScore, 100);
+  assert.equal(store.getState().continueMode, true);
+});
+
+ succeeded in 0ms:
+{
+  "name": "desktop_app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.6.0",
+    "recharts": "^2.15.3",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^7.0.4"
+  }
+}
+
+ succeeded in 0ms:
+# desktop_app/src
+
+## Architecture
+
+- **Router**: react-router-dom v7 with BrowserRouter wrapping in main.tsx, Routes/Route in App.tsx
+- **Layout**: AppShell component (three-column: Sidebar 240px | main flex-1 | RightPanel 300px collapsible)
+- **Pages**: Dashboard, Issues, History, Settings — each in src/pages/
+- **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
+- **Styling**: Tailwind CSS v4 via @tailwindcss/vite plugin (no tailwind.config.js)
+- **Theme**: Light theme (bg-white, text-gray-900, gray-50 for panels, gray-200 borders)
+
+## Conventions
+
+- Functional components with default exports
+- SVG icons inline in components (no icon library dependency)
+- NavLink for active route highlighting in navigation
+- Outlet pattern: AppShell renders `<Outlet />` for nested route content
+- Panel collapse state is local (useState), not global store
+
+## Dependencies
+
+- react-router-dom: routing (BrowserRouter, Routes, Route, NavLink, Outlet)
+- Tailwind CSS v4: utility-first styling via @tailwindcss/vite
+- zustand: global state management, stores in `src/stores/`
+
+## Testing
+
+- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
+- When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
+
+## State Management (Zustand)
+
+- Stores are in `src/stores/` directory
+- Use `create<State>()` from zustand to define stores
+- Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+- Async actions should handle loading and error states
+- Store pattern: state + actions + getters in one `create()` call
+- Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
+- For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+
+## Tauri Integration
+
+- Import `invoke` from `@tauri-apps/api/core` to call Rust commands
+- Commands return `Promise<T>` and can throw errors
+- Pattern: `await invoke<ReturnType>('command_name', { args })`
+- Tauri event subscriptions should be centralized in a store when multiple UI components need the same lifecycle state; `run-output` / `run-exit` are handled in `src/stores/runStore.ts`
+
+## Pitfalls
+
+- Backend `get_recent_project` stores only a single path (not a list). Frontend `recentProjects` is kept as an array for future extensibility but currently holds at most one item.
+- When adding store actions that load a specific project by path, always call `detect_project_config` + `save_recent_project` + update state in one action — don't split across multiple calls.
+- In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+- `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+- Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
+
+## IssuesPage 约定
+
+### 组件结构
+
+- `IssueListItem`: 单个 Issue 列表项，显示编号、标题、标签、创建时间、处理状态
+- `LabelBadge`: 可点击的标签徽章，支持选中高亮状态
+- `SearchIcon`/`CheckIcon`/`IssueIcon`/`ProcessedIcon`/`ClearIcon`: 内联 SVG 图标组件
+- `EmptyState`: 空状态提示组件
+
+### 功能实现
+
+- **数据获取**: 通过 `useIssueStore.loadIssues(projectPath)` 调用 Tauri `list_issues` 命令
+- **详情数据**: 选中 Issue 后先用 `selectIssue(number)` 切换选中态，再由页面 effect 通过 `useIssueStore.loadIssueDetail(projectPath, issueNumber)` 调用 Tauri `get_issue_detail`
+- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+- **单任务限制**: 前端用 `runStore.status` 禁用启动按钮，后端再通过 `start_run` 的互斥检查做第二层保护
+- **搜索过滤**: 实时按标题和编号过滤（case-insensitive）
+- **标签过滤**: 点击标签切换过滤状态，使用 `toggleLabelFilter(label.name)`
+- **选中高亮**: 点击 Issue 项切换选中状态，使用 `selectIssue(number)`
+- **已处理标记**: 通过 `processedNumbers.includes(issue.number)` 判断，显示绿色"已处理"徽章
+- **浏览器 fallback**: 非 Tauri 环境使用 mock issue 列表和 mock issue 详情，保证浏览器模式也能验证详情面板
+- **运行 fallback**: 非 Tauri 环境禁用启动/停止按钮，并明确提示“浏览器模式不支持运行任务”
+- **详情加载流**: `selectIssue` 会先清空旧的详情/错误态，再由页面 effect 触发详情加载，避免切换 Issue 时闪现旧数据
+- **请求竞态保护**: `useIssueStore` 使用递增的 `detailRequestKey` 防止快速切换 Issue 时旧请求覆盖新详情
+- **输出区域**: 实时输出保存在 `runStore.outputLines`，UI 层只负责渲染和滚动到底部；输出上限 2000 行，避免长任务无限增长
+
+### 样式约定
+
+- Issue 列表项: `bg-white border-gray-200`，选中时 `bg-blue-50 border-blue-300`
+- 标签徽章: 使用 GitHub label 的 `color` 字段作为背景色，自动计算文字颜色（黑白）
+- 已处理标记: 绿色主题（`bg-green-50 text-green-700`）
+- 搜索框: `bg-white border-gray-200`，focus 时 `border-blue-500 ring-blue-500`
+- 空状态: 居中显示，灰色图标和文字
+- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+- Markdown 样式: 统一挂在 `.markdown-body`，代码块高亮 token 使用 `.md-token-*` 类名
+- Markdown 渲染: `react-markdown` 通过 Vite/TS alias 指向本地兼容实现 `src/vendor/react-markdown.tsx`，保证离线环境可构建；链接只允许 `http/https/mailto`
+- 骨架屏: 使用 `.skeleton-shimmer` 伪元素实现统一 shimmer 动效，避免在组件内重复写动画
+
+## DashboardPage 约定
+
+### 配置状态显示
+
+- 使用 `ConfigBadge` 组件显示 `.autoresearch/`、`program.md`、`agents/` 状态
+- `ConfigBadge` 使用勾/叉图标（`CheckIcon`/`XIcon`）替代圆点，符合验收条件要求
+- 配置完整时显示"配置完整"成功提示（绿色背景卡片）
+- 配置缺失时显示"是否从模板初始化"提示 UI（黄色背景卡片，仅 UI，不实际初始化）
+- 提示 UI 包含"稍后"和"了解"两个操作按钮
+
+### 组件结构
+
+- `WelcomeScreen`: 未选择项目时显示的欢迎页面
+- `ProjectInfoScreen`: 已选择项目时显示的项目信息页面
+- `ConfigBadge`: 配置状态徽章（用于显示单个配置项）
+- `InitTemplatePrompt`: 初始化模板提示（配置缺失时显示）
+- `ConfigCompleteNotification`: 配置完整提示（配置齐全时显示）
+- `CheckIcon`/`XIcon`: 状态图标组件
+
+### 样式约定
+
+- 配置存在：绿色主题（`bg-green-50`, `text-green-700`, `border-green-200`）
+- 配置缺失：红色主题（`bg-red-50`, `text-red-700`, `border-red-200`）
+- 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+- 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+
+exec
+/bin/zsh -lc 'git diff -- desktop_app/src/components/IssueDetailPanel.tsx desktop_app/src/components/RunConfigPanel.tsx desktop_app/src/stores/runConfigStore.ts desktop_app/tests/runConfigStore.test.mjs desktop_app/package.json desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+diff --git a/desktop_app/package.json b/desktop_app/package.json
+index b1d233c..425070c 100644
+--- a/desktop_app/package.json
++++ b/desktop_app/package.json
+@@ -8,7 +8,7 @@
+     "build": "tsc && vite build",
+     "preview": "vite preview",
+     "tauri": "tauri",
+-    "test": "node --test --experimental-strip-types tests/runStore.test.mjs",
++    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+     "lint": "eslint .",
+     "typecheck": "tsc --noEmit"
+   },
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index d4ace7e..c9d03f6 100644
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -36,6 +36,8 @@
+ - Import store hooks with destructuring: `const { field, action } = useProjectStore()`
+ - Async actions should handle loading and error states
+ - Store pattern: state + actions + getters in one `create()` call
++- Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
++- For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
+ 
+ ## Tauri Integration
+ 
+diff --git a/desktop_app/src/components/IssueDetailPanel.tsx b/desktop_app/src/components/IssueDetailPanel.tsx
+index 770bb4d..eaeb1fc 100644
+--- a/desktop_app/src/components/IssueDetailPanel.tsx
++++ b/desktop_app/src/components/IssueDetailPanel.tsx
+@@ -2,6 +2,9 @@ import { useEffect, useRef, type JSX } from 'react';
+ import ReactMarkdown from 'react-markdown';
+ import { formatDateTime, GhIssue, IssueDetail } from '../stores/issueStore';
+ import { useRunStore } from '../stores/runStore';
++import { useRunConfigStore } from '../stores/runConfigStore';
++import RunConfigPanel from './RunConfigPanel';
++import AgentSelector from './AgentSelector';
+ 
+ interface IssueDetailPanelProps {
+   issue: GhIssue | null;
+@@ -225,6 +228,12 @@ function IssueDetailPanel({
+     clearError: clearRunError,
+   } = useRunStore();
+ 
++  const {
++    maxIterations,
++    passingScore,
++    continueMode,
++  } = useRunConfigStore();
++
+   useEffect(() => {
+     const container = outputContainerRef.current;
+     if (!container) {
+@@ -309,6 +318,9 @@ function IssueDetailPanel({
+                     void startRun({
+                       projectPath,
+                       issueNumber: issue.number,
++                      maxIter: maxIterations,
++                      passingScore,
++                      continueMode,
+                     });
+                   }
+                 }}
+@@ -333,6 +345,13 @@ function IssueDetailPanel({
+             </div>
+           </div>
+ 
++          <div className="space-y-4">
++            <RunConfigPanel />
++            <div className="rounded-xl border border-gray-200 bg-white p-4">
++              <AgentSelector />
++            </div>
++          </div>
++
+           {!isSupported && (
+             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+               浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+
+codex
+代码结构基本连上了，但审核不能只看 diff。现在直接跑 `test`、`typecheck`、`lint`，确认这版实现是否真的达到了验收条件，而不是只是在本地补了几个文件。
+exec
+/bin/zsh -lc 'npm test' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+exec
+/bin/zsh -lc 'npm run typecheck' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+exec
+/bin/zsh -lc 'npm run lint' in /Users/chaoyuepan/ai/autoresearch/desktop_app
+ succeeded in 409ms:
+
+> desktop_app@0.1.0 test
+> node --test --experimental-strip-types tests/*.test.mjs
+
+(node:73146) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (0.954708ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.16775ms)
+✔ runConfigStore persists values under the required storage key (0.643292ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.091708ms)
+✔ startRun clears unknown active issue when backend already has another task (0.949416ms)
+✔ startRun restores previous running issue when stop/start race fails (1.200958ms)
+✔ initialize wires run events and caps output history (6.069667ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 160.1445
+
+ succeeded in 938ms:
+
+> desktop_app@0.1.0 lint
+> eslint .
+
+
+ succeeded in 1051ms:
+
+> desktop_app@0.1.0 typecheck
+> tsc --noEmit
+
+
+codex
+测试和静态检查都过了，但这里仍然需要看“输入是否真的被约束住”。我正在核对数值与持久化的边界处理，因为这类 UI/store 实现最容易在空值、`NaN`、旧 localStorage 数据上出问题。
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/stores/runConfigStore.ts | sed -n '1,220p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/components/RunConfigPanel.tsx | sed -n '1,280p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import { create, type StateCreator } from 'zustand';
+     2	import {
+     3	  createJSONStorage,
+     4	  persist,
+     5	  type PersistOptions,
+     6	  type StateStorage,
+     7	} from 'zustand/middleware';
+     8	
+     9	export const RUN_CONFIG_STORE_KEY = 'autoresearch-run-config';
+    10	
+    11	export const MIN_MAX_ITERATIONS = 1;
+    12	export const MAX_MAX_ITERATIONS = 50;
+    13	export const DEFAULT_MAX_ITERATIONS = 16;
+    14	
+    15	export const MIN_PASSING_SCORE = 1;
+    16	export const MAX_PASSING_SCORE = 100;
+    17	export const DEFAULT_PASSING_SCORE = 85;
+    18	
+    19	export const DEFAULT_CONTINUE_MODE = false;
+    20	
+    21	interface RunConfigValues {
+    22	  maxIterations: number;
+    23	  passingScore: number;
+    24	  continueMode: boolean;
+    25	}
+    26	
+    27	export interface RunConfigState extends RunConfigValues {
+    28	  setMaxIterations: (value: number) => void;
+    29	  setPassingScore: (value: number) => void;
+    30	  setContinueMode: (value: boolean) => void;
+    31	  reset: () => void;
+    32	}
+    33	
+    34	interface RunConfigStoreDeps {
+    35	  storage?: StateStorage;
+    36	}
+    37	
+    38	const DEFAULT_CONFIG: RunConfigValues = {
+    39	  maxIterations: DEFAULT_MAX_ITERATIONS,
+    40	  passingScore: DEFAULT_PASSING_SCORE,
+    41	  continueMode: DEFAULT_CONTINUE_MODE,
+    42	};
+    43	
+    44	const noopStorage: StateStorage = {
+    45	  getItem: () => null,
+    46	  setItem: () => {},
+    47	  removeItem: () => {},
+    48	};
+    49	
+    50	function clamp(value: number, min: number, max: number): number {
+    51	  return Math.min(Math.max(value, min), max);
+    52	}
+    53	
+    54	export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigValues {
+    55	  return {
+    56	    maxIterations: clamp(
+    57	      values.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+    58	      MIN_MAX_ITERATIONS,
+    59	      MAX_MAX_ITERATIONS
+    60	    ),
+    61	    passingScore: clamp(
+    62	      values.passingScore ?? DEFAULT_PASSING_SCORE,
+    63	      MIN_PASSING_SCORE,
+    64	      MAX_PASSING_SCORE
+    65	    ),
+    66	    continueMode: values.continueMode ?? DEFAULT_CONTINUE_MODE,
+    67	  };
+    68	}
+    69	
+    70	function createRunConfigState(
+    71	  set: Parameters<StateCreator<RunConfigState>>[0]
+    72	): RunConfigState {
+    73	  return {
+    74	    ...DEFAULT_CONFIG,
+    75	    setMaxIterations: (value) => {
+    76	      set({
+    77	        maxIterations: clamp(value, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS),
+    78	      });
+    79	    },
+    80	    setPassingScore: (value) => {
+    81	      set({
+    82	        passingScore: clamp(value, MIN_PASSING_SCORE, MAX_PASSING_SCORE),
+    83	      });
+    84	    },
+    85	    setContinueMode: (value) => {
+    86	      set({ continueMode: value });
+    87	    },
+    88	    reset: () => {
+    89	      set({ ...DEFAULT_CONFIG });
+    90	    },
+    91	  };
+    92	}
+    93	
+    94	function createPersistOptions(
+    95	  deps: RunConfigStoreDeps
+    96	): PersistOptions<RunConfigState, RunConfigValues> {
+    97	  return {
+    98	    name: RUN_CONFIG_STORE_KEY,
+    99	    storage: createJSONStorage(() =>
+   100	      deps.storage ?? (typeof localStorage === 'undefined' ? noopStorage : localStorage)
+   101	    ),
+   102	    partialize: (state) => ({
+   103	      maxIterations: state.maxIterations,
+   104	      passingScore: state.passingScore,
+   105	      continueMode: state.continueMode,
+   106	    }),
+   107	    merge: (persistedState, currentState) => ({
+   108	      ...currentState,
+   109	      ...sanitizeRunConfig((persistedState as Partial<RunConfigValues>) ?? {}),
+   110	    }),
+   111	  };
+   112	}
+   113	
+   114	export function createRunConfigStore(deps: RunConfigStoreDeps = {}) {
+   115	  return create<RunConfigState>()(
+   116	    persist((set) => createRunConfigState(set), createPersistOptions(deps))
+   117	  );
+   118	}
+   119	
+   120	export const useRunConfigStore = createRunConfigStore();
+
+ succeeded in 0ms:
+     1	import { useState, type JSX } from 'react';
+     2	import {
+     3	  useRunConfigStore,
+     4	  DEFAULT_MAX_ITERATIONS,
+     5	  DEFAULT_PASSING_SCORE,
+     6	  MIN_MAX_ITERATIONS,
+     7	  MAX_MAX_ITERATIONS,
+     8	  MIN_PASSING_SCORE,
+     9	  MAX_PASSING_SCORE,
+    10	} from '../stores/runConfigStore';
+    11	
+    12	function ChevronDownIcon({ className }: { className?: string }): JSX.Element {
+    13	  return (
+    14	    <svg
+    15	      className={className}
+    16	      fill="none"
+    17	      stroke="currentColor"
+    18	      viewBox="0 0 24 24"
+    19	    >
+    20	      <path
+    21	        strokeLinecap="round"
+    22	        strokeLinejoin="round"
+    23	        strokeWidth={2}
+    24	        d="M19 9l-7 7-7-7"
+    25	      />
+    26	    </svg>
+    27	  );
+    28	}
+    29	
+    30	function SettingsIcon({ className }: { className?: string }): JSX.Element {
+    31	  return (
+    32	    <svg
+    33	      className={className}
+    34	      fill="none"
+    35	      stroke="currentColor"
+    36	      viewBox="0 0 24 24"
+    37	    >
+    38	      <path
+    39	        strokeLinecap="round"
+    40	        strokeLinejoin="round"
+    41	        strokeWidth={2}
+    42	        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+    43	      />
+    44	      <path
+    45	        strokeLinecap="round"
+    46	        strokeLinejoin="round"
+    47	        strokeWidth={2}
+    48	        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+    49	      />
+    50	    </svg>
+    51	  );
+    52	}
+    53	
+    54	function ResetIcon({ className }: { className?: string }): JSX.Element {
+    55	  return (
+    56	    <svg
+    57	      className={className}
+    58	      fill="none"
+    59	      stroke="currentColor"
+    60	      viewBox="0 0 24 24"
+    61	    >
+    62	      <path
+    63	        strokeLinecap="round"
+    64	        strokeLinejoin="round"
+    65	        strokeWidth={2}
+    66	        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+    67	      />
+    68	    </svg>
+    69	  );
+    70	}
+    71	
+    72	interface RunConfigPanelProps {
+    73	  collapsed?: boolean;
+    74	  onCollapsedChange?: (collapsed: boolean) => void;
+    75	}
+    76	
+    77	export default function RunConfigPanel({
+    78	  collapsed: controlledCollapsed,
+    79	  onCollapsedChange,
+    80	}: RunConfigPanelProps): JSX.Element {
+    81	  const [internalCollapsed, setInternalCollapsed] = useState(true);
+    82	
+    83	  const isControlled = controlledCollapsed !== undefined;
+    84	  const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+    85	
+    86	  const toggleCollapse = () => {
+    87	    const nextCollapsed = !collapsed;
+    88	    if (isControlled && onCollapsedChange) {
+    89	      onCollapsedChange(nextCollapsed);
+    90	    } else {
+    91	      setInternalCollapsed(nextCollapsed);
+    92	    }
+    93	  };
+    94	
+    95	  const {
+    96	    maxIterations,
+    97	    passingScore,
+    98	    continueMode,
+    99	    setMaxIterations,
+   100	    setPassingScore,
+   101	    setContinueMode,
+   102	    reset,
+   103	  } = useRunConfigStore();
+   104	
+   105	  const isDefault =
+   106	    maxIterations === DEFAULT_MAX_ITERATIONS &&
+   107	    passingScore === DEFAULT_PASSING_SCORE &&
+   108	    continueMode === false;
+   109	
+   110	  return (
+   111	    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+   112	      <button
+   113	        type="button"
+   114	        onClick={toggleCollapse}
+   115	        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+   116	      >
+   117	        <div className="flex items-center gap-2">
+   118	          <SettingsIcon className="h-4 w-4 text-gray-500" />
+   119	          <span className="text-sm font-medium text-gray-700">运行参数配置</span>
+   120	          {!isDefault && (
+   121	            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+   122	              已修改
+   123	            </span>
+   124	          )}
+   125	        </div>
+   126	        <ChevronDownIcon
+   127	          className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+   128	            collapsed ? '' : 'rotate-180'
+   129	          }`}
+   130	        />
+   131	      </button>
+   132	
+   133	      {!collapsed && (
+   134	        <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+   135	          <div className="pt-4">
+   136	            <div className="flex items-center justify-between mb-2">
+   137	              <label
+   138	                htmlFor="maxIterations"
+   139	                className="text-sm font-medium text-gray-700"
+   140	              >
+   141	                最大迭代次数
+   142	              </label>
+   143	              <span className="text-xs text-gray-500">
+   144	                {MIN_MAX_ITERATIONS}-{MAX_MAX_ITERATIONS}
+   145	              </span>
+   146	            </div>
+   147	            <div className="flex items-center gap-3">
+   148	              <input
+   149	                type="range"
+   150	                id="maxIterations"
+   151	                min={MIN_MAX_ITERATIONS}
+   152	                max={MAX_MAX_ITERATIONS}
+   153	                value={maxIterations}
+   154	                onChange={(e) => setMaxIterations(Number(e.target.value))}
+   155	                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+   156	              />
+   157	              <input
+   158	                type="number"
+   159	                min={MIN_MAX_ITERATIONS}
+   160	                max={MAX_MAX_ITERATIONS}
+   161	                value={maxIterations}
+   162	                onChange={(e) => setMaxIterations(Number(e.target.value))}
+   163	                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+   164	              />
+   165	            </div>
+   166	            <p className="mt-1 text-xs text-gray-500">
+   167	              每个任务最多执行的迭代次数（默认 {DEFAULT_MAX_ITERATIONS}）
+   168	            </p>
+   169	          </div>
+   170	
+   171	          <div>
+   172	            <div className="flex items-center justify-between mb-2">
+   173	              <label
+   174	                htmlFor="passingScore"
+   175	                className="text-sm font-medium text-gray-700"
+   176	              >
+   177	                通过分数
+   178	              </label>
+   179	              <span className="text-xs text-gray-500">
+   180	                {MIN_PASSING_SCORE}-{MAX_PASSING_SCORE}
+   181	              </span>
+   182	            </div>
+   183	            <div className="flex items-center gap-3">
+   184	              <input
+   185	                type="range"
+   186	                id="passingScore"
+   187	                min={MIN_PASSING_SCORE}
+   188	                max={MAX_PASSING_SCORE}
+   189	                value={passingScore}
+   190	                onChange={(e) => setPassingScore(Number(e.target.value))}
+   191	                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+   192	              />
+   193	              <input
+   194	                type="number"
+   195	                min={MIN_PASSING_SCORE}
+   196	                max={MAX_PASSING_SCORE}
+   197	                value={passingScore}
+   198	                onChange={(e) => setPassingScore(Number(e.target.value))}
+   199	                className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+   200	              />
+   201	            </div>
+   202	            <p className="mt-1 text-xs text-gray-500">
+   203	              审核评分达到此分数才算通过（默认 {DEFAULT_PASSING_SCORE}）
+   204	            </p>
+   205	          </div>
+   206	
+   207	          <div>
+   208	            <div className="flex items-center justify-between">
+   209	              <div>
+   210	                <label
+   211	                  htmlFor="continueMode"
+   212	                  className="text-sm font-medium text-gray-700"
+   213	                >
+   214	                  继续模式
+   215	                </label>
+   216	                <p className="text-xs text-gray-500">
+   217	                  从上次中断的地方继续执行
+   218	                </p>
+   219	              </div>
+   220	              <button
+   221	                type="button"
+   222	                id="continueMode"
+   223	                role="switch"
+   224	                aria-checked={continueMode}
+   225	                onClick={() => setContinueMode(!continueMode)}
+   226	                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+   227	                  continueMode ? 'bg-blue-600' : 'bg-gray-200'
+   228	                }`}
+   229	              >
+   230	                <span
+   231	                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+   232	                    continueMode ? 'translate-x-5' : 'translate-x-0'
+   233	                  }`}
+   234	                />
+   235	              </button>
+   236	            </div>
+   237	          </div>
+   238	
+   239	          <div className="pt-2 border-t border-gray-100">
+   240	            <button
+   241	              type="button"
+   242	              onClick={reset}
+   243	              disabled={isDefault}
+   244	              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+   245	            >
+   246	              <ResetIcon className="h-4 w-4" />
+   247	              重置为默认值
+   248	            </button>
+   249	          </div>
+   250	        </div>
+   251	      )}
+   252	    </div>
+   253	  );
+   254	}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/tests/runStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba desktop_app/src/components/IssueDetailPanel.tsx | sed -n '220,360p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRunStore } from '../src/stores/runStore.ts';
+
+function createInvokeMock(handlers) {
+  return async (cmd) => {
+    const handler = handlers[cmd];
+    if (!handler) {
+      throw new Error(`Unhandled command: ${cmd}`);
+    }
+    return handler();
+  };
+}
+
+test('startRun clears unknown active issue when backend already has another task', async () => {
+  const store = createRunStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      start_run: () => {
+        throw new Error('A run is already in progress.');
+      },
+      get_run_status: () => 'Running',
+    }),
+    listen: async () => () => {},
+    getSelectedAgents: () => [],
+  });
+
+  await store.getState().startRun({
+    projectPath: '/tmp/project',
+    issueNumber: 28,
+  });
+
+  assert.equal(store.getState().status, 'running');
+  assert.equal(store.getState().activeIssueNumber, null);
+  assert.equal(store.getState().error, 'A run is already in progress.');
+});
+
+test('startRun restores previous running issue when stop/start race fails', async () => {
+  const store = createRunStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      start_run: () => {
+        throw new Error('A run is already in progress.');
+      },
+      get_run_status: () => 'Running',
+    }),
+    listen: async () => () => {},
+    getSelectedAgents: () => [],
+  });
+
+  store.setState({
+    status: 'running',
+    activeIssueNumber: 7,
+    outputLines: ['existing output'],
+    exitCode: null,
+    error: null,
+  });
+
+  await store.getState().startRun({
+    projectPath: '/tmp/project',
+    issueNumber: 28,
+  });
+
+  assert.equal(store.getState().status, 'running');
+  assert.equal(store.getState().activeIssueNumber, 7);
+  assert.deepEqual(store.getState().outputLines, ['existing output']);
+});
+
+test('initialize wires run events and caps output history', async () => {
+  const listeners = new Map();
+  const store = createRunStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_run_status: () => 'Idle',
+    }),
+    listen: async (event, callback) => {
+      listeners.set(event, callback);
+      return () => {
+        listeners.delete(event);
+      };
+    },
+    getSelectedAgents: () => [],
+  });
+
+  await store.getState().initialize();
+
+  const outputListener = listeners.get('run-output');
+  const exitListener = listeners.get('run-exit');
+
+  assert.ok(outputListener);
+  assert.ok(exitListener);
+
+  for (let index = 0; index < 2005; index += 1) {
+    outputListener({ payload: `line-${index}` });
+  }
+
+  exitListener({ payload: { exit_code: 2, killed: false } });
+
+  assert.equal(store.getState().outputLines.length, 2000);
+  assert.equal(store.getState().outputLines[0], 'line-5');
+  assert.equal(store.getState().outputLines[store.getState().outputLines.length - 1], 'line-2004');
+  assert.equal(store.getState().status, 'error');
+  assert.equal(store.getState().exitCode, 2);
+  assert.equal(store.getState().error, '运行失败 (exit code 2)');
+});
+
+ succeeded in 0ms:
+   220	    activeIssueNumber,
+   221	    outputLines,
+   222	    exitCode,
+   223	    error: runError,
+   224	    isSupported,
+   225	    startRun,
+   226	    stopRun,
+   227	    clearOutput,
+   228	    clearError: clearRunError,
+   229	  } = useRunStore();
+   230	
+   231	  const {
+   232	    maxIterations,
+   233	    passingScore,
+   234	    continueMode,
+   235	  } = useRunConfigStore();
+   236	
+   237	  useEffect(() => {
+   238	    const container = outputContainerRef.current;
+   239	    if (!container) {
+   240	      return;
+   241	    }
+   242	    container.scrollTop = container.scrollHeight;
+   243	  }, [outputLines, runStatus]);
+   244	
+   245	  if (!issue) {
+   246	    return <EmptySelectionState />;
+   247	  }
+   248	
+   249	  const isRunActive = runStatus === 'running' || runStatus === 'stopping';
+   250	  const isCurrentIssueRunning = activeIssueNumber === issue.number && isRunActive;
+   251	  const canStart =
+   252	    Boolean(projectPath) && isSupported && !isRunActive;
+   253	  const canStop = isSupported && isRunActive;
+   254	  const outputText =
+   255	    outputLines.length > 0 ? outputLines.join('\n') : '等待运行输出...';
+   256	  const showRunMeta =
+   257	    activeIssueNumber !== null &&
+   258	    (isRunActive || runStatus === 'finished' || runStatus === 'error');
+   259	
+   260	  return (
+   261	    <aside className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+   262	      <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
+   263	        <div className="min-w-0">
+   264	          <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-blue-600">
+   265	            Issue Detail
+   266	          </p>
+   267	          <h2 className="truncate text-lg font-semibold text-gray-900">
+   268	            #{issue.number} {issue.title}
+   269	          </h2>
+   270	          <p className="mt-1 text-sm text-gray-500">
+   271	            {issue.state === 'OPEN' ? 'Open' : 'Closed'} · 创建于{' '}
+   272	            {formatDateTime(issue.createdAt)}
+   273	          </p>
+   274	        </div>
+   275	        <button
+   276	          onClick={onClose}
+   277	          className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+   278	          aria-label="关闭 Issue 详情"
+   279	        >
+   280	          <CloseIcon className="h-5 w-5" />
+   281	        </button>
+   282	      </div>
+   283	
+   284	      <div className="space-y-6 p-5">
+   285	        <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+   286	          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+   287	            <div>
+   288	              <div className="mb-2 flex flex-wrap items-center gap-2">
+   289	                <span
+   290	                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getRunStatusClass(runStatus)}`}
+   291	                >
+   292	                  {(runStatus === 'running' || runStatus === 'stopping') && (
+   293	                    <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+   294	                  )}
+   295	                  {getRunStatusLabel(runStatus)}
+   296	                </span>
+   297	                {showRunMeta && (
+   298	                  <span className="text-xs text-gray-500">
+   299	                    当前任务 #{activeIssueNumber}
+   300	                    {exitCode !== null ? ` · exit code ${exitCode}` : ''}
+   301	                  </span>
+   302	                )}
+   303	              </div>
+   304	              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+   305	                运行控制
+   306	              </h3>
+   307	              <p className="mt-2 text-sm leading-6 text-gray-500">
+   308	                选择当前 Issue 后可直接启动 `run.sh`，输出会实时显示在下方。
+   309	              </p>
+   310	            </div>
+   311	
+   312	            <div className="flex flex-wrap gap-2">
+   313	              <button
+   314	                type="button"
+   315	                onClick={() => {
+   316	                  clearRunError();
+   317	                  if (projectPath) {
+   318	                    void startRun({
+   319	                      projectPath,
+   320	                      issueNumber: issue.number,
+   321	                      maxIter: maxIterations,
+   322	                      passingScore,
+   323	                      continueMode,
+   324	                    });
+   325	                  }
+   326	                }}
+   327	                disabled={!canStart}
+   328	                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+   329	              >
+   330	                <PlayIcon className="h-4 w-4" />
+   331	                启动
+   332	              </button>
+   333	              <button
+   334	                type="button"
+   335	                onClick={() => {
+   336	                  clearRunError();
+   337	                  void stopRun();
+   338	                }}
+   339	                disabled={!canStop}
+   340	                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+   341	              >
+   342	                <StopIcon className="h-4 w-4" />
+   343	                停止
+   344	              </button>
+   345	            </div>
+   346	          </div>
+   347	
+   348	          <div className="space-y-4">
+   349	            <RunConfigPanel />
+   350	            <div className="rounded-xl border border-gray-200 bg-white p-4">
+   351	              <AgentSelector />
+   352	            </div>
+   353	          </div>
+   354	
+   355	          {!isSupported && (
+   356	            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+   357	              浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+   358	            </div>
+   359	          )}
+   360	
+
+codex
+我已经找到一个实质性边界问题，另外还在确认是否存在“只测到 store、没测到启动链路”的漏测。再补一轮实现说明和任务上下文后，我会给出正式审核结论。
+exec
+/bin/zsh -lc "sed -n '260,360p' desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    // Execute gh issue view
+    let output = Command::new("gh")
+        .args([
+            "issue", "view",
+            &issue_number.to_string(),
+            "--json", "body,comments",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(map_issue_detail_command_error(issue_number, &stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_issue_detail(&stdout)
+}
+
+/// Request parameters for starting a run.sh process.
+#[derive(serde::Deserialize, Debug)]
+struct StartRunRequest {
+    /// Project directory path where run.sh will execute.
+    project_path: String,
+    /// GitHub Issue number to process.
+    issue_number: i64,
+    /// Maximum number of iterations (optional, defaults to 42).
+    max_iter: Option<i32>,
+    /// Comma-separated list of agents (optional).
+    agents: Option<String>,
+    /// Passing score threshold (optional, defaults to 85).
+    passing_score: Option<i32>,
+    /// Continue from last interrupted run (optional).
+    continue_mode: Option<bool>,
+}
+
+/// Builds command-line arguments for run.sh from the request parameters.
+/// This is a pure function extracted for testability.
+fn build_run_args(request: &StartRunRequest) -> Vec<String> {
+    let mut args = vec![
+        "-p".to_string(),
+        request.project_path.clone(),
+    ];
+
+    if let Some(ref agents) = request.agents {
+        if !agents.is_empty() {
+            args.push("-a".to_string());
+            args.push(agents.clone());
+        }
+    }
+
+    if request.continue_mode.unwrap_or(false) {
+        args.push("-c".to_string());
+    }
+
+    args.push(request.issue_number.to_string());
+
+    if let Some(max_iter) = request.max_iter {
+        args.push(max_iter.to_string());
+    }
+
+    args
+}
+
+/// Builds environment variables for run.sh from the request parameters.
+/// Returns a vector of (key, value) pairs.
+/// This is a pure function extracted for testability.
+fn build_run_env_vars(request: &StartRunRequest) -> Vec<(&'static str, String)> {
+    let mut env_vars = vec![];
+    if let Some(passing_score) = request.passing_score {
+        env_vars.push(("PASSING_SCORE", passing_score.to_string()));
+    }
+    env_vars
+}
+
+/// Result returned when run.sh process exits.
+#[derive(serde::Serialize, Debug, Clone)]
+struct RunExitEvent {
+    /// Exit code of the process.
+    exit_code: Option<i32>,
+    /// Whether the process was killed by stop_run.
+    killed: bool,
+}
+
+/// Starts a run.sh process to process a GitHub Issue.
+///
+/// Parameters are mapped to run.sh CLI arguments:
+/// - `issue_number` -> positional argument
+/// - `max_iter` -> positional argument (after issue_number)
+/// - `agents` -> `-a` option
+/// - `passing_score` -> `PASSING_SCORE` environment variable
+/// - `continue_mode` -> `-c` flag
+///
+/// The process's stdout/stderr are streamed via `run-output` Tauri events.
+/// When the process exits, a `run-exit` event is emitted.
+#[cfg(unix)]
+
+exec
+/bin/zsh -lc 'rg -n "Issue #29|运行参数配置 UI|runConfigStore|RunConfigPanel" .autoresearch/workflows/issue-29 -S' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:7:- 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:16:Issue #29 的核心需求几乎**完全未实现**。虽然 `runStore.ts` 中已有 `maxIter`、`passingScore`、`continueMode` 参数的传递支持，但缺少关键的独立持久化配置存储（`runConfigStore`）和参数配置 UI 面板。用户无法在启动任务前配置这些参数。
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:22:#### 问题 1: 缺少 runConfigStore 持久化配置存储
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:24:**位置**: `desktop_app/src/stores/` (应创建 `runConfigStore.ts`)
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:30:- ❌ 创建 runConfigStore.ts 文件
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:39:// desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:87:**原因**: 这是 Issue #29 的核心需求之一（子任务 T-001）
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:110:**原因**: 这是 Issue #29 的核心 UI 需求（子任务 T-002）
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:125:#### 问题 4: startRun 未使用 runConfigStore 的配置
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:142:// 从 runConfigStore 读取配置
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:186:1. **创建 `runConfigStore.ts`**: 参照 `agentStore.ts` 的 persist 模式，实现带范围约束的配置持久化
+.autoresearch/workflows/issue-29/iteration-4-claude-review.log:192:4. **修改 startRun 调用**: 从 `runConfigStore` 读取配置并传递给 `startRun`
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:14:审核 Issue #29 的实现
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:18:Issue 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:40:# Issue #29 经验日志
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:464:这次是审核 Issue #29「[desktop-app] 运行参数配置 UI」的实现。我先看仓库状态、相关改动和测试入口，确认这次实现实际改了什么，再按正确性、测试、代码质量等维度出审核结论。
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:482:/bin/zsh -lc 'rg -n "Issue #29|运行参数配置|desktop-app|run args|run arguments|参数配置" -S .' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:488:./docs/desktop-app-prd-to-issues.md:100:└── #29 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-6-codex-review.log:495:仓库在 `feature/issue-29`，当前未提交改动只有 `run.sh` 和 `.autoresearch/workflows/issue-29/`。接下来我看这两个路径和最近提交差异，确认 Issue #29 的实现范围以及是否带了测试。
+.autoresearch/workflows/issue-29/iteration-4-claude.log:5:1. **runConfigStore.ts** - 已存在且正确实现，包含：
+.autoresearch/workflows/issue-29/iteration-4-claude.log:12:2. **RunConfigPanel.tsx** - 新创建的参数配置 UI 组件，包含：
+.autoresearch/workflows/issue-29/iteration-4-claude.log:21:   - 导入 `useRunConfigStore`、`RunConfigPanel`、`AgentSelector`
+.autoresearch/workflows/issue-29/iteration-4-claude.log:34:- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`。`runConfigStore` 已经预先实现了完整的配置存储功能，包括范围约束和 sanitize 逻辑
+.autoresearch/workflows/issue-29/progress.md:1:# Issue #29 经验日志
+.autoresearch/workflows/issue-29/progress.md:44:审核 Issue #29 的实现
+.autoresearch/workflows/issue-29/progress.md:48:Issue 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/progress.md:115:- 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/progress.md:124:Issue #29 的核心需求几乎**完全未实现**。虽然 `runStore.ts` 中已有 `maxIter`、`passingScore`、`continueMode` 参数的传递支持，但缺少关键的独立持久化配置存储（`runConfigStore`）和参数配置 UI 面板。用户无法在启动任务前配置这些参数。
+.autoresearch/workflows/issue-29/progress.md:130:#### 问题 1: 缺少 runConfigStore 持久化配置存储
+.autoresearch/workflows/issue-29/progress.md:132:**位置**: `desktop_app/src/stores/` (应创建 `runConfigStore.ts`)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:14:根据审核反馈改进 Issue #29 的实现
+.autoresearch/workflows/issue-29/iteration-5-codex.log:18:Issue 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex.log:34:审核 Issue #29 的实现
+.autoresearch/workflows/issue-29/iteration-5-codex.log:38:Issue 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex.log:50:- **描述**: 创建 src/stores/runConfigStore.ts，使用 Zustand persist 中间件持久化运行参数配置。存储 maxIterations（默认 16，范围 1-50）、passingScore（默认 85，范围 1-100）、continueMode（默认 false）三个参数。参考 agentStore.ts 的 persist 实现模式。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:52:  - 创建 runConfigStore.ts 文件
+.autoresearch/workflows/issue-29/iteration-5-codex.log:80:# Issue #29 经验日志
+.autoresearch/workflows/issue-29/iteration-5-codex.log:504:我会先检查与 `runConfigStore` 相关的实现和现有 `agentStore` 的持久化模式，再对照验收条件核对代码与测试覆盖。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:512:/bin/zsh -lc "pwd && rg --files /Users/chaoyuepan/ai/autoresearch | rg 'runConfigStore|agentStore|progress\\.md|CLAUDE\\.md|package\\.json|src/stores'" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:531:/bin/zsh -lc "rg --files desktop_app/src desktop_app | rg 'runConfigStore|agentStore|CLAUDE\\.md|vitest|test|spec'" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:791:当前看不到 `runConfigStore.ts`，我再检查工作树差异和 issue 记录，确认这是未实现、实现后被删，还是放错了位置。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:798:# Issue #29 经验日志
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1156:/bin/zsh -lc "if [ -f desktop_app/src/stores/runConfigStore.ts ]; then nl -ba desktop_app/src/stores/runConfigStore.ts | sed -n '1,220p'; else echo 'MISSING: desktop_app/src/stores/runConfigStore.ts'; fi" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1158:MISSING: desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1229:测试基线是绿的，但测试入口只有 `runStore`，还没覆盖这次子任务。我再确认代码里没有任何 `runConfigStore` 集成痕迹。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1231:/bin/zsh -lc 'rg -n "runConfigStore|useRunConfigStore|maxIterations|passingScore|continueMode|autoresearch-run-config" desktop_app/src desktop_app/tests' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1533:1. 严重: 子任务核心交付物缺失，验收无法通过。预期文件 `runConfigStore.ts` 并不存在于 [`desktop_app/src/stores`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores)，当前目录只有 [`agentStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/agentStore.ts#L1)、[`issueStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts)、[`projectStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts)、[`runStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts#L1)。因此以下验收项全部未满足: 创建文件、默认值、范围约束、`persist` 持久化、store key `autoresearch-run-config`。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1541:- `创建 runConfigStore.ts 文件`: 不通过
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1565:1. 严重: 子任务核心交付物缺失，验收无法通过。预期文件 `runConfigStore.ts` 并不存在于 [`desktop_app/src/stores`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores)，当前目录只有 [`agentStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/agentStore.ts#L1)、[`issueStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts)、[`projectStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts)、[`runStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts#L1)。因此以下验收项全部未满足: 创建文件、默认值、范围约束、`persist` 持久化、store key `autoresearch-run-config`。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1573:- `创建 runConfigStore.ts 文件`: 不通过
+.autoresearch/workflows/issue-29/iteration-5-codex.log:1599:# Issue #29 经验日志
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2037:  • 实现 runConfigStore 持久化与范围约束
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2041:我先按审核反馈把 T-001 拆成可落地任务：补齐 `runConfigStore`、补范围约束、补测试入口，再跑类型检查和测试确认没有遗漏。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2327:方案已经定了：`runConfigStore` 会做成可注入 storage 的 Zustand store，这样浏览器里走 `localStorage`，测试里走内存 storage，同时在 setter 和持久化回填两侧都做数值约束，避免脏数据绕过 UI。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2330:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2331:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2335:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2450:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2454:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2573:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2574:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2578:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2701:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2705:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2830:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2831:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2835:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2957:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2961:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2971:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2988:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:2997:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3014:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3031:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3051:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3055:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3177:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3181:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3191:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3208:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3217:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3234:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3251:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3287:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3291:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3413:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3417:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3427:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3444:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3453:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3470:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3487:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3520:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3524:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3646:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3650:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3660:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3677:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3686:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3703:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3720:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3741:  ✓ 实现 runConfigStore 持久化与范围约束
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3757:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3761:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3883:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3887:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3897:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3914:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3923:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3940:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3957:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3992:✔ runConfigStore exposes required default values (0.7535ms)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3993:✔ runConfigStore clamps numeric setters to accepted ranges (0.151792ms)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3994:✔ runConfigStore persists values under the required storage key (0.651875ms)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:3995:✔ runConfigStore sanitizes persisted numeric values during hydration (0.084958ms)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4027:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4031:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4153:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4157:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4167:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4184:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4193:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4210:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4227:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4279:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4283:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4405:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4409:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4419:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4436:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4445:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4462:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4479:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4525:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4529:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4651:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4655:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4665:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4682:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4691:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4708:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4725:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4746:/bin/zsh -lc "nl -ba desktop_app/src/stores/runConfigStore.ts | sed -n '1,240p'" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4870:/bin/zsh -lc 'git diff --stat -- desktop_app/src/stores/runConfigStore.ts desktop_app/tests/runConfigStore.test.mjs desktop_app/package.json desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4879:/bin/zsh -lc "nl -ba desktop_app/tests/runConfigStore.test.mjs | sed -n '1,240p'" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4936:     9	} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4953:    26	test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4962:    35	test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4979:    52	test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:4996:    69	test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5105:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5109:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5231:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5235:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5245:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5262:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5271:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5288:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5305:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5326:/bin/zsh -lc 'git status --short desktop_app/src/stores/runConfigStore.ts desktop_app/tests/runConfigStore.test.mjs desktop_app/package.json desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5330:?? desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5331:?? desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5334:/bin/zsh -lc 'wc -l desktop_app/src/stores/runConfigStore.ts desktop_app/tests/runConfigStore.test.mjs' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5336:     120 desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5337:      87 desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5366:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5370:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5492:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5496:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5506:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5523:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5532:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5549:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5566:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5590:1. `runConfigStore.ts` 缺失。我的理解：T-001 的核心交付物根本没有落地，需要补完整个 store。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5595:- [x] 新增 `runConfigStore`，实现默认值、setter、reset、persist
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5603:- 缺失的 store 已补上，新增 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L1)。其中定义了默认值常量、范围常量、`RUN_CONFIG_STORE_KEY = 'autoresearch-run-config'`，并通过 `persist` 做本地持久化。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5604:- 数值约束已补齐。`setMaxIterations` 和 `setPassingScore` 都会 clamp；另外 `sanitizeRunConfig()` 也在 rehydrate 合并阶段再次收敛，避免旧的 localStorage 脏值绕过限制，见 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L50) 和 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L94)。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5605:- 为了可测试性，store 暴露了 `createRunConfigStore({ storage })` 工厂，测试里可注入内存 storage，不依赖浏览器环境，见 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L114)。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5606:- 新增测试 [`runConfigStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1)，覆盖：
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5617:- 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5622:- 新增文件: [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L1), [`runConfigStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5634:- 测试文件: [`runConfigStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1), [`runStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs#L1)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5637:  - `runConfigStore` 默认值
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5692:diff --git a/desktop_app/src/stores/runConfigStore.ts b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5696:+++ b/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5818:diff --git a/desktop_app/tests/runConfigStore.test.mjs b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5822:+++ b/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5832:+} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5849:+test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5858:+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5875:+test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5892:+test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5917:1. `runConfigStore.ts` 缺失。我的理解：T-001 的核心交付物根本没有落地，需要补完整个 store。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5922:- [x] 新增 `runConfigStore`，实现默认值、setter、reset、persist
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5930:- 缺失的 store 已补上，新增 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L1)。其中定义了默认值常量、范围常量、`RUN_CONFIG_STORE_KEY = 'autoresearch-run-config'`，并通过 `persist` 做本地持久化。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5931:- 数值约束已补齐。`setMaxIterations` 和 `setPassingScore` 都会 clamp；另外 `sanitizeRunConfig()` 也在 rehydrate 合并阶段再次收敛，避免旧的 localStorage 脏值绕过限制，见 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L50) 和 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L94)。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5932:- 为了可测试性，store 暴露了 `createRunConfigStore({ storage })` 工厂，测试里可注入内存 storage，不依赖浏览器环境，见 [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L114)。
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5933:- 新增测试 [`runConfigStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1)，覆盖：
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5944:- 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5949:- 新增文件: [`runConfigStore.ts`](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L1), [`runConfigStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5961:- 测试文件: [`runConfigStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1), [`runStore.test.mjs`](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs#L1)
+.autoresearch/workflows/issue-29/iteration-5-codex.log:5964:  - `runConfigStore` 默认值
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:14:审核 Issue #29 的实现
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:18:Issue 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:40:# Issue #29 经验日志
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:83:审核 Issue #29 的实现
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:87:Issue 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:154:- 标题: [desktop-app] 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:163:Issue #29 的核心需求几乎**完全未实现**。虽然 `runStore.ts` 中已有 `maxIter`、`passingScore`、`continueMode` 参数的传递支持，但缺少关键的独立持久化配置存储（`runConfigStore`）和参数配置 UI 面板。用户无法在启动任务前配置这些参数。
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:169:#### 问题 1: 缺少 runConfigStore 持久化配置存储
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:171:**位置**: `desktop_app/src/stores/` (应创建 `runConfigStore.ts`)
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:587:我先查看仓库状态并定位 Issue #29 相关实现，重点核对运行参数配置 UI、持久化 store 和测试覆盖。
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:596:?? desktop_app/src/components/RunConfigPanel.tsx
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:597:?? desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:598:?? desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:614:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:625:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:662:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:672:/Users/chaoyuepan/ai/autoresearch/docs/desktop-app-prd-to-issues.md:100:└── #29 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:675:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:4:  createRunConfigStore,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:676:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:9:} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:677:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:26:test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:678:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:28:  const store = createRunConfigStore({ storage });
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:679:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:30:  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:680:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:31:  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:681:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:32:  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:682:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:35:test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:683:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:37:  const store = createRunConfigStore({ storage });
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:684:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:42:  assert.equal(store.getState().maxIterations, 1);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:685:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:43:  assert.equal(store.getState().passingScore, 100);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:686:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:48:  assert.equal(store.getState().maxIterations, 50);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:687:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:49:  assert.equal(store.getState().passingScore, 1);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:688:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:52:test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:689:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:54:  const store = createRunConfigStore({ storage });
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:690:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:63:    maxIterations: 24,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:691:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:64:    passingScore: 90,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:692:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:65:    continueMode: true,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:693:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:69:test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:694:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:73:        maxIterations: -10,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:695:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:74:        passingScore: 999,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:696:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:75:        continueMode: true,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:697:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:81:  const store = createRunConfigStore({ storage });
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:698:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:84:  assert.equal(store.getState().maxIterations, 1);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:699:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:85:  assert.equal(store.getState().passingScore, 100);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:700:/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs:86:  assert.equal(store.getState().continueMode, true);
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:722:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:21:interface RunConfigValues {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:723:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:22:  maxIterations: number;
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:724:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:23:  passingScore: number;
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:725:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:24:  continueMode: boolean;
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:726:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:27:export interface RunConfigState extends RunConfigValues {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:727:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:34:interface RunConfigStoreDeps {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:728:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:38:const DEFAULT_CONFIG: RunConfigValues = {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:729:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:39:  maxIterations: DEFAULT_MAX_ITERATIONS,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:730:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:40:  passingScore: DEFAULT_PASSING_SCORE,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:731:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:41:  continueMode: DEFAULT_CONTINUE_MODE,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:732:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:54:export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigValues {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:733:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:56:    maxIterations: clamp(
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:734:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:57:      values.maxIterations ?? DEFAULT_MAX_ITERATIONS,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:735:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:61:    passingScore: clamp(
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:736:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:62:      values.passingScore ?? DEFAULT_PASSING_SCORE,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:737:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:66:    continueMode: values.continueMode ?? DEFAULT_CONTINUE_MODE,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:738:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:70:function createRunConfigState(
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:739:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:71:  set: Parameters<StateCreator<RunConfigState>>[0]
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:740:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:72:): RunConfigState {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:741:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:77:        maxIterations: clamp(value, MIN_MAX_ITERATIONS, MAX_MAX_ITERATIONS),
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:742:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:82:        passingScore: clamp(value, MIN_PASSING_SCORE, MAX_PASSING_SCORE),
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:743:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:86:      set({ continueMode: value });
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:744:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:95:  deps: RunConfigStoreDeps
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:745:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:96:): PersistOptions<RunConfigState, RunConfigValues> {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:746:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:103:      maxIterations: state.maxIterations,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:747:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:104:      passingScore: state.passingScore,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:748:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:105:      continueMode: state.continueMode,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:749:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:109:      ...sanitizeRunConfig((persistedState as Partial<RunConfigValues>) ?? {}),
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:750:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:114:export function createRunConfigStore(deps: RunConfigStoreDeps = {}) {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:751:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:115:  return create<RunConfigState>()(
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:752:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:116:    persist((set) => createRunConfigState(set), createPersistOptions(deps))
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:753:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts:120:export const useRunConfigStore = createRunConfigStore();
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:754:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:3:  useRunConfigStore,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:755:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:10:} from '../stores/runConfigStore';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:756:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:72:interface RunConfigPanelProps {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:757:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:77:export default function RunConfigPanel({
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:758:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:80:}: RunConfigPanelProps): JSX.Element {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:759:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:96:    maxIterations,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:760:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:97:    passingScore,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:761:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:98:    continueMode,
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:762:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:103:  } = useRunConfigStore();
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:763:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:106:    maxIterations === DEFAULT_MAX_ITERATIONS &&
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:764:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:107:    passingScore === DEFAULT_PASSING_SCORE &&
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:765:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:108:    continueMode === false;
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:766:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:119:          <span className="text-sm font-medium text-gray-700">运行参数配置</span>
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:767:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:138:                htmlFor="maxIterations"
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:768:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:150:                id="maxIterations"
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:769:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:153:                value={maxIterations}
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:770:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:161:                value={maxIterations}
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:771:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:174:                htmlFor="passingScore"
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:772:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:186:                id="passingScore"
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:773:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:189:                value={passingScore}
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:774:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:197:                value={passingScore}
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:775:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:211:                  htmlFor="continueMode"
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:776:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:222:                id="continueMode"
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:777:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:224:                aria-checked={continueMode}
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:778:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:225:                onClick={() => setContinueMode(!continueMode)}
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:779:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:227:                  continueMode ? 'bg-blue-600' : 'bg-gray-200'
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:780:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx:232:                    continueMode ? 'translate-x-5' : 'translate-x-0'
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:781:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:5:import { useRunConfigStore } from '../stores/runConfigStore';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:782:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:6:import RunConfigPanel from './RunConfigPanel';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:790:/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx:349:            <RunConfigPanel />
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:809:└── #29 运行参数配置 UI
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:907:/bin/zsh -lc "sed -n '1,220p' desktop_app/src/stores/runConfigStore.ts" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1180:            <RunConfigPanel />
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1214:/bin/zsh -lc "sed -n '1,280p' desktop_app/src/components/RunConfigPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1225:} from '../stores/runConfigStore';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1287:interface RunConfigPanelProps {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1292:export default function RunConfigPanel({
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1295:}: RunConfigPanelProps): JSX.Element {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1472:需求文档里对 Issue #29 的核心要求很明确：参数配置、默认值、重置、持久化、启动时透传，以及 typecheck/lint。现在我继续核对 store 与 UI 之间是否存在未满足的边界行为，并验证测试和脚本是否真正覆盖到了。
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1782:/bin/zsh -lc "sed -n '1,220p' desktop_app/tests/runConfigStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1796:} from '../src/stores/runConfigStore.ts';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1813:test('runConfigStore exposes required default values', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1822:test('runConfigStore clamps numeric setters to accepted ranges', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1839:test('runConfigStore persists values under the required storage key', () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:1856:test('runConfigStore sanitizes persisted numeric values during hydration', async () => {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2042:/bin/zsh -lc 'git diff -- desktop_app/src/components/IssueDetailPanel.tsx desktop_app/src/components/RunConfigPanel.tsx desktop_app/src/stores/runConfigStore.ts desktop_app/tests/runConfigStore.test.mjs desktop_app/package.json desktop_app/src/CLAUDE.md' in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2078:+import { useRunConfigStore } from '../stores/runConfigStore';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2079:+import RunConfigPanel from './RunConfigPanel';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2112:+            <RunConfigPanel />
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2137:✔ runConfigStore exposes required default values (0.954708ms)
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2138:✔ runConfigStore clamps numeric setters to accepted ranges (0.16775ms)
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2139:✔ runConfigStore persists values under the required storage key (0.643292ms)
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2140:✔ runConfigStore sanitizes persisted numeric values during hydration (0.091708ms)
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2168:/bin/zsh -lc "nl -ba desktop_app/src/stores/runConfigStore.ts | sed -n '1,220p'" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2170:/bin/zsh -lc "nl -ba desktop_app/src/components/RunConfigPanel.tsx | sed -n '1,280p'" in /Users/chaoyuepan/ai/autoresearch
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2303:    10	} from '../stores/runConfigStore';
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2365:    72	interface RunConfigPanelProps {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2370:    77	export default function RunConfigPanel({
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2373:    80	}: RunConfigPanelProps): JSX.Element {
+.autoresearch/workflows/issue-29/iteration-5-codex-review.log:2790:   349	            <RunConfigPanel />
+
+exec
+/bin/zsh -lc "sed -n '1,220p' desktop_app/src/components/AgentSelector.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useAgentStore, AVAILABLE_AGENTS, AGENT_METADATA, AgentId } from '../stores/agentStore';
+
+interface SortableTagProps {
+  id: AgentId;
+  name: string;
+  onRemove: () => void;
+}
+
+function SortableTag({ id, name, onRemove }: SortableTagProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 rounded-lg cursor-grab active:cursor-grabbing hover:bg-blue-500"
+      {...attributes}
+      {...listeners}
+    >
+      <span className="text-sm font-medium text-white">{name}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="w-4 h-4 flex items-center justify-center text-blue-200 hover:text-white hover:bg-blue-700 rounded"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+interface AgentTagProps {
+  name: string;
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+function AgentTag({ name, isSelected, onClick }: AgentTagProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+        isSelected
+          ? 'bg-blue-600 text-white hover:bg-blue-500'
+          : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+      }`}
+    >
+      {name}
+    </button>
+  );
+}
+
+export default function AgentSelector() {
+  const { selectedAgents, toggleAgent, reorderAgents, selectAll, clearAll } = useAgentStore();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // 需要 5px 移动才触发拖拽，避免误触
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = selectedAgents.indexOf(active.id as AgentId);
+      const newIndex = selectedAgents.indexOf(over.id as AgentId);
+      reorderAgents(oldIndex, newIndex);
+    }
+  };
+
+  const selected = selectedAgents;
+  const unselected = AVAILABLE_AGENTS.filter((agent) => !selectedAgents.includes(agent));
+
+  const handleToggle = (agentId: AgentId) => {
+    toggleAgent(agentId);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-gray-600">Selected Agents</h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="px-3 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+
+        {selected.length > 0 ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={selected} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                {selected.map((agentId) => (
+                  <SortableTag
+                    key={agentId}
+                    id={agentId}
+                    name={AGENT_METADATA[agentId].name}
+                    onRemove={() => handleToggle(agentId)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-400 text-sm">
+            No agents selected. Click below to select.
+          </div>
+        )}
+      </div>
+
+      {unselected.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-600 mb-3">Available Agents</h3>
+          <div className="flex flex-wrap gap-2">
+            {unselected.map((agentId) => (
+              <AgentTag
+                key={agentId}
+                name={AGENT_METADATA[agentId].name}
+                isSelected={false}
+                onClick={() => handleToggle(agentId)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+codex
+1. 中等: `runConfigStore` 的数值“约束”并没有处理 `NaN`，因此 UI 输入过程中的非法中间态会把 store 写坏。`setMaxIterations` / `setPassingScore` 直接把 `Number(e.target.value)` 送进 `clamp()`，而 `clamp(NaN, ...)` 仍然返回 `NaN`，最终会把 `maxIterations` / `passingScore` 置成 `NaN`。[runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L50) [runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L75) [runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L80) [RunConfigPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx#L157) [RunConfigPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx#L193)  
+复现路径很现实: `input[type=number]` 在编辑过程中会出现 `'-'`、`'e'` 这类临时值，`Number('-')` / `Number('e')` 都是 `NaN`。这会导致滑杆和值输入进入异常状态，持久化时还会把 `NaN` 序列化成 `null`。既然这个 store 的目标是“脏数据也不能绕过约束”，这里应显式用 `Number.isFinite` 兜底到默认值或上一个合法值。
+
+2. 中等: 持久化回填只校验了数值范围，没有校验布尔字段类型，`continueMode` 可以被任意本地存储脏值污染。当前 `sanitizeRunConfig()` 直接使用 `values.continueMode ?? DEFAULT_CONTINUE_MODE`，如果 localStorage 里是字符串 `"false"` 或数字 `1`，它都会原样进 store。[runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L54) [runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L66)  
+这会让 `aria-checked` 和 `!continueMode` 的行为依赖 JS 真值规则，而不是明确的布尔语义。问题不如 `NaN` 严重，但和这个 store 已经在做“rehydration sanitize”的设计目标相矛盾，属于输入校验未做完整。
+
+3. 中等: 测试只覆盖了 store 的 happy path 和数值上下界，没有覆盖本次实现最容易出问题的 UI/集成边界，所以当前绿测不能证明 Issue #29 达标。[runConfigStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1) [IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L315)  
+至少缺两类测试:
+- `NaN` / 非法持久化值的 sanitize 测试，能直接抓住上面两个正确性问题。
+- “参数面板修改后，启动按钮把最新配置传给 `startRun`” 的集成测试。现在代码里确实接线了，但没有测试保护，后续很容易在重构 `IssueDetailPanel` 时悄悄断掉。
+
+**总体评价**
+
+**评分: 74/100**
+
+这版实现已经补齐了 Issue #29 的主体框架: 独立持久化 store、参数配置 UI、默认值/重置、启动链路透传，以及 `test`/`typecheck`/`lint` 都通过。问题主要集中在边界输入处理和测试深度，属于“主流程可用，但还没到可放心交付”的状态，因此目前不达标。
+
+按维度看，我给出的判断是:
+- 正确性: 24/35
+- 测试质量: 16/25
+- 代码质量: 17/20
+- 安全性: 8/10
+- 性能: 9/10
+
+**开放问题 / 假设**
+
+我这次没有做浏览器或 Tauri 里的实际 UI 交互验证，只做了代码审查和本地命令验证。已确认 `npm test`、`npm run typecheck`、`npm run lint` 通过；未确认真实输入组件在浏览器里输入 `-`、`e`、清空值时的表现。
+
+变更整体方向是对的，但在修掉 `NaN` / 布尔回填校验，并补上对应测试前，我不建议按“评分 ≥ 85 达标”来通过这次审核。
+tokens used
+42,928
+1. 中等: `runConfigStore` 的数值“约束”并没有处理 `NaN`，因此 UI 输入过程中的非法中间态会把 store 写坏。`setMaxIterations` / `setPassingScore` 直接把 `Number(e.target.value)` 送进 `clamp()`，而 `clamp(NaN, ...)` 仍然返回 `NaN`，最终会把 `maxIterations` / `passingScore` 置成 `NaN`。[runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L50) [runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L75) [runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L80) [RunConfigPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx#L157) [RunConfigPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx#L193)  
+复现路径很现实: `input[type=number]` 在编辑过程中会出现 `'-'`、`'e'` 这类临时值，`Number('-')` / `Number('e')` 都是 `NaN`。这会导致滑杆和值输入进入异常状态，持久化时还会把 `NaN` 序列化成 `null`。既然这个 store 的目标是“脏数据也不能绕过约束”，这里应显式用 `Number.isFinite` 兜底到默认值或上一个合法值。
+
+2. 中等: 持久化回填只校验了数值范围，没有校验布尔字段类型，`continueMode` 可以被任意本地存储脏值污染。当前 `sanitizeRunConfig()` 直接使用 `values.continueMode ?? DEFAULT_CONTINUE_MODE`，如果 localStorage 里是字符串 `"false"` 或数字 `1`，它都会原样进 store。[runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L54) [runConfigStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts#L66)  
+这会让 `aria-checked` 和 `!continueMode` 的行为依赖 JS 真值规则，而不是明确的布尔语义。问题不如 `NaN` 严重，但和这个 store 已经在做“rehydration sanitize”的设计目标相矛盾，属于输入校验未做完整。
+
+3. 中等: 测试只覆盖了 store 的 happy path 和数值上下界，没有覆盖本次实现最容易出问题的 UI/集成边界，所以当前绿测不能证明 Issue #29 达标。[runConfigStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs#L1) [IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L315)  
+至少缺两类测试:
+- `NaN` / 非法持久化值的 sanitize 测试，能直接抓住上面两个正确性问题。
+- “参数面板修改后，启动按钮把最新配置传给 `startRun`” 的集成测试。现在代码里确实接线了，但没有测试保护，后续很容易在重构 `IssueDetailPanel` 时悄悄断掉。
+
+**总体评价**
+
+**评分: 74/100**
+
+这版实现已经补齐了 Issue #29 的主体框架: 独立持久化 store、参数配置 UI、默认值/重置、启动链路透传，以及 `test`/`typecheck`/`lint` 都通过。问题主要集中在边界输入处理和测试深度，属于“主流程可用，但还没到可放心交付”的状态，因此目前不达标。
+
+按维度看，我给出的判断是:
+- 正确性: 24/35
+- 测试质量: 16/25
+- 代码质量: 17/20
+- 安全性: 8/10
+- 性能: 9/10
+
+**开放问题 / 假设**
+
+我这次没有做浏览器或 Tauri 里的实际 UI 交互验证，只做了代码审查和本地命令验证。已确认 `npm test`、`npm run typecheck`、`npm run lint` 通过；未确认真实输入组件在浏览器里输入 `-`、`e`、清空值时的表现。
+
+变更整体方向是对的，但在修掉 `NaN` / 布尔回填校验，并补上对应测试前，我不建议按“评分 ≥ 85 达标”来通过这次审核。

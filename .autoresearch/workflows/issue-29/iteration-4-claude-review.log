@@ -1,0 +1,201 @@
+现在我已经完整了解了当前的实现状态。让我输出审核报告。
+
+## 审核报告
+
+### Issue
+- 编号: #29
+- 标题: [desktop-app] 运行参数配置 UI
+- 迭代次数: 4（继续模式）
+
+---
+
+### 总体评价
+
+**评分: 15/100**
+
+Issue #29 的核心需求几乎**完全未实现**。虽然 `runStore.ts` 中已有 `maxIter`、`passingScore`、`continueMode` 参数的传递支持，但缺少关键的独立持久化配置存储（`runConfigStore`）和参数配置 UI 面板。用户无法在启动任务前配置这些参数。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少 runConfigStore 持久化配置存储
+
+**位置**: `desktop_app/src/stores/` (应创建 `runConfigStore.ts`)
+
+**问题描述**:
+Issue 要求创建独立的配置存储，使用 zustand persist 中间件持久化运行参数，但该文件不存在。
+
+**验收条件对照**:
+- ❌ 创建 runConfigStore.ts 文件
+- ❌ maxIterations 默认值 16，范围约束 1-50
+- ❌ passingScore 默认值 85，范围约束 1-100
+- ❌ continueMode 默认值 false
+- ❌ 使用 zustand/middleware 的 persist 持久化到 localStorage
+- ❌ store key 为 'autoresearch-run-config'
+
+**建议修复**:
+```typescript
+// desktop_app/src/stores/runConfigStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+export const DEFAULT_MAX_ITERATIONS = 16;
+export const DEFAULT_PASSING_SCORE = 85;
+export const MIN_ITERATIONS = 1;
+export const MAX_ITERATIONS = 50;
+export const MIN_SCORE = 1;
+export const MAX_SCORE = 100;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+interface RunConfigState {
+  maxIterations: number;
+  passingScore: number;
+  continueMode: boolean;
+  setMaxIterations: (value: number) => void;
+  setPassingScore: (value: number) => void;
+  setContinueMode: (value: boolean) => void;
+  reset: () => void;
+}
+
+export const useRunConfigStore = create<RunConfigState>()(
+  persist(
+    (set) => ({
+      maxIterations: DEFAULT_MAX_ITERATIONS,
+      passingScore: DEFAULT_PASSING_SCORE,
+      continueMode: false,
+      setMaxIterations: (value) =>
+        set({ maxIterations: clamp(value, MIN_ITERATIONS, MAX_ITERATIONS) }),
+      setPassingScore: (value) =>
+        set({ passingScore: clamp(value, MIN_SCORE, MAX_SCORE) }),
+      setContinueMode: (value) => set({ continueMode: value }),
+      reset: () =>
+        set({
+          maxIterations: DEFAULT_MAX_ITERATIONS,
+          passingScore: DEFAULT_PASSING_SCORE,
+          continueMode: false,
+        }),
+    }),
+    { name: 'autoresearch-run-config' }
+  )
+);
+```
+
+**原因**: 这是 Issue #29 的核心需求之一（子任务 T-001）
+
+---
+
+#### 问题 2: 缺少参数配置 UI 面板
+
+**位置**: `desktop_app/src/components/` 或 `IssueDetailPanel.tsx`
+
+**问题描述**:
+Issue 要求在启动任务前显示参数配置面板（可折叠/弹窗形式），包含：
+- max iterations：数字输入框
+- passing score：滑块或数字输入
+- continue 模式：开关按钮
+
+当前 `IssueDetailPanel.tsx` 的"运行控制"区域只有启动/停止按钮，没有参数配置输入。
+
+**验收条件对照**:
+- ❌ 在启动任务前显示参数配置面板
+- ❌ max iterations 数字输入框
+- ❌ passing score 滑块或数字输入
+- ❌ continue 模式开关按钮
+- ❌ 集成 agent 选择器
+
+**原因**: 这是 Issue #29 的核心 UI 需求（子任务 T-002）
+
+---
+
+#### 问题 3: 未集成 Agent 选择器
+
+**位置**: `desktop_app/src/components/IssueDetailPanel.tsx`
+
+**问题描述**:
+Issue 要求集成 Agent 选择器（来自 Issue #25 的 `AgentSelector.tsx` 组件），但当前 `IssueDetailPanel` 未使用该组件。
+
+**原因**: 用户无法在启动前选择要使用的 Agent
+
+---
+
+#### 问题 4: startRun 未使用 runConfigStore 的配置
+
+**位置**: `desktop_app/src/components/IssueDetailPanel.tsx:306-313`
+
+**代码片段**:
+```typescript
+void startRun({
+  projectPath,
+  issueNumber: issue.number,
+});
+```
+
+**问题描述**:
+调用 `startRun` 时未传递 `maxIter`、`passingScore`、`continueMode` 参数。
+
+**建议修复**:
+```typescript
+// 从 runConfigStore 读取配置
+const { maxIterations, passingScore, continueMode } = useRunConfigStore();
+
+void startRun({
+  projectPath,
+  issueNumber: issue.number,
+  maxIter: maxIterations,
+  passingScore,
+  continueMode,
+});
+```
+
+---
+
+### 评分计算
+
+| 维度 | 得分 | 权重 | 加权得分 |
+|------|------|------|----------|
+| 正确性 | 10/100 | 35% | 3.5 |
+| 测试质量 | 豁免 | 25% | 25 × 0 = 0 (无实现无需测试) |
+| 代码质量 | 60/100 | 20% | 12 |
+| 安全性 | 100/100 | 10% | 10 |
+| 性能 | 100/100 | 10% | 10 |
+
+**正确性得分说明**:
+- Issue 的 6 项验收条件中只满足 0 项
+- `runStore.ts` 已有接口支持但未被使用，给予少量分数
+
+**测试质量说明**:
+- 由于核心功能未实现，测试维度暂时不评分
+- 当实现完成后需要添加对应测试
+
+**总分**: 3.5 + 0 + 12 + 10 + 10 ≈ **15/100**
+
+---
+
+### 审核结论
+
+- [ ] 通过
+- [x] 需要修改 - 存在必须修复的严重问题
+- [ ] 阻塞
+
+**下一步行动**:
+
+1. **创建 `runConfigStore.ts`**: 参照 `agentStore.ts` 的 persist 模式，实现带范围约束的配置持久化
+2. **创建参数配置 UI 组件**: 在 `IssueDetailPanel` 中或作为独立组件，添加：
+   - 数字输入框（max iterations，1-50）
+   - 滑块/数字输入（passing score，1-100）
+   - 开关按钮（continue mode）
+3. **集成 AgentSelector**: 在运行控制区域添加 Agent 选择器
+4. **修改 startRun 调用**: 从 `runConfigStore` 读取配置并传递给 `startRun`
+5. **在浏览器中验证**: 确保 UI 正确渲染，localStorage 持久化生效
+
+---
+
+## Learnings
+
+- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`
+- **踩坑**: 之前迭代因 OpenCode 配额问题未能正常完成审核，导致进度丢失
+- **经验**: `runStore.ts` 已预留了配置参数的接口（`StartRunRequest`），实现时应直接使用这些接口，避免重复定义
