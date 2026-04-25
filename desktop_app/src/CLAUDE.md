@@ -157,6 +157,9 @@
 - Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
 - 前端 TypeScript 接口必须匹配 snake_case 字段名（不是 camelCase）
 - 后端 `Phase` 枚举值为：`Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
+- 评分展示链路也走同一个 `IterationProgress` payload：新增字段时要同时更新 Rust struct、Tauri command 返回值、`iterationStore.ts` 接口和 `IDLE_PROGRESS` 默认值
+- 当前评分相关字段为 `last_score`, `passing_score`, `review_summary`；前端不自行提取评分，只消费后端结果
+- 如果验收要求是“无 score 时不显示评分区域”，前端组件要以 `last_score` 为评分区块的唯一显隐条件，`review_summary` 不能单独触发渲染
 
 ### 更新策略
 
@@ -171,3 +174,5 @@
 - `isTauri: false` 时 `watchIssue` 为 no-op，确保浏览器模式不报错
 - 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
 - subtask 三态由后端提供 `status: pending | passing | failing`；前端只负责渲染，不要再用 `passes: boolean` 自行推导 `failing`
+- 评分 UI 的颜色映射约定放在 `iterationProgressView.ts` 这类纯函数里，用 `node --test --experimental-strip-types` 直接测阈值边界，比把颜色逻辑写死在 JSX 里更稳
+- 对这类小型 React UI，优先把关键显示区块提成纯组件，再用 `react-dom/server` 的 `renderToStaticMarkup` 做静态渲染测试；这样无需引入浏览器测试框架，也能覆盖文案、图标和显隐逻辑

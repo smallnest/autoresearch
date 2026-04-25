@@ -715,6 +715,7 @@ dependencies = [
  "libc",
  "nix",
  "notify",
+ "regex",
  "serde",
  "serde_json",
  "tauri",

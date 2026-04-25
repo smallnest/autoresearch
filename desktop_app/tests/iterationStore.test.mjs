@@ -33,6 +33,9 @@ const SAMPLE_PROGRESS = {
   ],
   passed_count: 2,
   total_count: 3,
+  last_score: 78,
+  passing_score: 85,
+  review_summary: 'Code quality needs improvement',
 };
 
 test('watchIssue stores iteration data from backend', async () => {

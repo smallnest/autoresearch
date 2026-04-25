@@ -1,0 +1,110 @@
+Now I have a complete picture. Let me compile the review report.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #32
+- 标题: [desktop-app] 评分提取与展示
+- 迭代次数: 5 (当前审核 T-003)
+
+---
+
+### 总体评价
+
+**评分: 15/100**
+
+**T-003 未实现。** 前端的 `IterationProgressPanel.tsx`、`iterationProgressView.ts`、`iterationStore.ts` 三个核心文件均无任何变更，与 master 分支完全一致。T-003 要求的评分展示 UI（颜色编码、通过 banner、摘要卡片）完全不存在。
+
+更严重的是，**T-002 被错误地标记为 `passes: true`，但其前端和后端核心工作也未完成**：
+
+1. **Rust `IterationProgress` 结构体**（`lib.rs:174`）仍然缺少 `last_score`、`passing_score`、`review_summary` 字段
+2. **`build_iteration_progress()` 未调用** `extract_score()` 或 `extract_review_summary()`——这两个函数带有 `#[cfg_attr(not(test), allow(dead_code))]`，确认生产代码中并未使用
+3. **前端 `IterationProgress` 接口**（`iterationStore.ts:15-22`）缺少对应字段
+4. **`scoreColorClass()` 函数**未添加到 `iterationProgressView.ts`
+
+T-003 的实现依赖 T-002 完成数据链路（Rust struct → Tauri command → TS interface），当前连前置数据都不存在。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: T-003 完全未实现
+
+**位置**: `desktop_app/src/components/IterationProgressPanel.tsx`
+
+**问题描述**: 
+文件与 master 完全一致（170 行），无任何评分展示、颜色编码、通过 banner 或摘要卡片的代码。`git diff master...HEAD -- desktop_app/src/` 输出为空，确认前端零改动。
+
+**缺失内容**:
+- 评分显示区域（X/100 格式）
+- 颜色编码逻辑（红 < 70、黄 70-84、绿 >= 85）
+- 通过 banner（绿色 + 勾号图标 + "通过"文字）
+- review_summary 摘要卡片
+- 无 score 时的条件隐藏
+
+#### 问题 2: T-002 前置工作未完成但已标记通过
+
+**位置**: 多个文件
+
+**问题描述**:
+T-002 被标为 `passes: true`，但其核心验收条件均未满足：
+
+| 验收条件 | 状态 |
+|----------|------|
+| Rust `IterationProgress` 包含 `last_score`、`passing_score`、`review_summary` | 缺失 |
+| `build_iteration_progress()` 从 review 日志提取评分 | 未实现 |
+| 前端 TS 接口匹配新字段 | 缺失 |
+| `scoreColorClass()` 纯函数 | 缺失 |
+
+**影响**: T-003 无法在当前代码基础上实现，因为数据链路完全不通。
+
+#### 问题 3: 未通过类型检查
+
+**预期验收条件**: `npx tsc --noEmit` 通过
+
+**问题描述**: 由于没有任何代码变更，类型检查本身可能通过（因为根本没有新代码），但这不算"实现验收"通过——验收条件的前提是评分展示 UI 存在且类型正确。
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 权重 | 加权分 |
+|------|------|------|--------|
+| 正确性 | 0/100（功能完全未实现） | 35% | 0 |
+| 测试质量 | 0/100（无新测试） | 25% | 0 |
+| 代码质量 | N/A（无新代码） | 20% | 0 |
+| 安全性 | 100/100（无新代码无风险） | 10% | 10 |
+| 性能 | 50/100（无新代码） | 10% | 5 |
+| **总计** | | | **15** |
+
+---
+
+### 审核结论
+
+- [x] **阻塞** - T-003 完全未实现，且前置子任务 T-002 的关键工作也缺失
+
+**下一步行动**:
+
+1. **先完成 T-002 的遗留工作**:
+   - 在 Rust `IterationProgress` 结构体中添加 `last_score: Option<i32>`、`passing_score: i32`、`review_summary: Option<String>`
+   - 在 `build_iteration_progress()` 中调用 `extract_score()` 和 `extract_review_summary()`，从最新 review 日志解析数据
+   - 更新前端 `IterationProgress` 接口和 `IDLE_PROGRESS` 默认值
+   - 添加 `scoreColorClass(score, passingScore)` 到 `iterationProgressView.ts`
+
+2. **实现 T-003**:
+   - 在 `IterationProgressPanel.tsx` 中添加评分展示区域
+   - 实现颜色编码、通过 banner、摘要卡片
+   - 条件渲染：无 score 时隐藏
+   - 确保 `npx tsc --noEmit` 通过
+
+3. **验证**: `cargo test`、`cargo clippy`、前端 typecheck、浏览器渲染
+
+---
+
+## Learnings
+
+- **踩坑**: T-002 被标记为 `passes: true` 但实际只完成了 Rust extraction helpers（属于 T-001 范围），Rust struct 扩展、`build_iteration_progress()` 集成、前端接口更新、`scoreColorClass` 函数均未实现。子任务通过标记与实际完成度脱节。
+- **经验**: 审核时不能仅看 `tasks.json` 的 `passes` 标记，必须用 `git diff` 验证实际代码变更，特别是前后端数据链路是否完整贯通（Rust struct → serde → Tauri command → TS interface → Component）。
+- **模式**: 这个 desktop app 前端使用 Tailwind CSS 直接在 JSX 中写类名（无独立 CSS 文件），颜色编码应通过纯函数返回 Tailwind 类名字符串实现，与已有的 `subtaskBadgeClass()` 模式一致。

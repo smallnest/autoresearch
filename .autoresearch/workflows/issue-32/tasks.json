@@ -1,0 +1,54 @@
+{
+  "issueNumber": 32,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 侧实现评分解析函数 extract_score()",
+      "description": "在 desktop_app/src-tauri/src/lib.rs 中实现 extract_score() 函数，复用 run.sh 中 lib/scoring.sh 的 6 种 regex 模式（X/100、**评分: X/100**、总分表格行、X/10、**评分: X**、评分: X）。使用 regex crate 实现。同时实现 extract_review_summary() 函数，提取评分行附近的文本作为关键摘要。编写完整的单元测试覆盖所有 6 种模式及边界情况。",
+      "acceptanceCriteria": [
+        "extract_score() 函数能正确解析 6 种评分格式，与 lib/scoring.sh 行为一致",
+        "X/10 和 ≤10 的评分能正确乘以 10 转换为百分制",
+        "无匹配时返回 None 或 0",
+        "extract_review_summary() 能提取评分行附近的上下文文本",
+        "cargo test 通过，测试覆盖所有 6 种模式",
+        "cargo clippy 无警告"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "扩展 IterationProgress 加入 score 和 review_summary 字段",
+      "description": "在 Rust 后端的 IterationProgress 结构体中新增 last_score: Option<i32>、passing_score: i32 和 review_summary: Option<String> 字段。修改 build_iteration_progress() 函数，利用 T-001 的 extract_score() 从最新的 review 日志中解析评分，并提取摘要。passing_score 从环境变量或默认值 85 获取。同步更新前端 iterationStore.ts 的 IterationProgress 接口以匹配新字段。更新 iterationProgressView.ts 添加评分颜色计算的纯函数。",
+      "acceptanceCriteria": [
+        "IterationProgress 包含 last_score、passing_score、review_summary 字段",
+        "build_iteration_progress() 能从 review 日志中提取评分和摘要",
+        "前端 IterationProgress 接口与 Rust 序列化字段一致（snake_case）",
+        "iterationProgressView.ts 新增 scoreColorClass(score, passingScore) 纯函数",
+        "cargo test 和前端 store 测试通过",
+        "cargo clippy 无警告"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "前端评分展示 UI：颜色编码 + 通过 banner + 摘要",
+      "description": "在 IterationProgressPanel.tsx 中新增评分展示区域：1) 显示当前评分（如 78/100），根据分值使用颜色编码（红色 < 70、黄色 70-84、绿色 >= 85）；2) 达到 passing_score 时显示醒目的绿色「通过」banner（含图标）；3) 展示 review_summary 摘要文本。确保 typecheck 和 lint 通过，浏览器中验证渲染效果。",
+      "acceptanceCriteria": [
+        "评分以 X/100 格式显示，字体突出",
+        "颜色编码正确：红色(< 70)、黄色(70-84)、绿色(>= 85)",
+        "达到 passing_score 时显示绿色 banner + 勾号图标 + '通过' 文字",
+        "review_summary 以摘要卡片形式展示",
+        "无 score 时不显示评分区域",
+        "npx tsc --noEmit 通过",
+        "浏览器中渲染正常，无 console 错误"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": true
+    }
+  ]
+}

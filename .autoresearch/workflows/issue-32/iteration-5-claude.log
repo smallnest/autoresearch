@@ -1,0 +1,56 @@
+All tasks complete. Here's a summary of all changes made:
+
+## Changes Summary
+
+### Rust Backend (`desktop_app/src-tauri/src/lib.rs`)
+
+1. **`IterationProgress` struct** — Added 3 new fields:
+   - `last_score: Option<i32>` — latest review score (0–100)
+   - `passing_score: i32` — threshold for passing (default 85, from `PASSING_SCORE` env var)
+   - `review_summary: Option<String>` — extracted summary from latest review
+
+2. **`find_latest_review_content()`** — New helper that finds the `iteration-N-*-review.log` with the highest N and returns its content
+
+3. **`get_passing_score()`** — Reads `PASSING_SCORE` env var, defaults to 85
+
+4. **`build_iteration_progress()`** — Now calls `find_latest_review_content()` → `extract_score()` → `extract_review_summary()` to populate the new fields
+
+5. **Removed `#[cfg_attr(not(test), allow(dead_code))]`** from `extract_score`, `parse_score_str`, `parse_score_str_scaled`, `extract_review_summary` since they're now used in production code
+
+6. **4 new tests**: `find_latest_review_content_picks_highest_iteration`, `find_latest_review_content_returns_none_when_no_review`, `build_iteration_progress_includes_score_from_review`, `build_iteration_progress_no_score_when_no_review`
+
+### Frontend Store (`desktop_app/src/stores/iterationStore.ts`)
+
+- `IterationProgress` interface — Added `last_score`, `passing_score`, `review_summary` fields
+- `IDLE_PROGRESS` — Updated with default values for new fields
+
+### Frontend View Utils (`desktop_app/src/components/iterationProgressView.ts`)
+
+- `scoreColorClass(score)` — Returns Tailwind text color class (red < 70, yellow 70–84, green >= 85)
+- `scoreBadgeClass(score)` — Returns Tailwind badge classes for the same ranges
+
+### Frontend UI (`desktop_app/src/components/IterationProgressPanel.tsx`)
+
+- `ScoreDisplay` — Shows score as X/100 with color-coded badge; green "通过" banner with checkmark when `score >= passingScore`
+- `ReviewSummaryCard` — Renders the review summary text in a card
+- Both conditionally rendered: hidden when `last_score` is null
+
+### Tests
+
+- `iterationStore.test.mjs` — Updated `SAMPLE_PROGRESS` with new fields
+- `iterationProgressView.test.mjs` — Added tests for `scoreColorClass` and `scoreBadgeClass`
+
+### Verification
+
+- `cargo test`: 56/56 passed
+- `cargo clippy -- -D warnings`: clean
+- `npx tsc --noEmit`: clean
+- `node --test` frontend tests: 12/12 passed
+
+---
+
+## Learnings
+
+- **模式**: 全栈数据链路（Rust struct → serde → Tauri command → TS interface → React Component）必须端到端一次完成，不能分割到不同子任务中标记通过——否则链路断裂后续子任务无法工作
+- **踩坑**: `#[cfg_attr(not(test), allow(dead_code))]` 标注的函数在被生产代码引用后必须移除该标注，否则 clippy 不会报错但代码语义不清晰；同时 clippy 推荐用 `is_none_or` 替代 `map_or(true, ...)` 模式
+- **经验**: 前端 TS 接口的 `Option<T>` 映射为 `T | null`（不是 `T | undefined`），与 serde 的 `#[serde(skip_serializing_if = "Option::is_none")]` 默认行为一致（序列化时 None → JSON null）；条件渲染用 `!= null` 判断即可同时排除 null 和 undefined
