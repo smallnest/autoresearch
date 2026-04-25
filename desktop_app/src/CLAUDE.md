@@ -26,6 +26,7 @@
 ## Testing
 
 - Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- Persisted Zustand stores should also expose a factory (for example `createRunConfigStore`) so tests can inject in-memory storage and explicitly exercise hydration behavior.
 - `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
 - When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
 
@@ -36,11 +37,15 @@
 - Import store hooks with destructuring: `const { field, action } = useProjectStore()`
 - Async actions should handle loading and error states
 - Store pattern: state + actions + getters in one `create()` call
+<<<<<<< Updated upstream
 - Persisted UI preference stores should expose shared default/min/max constants and clamp numeric values both in setters and during persist rehydration, so stale localStorage data cannot bypass UI constraints.
 - When persisted form fields represent CLI or backend integer parameters, normalize them to integers in the store layer as well, not just in the HTML input, so rehydrated localStorage and programmatic updates cannot send decimals downstream.
 - For persisted form state, treat `NaN`, `Infinity`, and wrong primitive types as invalid input; setters should preserve the last valid value, while rehydration should fall back to defaults.
 - For store tests, prefer exported factory functions with injected dependencies (for example custom storage) so `node --test --experimental-strip-types` can cover Zustand logic without a browser runtime.
 - When a React component mainly assembles command payloads, extract that mapping into a small non-JSX helper so `node --test --experimental-strip-types` can cover the integration contract without a browser test runner.
+=======
+- For persisted stores with value bounds, validate both setter input and persisted hydration (`merge`/`migrate`), otherwise invalid `localStorage` data can bypass runtime constraints.
+>>>>>>> Stashed changes
 
 ## Tauri Integration
 

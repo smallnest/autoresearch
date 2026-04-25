@@ -27,3 +27,5 @@
 2026-04-25T08:05:28+08:00	28	[desktop-app] run.sh 进程管理（启动/停止）	completed	7	false	88	88	feature/issue-28	
 2026-04-25T08:38:02+08:00	29	[desktop-app] 运行参数配置 UI	completed	7	false	92	92	feature/issue-29	
 2026-04-25T08:43:11+08:00	29	[desktop-app] 运行参数配置 UI	completed	7	false	92	92	feature/issue-29	
+2026-04-25T08:43:12+08:00	29	[desktop-app] 运行参数配置 UI	push_failed	7	false	92	92	feature/issue-29	
+2026-04-25T08:44:03+08:00	29	[desktop-app] 运行参数配置 UI	completed	7	false	92	92	feature/issue-29	

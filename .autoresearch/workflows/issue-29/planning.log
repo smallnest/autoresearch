@@ -1,0 +1,73 @@
+Based on my analysis of the codebase, I'll now break down Issue #29 into subtasks.
+
+## Issue #29 分析
+
+### 当前状态
+- `AgentSelector.tsx` 已实现 agent 选择功能（Issue #25）
+- `runStore.ts` 的 `StartRunRequest` 已支持 `maxIter`、`passingScore`、`continueMode` 参数
+- `IssueDetailPanel.tsx` 已有启动/停止按钮调用 `startRun`/`stopRun`（Issue #28）
+
+### 需要完成
+1. 创建参数配置的 Zustand store（持久化存储）
+2. 创建 RunConfigPanel 组件（包含输入控件和 AgentSelector 集成）
+3. 在 IssueDetailPanel 中集成配置面板
+4. 将配置参数传递给 startRun
+
+### 拆分方案
+
+```json
+{
+  "issueNumber": 29,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "创建 RunConfigStore 持久化配置存储",
+      "description": "创建 src/stores/runConfigStore.ts，使用 Zustand persist 中间件持久化运行参数配置。存储 maxIterations（默认 16，范围 1-50）、passingScore（默认 85，范围 1-100）、continueMode（默认 false）三个参数。参考 agentStore.ts 的 persist 实现模式。",
+      "acceptanceCriteria": [
+        "创建 runConfigStore.ts 文件",
+        "maxIterations 默认值 16，范围约束 1-50",
+        "passingScore 默认值 85，范围约束 1-100",
+        "continueMode 默认值 false",
+        "使用 zustand/middleware 的 persist 持久化到 localStorage",
+        "store key 为 'autoresearch-run-config'"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "创建 RunConfigPanel 配置面板组件",
+      "description": "创建 src/components/RunConfigPanel.tsx，实现参数配置面板 UI。包含：max iterations 数字输入框（范围 1-50）、passing score 滑块或数字输入（范围 1-100）、continue 模式开关、集成 AgentSelector 组件。面板可折叠或作为独立区域显示。",
+      "acceptanceCriteria": [
+        "创建 RunConfigPanel.tsx 组件",
+        "max iterations 使用数字输入框，显示范围提示",
+        "passing score 使用滑块或数字输入，显示范围提示",
+        "continue 模式使用开关按钮",
+        "集成 AgentSelector 组件（从 Issue #25）",
+        "面板使用 Tailwind CSS 样式，符合项目现有风格",
+        "数值越界时自动修正到有效范围"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "集成配置面板到 IssueDetailPanel 并连接 startRun",
+      "description": "修改 IssueDetailPanel.tsx，在运行控制区域集成 RunConfigPanel 组件。点击\"启动\"按钮时从 RunConfigStore 读取配置参数，传递给 startRun 调用。确保配置参数正确传递给后端 run.sh 命令。",
+      "acceptanceCriteria": [
+        "IssueDetailPanel 集成 RunConfigPanel 组件",
+        "启动按钮调用 startRun 时传入配置参数",
+        "配置面板显示在运行控制区域内",
+        "运行中时禁用配置面板输入",
+        "Typecheck 通过",
+        "Lint 无新增错误",
+        "浏览器中验证 UI 正常渲染和交互"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

@@ -1,0 +1,49 @@
+子任务 T-001 实现完成。
+
+## 实现报告
+
+### 完成内容
+
+创建了 `desktop_app/src/stores/runConfigStore.ts`，实现了运行参数配置的持久化存储。
+
+### 验收条件检查
+
+| 条件 | 状态 |
+|------|------|
+| 创建 runConfigStore.ts 文件 | ✅ |
+| maxIterations 默认值 16，范围约束 1-50 | ✅ |
+| passingScore 默认值 85，范围约束 1-100 | ✅ |
+| continueMode 默认值 false | ✅ |
+| 使用 zustand/middleware 的 persist 持久化到 localStorage | ✅ |
+| store key 为 'autoresearch-run-config' | ✅ |
+
+### 实现详情
+
+**Store 结构:**
+- `maxIterations`: number (默认 16，范围 1-50)
+- `passingScore`: number (默认 85，范围 1-100)
+- `continueMode`: boolean (默认 false)
+
+**Actions:**
+- `setMaxIterations(value)`: 设置最大迭代次数，自动 clamp 到有效范围
+- `setPassingScore(value)`: 设置通过分数，自动 clamp 到有效范围
+- `setContinueMode(value)`: 设置继续模式
+- `resetToDefaults()`: 重置所有参数为默认值
+
+**导出常量:**
+- `RUN_CONFIG_DEFAULTS`: 默认值常量
+- `RUN_CONFIG_CONSTRAINTS`: 范围约束常量（供 UI 组件使用）
+
+### 质量检查
+
+- ✅ TypeScript 编译通过
+- ✅ ESLint 检查通过
+- ✅ 遵循项目现有 store 模式（参考 agentStore.ts）
+
+---
+
+## Learnings
+
+- **模式**: 项目使用 `zustand/middleware` 的 `persist` 进行 localStorage 持久化，store key 命名约定为 `autoresearch-{name}`
+- **模式**: 数值约束使用 `clamp` 函数在 setter 中处理，确保存入的值始终有效
+- **模式**: 导出默认值和约束常量供 UI 组件使用，避免魔法数字
