@@ -2231,31 +2231,36 @@ CONTINUE_STASH_REF=""
 if [ $CONTINUE_MODE -eq 1 ]; then
     restore_continue_state
 
-    # 防御：确保 ITERATION 是有效数字
-    if [ -z "$ITERATION" ] || ! [ "$ITERATION" -gt 0 ] 2>/dev/null; then
-        error "无法恢复迭代状态，ITERATION=$ITERATION"
-        exit 1
-    fi
-
-    # 校验 tasks.json 完整性，损坏则删除并回退到原始模式
-    local tasks_file
-    tasks_file=$(get_tasks_file)
-    if [ -f "$tasks_file" ]; then
-        if ! validate_tasks_json; then
-            log "⚠️ tasks.json 已损坏，删除并回退到原始模式"
-            log_console "⚠️ tasks.json 已损坏，回退到原始模式（无子任务拆分）"
-            rm -f "$tasks_file"
-        fi
-    fi
-
-    # 不指定轮数时，总迭代数=默认值；指定时，总迭代数=已有+指定轮数
-    if [ -z "$2" ]; then
-        MAX_ITERATIONS=$DEFAULT_MAX_ITERATIONS
-        remaining=$((MAX_ITERATIONS - ITERATION))
-        log_console "继续运行: 已完成 $ITERATION 轮，再跑 $remaining 轮 (总计 $MAX_ITERATIONS)"
+    # 如果 restore_continue_state 已将 CONTINUE_MODE 重置为 0，跳过后续继续模式处理
+    # 这意味着没有找到迭代记录，将作为全新运行处理
+    if [ $CONTINUE_MODE -eq 0 ]; then
+        log_console "将以全新模式运行..."
     else
-        MAX_ITERATIONS=$((ITERATION + $2))
-        log_console "继续运行: 已完成 $ITERATION 轮，再跑 $2 轮 (总计 $MAX_ITERATIONS)"
+        # 防御：确保 ITERATION 是有效数字
+        if [ -z "$ITERATION" ] || ! [ "$ITERATION" -gt 0 ] 2>/dev/null; then
+            error "无法恢复迭代状态，ITERATION=$ITERATION"
+            exit 1
+        fi
+
+        # 校验 tasks.json 完整性，损坏则删除并回退到原始模式
+        tasks_file=$(get_tasks_file)
+        if [ -f "$tasks_file" ]; then
+            if ! validate_tasks_json; then
+                log "⚠️ tasks.json 已损坏，删除并回退到原始模式"
+                log_console "⚠️ tasks.json 已损坏，回退到原始模式（无子任务拆分）"
+                rm -f "$tasks_file"
+            fi
+        fi
+
+        # 不指定轮数时，总迭代数=默认值；指定时，总迭代数=已有+指定轮数
+        if [ -z "$2" ]; then
+            MAX_ITERATIONS=$DEFAULT_MAX_ITERATIONS
+            remaining=$((MAX_ITERATIONS - ITERATION))
+            log_console "继续运行: 已完成 $ITERATION 轮，再跑 $remaining 轮 (总计 $MAX_ITERATIONS)"
+        else
+            MAX_ITERATIONS=$((ITERATION + $2))
+            log_console "继续运行: 已完成 $ITERATION 轮，再跑 $2 轮 (总计 $MAX_ITERATIONS)"
+        fi
     fi
 fi
 

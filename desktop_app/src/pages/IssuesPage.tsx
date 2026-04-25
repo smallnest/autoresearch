@@ -7,6 +7,7 @@ import {
   GhLabel,
   formatDate,
 } from '../stores/issueStore';
+import { useRunStore } from '../stores/runStore';
 
 // Search Icon component
 function SearchIcon({ className }: { className?: string }): JSX.Element {
@@ -253,6 +254,7 @@ function EmptyState({ message }: { message: string }): JSX.Element {
 // Main Issues Page Component
 function IssuesPage(): JSX.Element {
   const { projectPath } = useProjectStore();
+  const initializeRunStore = useRunStore((state) => state.initialize);
   const {
     issues,
     processedNumbers,
@@ -275,6 +277,10 @@ function IssuesPage(): JSX.Element {
   } = useIssueStore();
 
   // Load issues on mount and when project changes
+  useEffect(() => {
+    void initializeRunStore();
+  }, [initializeRunStore]);
+
   useEffect(() => {
     if (projectPath) {
       loadIssues(projectPath);
@@ -595,6 +601,7 @@ function IssuesPage(): JSX.Element {
             detail={issueDetail}
             isLoading={detailLoading}
             error={detailError}
+            projectPath={projectPath}
             onClose={clearIssueDetail}
             onRetry={() => {
               clearDetailError();

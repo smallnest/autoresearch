@@ -1,0 +1,66 @@
+基于项目结构分析，我已完成 Issue #28 的子任务拆分。
+
+## 分析总结
+
+**Issue 核心需求**：
+1. 后端 Tauri commands 实现进程启动/停止
+2. stdout/stderr 实时推送到前端
+3. 前端状态管理和 UI 组件
+
+**关键约束**：
+- 依赖 Issue #24（项目目录和 agent 配置）- 已完成（`projectStore.ts`）
+- 使用 `tokio::process::Command` 异步进程管理
+- 进程组管理：`pre_exec` 设置 pgid，kill 整个进程组
+- run.sh 参数映射：`-p project_path -a agents [-c] issue_number [max_iterations]`
+
+**拆分依据**：
+- 后端和前端可独立开发测试
+- 每个子任务有明确的验收条件和边界
+- 粒度适中，可在一次迭代内完成
+
+```json
+{
+  "issueNumber": 28,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端进程管理命令实现",
+      "description": "实现 Tauri commands `start_run` 和 `stop_run`，使用 tokio::process::Command 启动 run.sh 进程。包括：进程组管理（Unix 下使用 pre_exec 设置 pgid）、stdout/stderr 通过 Tauri event `run-output` 实时推送、进程退出时发送 `run-exit` event（包含 exit code）。维护全局进程状态，确保一次只有一个运行实例。参数映射：issue_number -> 位置参数，max_iter -> 位置参数，agents -> -a 选项，passing_score -> 环境变量 PASSING_SCORE，continue_mode -> -c 选项。",
+      "acceptanceCriteria": [
+        "实现 `start_run(issue_number, max_iter, agents, passing_score, continue_mode)` Tauri command",
+        "实现 `stop_run` Tauri command，发送 SIGTERM 给进程组",
+        "stdout/stderr 通过 `run-output` event 实时推送",
+        "进程退出时发送 `run-exit` event，包含 exit code",
+        "进程启动失败时返回错误信息",
+        "运行中再次调用 start_run 返回错误（一次只能运行一个任务）",
+        "使用 tokio::process::Command 实现异步进程管理",
+        "Unix 下使用 pre_exec 设置进程组 ID（pgid）",
+        "cargo clippy 无 warnings",
+        "相关单元测试通过"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "前端运行状态管理与 UI 组件",
+      "description": "创建 Zustand store `runStore.ts` 维护运行状态（idle / running / stopping / finished / error），订阅 Tauri events 接收 `run-output` 和 `run-exit`。在 IssuesPage 或 IssueDetailPanel 添加启动/停止按钮，显示运行状态指示器，渲染实时输出区域。实现单任务运行限制：运行中禁用启动按钮。输出区域支持滚动到底部、清空等基本交互。",
+      "acceptanceCriteria": [
+        "创建 `runStore.ts` Zustand store，维护运行状态（idle/running/stopping/finished/error）",
+        "订阅 `run-output` event，更新输出内容",
+        "订阅 `run-exit` event，更新运行状态和 exit code",
+        "IssueDetailPanel 或 IssuesPage 添加启动按钮（需选择 Issue 后启用）",
+        "运行中禁用启动按钮，显示停止按钮",
+        "显示运行状态指示器（spinner 或状态文字）",
+        "显示实时输出区域，支持自动滚动到底部",
+        "一次只能运行一个任务（前端和后端双重限制）",
+        "TypeScript 类型检查通过",
+        "ESLint 检查通过"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```
