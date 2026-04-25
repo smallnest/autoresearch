@@ -1,0 +1,29 @@
+T-002 实现完成。以下是变更摘要：
+
+### 新建文件
+1. **`desktop_app/src/stores/prStore.ts`** — Zustand store，管理 PR 列表/详情/diff 状态，遵循 `issueStore.ts` 模式（`isTauri` 检测、mock fallback、loading/error 状态、请求竞态保护 `detailRequestKey`）
+2. **`desktop_app/src/pages/PRsPage.tsx`** — PR 列表页面，遵循 `IssuesPage.tsx` 布局约定：
+   - 未选项目时显示引导提示
+   - PR 列表展示编号、标题、分支名
+   - 点击 PR 展开文件变更列表（文件名、additions/deletions）
+   - 搜索过滤（标题/编号/分支名）
+   - 分页、刷新、错误提示
+
+### 修改文件
+3. **`desktop_app/src/App.tsx`** — 添加 `/prs` 路由指向 `PRsPage`
+4. **`desktop_app/src/components/Sidebar.tsx`** — 在"议题"后添加"PR"导航项
+
+### 验收条件对照
+- prStore.ts 遵循现有 store 模式（isTauri 检测、mock fallback、loading/error 状态）
+- PRsPage 展示 PR 编号、标题、分支名、文件变更统计
+- 点击 PR 展示文件变更列表（文件名、additions/deletions）
+- Sidebar 新增 PR 导航项，App.tsx 新增 /prs 路由
+- 未选择项目时显示引导提示
+- 遵循项目现有 Tailwind 样式约定
+- TypeScript 类型检查通过，无 lint 错误
+
+## Learnings
+
+- **模式**: Zustand store 的请求竞态保护使用递增 `detailRequestKey`，在 response 到达时校验 key 和 selectedNumber 是否匹配，防止快速切换时旧请求覆盖新数据
+- **模式**: 非 Tauri 环境 mock 中不使用的 `resolve` 参数需用 `_resolve` 命名，避免 TS6133 unused variable 错误
+- **经验**: 后端 Rust struct 使用 `#[serde(rename = "camelCase")]` 风格（如 `headRefName`、`changedFiles`），前端 TypeScript interface 必须匹配这些字段名而非 snake_case

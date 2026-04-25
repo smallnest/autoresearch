@@ -1,0 +1,76 @@
+## 审核报告 - 无法完成审核
+
+### Issue
+- 编号: #37
+- 标题: [desktop-app] PR 信息查看与 Diff 展示
+- 子任务: T-003 - Diff 查看器组件与集成
+- 迭代次数: 4
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-003 子任务**完全未实现**。`DiffViewer.tsx` 组件不存在，`PRsPage.tsx` 未集成任何 diff 展示功能。
+
+---
+
+### 阻塞原因
+
+经验证，T-003 验收条件全部未满足：
+
+| 验收条件 | 状态 |
+|---|---|
+| DiffViewer 组件正确解析 unified diff 格式并按文件分割 | `DiffViewer.tsx` **不存在** |
+| 新增行使用绿色背景样式，删除行使用红色背景样式 | 未实现 |
+| 代码使用等宽字体（font-mono）渲染 | 未实现 |
+| 支持文件列表导航（从文件列表点击跳转到对应 diff 区块） | 未实现 |
+| 在 PR 详情面板中集成，点击 PR 后可查看完整 diff | `PRsPage.tsx` 中未引用 `loadPrDiff`/`prDiff`/`diffLoading` |
+| TypeScript 类型检查通过，无 lint 错误 | N/A（无代码） |
+| 浏览器中验证 diff 渲染效果 | N/A（无代码） |
+
+### 证据
+
+1. **`desktop_app/src/components/DiffViewer.tsx`** — Glob 搜索无结果，文件不存在
+2. **`PRsPage.tsx`** — Grep 搜索 `loadPrDiff|prDiff|diffLoading` 无匹配，diff 功能完全未集成
+3. **`prStore.ts`** — Store 层已预留 `loadPrDiff`、`prDiff`、`diffLoading`（T-002 产出），但页面层从未消费
+4. **Rust 后端** — `get_pr_diff` 命令已实现并注册（T-001 产出），数据管道就绪
+
+### 现有基础
+
+以下 T-001/T-002 的成果可作为 T-003 实现的基础：
+
+- **后端**: `get_pr_diff(project_path, pr_number)` → `Result<PrDiff, String>` 已就绪
+- **Store**: `prStore.ts` 的 `loadPrDiff()`、`prDiff`、`diffLoading` 已就绪
+- **PRsPage**: PR 列表 + 展开式详情面板已就绪，需要在此集成 DiffViewer
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - 子任务未实现，无代码可审核
+
+**下一步行动**:
+需要实现 T-003，创建以下内容：
+
+1. **新建 `desktop_app/src/components/DiffViewer.tsx`** — 核心组件：
+   - 解析 unified diff 文本（按 `diff --git a/... b/...` 分割文件块）
+   - 区分文件头（`--- a/file` / `+++ b/file`）、hunk 头（`@@ ... @@`）、新增行（`+`）、删除行（`-`）、上下文行（` `）
+   - 渲染：等宽字体 `font-mono`、新增行 `bg-green-50 text-green-800`、删除行 `bg-red-50 text-red-800`
+   - 文件列表导航：顶部列出所有变更文件，点击滚动到对应区块（使用 `id` + `scrollIntoView`）
+
+2. **修改 `desktop_app/src/pages/PRsPage.tsx`** — 集成 DiffViewer：
+   - 从 `usePrStore` 解构 `loadPrDiff`、`prDiff`、`diffLoading`
+   - 选中 PR 时调用 `loadPrDiff(projectPath, prNumber)` 获取 diff 数据
+   - 在展开区域或独立 tab 中渲染 `<DiffViewer diffText={prDiff?.diff ?? ''} />`
+
+3. **样式参考**: 遵循项目 Tailwind CSS v4 约定，参照 `LogViewer` 的渲染模式和 `PRsPage` 现有配色
+
+---
+
+## Learnings
+
+- **模式**: `prStore.ts` 已预留完整的 diff 数据管道（`loadPrDiff` / `prDiff` / `diffLoading`），新组件只需消费 store，无需额外数据获取逻辑
+- **踩坑**: 迭代 4 的 opencode agent 给出了 95/100 的高分但实际上 T-003 并未实现，说明评分需严格对照验收条件逐条验证，不能仅凭"代码看起来不错"给分
+- **经验**: DiffViewer 的 unified diff 解析逻辑应提取为纯函数（输入 string → 输出结构化数据），便于后续用 `node --test` 做单元测试，不需要浏览器环境

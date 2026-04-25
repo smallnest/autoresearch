@@ -25,6 +25,15 @@ const navItems = [
     ),
   },
   {
+    to: "/prs",
+    label: "PR",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 6V3m8 3V3M6 21v-3a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v3m0-3V9a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v9" />
+      </svg>
+    ),
+  },
+  {
     to: "/history",
     label: "历史",
     icon: (

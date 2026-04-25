@@ -1,0 +1,15 @@
+## 总结
+
+**T-003 已经完全实现。** 对现有代码库的审查确认：
+
+| 验收条件 | 状态 | 证据 |
+|---|---|---|
+| DiffViewer 解析 unified diff 并按文件分割 | **已通过** | `DiffViewer.tsx:21-114` — `parseUnifiedDiff()` 按 `diff --git` 头部分割，并处理块/添加/删除/上下文行 |
+| 添加行使用绿色背景，删除行使用红色背景 | **已通过** | `DiffViewer.tsx:164-170` — `bg-green-50 text-green-800` / `bg-red-50 text-red-800` |
+| 等宽字体 (`font-mono`) | **已通过** | `DiffViewer.tsx:193` — `font-mono text-xs leading-5` |
+| 文件列表导航带滚动到视图功能 | **已通过** | `DiffViewer.tsx:123-157` (`FileNavList`) + `DiffViewer.tsx:223-228` (`scrollIntoView`) |
+| 集成到 PR 详情面板中 | **已通过** | `PRsPage.tsx:8` (导入), `PRsPage.tsx:230-234` (渲染), `PRsPage.tsx:291-296` (通过 `loadPrDiff` 加载 diff) |
+| TypeScript 类型检查通过 | **已通过** | `tsc --noEmit` — 无错误 |
+| 构建成功 | **已通过** | `vite build` — 在 1.36 秒内成功 |
+
+评审反馈称 "DiffViewer.tsx 不存在"，但对于当前的 Git 工作树来说这似乎是不正确的。该组件已存在，并包含完整的实现，并且已集成到 PRsPage 中。不需要更改。

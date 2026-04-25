@@ -1,0 +1,34 @@
+## 实现总结
+
+### 完成内容 (T-001: Rust 后端 PR 命令)
+
+**新增结构体** (`desktop_app/src-tauri/src/lib.rs`):
+- `GhPullRequest` — 解析 `gh pr list` 的 JSON 输出
+- `PrFileChange` — PR 中单个文件变更信息
+- `PrDetail` — 解析 `gh pr view --json` 的详情输出
+- `PrDiff` — `gh pr diff` 的原始 diff 文本
+
+**新增 Tauri 命令**:
+1. **`list_prs(project_path)`** — 调用 `gh pr list --state open --json number,title,headRefName,body`
+2. **`get_pr_detail(project_path, pr_number)`** — 调用 `gh pr view N --json files,additions,deletions,changedFiles`
+3. **`get_pr_diff(project_path, pr_number)`** — 调用 `gh pr diff N`
+
+所有命令遵循现有 `list_issues`/`get_issue_detail` 模式：async wrapper + `spawn_blocking` + sync 实现 + 纯函数解析/错误映射。
+
+**新增测试** (12 个):
+- `parse_pr_list` — 成功解析、空数组、无效 JSON
+- `parse_pr_detail` — 成功解析、无效 JSON
+- `map_pr_command_error` — missing PR 映射、通用错误保留
+- `map_pr_diff_error` — missing PR 映射、通用错误保留
+- 三个命令各自验证非目录路径拒绝
+
+**质量检查**:
+- `cargo clippy -- -D warnings` ✅
+- `cargo fmt --check` ✅  
+- `cargo test` — 109 tests passed ✅
+
+## Learnings
+
+- **模式**: 新增 Tauri 命令的标准流程是：定义 serde 结构体 → 编写 async `#[tauri::command]` 函数调用 `spawn_blocking` → 编写 sync 实现函数（验证路径 + 调用 CLI + 解析输出） → 提取纯函数（parse/map error）用于测试 → 注册到 `invoke_handler` → 在 `tests` 模块添加 import 和测试
+- **踩坑**: `PrFileChange` 需要在测试 import 块中显式引入，否则测试无法编译
+- **经验**: `cargo fmt` 会自动调整函数签名的多行参数为单行（当行宽允许时），先写代码再跑 `cargo fmt` 比 一次性手写 100% 格式正确的代码更高效

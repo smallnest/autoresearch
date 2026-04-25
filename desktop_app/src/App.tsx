@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import DashboardPage from "./pages/DashboardPage";
 import IssuesPage from "./pages/IssuesPage";
+import PRsPage from "./pages/PRsPage";
 import HistoryPage from "./pages/HistoryPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -11,6 +12,7 @@ function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/issues" element={<IssuesPage />} />
+        <Route path="/prs" element={<PRsPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

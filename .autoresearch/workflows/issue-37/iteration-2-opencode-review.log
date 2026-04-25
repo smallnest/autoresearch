@@ -1,0 +1,77 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead .
+[0m✱ [0mGlob ".autoresearch/workflows/issue-37/**"[90m in . · 8 matches[0m
+[0m→ [0mRead desktop_app
+[0m→ [0mRead .autoresearch/workflows/issue-37/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-37/tasks.json
+[0m✱ [0mGlob "desktop_app/src-tauri/src/**/*.rs"[90m in . · 2 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-37/iteration-1-claude.log
+[0m→ [0mRead .autoresearch/workflows/issue-37/log.md
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead .autoresearch/workflows/issue-37/terminal.log
+[0m→ [0mRead .autoresearch/workflows/issue-37/hard-gate-1.log
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1588][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3053][0m
+[0m→ [0mRead .autoresearch/workflows/issue-37/iteration-2-opencode-review.log
+现在让我看看当前的审核日志：
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4504, limit=100][0m
+根据完整的审核，以下是针对子任务 T-001 的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- **编号**: #37
+- **子任务**: T-001 — Rust 后端：实现 list_prs / get_pr_detail / get_pr_diff Tauri 命令
+- **迭代**: 1 (Agent: claude)
+
+### 验收条件检查
+
+| # | 验收条件 | 状态 |
+|---|---------|------|
+| 1 | 三个 Tauri command 均在 lib.rs 中定义并注册到 invoke_handler | ✅ |
+| 2 | 每个命令使用 spawn_blocking 调用 gh CLI，并通过 Result<T, String> 返回错误 | ✅ |
+| 3 | 定义合适的 serde 序列化结构体（GhPullRequest、PrFileChange 等） | ✅ |
+| 4 | gh CLI 调用失败时返回有意义的错误信息 | ✅ |
+| 5 | cargo clippy -- -D warnings 无新增警告 | ✅ |
+| 6 | cargo test 通过 | ✅ |
+| 7 | 为 JSON 解析和 stderr 映射编写纯函数单元测试 | ✅ |
+
+### 总体评价
+
+**评分: 98/100**
+
+实现质量很高。三个命令（`list_prs`、`get_pr_detail`、`get_pr_diff`）均已正确定义、注册在 `invoke_handler`，严格遵循现有 `list_issues`/`get_issue_detail` 模式：async Tauri command + `spawn_blocking` + sync 实现函数 + 纯函数分离。serde 结构体（`GhPullRequest`、`PrFileChange`、`PrDetail`、`PrDiff`）命名清晰且字段映射正确。12 个单元测试覆盖了解析、边界情况（空数组）和错误路径（无效 JSON、不存在的 PR、非目录路径）。
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 100 | 35.0 |
+| 测试质量 | 25% | 98 | 24.5 |
+| 代码质量 | 20% | 95 | 19.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | 100% | | **98.5 → 98** |
+
+### 一般问题（建议修复）
+
+- **测试缺少 `map_pr_command_error` 的 "not found" 分支**：`map_pr_command_error` 函数检查 `stderr.contains("not found")` 或 `stderr.contains("Could not resolve")`，但现有测试仅覆盖了 "Could not resolve" 路径。建议添加一个针对 `"not found"` 子串的测试用例，以确保该分支也被覆盖。
+
+### 建议改进（可选）
+
+- **`map_pr_command_error` / `map_pr_diff_error` 去重**：`map_pr_command_error` 和 `map_pr_diff_error` 逻辑完全相同，仅错误前缀不同（"gh pr view failed" vs "gh pr diff failed"）。可提取辅助函数 `fn map_pr_not_found(pr_number: i64, stderr: &str, command: &str) -> String` 来减少重复。此为可选优化，当前代码与项目中 `map_issue_detail_command_error` 的现有模式一致。
+
+### 审核结论
+
+- ✅ **通过** — 所有验收条件均已满足，代码质量高，可直接进入人工审核/下一子任务。
+
+---
+
+## Learnings
+
+- **模式**: `GhPullRequest` 无需 `#[serde(rename_all = "camelCase")]`，因为可通过逐字段 `#[serde(rename)]` 选择性处理不一致字段（如 `headRefName` → `head_ref_name`），这与 `GhIssue` 的做法一致。
+- **经验**: 对于返回纯文本的命令（如 `gh pr diff`），将其包装在结构体（如 `PrDiff { diff: String }`）中可使 Rust 返回值保持语义清晰，并在需要时轻松扩展附加元数据。
