@@ -1,0 +1,96 @@
+Now I have the full picture. Let me write the review report.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #31
+- 标题: [desktop-app] 迭代进度与阶段展示
+- 子任务: T-003 - 前端迭代进度与 subtask 状态 UI 展示
+- 迭代次数: 5
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+**T-003 尚未实现。** 经过全面搜索，前端代码中不存在任何与迭代进度展示相关的实现：
+
+1. **`iterationStore.ts` 不存在** — `desktop_app/src/stores/` 目录下没有 iterationStore 文件
+2. **无迭代进度 UI 组件** — `IssueDetailPanel.tsx` 中没有任何迭代编号、阶段标签、subtask 进度条或 subtask 状态列表
+3. **无 TypeScript 类型定义** — 前端不存在 `IterationProgress`、`SubtaskInfo`、`Phase` 等类型
+4. **无 `iteration-progress` 事件订阅** — 前端代码中没有任何对该事件的 listen 调用
+5. **无前端测试** — 没有 iterationStore 或迭代进度组件的测试文件
+6. **后端事件推送缺失** — Rust 后端虽然实现了 `get_iteration_progress` 命令（T-001），但 **没有** `app.emit("iteration-progress", ...)` 的代码，也没有 `notify` crate 的文件监听逻辑（T-002 标记为 passed 但事件推送部分实际缺失）
+
+### 验收条件检查
+
+| 验收条件 | 状态 |
+|----------|------|
+| 展示当前迭代编号和总迭代数（如 '3 / 16'） | **未实现** |
+| 显示当前阶段标签，四个阶段有视觉区分 | **未实现** |
+| 展示 subtask 进度条（如 '2/5 subtasks passed'） | **未实现** |
+| 各 subtask 显示状态标签：pending/passing/failing | **未实现** |
+| 通过 'iteration-progress' 事件实时更新 | **未实现**（后端也缺少 emit） |
+| run 未运行时显示合理的空/idle 状态 | **未实现** |
+| 组件有对应的前端测试 | **未实现** |
+| TypeScript 类型检查通过 | **无新代码可检查** |
+| 可在浏览器中正确渲染 | **无 UI 可渲染** |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 整个子任务未实现
+
+**问题描述**: T-003 要求的所有前端代码均不存在。需要从零开始实现以下内容：
+
+1. **`src/stores/iterationStore.ts`** — Zustand store：
+   - TypeScript 类型：`Phase`（`'Planning' | 'Implementation' | 'Review' | 'BuildLintTest' | 'Idle'`）、`SubtaskInfo`（`{id, title, passes}`）、`IterationProgress`
+   - 订阅 `iteration-progress` 事件接收后端推送
+   - 支持通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 主动拉取
+   - 遵循现有 `createRunStore(overrides)` 的工厂模式，注入 `invoke`/`listen`/`isTauri` 依赖
+
+2. **迭代进度 UI 组件**（在 `IssueDetailPanel.tsx` 的运行控制区域内添加）：
+   - 迭代编号：如 `3 / 16`
+   - 阶段标签栏：Planning → Implementation → Review → Build·Lint·Test（当前阶段高亮）
+   - Subtask 进度条：如 `2/5 subtasks passed`
+   - Subtask 列表：显示名称 + 状态标签（pending 灰色 / passing 绿色 / failing 红色）
+   - Idle 状态展示
+
+3. **前端测试** — 遵循 `node --test --experimental-strip-types` 模式
+
+#### 问题 2: 后端缺少事件推送
+
+**问题描述**: 尽管 T-002 标记为 `passes: true`，Rust 后端没有 `app.emit("iteration-progress", ...)` 调用，也没有使用 `notify` crate 进行文件监听。这意味着前端无法通过事件订阅实现实时更新。
+
+**建议**:
+- 短期方案：前端使用轮询（如 2s 间隔 `setInterval` 调用 `invoke('get_iteration_progress')`），类似现有 `LogViewer.tsx` 的轮询模式
+- 长期方案：后端补充 `notify` 文件监听 + `app.emit` 推送
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - T-003 完全未实现，所有验收条件均未满足
+
+**下一步行动**:
+1. 创建 `src/stores/iterationStore.ts`，包含 TypeScript 类型定义和 Zustand store
+2. 在 `IssueDetailPanel.tsx` 中添加迭代进度 UI（迭代编号 + 阶段标签 + subtask 进度条 + subtask 列表）
+3. 实现轮询机制：运行时每 2s 调用 `invoke('get_iteration_progress')`
+4. 创建 `tests/iterationStore.test.mjs` 覆盖 store 逻辑
+5. 运行 `npx tsc --noEmit` 确保类型检查通过
+
+**参考模式**:
+- Store 工厂模式：参考 `runStore.ts` 的 `createRunStore(overrides)`
+- 轮询模式：参考 `LogViewer.tsx` 的 `setInterval` + `clearInterval`
+- 测试模式：参考 `tests/runStore.test.mjs`
+- Rust 数据结构：`lib.rs:154` 的 `IterationProgress` struct（字段名 snake_case：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`）
+
+## Learnings
+
+- **踩坑**: T-002 被标记为 `passes: true`，但实际上后端的 `notify` 文件监听和 `iteration-progress` 事件推送代码完全缺失。前端实现需要自行降级为轮询方案。审核流程应更严格验证子任务之间的依赖链。
+- **模式**: Rust 后端 `IterationProgress` 使用 snake_case 字段名序列化（`current_iteration`, `total_iterations` 等），前端 TypeScript 接口需要匹配这个格式。
+- **经验**: 当子任务完全未实现时（0 个相关文件存在），应立即给出 0 分并详细列出需要创建的所有文件和实现细节，为下一轮实现者提供清晰路线图。

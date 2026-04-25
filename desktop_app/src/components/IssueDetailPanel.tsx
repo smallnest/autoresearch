@@ -11,6 +11,7 @@ import {
 import RunConfigPanel from './RunConfigPanel';
 import AgentSelector from './AgentSelector';
 import { buildIssueRunRequest } from './issueRunRequest';
+import IterationProgressPanel from './IterationProgressPanel';
 import LogViewer from './LogViewer';
 
 interface IssueDetailPanelProps {
@@ -350,6 +351,12 @@ function IssueDetailPanel({
               {runError}
             </div>
           )}
+
+          <IterationProgressPanel
+            issueNumber={issue.number}
+            projectPath={projectPath}
+            isRunning={isCurrentIssueRunning}
+          />
 
           <LogViewer issueNumber={issue.number} projectPath={projectPath} />
         </section>

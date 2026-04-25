@@ -1,0 +1,3124 @@
+Reading additional input from stdin...
+OpenAI Codex v0.122.0 (research preview)
+--------
+workdir: /Users/chaoyuepan/ai/autoresearch
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /Users/chaoyuepan/.codex/memories]
+reasoning effort: medium
+reasoning summaries: none
+session id: 019dc271-9867-7b60-b040-b334c8a95986
+--------
+user
+审核 Issue #31 的实现
+
+项目路径: /Users/chaoyuepan/ai/autoresearch
+项目语言: unknown
+Issue 标题: [desktop-app] 迭代进度与阶段展示
+
+
+## 子任务审核
+
+子任务进度: 2/3 已完成 | 当前子任务: T-003 - 前端迭代进度与 subtask 状态 UI 展示
+
+请审核当前子任务的实现：
+
+- **ID**: T-003
+- **标题**: 前端迭代进度与 subtask 状态 UI 展示
+- **类型**: ui
+- **描述**: 实现前端进度展示 UI：1) 创建 iterationStore.ts（Zustand），订阅 'iteration-progress' 事件接收后端推送的进度数据，同时支持通过 invoke get_iteration_progress 主动拉取；2) 在 IssueDetailPanel 或 RightPanel 中添加迭代进度区域：显示迭代编号（如 '3 / 16'），显示当前阶段标签（Planning → Implementation → Review → Build/Lint/Test 四个阶段，当前阶段高亮）；3) 展示 subtask 进度条（如 '2/5 subtasks passed'），列出各 subtask 名称和状态标签：pending（灰色）、passing（绿色）、failing（红色）；4) 实时更新无需手动刷新，利用事件推送自动更新 UI；5) run 未运行时显示 idle 状态。
+- **验收条件**:
+  - 展示当前迭代编号和总迭代数（如 '3 / 16'）
+  - 显示当前阶段标签，四个阶段（Planning/Implementation/Review/Build·Lint·Test）有视觉区分
+  - 展示 subtask 进度条（如 '2/5 subtasks passed'）
+  - 各 subtask 显示状态标签：pending（灰色）、passing（绿色）、failing（红色）
+  - 通过 'iteration-progress' 事件实时更新，无需手动刷新
+  - run 未运行时显示合理的空/idle 状态
+  - 组件有对应的前端测试
+  - TypeScript 类型检查通过（npx tsc --noEmit）
+  - 可在浏览器中正确渲染
+
+
+### UI 验证标准（此子任务为 UI 类型）
+
+审核时请额外关注以下 UI 验证标准：
+- 页面无空白或崩溃：页面能正常加载，无白屏或错误页面
+- 关键元素可见：页面标题、内容、导航等关键元素正确渲染
+- 交互元素可点击：按钮、链接、表单等可正常交互
+- 无 console 错误：浏览器控制台无 JavaScript 错误
+- 样式一致性：CSS 样式与设计稿或现有风格一致
+- 响应式布局：在不同屏幕尺寸下布局合理（如适用）
+
+此子任务通过代码审核后，将进行浏览器截图验证以确认 UI 渲染正确。
+
+请针对此子任务的验收条件进行审核。
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+
+## 跨迭代经验
+
+以下是之前迭代中积累的经验和发现，请优先参考，避免重复踩坑：
+
+## Codebase Patterns
+
+> 此区域汇总最重要的可复用经验和模式。Agent 可在实现过程中更新此区域。
+
+... (中间迭代记录已省略)
+
+
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删
+
+... (内容过长，已截断)
+
+
+## Learnings
+
+- **模式**: `infer_phase` 基于最大迭代号而非时间戳判断当前阶段，与 `run.sh` 的文件命名约定紧密耦合 — 任何 `run.sh` 文件命名变更需同步更新此函数
+- **模式**: `terminal.log` 中的 `🔄 迭代 N/M` 标记是最可靠的迭代进度来源，`log.md` 中的 `### 迭代 N` + `总迭代次数: N` 作为回退
+- **经验**: `TasksFile` 使用 `#[serde(rename_all = "camelCase")]` 适配 tasks.json 的驼峰命名，与 `GhIssue` 使用 `#[serde(rename)]` 单字段重命名是两种不同的模式
+- **经验**: 相比上一轮审核（79/100），此轮实现已修复了之前指出的问题，代码质量有明显提升
+# Codex Agent
+
+你是一
+
+... (内容过长，已截断)
+
+
+## Iteration 5 - 2026-04-25
+
+- **Agent**: claude
+- **类型**: 审核+修复 - T-003
+- **评分**: 50/100
+
+- **审核要点**:
+
+Now I have the full picture. Let me write the review report.
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #31
+- 标题: [desktop-app] 迭代进度与阶段展示
+- 子任务: T-003 - 前端迭代进度与 subtask 状态 UI 展示
+- 迭代次数: 5
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+**T-003 尚未实现。** 经过全面搜索，前端代码中不存在任何与迭代进度展示相关的实现：
+
+1. **`iterationStore.ts` 不存在** — `desktop_app/src/stores/` 目录下没有 iterationStore 文件
+2. **无迭代进度 UI 组件** — `IssueDetailPanel.tsx` 中没有任何迭代编号、阶段标签、subtask 进度条或 subtask 状态列表
+3. **无 TypeScript 类型定义** — 前端不存在 `IterationProgress`、`SubtaskInfo`、`Phase` 等类型
+4. **无 `iteration-progress` 
+
+- **经验与发现**:
+
+## Learnings
+
+- **踩坑**: T-002 被标记为 `passes: true`，但实际上后端的 `notify` 文件监听和 `iteration-progress` 事件推送代码完全缺失。前端实现需要自行降级为轮询方案。审核流程应更严格验证子任务之间的依赖链。
+- **模式**: Rust 后端 `IterationProgress` 使用 snake_case 字段名序列化（`current_iteration`, `total_iterations` 等），前端 TypeScript 接口需要匹配这个格式。
+- **经验**: 当子任务完全未实现时（0 个相关文件存在），应立即给出 0 分并详细列出需要创建的所有文件和实现细节，为下一轮实现者提供清晰路线图。
+# Codex Agent
+
+你是一个专业的软件工程师 Agent，既能实现功能，也能审核代码。
+
+---
+
+## 角色定位
+
+**你可以是实现者，也可以是审核者，取决于任务要求。**
+
+- 作为实现者：根据 Issue 描述或审核反馈实现/改进代码
+- 作为审核者：审查代码质量，给出评分和改进建议
+- 你需要编写代码和测试
+- 你需要接受审核反馈并改进
+
+---
+
+## 工作流程
+
+### Phase 1: 理解需求
+
+```
+1. 阅读 Issue #N 的完整内容
+2. 理解 Issue 的核心诉求
+3. 如果有疑问，列出需要澄清的问题
+4. 确认涉及的代码模块
+```
+
+### Phase 2: 分析代码
+
+```
+1. 使用 Glob 和 Grep 工具搜索相关代码
+2. 阅读相关文件，理解现有架构
+3. 识别需要修改的文件
+4. 评估改动范围和影响
+```
+
+### Phase 3: 实现代码
+
+```
+1. 编写功能实现代码
+2. 编写单元测试代码（如适用）
+3. 确保测试覆盖核心逻辑（如适用）
+4. 运行测试验证实现（如适用）
+```
+
+> **测试豁免**：如果项目类型或实现内容不适用单元测试（如 Shell 脚本、配置文件、Dockerfile、CI/CD pipeline 等），可以跳过步骤 2-4，在报告中注明"单元测试不适用"及原因。
+
+### Phase 4: 质量自检
+
+```
+实现完成后，必须执行以下自检：
+
+### 编译/类型检查
+- [ ] 代码可以编译通过（如适用）
+- [ ] 类型检查无错误（如适用）
+
+### 代码质量
+- [ ] Lint 无新增错误
+- [ ] 代码风格符合项目规范
+- [ ] 无硬编码配置
+
+### 测试验证
+- [ ] 相关测试通过
+- [ ] 新代码有对应的测试覆盖
+- [ ] 测试覆盖率 ≥ 70%（如适用）
+
+### 其他检查
+- [ ] 错误处理完整
+- [ ] 无安全漏洞
+
+> ⚠️ **重要**: 自检不通过必须修复，不得进入提交阶段
+```
+
+---
+
+## 输出格式
+
+每次实现完成后，你必须输出以下结构：
+
+```markdown
+## 实现报告
+
+### Issue
+- 编号: #N
+- 标题: [Issue 标题]
+- 类型: feature / bugfix / refactor / docs
+
+### 改动概述
+- 修改文件: [文件列表]
+- 新增文件: [文件列表]
+- 删除文件: [文件列表]
+- 代码行数: +X / -Y
+
+### 实现思路
+[描述你的实现思路，关键设计决策]
+
+### 测试情况
+- 测试文件: [测试文件路径]
+- 测试用例数: N
+- 覆盖场景:
+  - [场景1]
+  - [场景2]
+  - ...
+
+### 待确认问题
+- [列出需要审核者关注的问题，如果没有则写"无"]
+```
+
+---
+
+## 代码规范
+
+### Go 代码规范
+
+```go
+// 1. 包注释
+// Package parser 提供事件流解析功能。
+package parser
+
+// 2. 函数注释
+// Parse 解析输入数据并返回事件列表。
+// 如果输入格式无效，返回 ErrInvalidInput 错误。
+func Parse(input []byte) ([]Event, error) { ... }
+
+// 3. 错误处理
+if err != nil {
+    return fmt.Errorf("parse failed: %w", err)
+}
+
+// 4. 表格驱动测试
+func TestParse(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    []Event
+        wantErr bool
+    }{
+        {"valid input", `{"type":"start"}`, []Event{{Type: "start"}}, false},
+        {"invalid json", `{invalid}`, nil, true},
+        {"empty input", ``, nil, true},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Parse([]byte(tt.input))
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+            }
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Parse() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### 禁止事项
+
+```
+❌ 不要使用 panic（除非在不可恢复的错误场景）
+❌ 不要忽略错误返回值
+❌ 不要使用全局变量
+❌ 不要在测试中使用 time.Sleep
+❌ 不要硬编码配置值
+❌ 不要提交注释掉的代码
+❌ 不要使用魔法数字
+```
+
+---
+
+## 面对审核反馈
+
+当审核者 (Claude) 提出批评意见时：
+
+### 审核者自检验证
+
+作为审核者时，审核前确认实现者已完成以下自检：
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 如自检未执行或存在未修复问题，应要求实现者先完成自检。
+```
+
+### 1. 理解反馈
+
+```markdown
+## 反馈理解
+
+审核者提出以下问题：
+1. [问题1] - 我的理解：[描述理解]
+2. [问题2] - 我的理解：[描述理解]
+
+我是否正确理解了反馈？
+```
+
+### 2. 分类处理
+
+```
+| 反馈类型 | 处理方式 |
+|---------|---------|
+| 严重 Bug | 立即修复 |
+| 设计问题 | 评估影响后修复 |
+| 代码风格 | 按规范修改 |
+| 性能问题 | 评估必要性后处理 |
+| 建议性意见 | 根据实际情况决定是否采纳 |
+```
+
+### 3. 改进报告
+
+```markdown
+## 改进报告
+
+### 已修复问题
+- [问题1]: [修复方案]
+- [问题2]: [修复方案]
+
+### 未采纳建议
+- [建议]: [原因]
+
+### 新增改动
+- [描述新增的改动]
+
+### 自检执行
+- [ ] 代码编译通过
+- [ ] Lint 无新增错误
+- [ ] 测试全部通过
+- [ ] 测试覆盖率达标
+```
+
+---
+
+## 特殊情况处理
+
+### 无法实现
+
+如果 Issue 描述不清或技术上不可行：
+
+```markdown
+## 无法实现报告
+
+### Issue
+- 编号: #N
+
+### 阻塞原因
+- [ ] 需求不明确
+- [ ] 缺少必要上下文
+- [ ] 技术限制
+- [ ] 依赖未解决
+
+### 详细说明
+[描述具体原因]
+
+### 建议操作
+- [建议人类如何处理这个 Issue]
+```
+
+### 需要设计决策
+
+如果 Issue 涉及架构级别的决策：
+
+```markdown
+## 需要设计评审
+
+### Issue
+- 编号: #N
+
+### 设计问题
+[描述需要决策的问题]
+
+### 可选方案
+1. 方案A: [描述] - 优点: [] 缺点: []
+2. 方案B: [描述] - 优点: [] 缺点: []
+
+### 建议
+[你的建议和理由]
+
+### 请人工确认后继续
+```
+
+---
+
+## 跨迭代经验
+
+每次实现或修复完成后，你必须在输出末尾添加 `## Learnings` 部分，总结：
+
+1. **发现的关键模式**：代码库中的重要模式和约定
+2. **踩过的坑**：遇到的问题和解决方案
+3. **可复用的经验**：其他迭代可能受益的经验
+
+格式示例：
+```markdown
+## Learnings
+
+- **模式**: [发现的可复用模式]
+- **踩坑**: [遇到的问题及解决方式]
+- **经验**: [对后续迭代有帮助的经验]
+```
+
+如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+
+### 更新目录级 CLAUDE.md
+
+除了在输出中总结 Learnings，你还必须将可复用的项目知识写入相关目录的 `CLAUDE.md` 文件中。这样后续迭代和 Agent 都能自动获取这些知识。
+
+**操作流程**：
+1. 实现完成后，回顾你修改或新增代码所在的目录
+2. 如果发现了可复用的模式、约定或陷阱，更新（或创建）该目录的 `CLAUDE.md`
+3. 如果 `CLAUDE.md` 已存在，追加新知识，不要删除已有内容
+4. 如果 `CLAUDE.md` 不存在，创建新文件，格式参考 `program.md` 中的「目录级知识积累」章节
+
+**示例**：如果你在 `internal/auth/` 目录下发现 "所有中间件必须调用 next() 即使认证失败"，就更新 `internal/auth/CLAUDE.md`：
+
+```markdown
+# internal/auth
+
+## 架构约定
+- 所有中间件必须调用 next() 即使认证失败，确保日志中间件能记录请求
+```
+
+---
+
+## 迭代限制
+
+- 最大迭代次数: 5 次
+- 如果连续 3 次测试失败，报告阻塞
+- 如果审核者满意度不再提升，可以停止迭代并说明原因
+
+---
+
+## UI 验证指引
+
+当审核 UI 类型（type: "ui"）子任务时，请额外关注：
+- 页面布局和样式是否正确渲染
+- 交互元素（按钮、表单、链接）是否功能正常
+- 无 console 错误或白屏
+- 子任务通过代码审核后，将自动进行浏览器截图验证
+
+作为实现者时，处理 UI 类型子任务需注意：
+- 确保页面可在浏览器中正常加载
+- 注意 CSS 和 JavaScript 的正确引用
+- 实现完成后将进行浏览器截图验证
+
+---
+
+## 示例对话
+
+### 示例 1: 功能实现
+
+**Human**: 实现 Issue #42 - 添加用户认证功能
+
+**Codex**:
+```
+我来分析 Issue #42 并实现用户认证功能。
+
+首先，让我了解现有代码结构...
+[使用 Glob/Grep 搜索相关代码]
+
+分析完成，我计划：
+1. 在 internal/auth/ 目录下创建认证模块
+2. 实现 JWT token 生成和验证
+3. 添加认证中间件
+4. 编写单元测试
+
+开始实现...
+[编写代码]
+
+运行测试...
+go test ./internal/auth/... -v
+
+## 实现报告
+[按格式输出报告]
+```
+
+### 示例 2: 处理审核反馈
+
+**Claude**: "代码中使用了硬编码的密钥，存在安全风险..."
+
+**Codex**:
+```
+## 反馈理解
+
+审核者指出：
+- 问题: 硬编码密钥存在安全风险
+
+我的理解: 应该从配置或环境变量读取密钥
+
+## 改进
+
+修改方案：
+1. 将密钥改为从环境变量读取
+2. 添加默认值用于开发环境
+3. 添加配置验证
+
+[修改代码]
+
+## 改进报告
+[按格式输出报告]
+```
+codex
+我先核对仓库里与 T-003 相关的前端实现、测试和类型检查入口，确认这轮代码实际覆盖了哪些验收项。
+exec
+/bin/zsh -lc "rg --files /Users/chaoyuepan/ai/autoresearch | rg \"desktop_app/.+\\.(ts|tsx|css|test|spec)("'$|'"\\.)|CLAUDE\\.md"'$|progress'"\\.md"'$|package'"\\.json"'$|tsconfig"' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/lib/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/vendor/react-markdown.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/DashboardPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/SettingsPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/IssuesPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/pages/HistoryPage.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/vite-env.d.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/issueRunRequest.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RunConfigPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/Sidebar.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/MarkdownRenderer.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/RightPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/AgentSelector.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/AppShell.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/LogViewer.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/index.css
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/agentStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/issueStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/projectStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runConfigStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/main.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/App.tsx
+/Users/chaoyuepan/ai/autoresearch/desktop_app/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/vite.config.ts
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/CLAUDE.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/package.json
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runConfigStore.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/issueRunRequest.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/logViewerStore.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.node.json
+/Users/chaoyuepan/ai/autoresearch/docs/package.json
+/Users/chaoyuepan/ai/autoresearch/tests/CLAUDE.md
+
+exec
+/bin/zsh -lc 'rg -n "iteration-progress|get_iteration_progress|iterationStore|IterationProgress|subtask|Build/Lint/Test|Build·Lint·Test|IssueDetailPanel|RightPanel" desktop_app src .' in /Users/chaoyuepan/ai/autoresearch
+ exited 2 in 0ms:
+rg: src: No such file or directory (os error 2)
+./CLAUDE.md:42:Planning Phase: First agent reads Issue → outputs tasks.json with subtask breakdown
+./CLAUDE.md:43:Iteration 1: Agent implements current subtask → tests run
+./CLAUDE.md:44:Iteration 2+: Agent round-robin review + fix per subtask
+./CLAUDE.md:45:    → Score >= 85? → mark subtask passed → advance to next subtask
+./CLAUDE.md:47:    → All subtasks passed? → auto commit/PR/merge/close Issue
+./CLAUDE.md:65:Planning phase (before iteration 1) asks the first agent to split the Issue into subtasks, saved to `.autoresearch/workflows/issue-N/tasks.json`:
+./CLAUDE.md:70:  "subtasks": [
+./CLAUDE.md:76:- Each iteration focuses on one `passes: false` subtask
+./CLAUDE.md:77:- Quality gate passes → `mark_subtask_passed()` sets `passes: true`
+./CLAUDE.md:78:- `all_subtasks_passed()` → enters PR/merge flow
+./CLAUDE.md:92:2. Subtask section (current subtask details + progress) — from `get_subtask_section()` / `get_subtask_review_section()`
+./CLAUDE.md:96:For review prompts, only task context + subtask review section + agent instructions are included (no program.md).
+./CLAUDE.md:110:Restores state from `.autoresearch/workflows/issue-N/` log files: iteration count, last score, consecutive failure count, last review feedback, and subtask state (from tasks.json). MAX_ITERATIONS becomes `last_iteration + new_count`.
+./CLAUDE.md:126:The UI verification system runs browser-based validation for UI-type subtasks (`"type": "ui"`).
+desktop_app/src/CLAUDE.md:6:- **Layout**: AppShell component (three-column: Sidebar 240px | main flex-1 | RightPanel 300px collapsible)
+desktop_app/src/CLAUDE.md:8:- **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
+desktop_app/src/CLAUDE.md:75:- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+desktop_app/src/CLAUDE.md:99:- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+desktop_app/src/CLAUDE.md:152:## IterationProgressPanel 约定
+desktop_app/src/CLAUDE.md:156:- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+desktop_app/src/CLAUDE.md:157:- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+desktop_app/src/CLAUDE.md:163:- 后端不推送 `iteration-progress` 事件（T-002 缺失），前端使用轮询降级方案
+desktop_app/src/CLAUDE.md:164:- 运行中每 2s 调用 `invoke('get_iteration_progress')`，类似 `LogViewer` 的 `setInterval` 模式
+./lib/subtask.sh:13:has_subtasks() {
+./lib/subtask.sh:20:    count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+./lib/subtask.sh:25:get_current_subtask() {
+./lib/subtask.sh:32:    jq '.subtasks | map(select(.passes == false)) | .[0]' "$tasks_file" 2>/dev/null
+./lib/subtask.sh:36:get_current_subtask_id() {
+./lib/subtask.sh:37:    local subtask
+./lib/subtask.sh:38:    subtask=$(get_current_subtask)
+./lib/subtask.sh:39:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./lib/subtask.sh:43:    echo "$subtask" | jq -r '.id' 2>/dev/null
+./lib/subtask.sh:47:get_current_subtask_title() {
+./lib/subtask.sh:48:    local subtask
+./lib/subtask.sh:49:    subtask=$(get_current_subtask)
+./lib/subtask.sh:50:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./lib/subtask.sh:54:    echo "$subtask" | jq -r '.title' 2>/dev/null
+./lib/subtask.sh:73:mark_subtask_passed() {
+./lib/subtask.sh:74:    local subtask_id="$1"
+./lib/subtask.sh:87:    if ! jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file"; then
+./lib/subtask.sh:88:        log "❌ 子任务 $subtask_id: jq 处理失败，跳过写入"
+./lib/subtask.sh:95:        log "❌ 子任务 $subtask_id: jq 输出的 JSON 无效，拒绝覆盖 tasks.json"
+./lib/subtask.sh:101:    log "子任务 $subtask_id 已标记为通过"
+./lib/subtask.sh:105:all_subtasks_passed() {
+./lib/subtask.sh:113:    unfinished=$(jq '[.subtasks[] | select(.passes == false)] | length' "$tasks_file" 2>/dev/null)
+./lib/subtask.sh:119:is_ui_subtask() {
+./lib/subtask.sh:120:    local subtask
+./lib/subtask.sh:121:    subtask=$(get_current_subtask)
+./lib/subtask.sh:122:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./lib/subtask.sh:125:    local subtask_type
+./lib/subtask.sh:126:    subtask_type=$(echo "$subtask" | jq -r '.type // "code"' 2>/dev/null)
+./lib/subtask.sh:127:    [ "$subtask_type" = "ui" ]
+./lib/subtask.sh:131:get_ui_subtasks_count() {
+./lib/subtask.sh:138:    jq '[.subtasks[] | select(.type == "ui")] | length' "$tasks_file" 2>/dev/null || echo "0"
+./lib/subtask.sh:142:get_subtask_progress_summary() {
+./lib/subtask.sh:151:    total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+./lib/subtask.sh:152:    passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+./lib/subtask.sh:153:    current_id=$(get_current_subtask_id)
+./lib/subtask.sh:154:    current_title=$(get_current_subtask_title)
+./lib/subtask.sh:199:get_subtask_section() {
+./lib/subtask.sh:200:    local subtask
+./lib/subtask.sh:201:    subtask=$(get_current_subtask)
+./lib/subtask.sh:202:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./lib/subtask.sh:207:    local id title desc criteria subtask_type
+./lib/subtask.sh:208:    id=$(echo "$subtask" | jq -r '.id')
+./lib/subtask.sh:209:    title=$(echo "$subtask" | jq -r '.title')
+./lib/subtask.sh:210:    desc=$(echo "$subtask" | jq -r '.description')
+./lib/subtask.sh:211:    criteria=$(echo "$subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+./lib/subtask.sh:212:    subtask_type=$(echo "$subtask" | jq -r '.type // "code"' 2>/dev/null)
+./lib/subtask.sh:215:    progress=$(get_subtask_progress_summary)
+./lib/subtask.sh:222:    if [ "$subtask_type" = "ui" ]; then
+./lib/subtask.sh:242:- **类型**: $subtask_type
+./lib/subtask.sh:253:get_subtask_review_section() {
+./lib/subtask.sh:262:    progress=$(get_subtask_progress_summary)
+./lib/subtask.sh:264:    local current_subtask
+./lib/subtask.sh:265:    current_subtask=$(get_current_subtask)
+./lib/subtask.sh:266:    if [ -z "$current_subtask" ] || [ "$current_subtask" = "null" ]; then
+./lib/subtask.sh:277:    local id title desc criteria subtask_type
+./lib/subtask.sh:278:    id=$(echo "$current_subtask" | jq -r '.id')
+./lib/subtask.sh:279:    title=$(echo "$current_subtask" | jq -r '.title')
+./lib/subtask.sh:280:    desc=$(echo "$current_subtask" | jq -r '.description')
+./lib/subtask.sh:281:    criteria=$(echo "$current_subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+./lib/subtask.sh:282:    subtask_type=$(echo "$current_subtask" | jq -r '.type // "code"' 2>/dev/null)
+./lib/subtask.sh:285:    if [ "$subtask_type" = "ui" ]; then
+./lib/subtask.sh:311:- **类型**: $subtask_type
+./lib/CLAUDE.md:18:| `subtask.sh` | 子任务 CRUD 与 prompt 注入 | `has_subtasks`, `mark_subtask_passed`, `get_subtask_section` |
+./lib/prompt.sh:114:    # 3. Remove detailed descriptions of passed subtasks (keep only title lines)
+./lib/prompt.sh:115:    #    Buffer entire subtask block, decide whether to print full or title-only after seeing passes flag
+./lib/prompt.sh:119:        BEGIN { in_subtask=0; is_passed=0; title_lines=""; subtask_buf="" }
+./lib/prompt.sh:120:        function flush_subtask() {
+./lib/prompt.sh:121:            if (in_subtask) {
+./lib/prompt.sh:123:                else { print subtask_buf }
+./lib/prompt.sh:124:                in_subtask=0; is_passed=0; title_lines=""; subtask_buf=""
+./lib/prompt.sh:128:            flush_subtask()
+./lib/prompt.sh:129:            in_subtask=1; is_passed=0
+./lib/prompt.sh:130:            title_lines=$0; subtask_buf=$0
+./lib/prompt.sh:133:        in_subtask && /^[^- \t]/ {
+./lib/prompt.sh:134:            flush_subtask()
+./lib/prompt.sh:138:        in_subtask && /^$/ {
+./lib/prompt.sh:139:            flush_subtask()
+./lib/prompt.sh:143:        in_subtask {
+./lib/prompt.sh:144:            subtask_buf = subtask_buf "\n" $0
+./lib/prompt.sh:154:        END { flush_subtask() }
+./desktop_app/src/CLAUDE.md:6:- **Layout**: AppShell component (three-column: Sidebar 240px | main flex-1 | RightPanel 300px collapsible)
+./desktop_app/src/CLAUDE.md:8:- **Components**: Shared layout components in src/components/ (Sidebar, RightPanel, AppShell)
+./desktop_app/src/CLAUDE.md:75:- **运行控制**: `useRunStore.initialize()` 在 `IssuesPage` 挂载时订阅 `run-output` / `run-exit` 事件；启动/停止操作放在 `IssueDetailPanel`
+./desktop_app/src/CLAUDE.md:99:- 详情面板: 使用页面内右侧 sticky 卡片，而不是复用全局 `RightPanel`
+./desktop_app/src/CLAUDE.md:152:## IterationProgressPanel 约定
+./desktop_app/src/CLAUDE.md:156:- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+./desktop_app/src/CLAUDE.md:157:- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+./desktop_app/src/CLAUDE.md:163:- 后端不推送 `iteration-progress` 事件（T-002 缺失），前端使用轮询降级方案
+./desktop_app/src/CLAUDE.md:164:- 运行中每 2s 调用 `invoke('get_iteration_progress')`，类似 `LogViewer` 的 `setInterval` 模式
+./lib/ui_verify.sh:578: local subtask_desc="${2:-}"
+./lib/ui_verify.sh:623: if [ -n "$subtask_desc" ]; then
+./lib/ui_verify.sh:627:$subtask_desc"
+./lib/ui_verify.sh:713:  local subtask_desc="${2:-}"
+./lib/ui_verify.sh:782: verify_result=$(verify_ui_with_llm "$screenshot_file" "$subtask_desc")
+desktop_app/src/pages/IssuesPage.tsx:3:import IssueDetailPanel from '../components/IssueDetailPanel';
+desktop_app/src/pages/IssuesPage.tsx:599:          <IssueDetailPanel
+./desktop_app/src/pages/IssuesPage.tsx:3:import IssueDetailPanel from '../components/IssueDetailPanel';
+./desktop_app/src/pages/IssuesPage.tsx:599:          <IssueDetailPanel
+desktop_app/tests/iterationStore.test.mjs:3:import { createIterationStore } from '../src/stores/iterationStore.ts';
+desktop_app/tests/iterationStore.test.mjs:19:  subtasks: [
+desktop_app/tests/iterationStore.test.mjs:32:      get_iteration_progress: () => SAMPLE_PROGRESS,
+desktop_app/tests/iterationStore.test.mjs:42:  assert.equal(state.progress.subtasks.length, 3);
+desktop_app/tests/iterationStore.test.mjs:53:      get_iteration_progress: () => {
+desktop_app/tests/iterationStore.test.mjs:89:      get_iteration_progress: () => SAMPLE_PROGRESS,
+desktop_app/tests/iterationStore.test.mjs:101:  assert.equal(state.progress.subtasks.length, 0);
+desktop_app/tests/iterationStore.test.mjs:111:      if (cmd === 'get_iteration_progress') {
+desktop_app/src-tauri/src/lib.rs:132:    /// Planning phase — subtask breakdown.
+desktop_app/src-tauri/src/lib.rs:144:/// Information about a single subtask from tasks.json.
+desktop_app/src-tauri/src/lib.rs:154:struct IterationProgress {
+desktop_app/src-tauri/src/lib.rs:161:    /// List of subtasks with pass/fail status.
+desktop_app/src-tauri/src/lib.rs:162:    subtasks: Vec<SubtaskInfo>,
+desktop_app/src-tauri/src/lib.rs:163:    /// Number of subtasks that have passed.
+desktop_app/src-tauri/src/lib.rs:165:    /// Total number of subtasks.
+desktop_app/src-tauri/src/lib.rs:175:    subtasks: Vec<TasksFileSubtask>,
+desktop_app/src-tauri/src/lib.rs:178:/// A subtask entry in tasks.json.
+desktop_app/src-tauri/src/lib.rs:203:        .subtasks
+desktop_app/src-tauri/src/lib.rs:354:/// Builds a complete IterationProgress for a given workflow directory.
+desktop_app/src-tauri/src/lib.rs:355:fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+desktop_app/src-tauri/src/lib.rs:356:    let subtasks = parse_tasks_json(workflow_dir);
+desktop_app/src-tauri/src/lib.rs:357:    let passed_count = subtasks.iter().filter(|s| s.passes).count();
+desktop_app/src-tauri/src/lib.rs:358:    let total_count = subtasks.len();
+desktop_app/src-tauri/src/lib.rs:362:    IterationProgress {
+desktop_app/src-tauri/src/lib.rs:366:        subtasks,
+desktop_app/src-tauri/src/lib.rs:373:fn get_iteration_progress_sync(
+desktop_app/src-tauri/src/lib.rs:376:) -> Result<IterationProgress, String> {
+desktop_app/src-tauri/src/lib.rs:389:        return Ok(IterationProgress {
+desktop_app/src-tauri/src/lib.rs:393:            subtasks: Vec::new(),
+desktop_app/src-tauri/src/lib.rs:404:async fn get_iteration_progress(
+desktop_app/src-tauri/src/lib.rs:407:) -> Result<IterationProgress, String> {
+desktop_app/src-tauri/src/lib.rs:408:    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
+desktop_app/src-tauri/src/lib.rs:1067:            get_iteration_progress,
+desktop_app/src-tauri/src/lib.rs:1082:        build_iteration_progress, get_iteration_progress_sync, infer_phase,
+desktop_app/src-tauri/src/lib.rs:1405:    fn parse_tasks_json_returns_subtasks() {
+desktop_app/src-tauri/src/lib.rs:1411:                "subtasks": [
+desktop_app/src-tauri/src/lib.rs:1419:        let subtasks = parse_tasks_json(&dir);
+desktop_app/src-tauri/src/lib.rs:1421:        assert_eq!(subtasks.len(), 2);
+desktop_app/src-tauri/src/lib.rs:1422:        assert_eq!(subtasks[0], SubtaskInfo { id: "T-001".to_string(), title: "First task".to_string(), passes: false });
+desktop_app/src-tauri/src/lib.rs:1423:        assert_eq!(subtasks[1], SubtaskInfo { id: "T-002".to_string(), title: "Second task".to_string(), passes: true });
+desktop_app/src-tauri/src/lib.rs:1432:        let subtasks = parse_tasks_json(&dir);
+desktop_app/src-tauri/src/lib.rs:1434:        assert!(subtasks.is_empty());
+desktop_app/src-tauri/src/lib.rs:1443:        let subtasks = parse_tasks_json(&dir);
+desktop_app/src-tauri/src/lib.rs:1445:        assert!(subtasks.is_empty());
+desktop_app/src-tauri/src/lib.rs:1559:            r#"{"issueNumber": 42, "subtasks": [
+desktop_app/src-tauri/src/lib.rs:1575:        assert_eq!(progress.subtasks.len(), 3);
+desktop_app/src-tauri/src/lib.rs:1634:    fn get_iteration_progress_returns_idle_for_missing_workflow() {
+desktop_app/src-tauri/src/lib.rs:1637:        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 999)
+desktop_app/src-tauri/src/lib.rs:1642:        assert!(progress.subtasks.is_empty());
+desktop_app/src-tauri/src/lib.rs:1648:    fn get_iteration_progress_returns_data_for_existing_workflow() {
+desktop_app/src-tauri/src/lib.rs:1654:            r#"{"issueNumber": 42, "subtasks": [
+desktop_app/src-tauri/src/lib.rs:1661:        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 42)
+./desktop_app/src/components/IssueDetailPanel.tsx:14:import IterationProgressPanel from './IterationProgressPanel';
+./desktop_app/src/components/IssueDetailPanel.tsx:17:interface IssueDetailPanelProps {
+./desktop_app/src/components/IssueDetailPanel.tsx:197:function IssueDetailPanel({
+./desktop_app/src/components/IssueDetailPanel.tsx:205:}: IssueDetailPanelProps): JSX.Element {
+./desktop_app/src/components/IssueDetailPanel.tsx:355:          <IterationProgressPanel
+./desktop_app/src/components/IssueDetailPanel.tsx:435:export default IssueDetailPanel;
+desktop_app/src/components/IssueDetailPanel.tsx:14:import IterationProgressPanel from './IterationProgressPanel';
+desktop_app/src/components/IssueDetailPanel.tsx:17:interface IssueDetailPanelProps {
+desktop_app/src/components/IssueDetailPanel.tsx:197:function IssueDetailPanel({
+desktop_app/src/components/IssueDetailPanel.tsx:205:}: IssueDetailPanelProps): JSX.Element {
+desktop_app/src/components/IssueDetailPanel.tsx:355:          <IterationProgressPanel
+desktop_app/src/components/IssueDetailPanel.tsx:435:export default IssueDetailPanel;
+desktop_app/src/stores/iterationStore.ts:16:export interface IterationProgress {
+desktop_app/src/stores/iterationStore.ts:20:  subtasks: SubtaskInfo[];
+desktop_app/src/stores/iterationStore.ts:52:const IDLE_PROGRESS: IterationProgress = {
+desktop_app/src/stores/iterationStore.ts:56:  subtasks: [],
+desktop_app/src/stores/iterationStore.ts:66:  progress: IterationProgress;
+desktop_app/src/stores/iterationStore.ts:91:        const data = await deps.invoke<IterationProgress>(
+desktop_app/src/stores/iterationStore.ts:92:          'get_iteration_progress',
+desktop_app/src/components/AppShell.tsx:3:import RightPanel from "./RightPanel";
+desktop_app/src/components/AppShell.tsx:12:      <RightPanel />
+desktop_app/src/components/IterationProgressPanel.tsx:7:} from '../stores/iterationStore';
+desktop_app/src/components/IterationProgressPanel.tsx:9:interface IterationProgressPanelProps {
+desktop_app/src/components/IterationProgressPanel.tsx:21:  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+desktop_app/src/components/IterationProgressPanel.tsx:69:function subtaskStatusLabel(passes: boolean, isIdle: boolean): string {
+desktop_app/src/components/IterationProgressPanel.tsx:74:function subtaskBadgeClass(passes: boolean, isIdle: boolean): string {
+desktop_app/src/components/IterationProgressPanel.tsx:84:  subtasks,
+desktop_app/src/components/IterationProgressPanel.tsx:87:  subtasks: SubtaskInfo[];
+desktop_app/src/components/IterationProgressPanel.tsx:90:  if (subtasks.length === 0) {
+desktop_app/src/components/IterationProgressPanel.tsx:92:      <p className="text-xs text-gray-400">暂无 subtask 信息。</p>
+desktop_app/src/components/IterationProgressPanel.tsx:98:      {subtasks.map((st) => {
+desktop_app/src/components/IterationProgressPanel.tsx:99:        const status = subtaskStatusLabel(st.passes, isIdle);
+desktop_app/src/components/IterationProgressPanel.tsx:100:        const badge = subtaskBadgeClass(st.passes, isIdle);
+desktop_app/src/components/IterationProgressPanel.tsx:137:          {passed}/{total} subtasks passed
+desktop_app/src/components/IterationProgressPanel.tsx:153:export default function IterationProgressPanel({
+desktop_app/src/components/IterationProgressPanel.tsx:157:}: IterationProgressPanelProps): JSX.Element {
+desktop_app/src/components/IterationProgressPanel.tsx:219:      <SubtaskList subtasks={progress.subtasks} isIdle={isIdle} />
+desktop_app/src/components/RightPanel.tsx:4:function RightPanel() {
+desktop_app/src/components/RightPanel.tsx:54:export default RightPanel;
+./README.md:135:1. 规划阶段：拆分 subtasks（如需要）
+./README.md:137:3. 质量门禁：Build/Lint/Test + LLM 评分 ≥ 85
+./README.md:204:| **质量门禁** | 硬门禁（Build/Lint/Test）+ 软门禁（LLM 评分） | 纯工具链检查 |
+./desktop_app/src/components/RightPanel.tsx:4:function RightPanel() {
+./desktop_app/src/components/RightPanel.tsx:54:export default RightPanel;
+./run.sh:93:for _lib in scoring context progress subtask prompt ui_verify; do
+./run.sh:1150:# Subtask (tasks.json) functions are in lib/subtask.sh
+./run.sh:1162:    if has_subtasks; then
+./run.sh:1165:        progress=$(get_subtask_progress_summary)
+./run.sh:1198:  \"subtasks\": [
+./run.sh:1277:            count=$(jq '.subtasks | length' "$tasks_file")
+./run.sh:1288:            jq -r '.subtasks[] | "  \(.id): \(.title)"' "$tasks_file" | while read -r line; do
+./run.sh:1329:    local subtask_section
+./run.sh:1330:    subtask_section=$(get_subtask_section)
+./run.sh:1341:$subtask_section
+./run.sh:1370:$subtask_section
+./run.sh:1433:    local subtask_section
+./run.sh:1434:    subtask_section=$(get_subtask_section)
+./run.sh:1445:$subtask_section
+./run.sh:1474:$subtask_section
+./run.sh:1537:    local subtask_section
+./run.sh:1538:    subtask_section=$(get_subtask_section)
+./run.sh:1549:$subtask_section
+./run.sh:1578:$subtask_section
+./run.sh:1635:    local subtask_review_section
+./run.sh:1636:    subtask_review_section=$(get_subtask_review_section)
+./run.sh:1644:$subtask_review_section
+./run.sh:1758:    local subtask_review_section
+./run.sh:1759:    subtask_review_section=$(get_subtask_review_section)
+./run.sh:1767:$subtask_review_section
+./run.sh:1853:    local subtask_review_section
+./run.sh:1854:    subtask_review_section=$(get_subtask_review_section)
+./run.sh:1862:$subtask_review_section
+./run.sh:2138:    if has_subtasks; then
+./run.sh:2140:        progress=$(get_subtask_progress_summary)
+./run.sh:2315:        if has_subtasks; then
+./run.sh:2316:            local current_subtask_id
+./run.sh:2317:            current_subtask_id=$(get_current_subtask_id)
+./run.sh:2318:            if [ -n "$current_subtask_id" ]; then
+./run.sh:2320:                if is_ui_subtask; then
+./run.sh:2321:                    local subtask_title
+./run.sh:2322:                    subtask_title=$(get_current_subtask_title)
+./run.sh:2325:                        ui_result=$(run_ui_verification "$WORK_DIR" "$subtask_title") || true
+./run.sh:2348:                mark_subtask_passed "$current_subtask_id"
+./run.sh:2349:                log_console "✅ 子任务 $current_subtask_id 审核通过"
+./run.sh:2352:                if all_subtasks_passed; then
+./run.sh:2358:                    progress=$(get_subtask_progress_summary)
+./run.sh:2426:    if has_subtasks; then
+./run.sh:2427:        subtask_progress=$(get_subtask_progress_summary)
+./run.sh:2428:        log_console "$subtask_progress"
+./run.sh:2430:    if [ $ITERATION -eq 1 ] && ! has_subtasks; then
+./run.sh:2439:    if [ $ITERATION -eq 1 ] && ! has_subtasks; then
+./run.sh:2509:    if [ $ITERATION -eq 1 ] && has_subtasks; then
+./run.sh:2564:            subtask_title=
+./run.sh:2565:            subtask_title=$(get_current_subtask_title)
+./run.sh:2566:            append_to_progress "$ITERATION" "$first_agent" "$impl_log" "N/A" "初始实现 - $subtask_title" ""
+./run.sh:2616:    subtask_label=""
+./run.sh:2617:    if has_subtasks; then
+./run.sh:2619:        current_id=$(get_current_subtask_id)
+./run.sh:2621:            subtask_label=" - $current_id"
+./run.sh:2624:    append_to_progress "$ITERATION" "$agent_name" "$review_log" "$SCORE" "审核+修复${subtask_label}" "$review_feedback_brief"
+./run.sh:2631:    if [ $PASSED -eq 1 ] && ! has_subtasks; then
+./run.sh:2718:    subtask_summary=""
+./run.sh:2719:    if has_subtasks; then
+./run.sh:2722:        total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+./run.sh:2723:        passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+./run.sh:2724:        subtask_summary="
+./run.sh:2727:$(jq -r '.subtasks[] | "- [\(.passes | if true then "x" else " " end)] \(.id): \(.title)"' "$tasks_file" 2>/dev/null)
+./run.sh:2748:$subtask_summary$ui_verify_summary
+./desktop_app/src/components/AppShell.tsx:3:import RightPanel from "./RightPanel";
+./desktop_app/src/components/AppShell.tsx:12:      <RightPanel />
+./tasks/prd-desktop-app.md:54:**Description:** 作为开发者，我希望能实时看到当前迭代的进度——处于哪个阶段（planning/implementation/review）、当前 subtask、评分结果。
+./tasks/prd-desktop-app.md:58:- [ ] 显示当前阶段：Planning / Implementation / Review / Build/Lint/Test
+./tasks/prd-desktop-app.md:59:- [ ] 如果有 subtask 系统，显示 subtask 进度条和各 subtask 状态（pending/passing/failing）
+./tasks/prd-desktop-app.md:131:- FR-5: 解析 `tasks.json` 获取 subtask 结构和状态，渲染进度视图
+./tasks/prd-desktop-app.md:189:- **日志解析**：Rust 侧解析 log 文件提取评分、阶段、subtask 状态，结构化数据传给前端
+./desktop_app/tests/iterationStore.test.mjs:3:import { createIterationStore } from '../src/stores/iterationStore.ts';
+./desktop_app/tests/iterationStore.test.mjs:19:  subtasks: [
+./desktop_app/tests/iterationStore.test.mjs:32:      get_iteration_progress: () => SAMPLE_PROGRESS,
+./desktop_app/tests/iterationStore.test.mjs:42:  assert.equal(state.progress.subtasks.length, 3);
+./desktop_app/tests/iterationStore.test.mjs:53:      get_iteration_progress: () => {
+./desktop_app/tests/iterationStore.test.mjs:89:      get_iteration_progress: () => SAMPLE_PROGRESS,
+./desktop_app/tests/iterationStore.test.mjs:101:  assert.equal(state.progress.subtasks.length, 0);
+./desktop_app/tests/iterationStore.test.mjs:111:      if (cmd === 'get_iteration_progress') {
+./desktop_app/src/stores/iterationStore.ts:16:export interface IterationProgress {
+./desktop_app/src/stores/iterationStore.ts:20:  subtasks: SubtaskInfo[];
+./desktop_app/src/stores/iterationStore.ts:52:const IDLE_PROGRESS: IterationProgress = {
+./desktop_app/src/stores/iterationStore.ts:56:  subtasks: [],
+./desktop_app/src/stores/iterationStore.ts:66:  progress: IterationProgress;
+./desktop_app/src/stores/iterationStore.ts:91:        const data = await deps.invoke<IterationProgress>(
+./desktop_app/src/stores/iterationStore.ts:92:          'get_iteration_progress',
+./desktop_app/src/components/IterationProgressPanel.tsx:7:} from '../stores/iterationStore';
+./desktop_app/src/components/IterationProgressPanel.tsx:9:interface IterationProgressPanelProps {
+./desktop_app/src/components/IterationProgressPanel.tsx:21:  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+./desktop_app/src/components/IterationProgressPanel.tsx:69:function subtaskStatusLabel(passes: boolean, isIdle: boolean): string {
+./desktop_app/src/components/IterationProgressPanel.tsx:74:function subtaskBadgeClass(passes: boolean, isIdle: boolean): string {
+./desktop_app/src/components/IterationProgressPanel.tsx:84:  subtasks,
+./desktop_app/src/components/IterationProgressPanel.tsx:87:  subtasks: SubtaskInfo[];
+./desktop_app/src/components/IterationProgressPanel.tsx:90:  if (subtasks.length === 0) {
+./desktop_app/src/components/IterationProgressPanel.tsx:92:      <p className="text-xs text-gray-400">暂无 subtask 信息。</p>
+./desktop_app/src/components/IterationProgressPanel.tsx:98:      {subtasks.map((st) => {
+./desktop_app/src/components/IterationProgressPanel.tsx:99:        const status = subtaskStatusLabel(st.passes, isIdle);
+./desktop_app/src/components/IterationProgressPanel.tsx:100:        const badge = subtaskBadgeClass(st.passes, isIdle);
+./desktop_app/src/components/IterationProgressPanel.tsx:137:          {passed}/{total} subtasks passed
+./desktop_app/src/components/IterationProgressPanel.tsx:153:export default function IterationProgressPanel({
+./desktop_app/src/components/IterationProgressPanel.tsx:157:}: IterationProgressPanelProps): JSX.Element {
+./desktop_app/src/components/IterationProgressPanel.tsx:219:      <SubtaskList subtasks={progress.subtasks} isIdle={isIdle} />
+./desktop_app/src-tauri/src/lib.rs:132:    /// Planning phase — subtask breakdown.
+./desktop_app/src-tauri/src/lib.rs:144:/// Information about a single subtask from tasks.json.
+./desktop_app/src-tauri/src/lib.rs:154:struct IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:161:    /// List of subtasks with pass/fail status.
+./desktop_app/src-tauri/src/lib.rs:162:    subtasks: Vec<SubtaskInfo>,
+./desktop_app/src-tauri/src/lib.rs:163:    /// Number of subtasks that have passed.
+./desktop_app/src-tauri/src/lib.rs:165:    /// Total number of subtasks.
+./desktop_app/src-tauri/src/lib.rs:175:    subtasks: Vec<TasksFileSubtask>,
+./desktop_app/src-tauri/src/lib.rs:178:/// A subtask entry in tasks.json.
+./desktop_app/src-tauri/src/lib.rs:203:        .subtasks
+./desktop_app/src-tauri/src/lib.rs:354:/// Builds a complete IterationProgress for a given workflow directory.
+./desktop_app/src-tauri/src/lib.rs:355:fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:356:    let subtasks = parse_tasks_json(workflow_dir);
+./desktop_app/src-tauri/src/lib.rs:357:    let passed_count = subtasks.iter().filter(|s| s.passes).count();
+./desktop_app/src-tauri/src/lib.rs:358:    let total_count = subtasks.len();
+./desktop_app/src-tauri/src/lib.rs:362:    IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:366:        subtasks,
+./desktop_app/src-tauri/src/lib.rs:373:fn get_iteration_progress_sync(
+./desktop_app/src-tauri/src/lib.rs:376:) -> Result<IterationProgress, String> {
+./desktop_app/src-tauri/src/lib.rs:389:        return Ok(IterationProgress {
+./desktop_app/src-tauri/src/lib.rs:393:            subtasks: Vec::new(),
+./desktop_app/src-tauri/src/lib.rs:404:async fn get_iteration_progress(
+./desktop_app/src-tauri/src/lib.rs:407:) -> Result<IterationProgress, String> {
+./desktop_app/src-tauri/src/lib.rs:408:    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
+./desktop_app/src-tauri/src/lib.rs:1067:            get_iteration_progress,
+./desktop_app/src-tauri/src/lib.rs:1082:        build_iteration_progress, get_iteration_progress_sync, infer_phase,
+./desktop_app/src-tauri/src/lib.rs:1405:    fn parse_tasks_json_returns_subtasks() {
+./desktop_app/src-tauri/src/lib.rs:1411:                "subtasks": [
+./desktop_app/src-tauri/src/lib.rs:1419:        let subtasks = parse_tasks_json(&dir);
+./desktop_app/src-tauri/src/lib.rs:1421:        assert_eq!(subtasks.len(), 2);
+./desktop_app/src-tauri/src/lib.rs:1422:        assert_eq!(subtasks[0], SubtaskInfo { id: "T-001".to_string(), title: "First task".to_string(), passes: false });
+./desktop_app/src-tauri/src/lib.rs:1423:        assert_eq!(subtasks[1], SubtaskInfo { id: "T-002".to_string(), title: "Second task".to_string(), passes: true });
+./desktop_app/src-tauri/src/lib.rs:1432:        let subtasks = parse_tasks_json(&dir);
+./desktop_app/src-tauri/src/lib.rs:1434:        assert!(subtasks.is_empty());
+./desktop_app/src-tauri/src/lib.rs:1443:        let subtasks = parse_tasks_json(&dir);
+./desktop_app/src-tauri/src/lib.rs:1445:        assert!(subtasks.is_empty());
+./desktop_app/src-tauri/src/lib.rs:1559:            r#"{"issueNumber": 42, "subtasks": [
+./desktop_app/src-tauri/src/lib.rs:1575:        assert_eq!(progress.subtasks.len(), 3);
+./desktop_app/src-tauri/src/lib.rs:1634:    fn get_iteration_progress_returns_idle_for_missing_workflow() {
+./desktop_app/src-tauri/src/lib.rs:1637:        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 999)
+./desktop_app/src-tauri/src/lib.rs:1642:        assert!(progress.subtasks.is_empty());
+./desktop_app/src-tauri/src/lib.rs:1648:    fn get_iteration_progress_returns_data_for_existing_workflow() {
+./desktop_app/src-tauri/src/lib.rs:1654:            r#"{"issueNumber": 42, "subtasks": [
+./desktop_app/src-tauri/src/lib.rs:1661:        let progress = get_iteration_progress_sync(dir.to_string_lossy().as_ref(), 42)
+./tests/test_trim_prompt.sh:76:    # 3. Remove detailed descriptions of passed subtasks (keep only title lines)
+./tests/test_trim_prompt.sh:77:    #    Buffer entire subtask block, decide whether to print full or title-only after seeing passes flag
+./tests/test_trim_prompt.sh:81:        BEGIN { in_subtask=0; is_passed=0; title_lines=""; subtask_buf="" }
+./tests/test_trim_prompt.sh:82:        function flush_subtask() {
+./tests/test_trim_prompt.sh:83:            if (in_subtask) {
+./tests/test_trim_prompt.sh:85:                else { print subtask_buf }
+./tests/test_trim_prompt.sh:86:                in_subtask=0; is_passed=0; title_lines=""; subtask_buf=""
+./tests/test_trim_prompt.sh:90:            flush_subtask()
+./tests/test_trim_prompt.sh:91:            in_subtask=1; is_passed=0
+./tests/test_trim_prompt.sh:92:            title_lines=$0; subtask_buf=$0
+./tests/test_trim_prompt.sh:95:        in_subtask && /^[^- \t]/ {
+./tests/test_trim_prompt.sh:96:            flush_subtask()
+./tests/test_trim_prompt.sh:100:        in_subtask && /^$/ {
+./tests/test_trim_prompt.sh:101:            flush_subtask()
+./tests/test_trim_prompt.sh:105:        in_subtask {
+./tests/test_trim_prompt.sh:106:            subtask_buf = subtask_buf "\n" $0
+./tests/test_trim_prompt.sh:116:        END { flush_subtask() }
+./tests/test_trim_prompt.sh:330:echo "--- Preserves subtask section ---"
+./tests/test_trim_prompt.sh:354:assert_contains "preserves subtask ID" "$result" "T-001"
+./tests/test_trim_prompt.sh:355:assert_contains "preserves subtask title" "$result" "Add parser"
+./tests/test_trim_prompt.sh:479:# ==================== Tests: trim_prompt_smart() removes passed subtasks ====================
+./tests/test_trim_prompt.sh:485:echo "--- Removes passed subtask details, keeps title ---"
+./tests/test_output_validation.sh:204:  "subtasks": [
+./tests/test_context_overflow.sh:379:    # 3. Remove detailed descriptions of passed subtasks (keep only title lines)
+./tests/test_context_overflow.sh:381:        BEGIN { in_subtask=0; is_passed=0; title_lines=""; subtask_buf="" }
+./tests/test_context_overflow.sh:382:        function flush_subtask() {
+./tests/test_context_overflow.sh:383:            if (in_subtask) {
+./tests/test_context_overflow.sh:385:                else { print subtask_buf }
+./tests/test_context_overflow.sh:386:                in_subtask=0; is_passed=0; title_lines=""; subtask_buf=""
+./tests/test_context_overflow.sh:390:            flush_subtask()
+./tests/test_context_overflow.sh:391:            in_subtask=1; is_passed=0
+./tests/test_context_overflow.sh:392:            title_lines=$0; subtask_buf=$0
+./tests/test_context_overflow.sh:395:        in_subtask && /^[^- \t]/ {
+./tests/test_context_overflow.sh:396:            flush_subtask()
+./tests/test_context_overflow.sh:400:        in_subtask && /^$/ {
+./tests/test_context_overflow.sh:401:            flush_subtask()
+./tests/test_context_overflow.sh:405:        in_subtask {
+./tests/test_context_overflow.sh:406:            subtask_buf = subtask_buf "\n" $0
+./tests/test_context_overflow.sh:416:        END { flush_subtask() }
+./tests/test_context_overflow.sh:1485:# Test 4: Prompt with passed subtasks
+./tests/test_context_overflow.sh:1486:prompt_with_subtasks="# Task Description
+./tests/test_context_overflow.sh:1503:trimmed_subtasks=$(trim_prompt_for_overflow "$prompt_with_subtasks")
+./tests/test_context_overflow.sh:1505:    "echo '$trimmed_subtasks' | grep -q 'Implement feature'"
+./tests/test_context_overflow.sh:1506:assert_true "Failed subtask kept" \
+./tests/test_context_overflow.sh:1507:    "echo '$trimmed_subtasks' | grep -q 'T-002'"
+./tests/test_context_overflow.sh:1509:    "echo '$trimmed_subtasks' | grep -q 'Please fix the bug'"
+./docs/autoresearch-promo.html:184:      <div style="border-top:1px solid ${C.border};padding-top:12px;color:${C.grayLight};font-size:13px;line-height:1.6">Provide an Issue number. autoresearch reads it, plans subtasks, and starts implementing.</div>
+./docs/autoresearch-promo.html:216:    {cls:'info',text:'\u2192 Planning phase: splitting into 3 subtasks'},
+./docs/autoresearch-promo.html:234:    {cls:'pass',text:'\u2713 All subtasks passed!'},
+./docs/autoresearch-promo.html:280:    {icon:'\u{1F4E6}',title:'Subtask Planning',desc:'Auto-splits complex Issues into manageable subtasks',color:C.purple},
+./docs/hardness_engineering.md:107:**问题：** `mark_subtask_passed()` 先 `jq > tmpfile` 再 `mv`，如果中途被 kill，文件可能损坏（空文件或截断的 JSON）。存在数据一致性风险。
+./tests/test_extract_score.sh:310:has_subtasks() {
+./tests/test_extract_score.sh:317:    count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+./tests/test_extract_score.sh:321:get_current_subtask() {
+./tests/test_extract_score.sh:328:    jq '.subtasks | map(select(.passes == false)) | .[0]' "$tasks_file" 2>/dev/null
+./tests/test_extract_score.sh:331:get_current_subtask_id() {
+./tests/test_extract_score.sh:332:    local subtask
+./tests/test_extract_score.sh:333:    subtask=$(get_current_subtask)
+./tests/test_extract_score.sh:334:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./tests/test_extract_score.sh:338:    echo "$subtask" | jq -r '.id' 2>/dev/null
+./tests/test_extract_score.sh:341:get_current_subtask_title() {
+./tests/test_extract_score.sh:342:    local subtask
+./tests/test_extract_score.sh:343:    subtask=$(get_current_subtask)
+./tests/test_extract_score.sh:344:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./tests/test_extract_score.sh:348:    echo "$subtask" | jq -r '.title' 2>/dev/null
+./tests/test_extract_score.sh:363:mark_subtask_passed() {
+./tests/test_extract_score.sh:364:    local subtask_id="$1"
+./tests/test_extract_score.sh:375:    if ! jq --arg id "$subtask_id" '(.subtasks[] | select(.id == $id)).passes = true' "$tasks_file" > "$tmp_file"; then
+./tests/test_extract_score.sh:388:all_subtasks_passed() {
+./tests/test_extract_score.sh:395:    unfinished=$(jq '[.subtasks[] | select(.passes == false)] | length' "$tasks_file" 2>/dev/null)
+./tests/test_extract_score.sh:399:get_subtask_progress_summary() {
+./tests/test_extract_score.sh:407:    total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+./tests/test_extract_score.sh:408:    passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+./tests/test_extract_score.sh:409:    current_id=$(get_current_subtask_id)
+./tests/test_extract_score.sh:410:    current_title=$(get_current_subtask_title)
+./tests/test_extract_score.sh:414:get_subtask_section() {
+./tests/test_extract_score.sh:415:    local subtask
+./tests/test_extract_score.sh:416:    subtask=$(get_current_subtask)
+./tests/test_extract_score.sh:417:    if [ -z "$subtask" ] || [ "$subtask" = "null" ]; then
+./tests/test_extract_score.sh:422:    id=$(echo "$subtask" | jq -r '.id')
+./tests/test_extract_score.sh:423:    title=$(echo "$subtask" | jq -r '.title')
+./tests/test_extract_score.sh:424:    desc=$(echo "$subtask" | jq -r '.description')
+./tests/test_extract_score.sh:425:    criteria=$(echo "$subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+./tests/test_extract_score.sh:427:    progress=$(get_subtask_progress_summary)
+./tests/test_extract_score.sh:446:get_subtask_review_section() {
+./tests/test_extract_score.sh:454:    progress=$(get_subtask_progress_summary)
+./tests/test_extract_score.sh:455:    local current_subtask
+./tests/test_extract_score.sh:456:    current_subtask=$(get_current_subtask)
+./tests/test_extract_score.sh:457:    if [ -z "$current_subtask" ] || [ "$current_subtask" = "null" ]; then
+./tests/test_extract_score.sh:468:    id=$(echo "$current_subtask" | jq -r '.id')
+./tests/test_extract_score.sh:469:    title=$(echo "$current_subtask" | jq -r '.title')
+./tests/test_extract_score.sh:470:    desc=$(echo "$current_subtask" | jq -r '.description')
+./tests/test_extract_score.sh:471:    criteria=$(echo "$current_subtask" | jq -r '.acceptanceCriteria[]?' 2>/dev/null)
+./tests/test_extract_score.sh:1011:# --- has_subtasks() when no tasks.json ---
+./tests/test_extract_score.sh:1012:echo "--- has_subtasks() when no file ---"
+./tests/test_extract_score.sh:1014:assert_false "no tasks.json returns false" "has_subtasks"
+./tests/test_extract_score.sh:1020:  "subtasks": [
+./tests/test_extract_score.sh:1049:# --- has_subtasks() with valid file ---
+./tests/test_extract_score.sh:1050:echo "--- has_subtasks() with valid file ---"
+./tests/test_extract_score.sh:1052:assert_true "valid tasks.json returns true" "has_subtasks"
+./tests/test_extract_score.sh:1054:# --- get_current_subtask() ---
+./tests/test_extract_score.sh:1055:echo "--- get_current_subtask() ---"
+./tests/test_extract_score.sh:1057:current=$(get_current_subtask)
+./tests/test_extract_score.sh:1058:assert_true "returns non-null subtask" "[ '$current' != 'null' ]"
+./tests/test_extract_score.sh:1059:assert_true "current subtask has id T-001" "echo '$current' | jq -r '.id' | grep -q 'T-001'"
+./tests/test_extract_score.sh:1061:# --- get_current_subtask_id() ---
+./tests/test_extract_score.sh:1062:echo "--- get_current_subtask_id() ---"
+./tests/test_extract_score.sh:1064:assert_eq "current subtask id is T-001" "T-001" "$(get_current_subtask_id)"
+./tests/test_extract_score.sh:1066:# --- get_current_subtask_title() ---
+./tests/test_extract_score.sh:1067:echo "--- get_current_subtask_title() ---"
+./tests/test_extract_score.sh:1069:current_title=$(get_current_subtask_title)
+./tests/test_extract_score.sh:1070:assert_true "current subtask title contains 解析函数" "echo '$current_title' | grep -q '解析函数'"
+./tests/test_extract_score.sh:1072:# --- mark_subtask_passed() ---
+./tests/test_extract_score.sh:1073:echo "--- mark_subtask_passed() ---"
+./tests/test_extract_score.sh:1075:mark_subtask_passed "T-001"
+./tests/test_extract_score.sh:1078:assert_eq "after T-001 passes, current is T-002" "T-002" "$(get_current_subtask_id)"
+./tests/test_extract_score.sh:1081:t001_passes=$(jq -r '.subtasks[0].passes' "$WORK_DIR/tasks.json")
+./tests/test_extract_score.sh:1084:# --- get_subtask_progress_summary() ---
+./tests/test_extract_score.sh:1085:echo "--- get_subtask_progress_summary() ---"
+./tests/test_extract_score.sh:1087:progress_summary=$(get_subtask_progress_summary)
+./tests/test_extract_score.sh:1091:# --- all_subtasks_passed() ---
+./tests/test_extract_score.sh:1092:echo "--- all_subtasks_passed() ---"
+./tests/test_extract_score.sh:1094:assert_false "not all subtasks passed" "all_subtasks_passed"
+./tests/test_extract_score.sh:1096:# Mark remaining subtasks as passed
+./tests/test_extract_score.sh:1097:mark_subtask_passed "T-002"
+./tests/test_extract_score.sh:1098:mark_subtask_passed "T-003"
+./tests/test_extract_score.sh:1100:assert_true "all subtasks passed" "all_subtasks_passed"
+./tests/test_extract_score.sh:1101:assert_eq "current subtask id is empty" "" "$(get_current_subtask_id)"
+./tests/test_extract_score.sh:1103:# --- get_subtask_section() ---
+./tests/test_extract_score.sh:1104:echo "--- get_subtask_section() ---"
+./tests/test_extract_score.sh:1110:  "subtasks": [
+./tests/test_extract_score.sh:1123:section=$(get_subtask_section)
+./tests/test_extract_score.sh:1129:# --- get_subtask_review_section() ---
+./tests/test_extract_score.sh:1130:echo "--- get_subtask_review_section() ---"
+./tests/test_extract_score.sh:1132:review_section=$(get_subtask_review_section)
+./tests/test_extract_score.sh:1140:# Test with empty tasks.json (no subtasks)
+./tests/test_extract_score.sh:1144:  "subtasks": []
+./tests/test_extract_score.sh:1148:assert_false "empty subtasks array returns false" "has_subtasks"
+./tests/test_extract_score.sh:1149:assert_eq "empty subtasks current id is empty" "" "$(get_current_subtask_id)"
+./tests/test_extract_score.sh:1155:  "subtasks": [
+./tests/test_extract_score.sh:1168:assert_true "all passed returns true for all_subtasks_passed" "all_subtasks_passed"
+./tests/test_extract_score.sh:1169:assert_eq "all passed current id is empty" "" "$(get_current_subtask_id)"
+./tests/test_extract_score.sh:1173:assert_true "no tasks.json: all_subtasks_passed returns true (backward compat)" "all_subtasks_passed"
+./tests/test_extract_score.sh:1174:assert_eq "no tasks.json: get_subtask_section returns empty" "" "$(get_subtask_section)"
+./tests/test_extract_score.sh:1181:{"issueNumber": 42, "subtasks": []}
+./tests/test_extract_score.sh:1197:# --- mark_subtask_passed() atomic write ---
+./tests/test_extract_score.sh:1198:echo "--- mark_subtask_passed() atomic write ---"
+./tests/test_extract_score.sh:1204:  "subtasks": [
+./tests/test_extract_score.sh:1211:mark_subtask_passed "T-001"
+./tests/test_extract_score.sh:1212:assert_eq "T-001 marked as passed" "true" "$(jq -r '.subtasks[0].passes' "$WORK_DIR/tasks.json")"
+./tests/test_extract_score.sh:1213:assert_eq "T-002 still false" "false" "$(jq -r '.subtasks[1].passes' "$WORK_DIR/tasks.json")"
+./tests/test_extract_score.sh:1219:# Test mark_subtask_passed with non-existent ID still succeeds (jq produces valid JSON)
+./tests/test_extract_score.sh:1221:{ "issueNumber": 42, "subtasks": [{ "id": "T-001", "title": "t", "description": "d", "acceptanceCriteria": [], "priority": 1, "passes": false }] }
+./tests/test_extract_score.sh:1224:mark_subtask_passed "T-999" || result=$?
+./tests/test_extract_score.sh:1226:assert_eq "file still valid JSON after non-existent id mark" "T-001" "$(jq -r '.subtasks[0].id' "$WORK_DIR/tasks.json")"
+
+codex
+我已经定位到前端与后端两侧的相关实现，接下来直接读 `IterationProgressPanel`、`iterationStore`、接入点和测试，按验收条件逐项核对。
+exec
+/bin/zsh -lc "sed -n '1,260p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '1,280p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import { create } from 'zustand';
+
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// ── Types matching Rust backend (snake_case serialization) ──
+
+export type Phase = 'Planning' | 'Implementation' | 'Review' | 'BuildLintTest' | 'Idle';
+
+export interface SubtaskInfo {
+  id: string;
+  title: string;
+  passes: boolean;
+}
+
+export interface IterationProgress {
+  current_iteration: number;
+  total_iterations: number;
+  phase: Phase;
+  subtasks: SubtaskInfo[];
+  passed_count: number;
+  total_count: number;
+}
+
+// ── Dependency injection (matches runStore pattern) ──
+
+interface IterationStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
+
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
+
+function createIterationStoreDeps(
+  overrides: Partial<IterationStoreDeps> = {},
+): IterationStoreDeps {
+  return {
+    isTauri,
+    invoke: tauriInvoke,
+    ...overrides,
+  };
+}
+
+// ── Default idle state ──
+
+const IDLE_PROGRESS: IterationProgress = {
+  current_iteration: 0,
+  total_iterations: 0,
+  phase: 'Idle',
+  subtasks: [],
+  passed_count: 0,
+  total_count: 0,
+};
+
+export const POLL_INTERVAL_MS = 2000;
+
+// ── Store ──
+
+export interface IterationState {
+  progress: IterationProgress;
+  isLoading: boolean;
+  error: string | null;
+  /** Fetch progress once from the backend. */
+  fetchProgress: (projectPath: string, issueNumber: number) => Promise<void>;
+  /** Reset to idle state. */
+  reset: () => void;
+}
+
+export function createIterationStore(overrides: Partial<IterationStoreDeps> = {}) {
+  const deps = createIterationStoreDeps(overrides);
+
+  return create<IterationState>((set) => ({
+    progress: IDLE_PROGRESS,
+    isLoading: false,
+    error: null,
+
+    fetchProgress: async (projectPath: string, issueNumber: number) => {
+      if (!deps.isTauri) {
+        return;
+      }
+
+      set({ isLoading: true });
+
+      try {
+        const data = await deps.invoke<IterationProgress>(
+          'get_iteration_progress',
+          { projectPath, issueNumber },
+        );
+        set({ progress: data, isLoading: false, error: null });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set({ isLoading: false, error: message });
+      }
+    },
+
+    reset: () => {
+      set({ progress: IDLE_PROGRESS, isLoading: false, error: null });
+    },
+  }));
+}
+
+export const useIterationStore = createIterationStore();
+
+ succeeded in 0ms:
+import { useEffect, useRef, type JSX } from 'react';
+import {
+  type Phase,
+  type SubtaskInfo,
+  POLL_INTERVAL_MS,
+  useIterationStore,
+} from '../stores/iterationStore';
+
+interface IterationProgressPanelProps {
+  issueNumber: number;
+  projectPath: string | null;
+  isRunning: boolean;
+}
+
+// ── Phase pipeline ──
+
+const PHASE_STEPS: { key: Phase; label: string }[] = [
+  { key: 'Planning', label: 'Planning' },
+  { key: 'Implementation', label: 'Implementation' },
+  { key: 'Review', label: 'Review' },
+  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+];
+
+function phaseIndex(phase: Phase): number {
+  const idx = PHASE_STEPS.findIndex((s) => s.key === phase);
+  return idx === -1 ? -1 : idx;
+}
+
+function PhaseSteps({ currentPhase }: { currentPhase: Phase }): JSX.Element {
+  const activeIdx = phaseIndex(currentPhase);
+
+  return (
+    <div className="flex items-center gap-1">
+      {PHASE_STEPS.map((step, idx) => {
+        const isActive = idx === activeIdx;
+        const isPast = activeIdx > idx;
+
+        let pillClass =
+          'rounded-full px-2.5 py-1 text-xs font-medium transition-colors';
+        if (isActive) {
+          pillClass += ' bg-blue-600 text-white';
+        } else if (isPast) {
+          pillClass += ' bg-blue-100 text-blue-700';
+        } else {
+          pillClass += ' bg-gray-100 text-gray-400';
+        }
+
+        return (
+          <span key={step.key}>
+            {idx > 0 && (
+              <span
+                className={`mx-1 inline-block text-xs ${
+                  isPast || isActive ? 'text-blue-400' : 'text-gray-300'
+                }`}
+              >
+                →
+              </span>
+            )}
+            <span className={pillClass}>{step.label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Subtask status badge ──
+
+function subtaskStatusLabel(passes: boolean, isIdle: boolean): string {
+  if (isIdle) return 'pending';
+  return passes ? 'passing' : 'failing';
+}
+
+function subtaskBadgeClass(passes: boolean, isIdle: boolean): string {
+  if (isIdle) {
+    return 'border-gray-200 bg-gray-100 text-gray-500';
+  }
+  return passes
+    ? 'border-green-200 bg-green-50 text-green-700'
+    : 'border-red-200 bg-red-50 text-red-700';
+}
+
+function SubtaskList({
+  subtasks,
+  isIdle,
+}: {
+  subtasks: SubtaskInfo[];
+  isIdle: boolean;
+}): JSX.Element {
+  if (subtasks.length === 0) {
+    return (
+      <p className="text-xs text-gray-400">暂无 subtask 信息。</p>
+    );
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {subtasks.map((st) => {
+        const status = subtaskStatusLabel(st.passes, isIdle);
+        const badge = subtaskBadgeClass(st.passes, isIdle);
+        return (
+          <li
+            key={st.id}
+            className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2 text-sm"
+          >
+            <span className="min-w-0 truncate text-gray-700">
+              <span className="mr-1.5 font-mono text-xs text-gray-400">{st.id}</span>
+              {st.title}
+            </span>
+            <span
+              className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${badge}`}
+            >
+              {status}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// ── Progress bar ──
+
+function ProgressBar({
+  passed,
+  total,
+}: {
+  passed: number;
+  total: number;
+}): JSX.Element {
+  const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="font-medium text-gray-600">
+          {passed}/{total} subtasks passed
+        </span>
+        <span className="text-gray-400">{pct}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+        <div
+          className="h-full rounded-full bg-blue-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ──
+
+export default function IterationProgressPanel({
+  issueNumber,
+  projectPath,
+  isRunning,
+}: IterationProgressPanelProps): JSX.Element {
+  const { progress, error, fetchProgress, reset } = useIterationStore();
+  const timerRef = useRef<number | null>(null);
+
+  // Polling: fetch immediately + every POLL_INTERVAL_MS while running
+  useEffect(() => {
+    if (!projectPath) {
+      reset();
+      return;
+    }
+
+    void fetchProgress(projectPath, issueNumber);
+
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+    }
+
+    if (isRunning) {
+      timerRef.current = window.setInterval(() => {
+        void fetchProgress(projectPath, issueNumber);
+      }, POLL_INTERVAL_MS);
+    }
+
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [projectPath, issueNumber, isRunning, fetchProgress, reset]);
+
+  const isIdle = progress.phase === 'Idle';
+
+  // Idle / no data state
+  if (isIdle && progress.current_iteration === 0) {
+    return (
+      <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-center text-sm text-gray-400">
+        暂无迭代进度 — 启动运行后将自动展示。
+        {error && (
+          <p className="mt-2 text-xs text-red-400">{error}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-4 rounded-xl border border-gray-200 bg-white p-4">
+      {/* Iteration number */}
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-gray-700">迭代进度</h4>
+        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-mono font-medium text-gray-700">
+          {progress.current_iteration} / {progress.total_iterations}
+        </span>
+      </div>
+
+      {/* Phase steps */}
+      <PhaseSteps currentPhase={progress.phase} />
+
+      {/* Subtask progress bar */}
+      <ProgressBar passed={progress.passed_count} total={progress.total_count} />
+
+      {/* Subtask list */}
+      <SubtaskList subtasks={progress.subtasks} isIdle={isIdle} />
+
+      {error && (
+        <p className="text-xs text-red-500">{error}</p>
+      )}
+    </div>
+  );
+}
+
+exec
+/bin/zsh -lc "sed -n '1,220p' /Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "sed -n '300,420p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createIterationStore } from '../src/stores/iterationStore.ts';
+
+function createInvokeMock(handlers) {
+  return async (cmd, args) => {
+    const handler = handlers[cmd];
+    if (!handler) {
+      throw new Error(`Unhandled command: ${cmd}`);
+    }
+    return handler(args);
+  };
+}
+
+const SAMPLE_PROGRESS = {
+  current_iteration: 3,
+  total_iterations: 16,
+  phase: 'Review',
+  subtasks: [
+    { id: 'T-001', title: 'Backend data model', passes: true },
+    { id: 'T-002', title: 'File watcher', passes: true },
+    { id: 'T-003', title: 'Frontend UI', passes: false },
+  ],
+  passed_count: 2,
+  total_count: 3,
+};
+
+test('fetchProgress stores iteration data from backend', async () => {
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => SAMPLE_PROGRESS,
+    }),
+  });
+
+  await store.getState().fetchProgress('/tmp/project', 31);
+
+  const state = store.getState();
+  assert.equal(state.progress.current_iteration, 3);
+  assert.equal(state.progress.total_iterations, 16);
+  assert.equal(state.progress.phase, 'Review');
+  assert.equal(state.progress.subtasks.length, 3);
+  assert.equal(state.progress.passed_count, 2);
+  assert.equal(state.progress.total_count, 3);
+  assert.equal(state.isLoading, false);
+  assert.equal(state.error, null);
+});
+
+test('fetchProgress sets error on backend failure', async () => {
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => {
+        throw new Error('Workflow dir not found');
+      },
+    }),
+  });
+
+  await store.getState().fetchProgress('/tmp/project', 99);
+
+  const state = store.getState();
+  assert.equal(state.error, 'Workflow dir not found');
+  assert.equal(state.isLoading, false);
+  // progress should remain at idle defaults
+  assert.equal(state.progress.current_iteration, 0);
+  assert.equal(state.progress.phase, 'Idle');
+});
+
+test('fetchProgress is a no-op when isTauri is false', async () => {
+  const invoked = [];
+  const store = createIterationStore({
+    isTauri: false,
+    invoke: async (cmd) => {
+      invoked.push(cmd);
+      return {};
+    },
+  });
+
+  await store.getState().fetchProgress('/tmp/project', 31);
+
+  assert.equal(invoked.length, 0);
+  assert.equal(store.getState().progress.phase, 'Idle');
+});
+
+test('reset restores idle state after data was loaded', async () => {
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      get_iteration_progress: () => SAMPLE_PROGRESS,
+    }),
+  });
+
+  await store.getState().fetchProgress('/tmp/project', 31);
+  assert.equal(store.getState().progress.current_iteration, 3);
+
+  store.getState().reset();
+
+  const state = store.getState();
+  assert.equal(state.progress.current_iteration, 0);
+  assert.equal(state.progress.phase, 'Idle');
+  assert.equal(state.progress.subtasks.length, 0);
+  assert.equal(state.isLoading, false);
+  assert.equal(state.error, null);
+});
+
+test('fetchProgress passes correct args to invoke', async () => {
+  let receivedArgs = null;
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: async (cmd, args) => {
+      if (cmd === 'get_iteration_progress') {
+        receivedArgs = args;
+        return SAMPLE_PROGRESS;
+      }
+      throw new Error(`Unhandled: ${cmd}`);
+    },
+  });
+
+  await store.getState().fetchProgress('/my/project', 42);
+
+  assert.deepEqual(receivedArgs, {
+    projectPath: '/my/project',
+    issueNumber: 42,
+  });
+});
+
+test('fetchProgress handles non-Error thrown values', async () => {
+  const store = createIterationStore({
+    isTauri: true,
+    invoke: async () => {
+      throw 'raw string error';
+    },
+  });
+
+  await store.getState().fetchProgress('/tmp/project', 1);
+
+  assert.equal(store.getState().error, 'raw string error');
+});
+
+ succeeded in 0ms:
+                    );
+                  }
+                }}
+                disabled={!canStart}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                <PlayIcon className="h-4 w-4" />
+                启动
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearRunError();
+                  void stopRun();
+                }}
+                disabled={!canStop}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <StopIcon className="h-4 w-4" />
+                停止
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <RunConfigPanel
+              defaultConfig={{
+                maxIterations: DEFAULT_MAX_ITERATIONS,
+                passingScore: DEFAULT_PASSING_SCORE,
+                continueMode: DEFAULT_CONTINUE_MODE,
+              }}
+            />
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <AgentSelector />
+            </div>
+          </div>
+
+          {!isSupported && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+            </div>
+          )}
+
+          {isSupported && !isCurrentIssueRunning && isRunActive && activeIssueNumber !== null && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              当前正在运行 Issue #{activeIssueNumber}，一次只能处理一个任务。
+            </div>
+          )}
+
+          {runError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {runError}
+            </div>
+          )}
+
+          <IterationProgressPanel
+            issueNumber={issue.number}
+            projectPath={projectPath}
+            isRunning={isCurrentIssueRunning}
+          />
+
+          <LogViewer issueNumber={issue.number} projectPath={projectPath} />
+        </section>
+
+        {isLoading ? (
+          <DetailSkeleton />
+        ) : error ? (
+          <ErrorState message={error} onRetry={onRetry} />
+        ) : (
+          <>
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  描述
+                </h3>
+              </div>
+              {detail?.body.trim() ? (
+                <ReactMarkdown className="markdown-body">
+                  {detail.body}
+                </ReactMarkdown>
+              ) : (
+                <EmptyContentState title="该 Issue 暂无描述。" />
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <CommentIcon className="h-4 w-4 text-gray-400" />
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  评论
+                </h3>
+                <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">
+                  {detail?.comments.length ?? 0}
+                </span>
+              </div>
+
+              {detail && detail.comments.length > 0 ? (
+                <div className="space-y-4">
+                  {detail.comments.map((comment) => (
+                    <article
+                      key={comment.id}
+                      className="rounded-2xl border border-gray-200 bg-white p-4"
+                    >
+                      <div className="mb-4 flex items-center gap-3">
+                        <img
+                          src={avatarUrl(comment.author.login)}
+                          alt={`${comment.author.login} avatar`}
+                          className="h-10 w-10 rounded-full border border-gray-200 bg-gray-100 object-cover"
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">
+                            {comment.author.login}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatDateTime(comment.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <ReactMarkdown className="markdown-body markdown-comment">
+                        {comment.body}
+                      </ReactMarkdown>
+
+codex
+目前实现里已经有 UI 组件和 store，不是“未实现”。现在要确认的是它是否真的满足验收，尤其是事件实时更新、subtask 状态语义和测试覆盖。
+exec
+/bin/zsh -lc "rg -n \"listen\\(|event\\.listen|iteration-progress|emit\\(|app_handle\\.emit|window\\.emit\" /Users/chaoyuepan/ai/autoresearch/desktop_app/src /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:935:            let _ = app_clone.emit("run-exit", &exit_event);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:945:                let _ = app_clone.emit("run-output", &line);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:956:                let _ = app_clone.emit("run-output", &line);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs:992:            let _ = app.emit("run-exit", &exit_event);
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md:163:- 后端不推送 `iteration-progress` 事件（T-002 缺失），前端使用轮询降级方案
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/runStore.ts:111:  return listen(event, callback);
+
+exec
+/bin/zsh -lc "sed -n '140,230p' /Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cat /Users/chaoyuepan/ai/autoresearch/desktop_app/package.json' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+{
+  "name": "desktop_app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.6.0",
+    "recharts": "^2.15.3",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@tailwindcss/vite": "^4.1.4",
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "playwright": "^1.59.1",
+    "tailwindcss": "^4.1.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^7.0.4"
+  }
+}
+
+ succeeded in 0ms:
+- `loadSources` / `refreshSelectedSource` 这类异步动作在切换 Issue 时需要请求隔离（例如 request key / issue number guard），否则旧 Issue 的迟到响应会污染新 Issue 的 `sources` 或 `sourceContents`
+
+### 搜索高亮
+
+- 搜索关键词高亮通过 `HighlightedText` 组件实现，使用 `<mark>` 标签包裹匹配文本
+- `escapeRegExp` 用于安全转义用户输入中的正则特殊字符
+- 搜索过滤（filter）和搜索高亮（highlight）是两个独立功能，不要混淆
+
+### React Key
+
+- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+
+## IterationProgressPanel 约定
+
+### 数据来源
+
+- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+- 前端 TypeScript 接口必须匹配 snake_case 字段名（不是 camelCase）
+- 后端 `Phase` 枚举值为：`Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
+
+### 更新策略
+
+- 后端不推送 `iteration-progress` 事件（T-002 缺失），前端使用轮询降级方案
+- 运行中每 2s 调用 `invoke('get_iteration_progress')`，类似 `LogViewer` 的 `setInterval` 模式
+- 非运行状态只在挂载时拉取一次，不轮询
+- 使用 `useRef<number | null>` 存储 interval ID，`useEffect` cleanup 中清除
+
+### Store 模式
+
+- 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+- 测试使用 `createIterationStore({ isTauri: true, invoke: mockFn })` 隔离
+- `isTauri: false` 时 `fetchProgress` 为 no-op，确保浏览器模式不报错
+
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts | sed -n '1,220p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs | sed -n '1,220p'" in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx | sed -n '1,260p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import { create } from 'zustand';
+     2	
+     3	const isTauri =
+     4	  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+     5	
+     6	// ── Types matching Rust backend (snake_case serialization) ──
+     7	
+     8	export type Phase = 'Planning' | 'Implementation' | 'Review' | 'BuildLintTest' | 'Idle';
+     9	
+    10	export interface SubtaskInfo {
+    11	  id: string;
+    12	  title: string;
+    13	  passes: boolean;
+    14	}
+    15	
+    16	export interface IterationProgress {
+    17	  current_iteration: number;
+    18	  total_iterations: number;
+    19	  phase: Phase;
+    20	  subtasks: SubtaskInfo[];
+    21	  passed_count: number;
+    22	  total_count: number;
+    23	}
+    24	
+    25	// ── Dependency injection (matches runStore pattern) ──
+    26	
+    27	interface IterationStoreDeps {
+    28	  isTauri: boolean;
+    29	  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+    30	}
+    31	
+    32	async function tauriInvoke<T>(
+    33	  cmd: string,
+    34	  args?: Record<string, unknown>,
+    35	): Promise<T> {
+    36	  const { invoke } = await import('@tauri-apps/api/core');
+    37	  return invoke<T>(cmd, args);
+    38	}
+    39	
+    40	function createIterationStoreDeps(
+    41	  overrides: Partial<IterationStoreDeps> = {},
+    42	): IterationStoreDeps {
+    43	  return {
+    44	    isTauri,
+    45	    invoke: tauriInvoke,
+    46	    ...overrides,
+    47	  };
+    48	}
+    49	
+    50	// ── Default idle state ──
+    51	
+    52	const IDLE_PROGRESS: IterationProgress = {
+    53	  current_iteration: 0,
+    54	  total_iterations: 0,
+    55	  phase: 'Idle',
+    56	  subtasks: [],
+    57	  passed_count: 0,
+    58	  total_count: 0,
+    59	};
+    60	
+    61	export const POLL_INTERVAL_MS = 2000;
+    62	
+    63	// ── Store ──
+    64	
+    65	export interface IterationState {
+    66	  progress: IterationProgress;
+    67	  isLoading: boolean;
+    68	  error: string | null;
+    69	  /** Fetch progress once from the backend. */
+    70	  fetchProgress: (projectPath: string, issueNumber: number) => Promise<void>;
+    71	  /** Reset to idle state. */
+    72	  reset: () => void;
+    73	}
+    74	
+    75	export function createIterationStore(overrides: Partial<IterationStoreDeps> = {}) {
+    76	  const deps = createIterationStoreDeps(overrides);
+    77	
+    78	  return create<IterationState>((set) => ({
+    79	    progress: IDLE_PROGRESS,
+    80	    isLoading: false,
+    81	    error: null,
+    82	
+    83	    fetchProgress: async (projectPath: string, issueNumber: number) => {
+    84	      if (!deps.isTauri) {
+    85	        return;
+    86	      }
+    87	
+    88	      set({ isLoading: true });
+    89	
+    90	      try {
+    91	        const data = await deps.invoke<IterationProgress>(
+    92	          'get_iteration_progress',
+    93	          { projectPath, issueNumber },
+    94	        );
+    95	        set({ progress: data, isLoading: false, error: null });
+    96	      } catch (err) {
+    97	        const message = err instanceof Error ? err.message : String(err);
+    98	        set({ isLoading: false, error: message });
+    99	      }
+   100	    },
+   101	
+   102	    reset: () => {
+   103	      set({ progress: IDLE_PROGRESS, isLoading: false, error: null });
+   104	    },
+   105	  }));
+   106	}
+   107	
+   108	export const useIterationStore = createIterationStore();
+
+ succeeded in 0ms:
+     1	import test from 'node:test';
+     2	import assert from 'node:assert/strict';
+     3	import { createIterationStore } from '../src/stores/iterationStore.ts';
+     4	
+     5	function createInvokeMock(handlers) {
+     6	  return async (cmd, args) => {
+     7	    const handler = handlers[cmd];
+     8	    if (!handler) {
+     9	      throw new Error(`Unhandled command: ${cmd}`);
+    10	    }
+    11	    return handler(args);
+    12	  };
+    13	}
+    14	
+    15	const SAMPLE_PROGRESS = {
+    16	  current_iteration: 3,
+    17	  total_iterations: 16,
+    18	  phase: 'Review',
+    19	  subtasks: [
+    20	    { id: 'T-001', title: 'Backend data model', passes: true },
+    21	    { id: 'T-002', title: 'File watcher', passes: true },
+    22	    { id: 'T-003', title: 'Frontend UI', passes: false },
+    23	  ],
+    24	  passed_count: 2,
+    25	  total_count: 3,
+    26	};
+    27	
+    28	test('fetchProgress stores iteration data from backend', async () => {
+    29	  const store = createIterationStore({
+    30	    isTauri: true,
+    31	    invoke: createInvokeMock({
+    32	      get_iteration_progress: () => SAMPLE_PROGRESS,
+    33	    }),
+    34	  });
+    35	
+    36	  await store.getState().fetchProgress('/tmp/project', 31);
+    37	
+    38	  const state = store.getState();
+    39	  assert.equal(state.progress.current_iteration, 3);
+    40	  assert.equal(state.progress.total_iterations, 16);
+    41	  assert.equal(state.progress.phase, 'Review');
+    42	  assert.equal(state.progress.subtasks.length, 3);
+    43	  assert.equal(state.progress.passed_count, 2);
+    44	  assert.equal(state.progress.total_count, 3);
+    45	  assert.equal(state.isLoading, false);
+    46	  assert.equal(state.error, null);
+    47	});
+    48	
+    49	test('fetchProgress sets error on backend failure', async () => {
+    50	  const store = createIterationStore({
+    51	    isTauri: true,
+    52	    invoke: createInvokeMock({
+    53	      get_iteration_progress: () => {
+    54	        throw new Error('Workflow dir not found');
+    55	      },
+    56	    }),
+    57	  });
+    58	
+    59	  await store.getState().fetchProgress('/tmp/project', 99);
+    60	
+    61	  const state = store.getState();
+    62	  assert.equal(state.error, 'Workflow dir not found');
+    63	  assert.equal(state.isLoading, false);
+    64	  // progress should remain at idle defaults
+    65	  assert.equal(state.progress.current_iteration, 0);
+    66	  assert.equal(state.progress.phase, 'Idle');
+    67	});
+    68	
+    69	test('fetchProgress is a no-op when isTauri is false', async () => {
+    70	  const invoked = [];
+    71	  const store = createIterationStore({
+    72	    isTauri: false,
+    73	    invoke: async (cmd) => {
+    74	      invoked.push(cmd);
+    75	      return {};
+    76	    },
+    77	  });
+    78	
+    79	  await store.getState().fetchProgress('/tmp/project', 31);
+    80	
+    81	  assert.equal(invoked.length, 0);
+    82	  assert.equal(store.getState().progress.phase, 'Idle');
+    83	});
+    84	
+    85	test('reset restores idle state after data was loaded', async () => {
+    86	  const store = createIterationStore({
+    87	    isTauri: true,
+    88	    invoke: createInvokeMock({
+    89	      get_iteration_progress: () => SAMPLE_PROGRESS,
+    90	    }),
+    91	  });
+    92	
+    93	  await store.getState().fetchProgress('/tmp/project', 31);
+    94	  assert.equal(store.getState().progress.current_iteration, 3);
+    95	
+    96	  store.getState().reset();
+    97	
+    98	  const state = store.getState();
+    99	  assert.equal(state.progress.current_iteration, 0);
+   100	  assert.equal(state.progress.phase, 'Idle');
+   101	  assert.equal(state.progress.subtasks.length, 0);
+   102	  assert.equal(state.isLoading, false);
+   103	  assert.equal(state.error, null);
+   104	});
+   105	
+   106	test('fetchProgress passes correct args to invoke', async () => {
+   107	  let receivedArgs = null;
+   108	  const store = createIterationStore({
+   109	    isTauri: true,
+   110	    invoke: async (cmd, args) => {
+   111	      if (cmd === 'get_iteration_progress') {
+   112	        receivedArgs = args;
+   113	        return SAMPLE_PROGRESS;
+   114	      }
+   115	      throw new Error(`Unhandled: ${cmd}`);
+   116	    },
+   117	  });
+   118	
+   119	  await store.getState().fetchProgress('/my/project', 42);
+   120	
+   121	  assert.deepEqual(receivedArgs, {
+   122	    projectPath: '/my/project',
+   123	    issueNumber: 42,
+   124	  });
+   125	});
+   126	
+   127	test('fetchProgress handles non-Error thrown values', async () => {
+   128	  const store = createIterationStore({
+   129	    isTauri: true,
+   130	    invoke: async () => {
+   131	      throw 'raw string error';
+   132	    },
+   133	  });
+   134	
+   135	  await store.getState().fetchProgress('/tmp/project', 1);
+   136	
+   137	  assert.equal(store.getState().error, 'raw string error');
+   138	});
+
+ succeeded in 0ms:
+     1	import { useEffect, useRef, type JSX } from 'react';
+     2	import {
+     3	  type Phase,
+     4	  type SubtaskInfo,
+     5	  POLL_INTERVAL_MS,
+     6	  useIterationStore,
+     7	} from '../stores/iterationStore';
+     8	
+     9	interface IterationProgressPanelProps {
+    10	  issueNumber: number;
+    11	  projectPath: string | null;
+    12	  isRunning: boolean;
+    13	}
+    14	
+    15	// ── Phase pipeline ──
+    16	
+    17	const PHASE_STEPS: { key: Phase; label: string }[] = [
+    18	  { key: 'Planning', label: 'Planning' },
+    19	  { key: 'Implementation', label: 'Implementation' },
+    20	  { key: 'Review', label: 'Review' },
+    21	  { key: 'BuildLintTest', label: 'Build·Lint·Test' },
+    22	];
+    23	
+    24	function phaseIndex(phase: Phase): number {
+    25	  const idx = PHASE_STEPS.findIndex((s) => s.key === phase);
+    26	  return idx === -1 ? -1 : idx;
+    27	}
+    28	
+    29	function PhaseSteps({ currentPhase }: { currentPhase: Phase }): JSX.Element {
+    30	  const activeIdx = phaseIndex(currentPhase);
+    31	
+    32	  return (
+    33	    <div className="flex items-center gap-1">
+    34	      {PHASE_STEPS.map((step, idx) => {
+    35	        const isActive = idx === activeIdx;
+    36	        const isPast = activeIdx > idx;
+    37	
+    38	        let pillClass =
+    39	          'rounded-full px-2.5 py-1 text-xs font-medium transition-colors';
+    40	        if (isActive) {
+    41	          pillClass += ' bg-blue-600 text-white';
+    42	        } else if (isPast) {
+    43	          pillClass += ' bg-blue-100 text-blue-700';
+    44	        } else {
+    45	          pillClass += ' bg-gray-100 text-gray-400';
+    46	        }
+    47	
+    48	        return (
+    49	          <span key={step.key}>
+    50	            {idx > 0 && (
+    51	              <span
+    52	                className={`mx-1 inline-block text-xs ${
+    53	                  isPast || isActive ? 'text-blue-400' : 'text-gray-300'
+    54	                }`}
+    55	              >
+    56	                →
+    57	              </span>
+    58	            )}
+    59	            <span className={pillClass}>{step.label}</span>
+    60	          </span>
+    61	        );
+    62	      })}
+    63	    </div>
+    64	  );
+    65	}
+    66	
+    67	// ── Subtask status badge ──
+    68	
+    69	function subtaskStatusLabel(passes: boolean, isIdle: boolean): string {
+    70	  if (isIdle) return 'pending';
+    71	  return passes ? 'passing' : 'failing';
+    72	}
+    73	
+    74	function subtaskBadgeClass(passes: boolean, isIdle: boolean): string {
+    75	  if (isIdle) {
+    76	    return 'border-gray-200 bg-gray-100 text-gray-500';
+    77	  }
+    78	  return passes
+    79	    ? 'border-green-200 bg-green-50 text-green-700'
+    80	    : 'border-red-200 bg-red-50 text-red-700';
+    81	}
+    82	
+    83	function SubtaskList({
+    84	  subtasks,
+    85	  isIdle,
+    86	}: {
+    87	  subtasks: SubtaskInfo[];
+    88	  isIdle: boolean;
+    89	}): JSX.Element {
+    90	  if (subtasks.length === 0) {
+    91	    return (
+    92	      <p className="text-xs text-gray-400">暂无 subtask 信息。</p>
+    93	    );
+    94	  }
+    95	
+    96	  return (
+    97	    <ul className="space-y-1.5">
+    98	      {subtasks.map((st) => {
+    99	        const status = subtaskStatusLabel(st.passes, isIdle);
+   100	        const badge = subtaskBadgeClass(st.passes, isIdle);
+   101	        return (
+   102	          <li
+   103	            key={st.id}
+   104	            className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2 text-sm"
+   105	          >
+   106	            <span className="min-w-0 truncate text-gray-700">
+   107	              <span className="mr-1.5 font-mono text-xs text-gray-400">{st.id}</span>
+   108	              {st.title}
+   109	            </span>
+   110	            <span
+   111	              className={`ml-2 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${badge}`}
+   112	            >
+   113	              {status}
+   114	            </span>
+   115	          </li>
+   116	        );
+   117	      })}
+   118	    </ul>
+   119	  );
+   120	}
+   121	
+   122	// ── Progress bar ──
+   123	
+   124	function ProgressBar({
+   125	  passed,
+   126	  total,
+   127	}: {
+   128	  passed: number;
+   129	  total: number;
+   130	}): JSX.Element {
+   131	  const pct = total > 0 ? Math.round((passed / total) * 100) : 0;
+   132	
+   133	  return (
+   134	    <div>
+   135	      <div className="mb-1 flex items-center justify-between text-xs">
+   136	        <span className="font-medium text-gray-600">
+   137	          {passed}/{total} subtasks passed
+   138	        </span>
+   139	        <span className="text-gray-400">{pct}%</span>
+   140	      </div>
+   141	      <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+   142	        <div
+   143	          className="h-full rounded-full bg-blue-500 transition-all"
+   144	          style={{ width: `${pct}%` }}
+   145	        />
+   146	      </div>
+   147	    </div>
+   148	  );
+   149	}
+   150	
+   151	// ── Main component ──
+   152	
+   153	export default function IterationProgressPanel({
+   154	  issueNumber,
+   155	  projectPath,
+   156	  isRunning,
+   157	}: IterationProgressPanelProps): JSX.Element {
+   158	  const { progress, error, fetchProgress, reset } = useIterationStore();
+   159	  const timerRef = useRef<number | null>(null);
+   160	
+   161	  // Polling: fetch immediately + every POLL_INTERVAL_MS while running
+   162	  useEffect(() => {
+   163	    if (!projectPath) {
+   164	      reset();
+   165	      return;
+   166	    }
+   167	
+   168	    void fetchProgress(projectPath, issueNumber);
+   169	
+   170	    if (timerRef.current !== null) {
+   171	      window.clearInterval(timerRef.current);
+   172	    }
+   173	
+   174	    if (isRunning) {
+   175	      timerRef.current = window.setInterval(() => {
+   176	        void fetchProgress(projectPath, issueNumber);
+   177	      }, POLL_INTERVAL_MS);
+   178	    }
+   179	
+   180	    return () => {
+   181	      if (timerRef.current !== null) {
+   182	        window.clearInterval(timerRef.current);
+   183	        timerRef.current = null;
+   184	      }
+   185	    };
+   186	  }, [projectPath, issueNumber, isRunning, fetchProgress, reset]);
+   187	
+   188	  const isIdle = progress.phase === 'Idle';
+   189	
+   190	  // Idle / no data state
+   191	  if (isIdle && progress.current_iteration === 0) {
+   192	    return (
+   193	      <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-center text-sm text-gray-400">
+   194	        暂无迭代进度 — 启动运行后将自动展示。
+   195	        {error && (
+   196	          <p className="mt-2 text-xs text-red-400">{error}</p>
+   197	        )}
+   198	      </div>
+   199	    );
+   200	  }
+   201	
+   202	  return (
+   203	    <div className="mt-4 space-y-4 rounded-xl border border-gray-200 bg-white p-4">
+   204	      {/* Iteration number */}
+   205	      <div className="flex items-center justify-between">
+   206	        <h4 className="text-sm font-semibold text-gray-700">迭代进度</h4>
+   207	        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-mono font-medium text-gray-700">
+   208	          {progress.current_iteration} / {progress.total_iterations}
+   209	        </span>
+   210	      </div>
+   211	
+   212	      {/* Phase steps */}
+   213	      <PhaseSteps currentPhase={progress.phase} />
+   214	
+   215	      {/* Subtask progress bar */}
+   216	      <ProgressBar passed={progress.passed_count} total={progress.total_count} />
+   217	
+   218	      {/* Subtask list */}
+   219	      <SubtaskList subtasks={progress.subtasks} isIdle={isIdle} />
+   220	
+   221	      {error && (
+   222	        <p className="text-xs text-red-500">{error}</p>
+   223	      )}
+   224	    </div>
+   225	  );
+   226	}
+
+codex
+关键风险已经出现了两个方向：一是没有按验收条件走事件推送，二是前端把 `passes: false` 直接映射成 `failing`，这和任务里要求的 `pending/passing/failing` 三态并不一致。再读后端数据结构确认这一点。
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs | sed -n '140,230p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   140	    /// No active run or unknown state.
+   141	    Idle,
+   142	}
+   143	
+   144	/// Information about a single subtask from tasks.json.
+   145	#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+   146	struct SubtaskInfo {
+   147	    id: String,
+   148	    title: String,
+   149	    passes: bool,
+   150	}
+   151	
+   152	/// Overall iteration progress data sent to the frontend.
+   153	#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+   154	struct IterationProgress {
+   155	    /// Current iteration number (1-based), 0 if not started.
+   156	    current_iteration: i32,
+   157	    /// Total iterations configured (e.g. 42).
+   158	    total_iterations: i32,
+   159	    /// Current workflow phase.
+   160	    phase: Phase,
+   161	    /// List of subtasks with pass/fail status.
+   162	    subtasks: Vec<SubtaskInfo>,
+   163	    /// Number of subtasks that have passed.
+   164	    passed_count: usize,
+   165	    /// Total number of subtasks.
+   166	    total_count: usize,
+   167	}
+   168	
+   169	/// Raw tasks.json structure for deserialization.
+   170	#[derive(serde::Deserialize, Debug)]
+   171	#[serde(rename_all = "camelCase")]
+   172	struct TasksFile {
+   173	    #[allow(dead_code)]
+   174	    issue_number: Option<i64>,
+   175	    subtasks: Vec<TasksFileSubtask>,
+   176	}
+   177	
+   178	/// A subtask entry in tasks.json.
+   179	#[derive(serde::Deserialize, Debug)]
+   180	#[serde(rename_all = "camelCase")]
+   181	struct TasksFileSubtask {
+   182	    id: String,
+   183	    title: String,
+   184	    passes: bool,
+   185	}
+   186	
+   187	// ========================================
+   188	// Iteration progress helpers
+   189	// ========================================
+   190	
+   191	/// Parses tasks.json and returns a list of SubtaskInfo.
+   192	fn parse_tasks_json(workflow_dir: &Path) -> Vec<SubtaskInfo> {
+   193	    let tasks_path = workflow_dir.join("tasks.json");
+   194	    let bytes = match fs::read(&tasks_path) {
+   195	        Ok(b) => b,
+   196	        Err(_) => return Vec::new(),
+   197	    };
+   198	    let tasks_file: TasksFile = match serde_json::from_slice(&bytes) {
+   199	        Ok(t) => t,
+   200	        Err(_) => return Vec::new(),
+   201	    };
+   202	    tasks_file
+   203	        .subtasks
+   204	        .into_iter()
+   205	        .map(|s| SubtaskInfo {
+   206	            id: s.id,
+   207	            title: s.title,
+   208	            passes: s.passes,
+   209	        })
+   210	        .collect()
+   211	}
+   212	
+   213	/// Infers the current phase by examining files in the workflow directory.
+   214	///
+   215	/// Logic:
+   216	/// 1. Find the highest iteration number N from `iteration-N-*.log` files.
+   217	/// 2. If no iteration logs exist but `planning.log` exists → Planning.
+   218	/// 3. If no iteration logs and no planning.log → Idle.
+   219	/// 4. If `hard-gate-N.log` exists → BuildLintTest.
+   220	/// 5. If `iteration-N-*-review.log` exists → Review.
+   221	/// 6. Otherwise → Implementation.
+   222	fn infer_phase(workflow_dir: &Path) -> Phase {
+   223	    let entries = match fs::read_dir(workflow_dir) {
+   224	        Ok(e) => e,
+   225	        Err(_) => return Phase::Idle,
+   226	    };
+   227	
+   228	    let mut max_iteration: i32 = 0;
+   229	    let mut has_planning = false;
+   230	    let mut review_iterations = std::collections::HashSet::new();
+
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs | sed -n '354,420p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   354	/// Builds a complete IterationProgress for a given workflow directory.
+   355	fn build_iteration_progress(workflow_dir: &Path) -> IterationProgress {
+   356	    let subtasks = parse_tasks_json(workflow_dir);
+   357	    let passed_count = subtasks.iter().filter(|s| s.passes).count();
+   358	    let total_count = subtasks.len();
+   359	    let phase = infer_phase(workflow_dir);
+   360	    let (current_iteration, total_iterations) = extract_iteration_numbers(workflow_dir);
+   361	
+   362	    IterationProgress {
+   363	        current_iteration,
+   364	        total_iterations,
+   365	        phase,
+   366	        subtasks,
+   367	        passed_count,
+   368	        total_count,
+   369	    }
+   370	}
+   371	
+   372	/// Returns the iteration progress for a given issue's workflow.
+   373	fn get_iteration_progress_sync(
+   374	    project_path: &str,
+   375	    issue_number: i64,
+   376	) -> Result<IterationProgress, String> {
+   377	    let base = Path::new(project_path);
+   378	    if !base.is_dir() {
+   379	        return Err(format!("Path is not a directory: {project_path}"));
+   380	    }
+   381	
+   382	    let workflow_dir = base
+   383	        .join(".autoresearch")
+   384	        .join("workflows")
+   385	        .join(format!("issue-{issue_number}"));
+   386	
+   387	    if !workflow_dir.is_dir() {
+   388	        // Return idle progress with empty data
+   389	        return Ok(IterationProgress {
+   390	            current_iteration: 0,
+   391	            total_iterations: 0,
+   392	            phase: Phase::Idle,
+   393	            subtasks: Vec::new(),
+   394	            passed_count: 0,
+   395	            total_count: 0,
+   396	        });
+   397	    }
+   398	
+   399	    Ok(build_iteration_progress(&workflow_dir))
+   400	}
+   401	
+   402	/// Returns the current iteration progress for a specific issue.
+   403	#[tauri::command]
+   404	async fn get_iteration_progress(
+   405	    project_path: String,
+   406	    issue_number: i64,
+   407	) -> Result<IterationProgress, String> {
+   408	    tokio::task::spawn_blocking(move || get_iteration_progress_sync(&project_path, issue_number))
+   409	        .await
+   410	        .map_err(|e| format!("Task join error: {e}"))?
+   411	}
+   412	
+   413	/// Opens a native folder selection dialog and returns the selected path.
+   414	#[tauri::command]
+   415	async fn select_project_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
+   416	    let dir = tauri_plugin_dialog::DialogExt::dialog(&app)
+   417	        .file()
+   418	        .set_title("Select Project Directory")
+   419	        .blocking_pick_folder();
+   420	    Ok(dir.map(|p| p.to_string()))
+
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx | sed -n '340,370p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   340	            </div>
+   341	          )}
+   342	
+   343	          {isSupported && !isCurrentIssueRunning && isRunActive && activeIssueNumber !== null && (
+   344	            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+   345	              当前正在运行 Issue #{activeIssueNumber}，一次只能处理一个任务。
+   346	            </div>
+   347	          )}
+   348	
+   349	          {runError && (
+   350	            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+   351	              {runError}
+   352	            </div>
+   353	          )}
+   354	
+   355	          <IterationProgressPanel
+   356	            issueNumber={issue.number}
+   357	            projectPath={projectPath}
+   358	            isRunning={isCurrentIssueRunning}
+   359	          />
+   360	
+   361	          <LogViewer issueNumber={issue.number} projectPath={projectPath} />
+   362	        </section>
+   363	
+   364	        {isLoading ? (
+   365	          <DetailSkeleton />
+   366	        ) : error ? (
+   367	          <ErrorState message={error} onRetry={onRetry} />
+   368	        ) : (
+   369	          <>
+   370	            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+
+exec
+/bin/zsh -lc 'cd /Users/chaoyuepan/ai/autoresearch/desktop_app && npm test' in /Users/chaoyuepan/ai/autoresearch
+exec
+/bin/zsh -lc 'cd /Users/chaoyuepan/ai/autoresearch/desktop_app && npm run typecheck' in /Users/chaoyuepan/ai/autoresearch
+ exited 1 in 312ms:
+✔ buildIssueRunRequest maps the current run config into startRun payload (2.030792ms)
+✔ fetchProgress stores iteration data from backend (1.065958ms)
+✔ fetchProgress sets error on backend failure (0.174542ms)
+✔ fetchProgress is a no-op when isTauri is false (0.062375ms)
+✔ reset restores idle state after data was loaded (0.079791ms)
+✔ fetchProgress passes correct args to invoke (0.702166ms)
+✔ fetchProgress handles non-Error thrown values (0.8465ms)
+✔ classifyLogLevel detects info, warn, and error lines (0.875708ms)
+✔ filterLogEntries applies search query and level filters together (0.944875ms)
+✔ loadSources prepends live output and prefers terminal log when not running (0.273708ms)
+✔ loadSources prefers live output for active issue and refreshSelectedSource caches content (0.175417ms)
+✔ loadSources preserves viewer state while refreshing the same issue (0.156167ms)
+✔ loadSources preserves an explicit live-output selection while refreshing the same issue (0.094917ms)
+✔ loadSources ignores a stale response from a previous issue (0.123959ms)
+✔ refreshSelectedSource ignores a stale response from a previous issue (0.171834ms)
+✔ toggleLevel keeps at least one log level enabled (0.089917ms)
+✔ buildLogEntries truncates to last 5000 lines for large input (2.651166ms)
+✔ buildLogEntries keeps all lines when under 5000 (0.079042ms)
+(node:68284) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ runConfigStore exposes required default values (0.7555ms)
+✔ runConfigStore clamps numeric setters to accepted ranges (0.165875ms)
+✔ runConfigStore normalizes decimal values to integers before persisting (0.645125ms)
+✔ runConfigStore persists values under the required storage key (0.101375ms)
+✔ runConfigStore sanitizes persisted numeric values during hydration (0.098875ms)
+✔ runConfigStore rounds persisted decimal values during hydration (0.083083ms)
+✔ runConfigStore ignores NaN updates and preserves the previous valid values (0.08725ms)
+✔ sanitizeRunConfig rejects non-boolean and non-finite persisted values (0.046833ms)
+✔ startRun clears unknown active issue when backend already has another task (0.982ms)
+✔ startRun restores previous running issue when stop/start race fails (2.070083ms)
+✖ initialize wires run events and caps output history (9.568875ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 28
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 168.211708
+
+✖ failing tests:
+
+test at tests/runStore.test.mjs:69:1
+✖ initialize wires run events and caps output history (9.568875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2005 !== 2000
+  
+      at TestContext.<anonymous> (file:///Users/chaoyuepan/ai/autoresearch/desktop_app/tests/runStore.test.mjs:99:10)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2005,
+    expected: 2000,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+ succeeded in 829ms:
+codex
+测试跑过一遍后，仓库当前并不处于“全绿”状态：`typecheck` 通过，但前端测试套件已有一个无关失败。我要再看一下这块实现有没有自己的竞态或切换 Issue 污染问题，这会直接影响正确性评分。
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/logViewerStore.ts | sed -n '1,260p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+     1	import { create } from 'zustand';
+     2	import { isTauri as issueStoreIsTauri } from './issueStore.ts';
+     3	
+     4	export type LogLevel = 'info' | 'warn' | 'error';
+     5	export type LogSourceKind = 'live' | 'terminal' | 'summary' | 'iteration' | 'file';
+     6	
+     7	export interface IssueLogSource {
+     8	  id: string;
+     9	  label: string;
+    10	  kind: Exclude<LogSourceKind, 'live'>;
+    11	  updated_at: string | null;
+    12	  size_bytes: number;
+    13	}
+    14	
+    15	export interface IssueLogContent {
+    16	  source_id: string;
+    17	  text: string;
+    18	  updated_at: string | null;
+    19	}
+    20	
+    21	export interface LogSourceOption {
+    22	  id: string;
+    23	  label: string;
+    24	  kind: LogSourceKind;
+    25	  updatedAt: string | null;
+    26	  sizeBytes: number | null;
+    27	}
+    28	
+    29	export interface LogEntry {
+    30	  lineNumber: number;
+    31	  text: string;
+    32	  level: LogLevel;
+    33	}
+    34	
+    35	type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+    36	
+    37	interface LogViewerDeps {
+    38	  isTauri: boolean;
+    39	  invoke: InvokeFn;
+    40	}
+    41	
+    42	interface LoadSourcesOptions {
+    43	  preferLive: boolean;
+    44	}
+    45	
+    46	interface LogViewerState {
+    47	  currentIssueNumber: number | null;
+    48	  sourcesRequestKey: number;
+    49	  contentRequestKey: number;
+    50	  sources: LogSourceOption[];
+    51	  selectedSourceId: string;
+    52	  searchQuery: string;
+    53	  levelFilters: Record<LogLevel, boolean>;
+    54	  autoScroll: boolean;
+    55	  hasPendingScroll: boolean;
+    56	  sourceContents: Record<string, IssueLogContent>;
+    57	  isLoadingSources: boolean;
+    58	  isLoadingContent: boolean;
+    59	  error: string | null;
+    60	  loadSources: (
+    61	    _projectPath: string,
+    62	    _issueNumber: number,
+    63	    _options?: Partial<LoadSourcesOptions>
+    64	  ) => Promise<void>;
+    65	  refreshSelectedSource: (_projectPath: string, _issueNumber: number) => Promise<void>;
+    66	  selectSource: (_sourceId: string) => void;
+    67	  setSearchQuery: (_query: string) => void;
+    68	  toggleLevel: (_level: LogLevel) => void;
+    69	  setAutoScroll: (_enabled: boolean) => void;
+    70	  markScrollPending: (_pending: boolean) => void;
+    71	  clearError: () => void;
+    72	  clearIssue: () => void;
+    73	}
+    74	
+    75	const DEFAULT_SELECTED_SOURCE_ID = 'live-output';
+    76	
+    77	async function tauriInvoke<T>(
+    78	  cmd: string,
+    79	  args?: Record<string, unknown>
+    80	): Promise<T> {
+    81	  const { invoke } = await import('@tauri-apps/api/core');
+    82	  return invoke<T>(cmd, args);
+    83	}
+    84	
+    85	function normalizeError(error: unknown): string {
+    86	  if (error instanceof Error) {
+    87	    return error.message;
+    88	  }
+    89	  return String(error);
+    90	}
+    91	
+    92	function createLiveSource(): LogSourceOption {
+    93	  return {
+    94	    id: DEFAULT_SELECTED_SOURCE_ID,
+    95	    label: '当前运行输出',
+    96	    kind: 'live',
+    97	    updatedAt: null,
+    98	    sizeBytes: null,
+    99	  };
+   100	}
+   101	
+   102	export function classifyLogLevel(line: string): LogLevel {
+   103	  const normalized = line.toLowerCase();
+   104	  if (
+   105	    normalized.includes('error') ||
+   106	    normalized.includes('failed') ||
+   107	    normalized.includes('failure') ||
+   108	    normalized.includes('fatal') ||
+   109	    normalized.includes('❌') ||
+   110	    normalized.includes('错误') ||
+   111	    normalized.includes('失败')
+   112	  ) {
+   113	    return 'error';
+   114	  }
+   115	
+   116	  if (
+   117	    normalized.includes('warn') ||
+   118	    normalized.includes('warning') ||
+   119	    normalized.includes('⚠️') ||
+   120	    normalized.includes('警告')
+   121	  ) {
+   122	    return 'warn';
+   123	  }
+   124	
+   125	  return 'info';
+   126	}
+   127	
+   128	const MAX_LOG_LINES = 5000;
+   129	
+   130	export function buildLogEntries(text: string): LogEntry[] {
+   131	  if (!text) {
+   132	    return [];
+   133	  }
+   134	
+   135	  const lines = text.split(/\r?\n/);
+   136	  const start = Math.max(0, lines.length - MAX_LOG_LINES);
+   137	  return lines.slice(start).map((line, index) => ({
+   138	    lineNumber: start + index + 1,
+   139	    text: line,
+   140	    level: classifyLogLevel(line),
+   141	  }));
+   142	}
+   143	
+   144	export function filterLogEntries(
+   145	  entries: LogEntry[],
+   146	  searchQuery: string,
+   147	  levelFilters: Record<LogLevel, boolean>
+   148	): LogEntry[] {
+   149	  const normalizedQuery = searchQuery.trim().toLowerCase();
+   150	  return entries.filter((entry) => {
+   151	    if (!levelFilters[entry.level]) {
+   152	      return false;
+   153	    }
+   154	    if (!normalizedQuery) {
+   155	      return true;
+   156	    }
+   157	    return entry.text.toLowerCase().includes(normalizedQuery);
+   158	  });
+   159	}
+   160	
+   161	function mapBackendSource(source: IssueLogSource): LogSourceOption {
+   162	  return {
+   163	    id: source.id,
+   164	    label: source.label,
+   165	    kind: source.kind,
+   166	    updatedAt: source.updated_at,
+   167	    sizeBytes: source.size_bytes,
+   168	  };
+   169	}
+   170	
+   171	function nextSelectedSourceId(
+   172	  availableSources: LogSourceOption[],
+   173	  currentSelectedSourceId: string,
+   174	  preferLive: boolean
+   175	): string {
+   176	  if (availableSources.some((source) => source.id === currentSelectedSourceId)) {
+   177	    return currentSelectedSourceId;
+   178	  }
+   179	
+   180	  if (preferLive) {
+   181	    return DEFAULT_SELECTED_SOURCE_ID;
+   182	  }
+   183	
+   184	  const terminalSource = availableSources.find((source) => source.kind === 'terminal');
+   185	  if (terminalSource) {
+   186	    return terminalSource.id;
+   187	  }
+   188	
+   189	  return availableSources[0]?.id ?? DEFAULT_SELECTED_SOURCE_ID;
+   190	}
+   191	
+   192	function createLogViewerDeps(
+   193	  overrides: Partial<LogViewerDeps> = {}
+   194	): LogViewerDeps {
+   195	  return {
+   196	    isTauri: issueStoreIsTauri,
+   197	    invoke: tauriInvoke,
+   198	    ...overrides,
+   199	  };
+   200	}
+   201	
+   202	export function createLogViewerStore(
+   203	  overrides: Partial<LogViewerDeps> = {}
+   204	) {
+   205	  const deps = createLogViewerDeps(overrides);
+   206	
+   207	  return create<LogViewerState>((set, get) => ({
+   208	    currentIssueNumber: null,
+   209	    sourcesRequestKey: 0,
+   210	    contentRequestKey: 0,
+   211	    sources: [createLiveSource()],
+   212	    selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+   213	    searchQuery: '',
+   214	    levelFilters: {
+   215	      info: true,
+   216	      warn: true,
+   217	      error: true,
+   218	    },
+   219	    autoScroll: true,
+   220	    hasPendingScroll: false,
+   221	    sourceContents: {},
+   222	    isLoadingSources: false,
+   223	    isLoadingContent: false,
+   224	    error: null,
+   225	
+   226	    loadSources: async (
+   227	      _projectPath: string,
+   228	      _issueNumber: number,
+   229	      _options: Partial<LoadSourcesOptions> = {}
+   230	    ) => {
+   231	      const preferLive = _options.preferLive ?? false;
+   232	      const previousState = get();
+   233	      const issueChanged = previousState.currentIssueNumber !== _issueNumber;
+   234	      const requestKey = previousState.sourcesRequestKey + 1;
+   235	      const currentSelectedSourceId = issueChanged
+   236	        ? ''
+   237	        : previousState.selectedSourceId;
+   238	
+   239	      set((state) => ({
+   240	        currentIssueNumber: _issueNumber,
+   241	        sourcesRequestKey: requestKey,
+   242	        isLoadingSources: true,
+   243	        error: null,
+   244	        autoScroll: issueChanged ? true : state.autoScroll,
+   245	        hasPendingScroll: issueChanged ? false : state.hasPendingScroll,
+   246	        selectedSourceId: issueChanged
+   247	          ? DEFAULT_SELECTED_SOURCE_ID
+   248	          : state.selectedSourceId,
+   249	        sourceContents: issueChanged ? {} : state.sourceContents,
+   250	        searchQuery: issueChanged ? '' : state.searchQuery,
+   251	      }));
+   252	
+   253	      if (!deps.isTauri) {
+   254	        set({
+   255	          sources: [createLiveSource()],
+   256	          selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+   257	          isLoadingSources: false,
+   258	          isLoadingContent: false,
+   259	        });
+   260	        return;
+
+exec
+/bin/zsh -lc 'git -C /Users/chaoyuepan/ai/autoresearch status --short' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+ M desktop_app/src-tauri/CLAUDE.md
+ M desktop_app/src-tauri/src/lib.rs
+ M desktop_app/src/CLAUDE.md
+ M desktop_app/src/components/IssueDetailPanel.tsx
+?? .autoresearch/workflows/issue-31/
+?? desktop_app/src/components/IterationProgressPanel.tsx
+?? desktop_app/src/stores/iterationStore.ts
+?? desktop_app/tests/iterationStore.test.mjs
+
+exec
+/bin/zsh -lc 'cd /Users/chaoyuepan/ai/autoresearch/desktop_app && npm run build' in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 1533ms:
+vite v7.3.2 building client environment for production...
+transforming...
+✓ 72 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:  0.29 kB
+dist/assets/index-CQHCAxI7.css   39.20 kB │ gzip:  7.83 kB
+dist/assets/core-BEOw45JP.js      0.20 kB │ gzip:  0.15 kB
+dist/assets/event-DXqYWlmG.js     1.04 kB │ gzip:  0.58 kB
+dist/assets/index-CQBlsrtS.js   301.78 kB │ gzip: 95.80 kB
+✓ built in 565ms
+
+codex
+我也顺手跑了前端构建，确认不是“只过 typecheck、实际页面打包失败”的假通过。再等一下构建结果。
+codex
+我已经有足够结论了。最后补一条目录级知识到 `desktop_app/src/CLAUDE.md`，把这次审核暴露出的可复用约束写进去，然后给出正式审核报告。
+apply patch
+patch: completed
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index ec9302bc3a7f825327ef2370a067ca260e84968c..72a17969ca172d50c8383203dcef681d7482191b
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -170,3 +170,5 @@
+ - 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+ - 测试使用 `createIterationStore({ isTauri: true, invoke: mockFn })` 隔离
+ - `isTauri: false` 时 `fetchProgress` 为 no-op，确保浏览器模式不报错
++- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
++- `tasks.json` 里的 `passes: false` 只表示“尚未通过”，不能直接在 UI 上映射为 `failing`；如果要展示 `pending/passing/failing` 三态，后端必须提供可区分失败与未完成的状态字段
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index ec9302bc3a7f825327ef2370a067ca260e84968c..72a17969ca172d50c8383203dcef681d7482191b
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -170,3 +170,5 @@
+ - 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+ - 测试使用 `createIterationStore({ isTauri: true, invoke: mockFn })` 隔离
+ - `isTauri: false` 时 `fetchProgress` 为 no-op，确保浏览器模式不报错
++- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
++- `tasks.json` 里的 `passes: false` 只表示“尚未通过”，不能直接在 UI 上映射为 `failing`；如果要展示 `pending/passing/failing` 三态，后端必须提供可区分失败与未完成的状态字段
+
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md | sed -n '150,180p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   150	- 日志行的 React key 使用 `entry.lineNumber`（同一文件中唯一），不要拼接 `entry.text`（日志中常有重复行）
+   151	
+   152	## IterationProgressPanel 约定
+   153	
+   154	### 数据来源
+   155	
+   156	- `iterationStore.ts` 通过 `invoke('get_iteration_progress', { projectPath, issueNumber })` 从 Rust 后端拉取
+   157	- Rust 后端 `IterationProgress` 使用 snake_case 序列化：`current_iteration`, `total_iterations`, `phase`, `subtasks`, `passed_count`, `total_count`
+   158	- 前端 TypeScript 接口必须匹配 snake_case 字段名（不是 camelCase）
+   159	- 后端 `Phase` 枚举值为：`Planning`, `Implementation`, `Review`, `BuildLintTest`, `Idle`
+   160	
+   161	### 更新策略
+   162	
+   163	- 后端不推送 `iteration-progress` 事件（T-002 缺失），前端使用轮询降级方案
+   164	- 运行中每 2s 调用 `invoke('get_iteration_progress')`，类似 `LogViewer` 的 `setInterval` 模式
+   165	- 非运行状态只在挂载时拉取一次，不轮询
+   166	- 使用 `useRef<number | null>` 存储 interval ID，`useEffect` cleanup 中清除
+   167	
+   168	### Store 模式
+   169	
+   170	- 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+   171	- 测试使用 `createIterationStore({ isTauri: true, invoke: mockFn })` 隔离
+   172	- `isTauri: false` 时 `fetchProgress` 为 no-op，确保浏览器模式不报错
+   173	- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
+   174	- `tasks.json` 里的 `passes: false` 只表示“尚未通过”，不能直接在 UI 上映射为 `failing`；如果要展示 `pending/passing/failing` 三态，后端必须提供可区分失败与未完成的状态字段
+
+exec
+/bin/zsh -lc "nl -ba /Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx | sed -n '190,240p'" in /Users/chaoyuepan/ai/autoresearch
+ succeeded in 0ms:
+   190	      return 'border-red-200 bg-red-50 text-red-700';
+   191	    case 'idle':
+   192	    default:
+   193	      return 'border-gray-200 bg-gray-100 text-gray-600';
+   194	  }
+   195	}
+   196	
+   197	function IssueDetailPanel({
+   198	  issue,
+   199	  detail,
+   200	  isLoading,
+   201	  error,
+   202	  projectPath,
+   203	  onClose,
+   204	  onRetry,
+   205	}: IssueDetailPanelProps): JSX.Element {
+   206	  const {
+   207	    status: runStatus,
+   208	    activeIssueNumber,
+   209	    exitCode,
+   210	    error: runError,
+   211	    isSupported,
+   212	    startRun,
+   213	    stopRun,
+   214	    clearError: clearRunError,
+   215	  } = useRunStore();
+   216	
+   217	  const {
+   218	    maxIterations,
+   219	    passingScore,
+   220	    continueMode,
+   221	  } = useRunConfigStore();
+   222	
+   223	  if (!issue) {
+   224	    return <EmptySelectionState />;
+   225	  }
+   226	
+   227	  const isRunActive = runStatus === 'running' || runStatus === 'stopping';
+   228	  const isCurrentIssueRunning = activeIssueNumber === issue.number && isRunActive;
+   229	  const canStart =
+   230	    Boolean(projectPath) && isSupported && !isRunActive;
+   231	  const canStop = isSupported && isRunActive;
+   232	  const showRunMeta =
+   233	    activeIssueNumber !== null &&
+   234	    (isRunActive || runStatus === 'finished' || runStatus === 'error');
+   235	
+   236	  return (
+   237	    <aside className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+   238	      <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
+   239	        <div className="min-w-0">
+   240	          <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-blue-600">
+
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index ec9302bc3a7f825327ef2370a067ca260e84968c..72a17969ca172d50c8383203dcef681d7482191b
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -170,3 +170,5 @@
+ - 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+ - 测试使用 `createIterationStore({ isTauri: true, invoke: mockFn })` 隔离
+ - `isTauri: false` 时 `fetchProgress` 为 no-op，确保浏览器模式不报错
++- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
++- `tasks.json` 里的 `passes: false` 只表示“尚未通过”，不能直接在 UI 上映射为 `failing`；如果要展示 `pending/passing/failing` 三态，后端必须提供可区分失败与未完成的状态字段
+
+codex
+## 审核报告
+
+### 主要问题
+
+1. 高严重: 未按验收条件接入 `iteration-progress` 事件，当前实现仍是轮询，不满足“通过事件实时更新”的要求。前端 store 只有 `invoke('get_iteration_progress')`，没有事件订阅逻辑，见 [iterationStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L27) 和 [iterationStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L83)。面板通过 `setInterval` 轮询，见 [IterationProgressPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx#L161)。后端当前只 `emit("run-output")` / `emit("run-exit")`，没有 `iteration-progress`，见 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L935) 和 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L945)。
+
+2. 高严重: subtask 状态语义错误，`passes: false` 被直接渲染成 `failing`，会把“未完成/待处理”误报为“失败”。当前映射逻辑是 idle 时全灰，非 idle 时 `passes ? 'passing' : 'failing'`，见 [IterationProgressPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx#L69)。但后端给前端的 subtask 只有 `passes: bool`，并没有失败态字段，见 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L145)。这不满足验收里的 `pending / passing / failing` 三态展示。
+
+3. 中严重: 全局 `useIterationStore` 没有做请求隔离，切换 Issue 时存在旧请求回写新 Issue 视图的竞态。`fetchProgress` 直接把返回值写入全局 store，没有 request key / issue guard，见 [iterationStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L75)。`IssueDetailPanel` 复用同一个全局 store 实例渲染不同 issue，见 [IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L197) 和 [IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L355)。慢请求下会短暂显示错误 issue 的进度，甚至被迟到响应永久覆盖。
+
+4. 中严重: 缺少对应的前端 UI 测试。当前新增测试只覆盖 store 的拉取、报错、reset 和参数透传，见 [iterationStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs#L28)。没有覆盖 `IterationProgressPanel` 的渲染、idle 态、阶段高亮、subtask badge、轮询/订阅行为，不满足“组件有对应的前端测试”。
+
+### 总体评价
+
+**评分: 61/100**
+
+这轮不是“未实现”，而是“实现了主框架，但未达验收”。好的部分是：UI 已接入到详情面板，迭代编号、阶段条、subtask 进度条和 idle 空态都做了；`typecheck` 通过，生产构建也通过。  
+但按子任务验收条件审核，核心缺口仍然存在：事件实时更新未实现、subtask 三态语义不成立、切换 issue 有竞态、UI 测试不足。因此当前版本不达标，不能判定通过。
+
+### 验收条件核对
+
+- 展示当前迭代编号和总迭代数: 通过
+- 显示四个阶段标签并有视觉区分: 基本通过
+- 展示 subtask 进度条: 通过
+- subtask 状态标签 `pending/passing/failing`: 不通过，当前实际只有 idle 时 `pending`，运行中所有未通过都显示 `failing`
+- 通过 `iteration-progress` 事件实时更新: 不通过，当前是轮询
+- run 未运行时显示 idle 状态: 通过
+- 组件有对应的前端测试: 不通过
+- `npx tsc --noEmit`: 通过
+- 可在浏览器中正确渲染: 从 `npm run build` 看没有打包问题，但我这里没有做浏览器截图/console 验证，暂不能完全签字
+
+### 已验证情况
+
+- `npm run typecheck`: 通过
+- `npm run build`: 通过
+- `npm test`: 未全绿，现有套件有 1 个无关失败，失败项是 `tests/runStore.test.mjs` 中的 `initialize wires run events and caps output history`
+
+### 建议修复方向
+
+1. 如果验收必须坚持事件推送，就补齐后端 `iteration-progress` emit 和前端 `listen` 订阅；如果决定接受轮询降级，应先回改 Issue/T-003 验收条件，否则这项审核不能过。
+2. 不要再用 `passes: boolean` 直接推导三态。要么后端补充真实状态字段，要么前端只展示二态并同步修改需求。
+3. 给 `iterationStore` 加 request key / issue guard，避免切换 issue 时旧响应污染当前视图。
+4. 增加 `IterationProgressPanel` 组件测试，至少覆盖 idle、阶段高亮、subtask badge、错误显示、更新行为。
+
+### CLAUDE.md
+
+已将两条可复用约束追加到 [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md#L168)：
+- issue 级全局 store 必须做请求隔离
+- `passes: false` 不能直接映射为 `failing`
+
+## Learnings
+
+- **模式**: 这块前端沿用了 `createXStore(overrides)` 的依赖注入测试模式，适合做 store 单测，但 UI 组件测试需要单独补。
+- **踩坑**: `tasks.json` 的 `passes` 只是“是否通过”，不是三态状态机；直接映射成 `pending/passing/failing` 会产生语义错误。
+- **经验**: 对 issue 维度的全局 store，切换详情面板时必须做请求隔离，否则迟到响应会污染当前 issue 数据。
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index ec9302bc3a7f825327ef2370a067ca260e84968c..72a17969ca172d50c8383203dcef681d7482191b
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -170,3 +170,5 @@
+ - 遵循 `createRunStore(overrides)` 工厂模式，注入 `isTauri`/`invoke` 依赖
+ - 测试使用 `createIterationStore({ isTauri: true, invoke: mockFn })` 隔离
+ - `isTauri: false` 时 `fetchProgress` 为 no-op，确保浏览器模式不报错
++- 迭代进度如果按 Issue 维度放在全局 store，必须做请求隔离（request key / issue guard）；切换 Issue 时旧请求的迟到响应不能覆盖当前 Issue 的进度
++- `tasks.json` 里的 `passes: false` 只表示“尚未通过”，不能直接在 UI 上映射为 `failing`；如果要展示 `pending/passing/failing` 三态，后端必须提供可区分失败与未完成的状态字段
+
+tokens used
+55,003
+## 审核报告
+
+### 主要问题
+
+1. 高严重: 未按验收条件接入 `iteration-progress` 事件，当前实现仍是轮询，不满足“通过事件实时更新”的要求。前端 store 只有 `invoke('get_iteration_progress')`，没有事件订阅逻辑，见 [iterationStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L27) 和 [iterationStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L83)。面板通过 `setInterval` 轮询，见 [IterationProgressPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx#L161)。后端当前只 `emit("run-output")` / `emit("run-exit")`，没有 `iteration-progress`，见 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L935) 和 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L945)。
+
+2. 高严重: subtask 状态语义错误，`passes: false` 被直接渲染成 `failing`，会把“未完成/待处理”误报为“失败”。当前映射逻辑是 idle 时全灰，非 idle 时 `passes ? 'passing' : 'failing'`，见 [IterationProgressPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IterationProgressPanel.tsx#L69)。但后端给前端的 subtask 只有 `passes: bool`，并没有失败态字段，见 [lib.rs](/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs#L145)。这不满足验收里的 `pending / passing / failing` 三态展示。
+
+3. 中严重: 全局 `useIterationStore` 没有做请求隔离，切换 Issue 时存在旧请求回写新 Issue 视图的竞态。`fetchProgress` 直接把返回值写入全局 store，没有 request key / issue guard，见 [iterationStore.ts](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/stores/iterationStore.ts#L75)。`IssueDetailPanel` 复用同一个全局 store 实例渲染不同 issue，见 [IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L197) 和 [IssueDetailPanel.tsx](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/components/IssueDetailPanel.tsx#L355)。慢请求下会短暂显示错误 issue 的进度，甚至被迟到响应永久覆盖。
+
+4. 中严重: 缺少对应的前端 UI 测试。当前新增测试只覆盖 store 的拉取、报错、reset 和参数透传，见 [iterationStore.test.mjs](/Users/chaoyuepan/ai/autoresearch/desktop_app/tests/iterationStore.test.mjs#L28)。没有覆盖 `IterationProgressPanel` 的渲染、idle 态、阶段高亮、subtask badge、轮询/订阅行为，不满足“组件有对应的前端测试”。
+
+### 总体评价
+
+**评分: 61/100**
+
+这轮不是“未实现”，而是“实现了主框架，但未达验收”。好的部分是：UI 已接入到详情面板，迭代编号、阶段条、subtask 进度条和 idle 空态都做了；`typecheck` 通过，生产构建也通过。  
+但按子任务验收条件审核，核心缺口仍然存在：事件实时更新未实现、subtask 三态语义不成立、切换 issue 有竞态、UI 测试不足。因此当前版本不达标，不能判定通过。
+
+### 验收条件核对
+
+- 展示当前迭代编号和总迭代数: 通过
+- 显示四个阶段标签并有视觉区分: 基本通过
+- 展示 subtask 进度条: 通过
+- subtask 状态标签 `pending/passing/failing`: 不通过，当前实际只有 idle 时 `pending`，运行中所有未通过都显示 `failing`
+- 通过 `iteration-progress` 事件实时更新: 不通过，当前是轮询
+- run 未运行时显示 idle 状态: 通过
+- 组件有对应的前端测试: 不通过
+- `npx tsc --noEmit`: 通过
+- 可在浏览器中正确渲染: 从 `npm run build` 看没有打包问题，但我这里没有做浏览器截图/console 验证，暂不能完全签字
+
+### 已验证情况
+
+- `npm run typecheck`: 通过
+- `npm run build`: 通过
+- `npm test`: 未全绿，现有套件有 1 个无关失败，失败项是 `tests/runStore.test.mjs` 中的 `initialize wires run events and caps output history`
+
+### 建议修复方向
+
+1. 如果验收必须坚持事件推送，就补齐后端 `iteration-progress` emit 和前端 `listen` 订阅；如果决定接受轮询降级，应先回改 Issue/T-003 验收条件，否则这项审核不能过。
+2. 不要再用 `passes: boolean` 直接推导三态。要么后端补充真实状态字段，要么前端只展示二态并同步修改需求。
+3. 给 `iterationStore` 加 request key / issue guard，避免切换 issue 时旧响应污染当前视图。
+4. 增加 `IterationProgressPanel` 组件测试，至少覆盖 idle、阶段高亮、subtask badge、错误显示、更新行为。
+
+### CLAUDE.md
+
+已将两条可复用约束追加到 [desktop_app/src/CLAUDE.md](/Users/chaoyuepan/ai/autoresearch/desktop_app/src/CLAUDE.md#L168)：
+- issue 级全局 store 必须做请求隔离
+- `passes: false` 不能直接映射为 `failing`
+
+## Learnings
+
+- **模式**: 这块前端沿用了 `createXStore(overrides)` 的依赖注入测试模式，适合做 store 单测，但 UI 组件测试需要单独补。
+- **踩坑**: `tasks.json` 的 `passes` 只是“是否通过”，不是三态状态机；直接映射成 `pending/passing/failing` 会产生语义错误。
+- **经验**: 对 issue 维度的全局 store，切换详情面板时必须做请求隔离，否则迟到响应会污染当前 issue 数据。

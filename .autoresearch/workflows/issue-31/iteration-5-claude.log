@@ -1,0 +1,43 @@
+All tasks complete. Here's a summary of what was implemented:
+
+## Implementation Summary
+
+### Files Created
+1. **`desktop_app/src/stores/iterationStore.ts`** — Zustand store with:
+   - TypeScript types: `Phase`, `SubtaskInfo`, `IterationProgress` matching Rust backend snake_case serialization
+   - `createIterationStore(overrides)` factory pattern with `isTauri`/`invoke` dependency injection
+   - `fetchProgress()` action calling `get_iteration_progress` command
+   - `reset()` action for clearing state
+   - Exported singleton `useIterationStore`
+
+2. **`desktop_app/src/components/IterationProgressPanel.tsx`** — UI component with:
+   - Iteration number display (`3 / 16`)
+   - Phase pipeline: Planning → Implementation → Review → Build·Lint·Test (current phase highlighted blue, past phases light blue, future phases gray)
+   - Subtask progress bar with percentage
+   - Subtask list with status badges: pending (gray), passing (green), failing (red)
+   - Idle/empty state when no run data exists
+   - **Polling**: 2s `setInterval` when `isRunning=true`, single fetch otherwise
+
+3. **`desktop_app/tests/iterationStore.test.mjs`** — 6 tests covering:
+   - Successful data fetch
+   - Backend error handling
+   - Non-Tauri no-op behavior
+   - Reset to idle state
+   - Correct invoke args
+   - Non-Error thrown values
+
+### Files Modified
+- **`desktop_app/src/components/IssueDetailPanel.tsx`** — Added `IterationProgressPanel` import and placed it between the error display and LogViewer
+- **`desktop_app/src/CLAUDE.md`** — Added `## IterationProgressPanel 约定` section
+
+### Verification
+- **6/6 tests pass** (`node --test --experimental-strip-types`)
+- **`npx tsc --noEmit` passes** with zero errors
+- Pre-existing `runStore.test.mjs` test failure is unrelated (MAX_OUTPUT_LINES mismatch)
+
+## Learnings
+
+- **模式**: Rust backend `IterationProgress` uses default serde snake_case serialization (`current_iteration`, `total_iterations` etc.), so TypeScript interfaces must use snake_case field names — do NOT use camelCase.
+- **踩坑**: T-002 was marked `passes: true` but backend `app.emit("iteration-progress", ...)` is missing. Frontend must use polling as degraded strategy. The `LogViewer.tsx` 1500ms `setInterval` pattern served as the reference implementation.
+- **经验**: The `createRunStore(overrides)` factory pattern is the standard for testable Zustand stores in this project — inject `isTauri`/`invoke`/`listen` deps, then tests call `createXxxStore({ isTauri: true, invoke: mockFn })`.
+- **经验**: Phase enum values from Rust serde serialize as PascalCase strings (`"Planning"`, `"BuildLintTest"`, `"Idle"`) — they match the Rust enum variant names exactly.
