@@ -36,6 +36,10 @@ const SAMPLE_PROGRESS = {
   last_score: 78,
   passing_score: 85,
   review_summary: 'Code quality needs improvement',
+  score_history: [
+    { iteration: 1, score: 62, review_summary: 'First pass' },
+    { iteration: 2, score: 78, review_summary: 'Code quality needs improvement' },
+  ],
 };
 
 test('watchIssue stores iteration data from backend', async () => {
@@ -55,6 +59,7 @@ test('watchIssue stores iteration data from backend', async () => {
   assert.equal(state.progress.phase, 'Review');
   assert.equal(state.progress.subtasks.length, 3);
   assert.equal(state.progress.subtasks[2].status, 'failing');
+  assert.equal(state.progress.score_history[1].score, 78);
   assert.equal(state.isLoading, false);
   assert.equal(state.error, null);
 });
