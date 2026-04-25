@@ -1,12 +1,12 @@
 #!/bin/bash
-# tests/test_continue_dirty.sh - Unit tests for continue mode dirty working tree detection
+# tests/test_continue_dirty.sh - Unit tests for continue mode dirty working tree handling
 #
 # Tests the dirty working tree handling in restore_continue_state():
-# - git status --porcelain detection after checkout
-# - auto stash on dirty files with stash message
-# - stash failure graceful degradation
-# - residual stash detection and recovery
-# - clean working tree (no stash)
+# - clean working tree (no stash, no action)
+# - dirty working tree files are preserved (NOT stashed)
+# - residual stash detection warns about old stashes
+# - multiple dirty files are preserved
+# - modified tracked files are preserved
 #
 # Usage: bash tests/test_continue_dirty.sh
 
@@ -117,58 +117,25 @@ error() {
     echo "ERROR: $1" >> "$CONSOLE_OUTPUT"
 }
 
-# ---- extracted functions under test ----
-# We extract the dirty detection logic from restore_continue_state() as a
-# standalone testable function.  It mirrors the exact code in run.sh.
+# ---- extracted function under test ----
+# This mirrors the current behavior of restore_continue_state():
+# dirty files are preserved (NOT stashed), residual stashes are warned about.
 
-detect_and_handle_dirty_tree() {
+handle_dirty_tree_and_residual_stashes() {
     local issue_number="$1"
 
     cd "$PROJECT_ROOT"
 
-    # 检测 dirty working tree 并自动 stash
-    local dirty_files
-    dirty_files=$(git status --porcelain 2>/dev/null)
-    if [ -n "$dirty_files" ]; then
-        local stash_msg="autoresearch-temp-continue-$issue_number-$(date +%s)"
-        log_console "⚠️ 检测到未提交的更改，自动 stash..."
-        log "检测到 dirty working tree，执行 git stash push -m \"$stash_msg\""
-        if git stash push -u -m "$stash_msg" 2>/dev/null; then
-            log_console "已 stash 未提交的更改: $stash_msg"
-            log "stash 成功: $stash_msg"
-            CONTINUE_STASH_REF="$stash_msg"
-        else
-            log_console "⚠️ stash 失败，继续运行（dirty 文件可能影响后续操作）"
-            log "stash 失败，降级继续"
-            CONTINUE_STASH_REF=""
-        fi
-    else
-        CONTINUE_STASH_REF=""
-    fi
-
     # 检测是否有残留的 autoresearch stash（上次中断遗留）
-    # 排除本次 continue 刚创建的 stash
+    # 只警告，不自动 pop，避免冲突导致脚本中断
     local residual_stash
-    if [ -n "$CONTINUE_STASH_REF" ]; then
-        residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | grep -v "$CONTINUE_STASH_REF" | head -1 || true)
-    else
-        residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | head -1 || true)
-    fi
+    residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | head -1 || true)
     if [ -n "$residual_stash" ]; then
-        log_console "⚠️ 发现上次中断遗留的 stash: $residual_stash"
-        log "发现残留 stash: $residual_stash"
         local stash_index
         stash_index=$(echo "$residual_stash" | grep -oE 'stash@\{[0-9]+\}' | head -1)
-        if [ -n "$stash_index" ]; then
-            log_console "尝试恢复残留 stash..."
-            if git stash pop "$stash_index" 2>/dev/null; then
-                log_console "已恢复残留 stash"
-                log "残留 stash 恢复成功: $stash_index"
-            else
-                log_console "⚠️ 残留 stash pop 失败（可能有冲突），请手动处理"
-                log "残留 stash pop 失败: $stash_index"
-            fi
-        fi
+        log_console "⚠️ 发现上次中断遗留的 stash: $residual_stash"
+        log_console "   如需恢复，请手动执行: git stash pop $stash_index"
+        log "发现残留 stash: $residual_stash"
     fi
 }
 
@@ -179,99 +146,83 @@ echo ""
 
 # Test 1: Clean working tree - no stash
 setup_case
-echo "Test 1: clean working tree does not stash"
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_eq "no stash on clean tree" "" "$CONTINUE_STASH_REF"
+echo "Test 1: clean working tree remains clean"
+handle_dirty_tree_and_residual_stashes 99
+assert_true "working tree still clean" "git diff --quiet"
 assert_not_contains "no stash log message" "$(cat "$LOG_OUTPUT")" "stash"
 teardown_case
 
-# Test 2: Dirty working tree - auto stash
+# Test 2: Dirty working tree - files are NOT stashed, preserved in place
 setup_case
-echo "Test 2: dirty working tree auto stashes"
+echo "Test 2: dirty working tree files are preserved (not stashed)"
 echo "dirty file" > dirty.txt
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_contains "stash ref set" "$CONTINUE_STASH_REF" "autoresearch-temp-continue-99"
-assert_contains "log mentions stash success" "$(cat "$LOG_OUTPUT")" "stash 成功"
-assert_contains "console mentions stash" "$(cat "$CONSOLE_OUTPUT")" "已 stash 未提交的更改"
-# Verify stash was created
+handle_dirty_tree_and_residual_stashes 99
+assert_true "dirty file still exists" "[ -f dirty.txt ]"
+assert_eq "dirty file content preserved" "dirty file" "$(cat dirty.txt)"
+assert_not_contains "no stash was performed" "$(cat "$LOG_OUTPUT")" "stash 成功"
+# Verify stash was NOT created
 stash_count=$(git stash list | grep -c 'autoresearch-temp-continue-99' || true)
-assert_eq "stash entry exists" "1" "$stash_count"
-# Verify working tree is now clean
-assert_true "working tree is clean after stash" "git diff --quiet"
+assert_eq "no stash entry was created" "0" "$stash_count"
 teardown_case
 
-# Test 3: Dirty working tree with staged files - auto stash
+# Test 3: Staged dirty files are also preserved
 setup_case
-echo "Test 3: staged dirty files also trigger stash"
+echo "Test 3: staged dirty files are preserved"
 echo "staged file" > staged.txt
 git add staged.txt
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_contains "stash ref set for staged" "$CONTINUE_STASH_REF" "autoresearch-temp-continue-99"
-assert_contains "log mentions stash" "$(cat "$LOG_OUTPUT")" "stash 成功"
+handle_dirty_tree_and_residual_stashes 99
+assert_true "staged file still exists" "[ -f staged.txt ]"
+assert_eq "staged file content preserved" "staged file" "$(cat staged.txt)"
 teardown_case
 
-# Test 4: Residual stash detection and recovery
+# Test 4: Residual stash detection warms about old stashes
 setup_case
-echo "Test 4: residual stash from previous run is detected and restored"
+echo "Test 4: residual stash from previous run is detected with warning"
 echo "residual file" > residual.txt
 git add residual.txt
 git stash push -m "autoresearch-temp-continue-99-old" -q
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_contains "console mentions residual stash" "$(cat "$CONSOLE_OUTPUT")" "上次中断遗留的 stash"
-assert_contains "console mentions restore attempt" "$(cat "$CONSOLE_OUTPUT")" "尝试恢复残留 stash"
-assert_true "residual file restored" "[ -f residual.txt ]"
+handle_dirty_tree_and_residual_stashes 99
+assert_contains "console warns about residual stash" "$(cat "$CONSOLE_OUTPUT")" "上次中断遗留的 stash"
+assert_contains "console shows restore command" "$(cat "$CONSOLE_OUTPUT")" "git stash pop"
+assert_not_contains "residual stash not auto-popped" "$(cat "$CONSOLE_OUTPUT")" "已恢复残留 stash"
 teardown_case
 
-# Test 5: Dirty tree + residual stash both handled
+# Test 5: Dirty tree with residual stash from previous run
 setup_case
-echo "Test 5: dirty tree with residual stash from previous run"
+echo "Test 5: dirty tree files persist while residual stash warning is shown"
 echo "old residual" > old_residual.txt
 git add old_residual.txt
 git stash push -m "autoresearch-temp-continue-99-old" -q
 echo "new dirty" > new_dirty.txt
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_contains "stash ref set for new dirty" "$CONTINUE_STASH_REF" "autoresearch-temp-continue-99"
-assert_contains "console mentions residual" "$(cat "$CONSOLE_OUTPUT")" "上次中断遗留的 stash"
+handle_dirty_tree_and_residual_stashes 99
+assert_true "new dirty file preserved" "[ -f new_dirty.txt ]"
+assert_contains "console warns about residual" "$(cat "$CONSOLE_OUTPUT")" "上次中断遗留的 stash"
 teardown_case
 
-# Test 6: Stash message format verification
+# Test 6: Multiple dirty files are all preserved
 setup_case
-echo "Test 6: stash message follows autoresearch-temp-continue format"
-echo "dirty" > dirty.txt
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 42
-stash_msg=$(git stash list | head -1 | grep -oE 'autoresearch-temp-continue-42-[0-9]+' || true)
-assert_contains "stash message has correct format" "$stash_msg" "autoresearch-temp-continue-42"
-teardown_case
-
-# Test 7: Multiple dirty files
-setup_case
-echo "Test 7: multiple dirty files are all stashed"
+echo "Test 6: multiple dirty files are all preserved"
 echo "file1" > file1.txt
 echo "file2" > file2.txt
 echo "file3" > file3.txt
 git add file1.txt
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_true "all dirty files stashed" "[ ! -f file1.txt ] && [ ! -f file2.txt ] && [ ! -f file3.txt ]"
-assert_contains "stash ref set" "$CONTINUE_STASH_REF" "autoresearch-temp-continue-99"
+handle_dirty_tree_and_residual_stashes 99
+assert_true "all dirty files preserved" "[ -f file1.txt ] && [ -f file2.txt ] && [ -f file3.txt ]"
+assert_eq "file1 content" "file1" "$(cat file1.txt)"
+assert_eq "file2 content" "file2" "$(cat file2.txt)"
+assert_eq "file3 content" "file3" "$(cat file3.txt)"
 teardown_case
 
-# Test 8: Modified tracked file is detected as dirty
+# Test 7: Modified tracked file is preserved
 setup_case
-echo "Test 8: modified tracked file triggers stash"
+echo "Test 7: modified tracked file is preserved"
 echo "original" > tracked.txt
 git add tracked.txt
 git commit -q -m "add tracked"
 echo "modified" > tracked.txt
-CONTINUE_STASH_REF=""
-detect_and_handle_dirty_tree 99
-assert_contains "stash ref for modified tracked" "$CONTINUE_STASH_REF" "autoresearch-temp-continue-99"
+handle_dirty_tree_and_residual_stashes 99
+assert_true "tracked file preserved" "[ -f tracked.txt ]"
+assert_eq "modified content preserved" "modified" "$(cat tracked.txt)"
 teardown_case
 
 echo ""

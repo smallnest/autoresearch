@@ -1,0 +1,2581 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mFind Issue #34 details[90m Explore Agent[0m
+[0m✓ [0mFind Issue #34 details[90m Explore Agent[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git stash show -p 2>/dev/null | head -3000
+...output truncated...
+
+Full output saved to: /Users/chaoyuepan/.local/share/opencode/tool-output/tool_dc45bea75001szh8LLrOAwnK0o
+
++        format!(
++            "Failed to create backup {} from {}: {e}",
++            backup_path.display(),
++            path.display()
++        )
++    })?;
++
++    Ok(())
++}
++
++fn write_config_file_sync(
++    base: &Path,
++    project_path: &str,
++    file_id: &str,
++    content: &str,
++) -> Result<ConfigFileContent, String> {
++    if !base.is_dir() {
++        return Err(format!("Path is not a directory: {project_path}"));
++    }
++
++    let target_path = resolve_project_config_file_path(base, file_id)?;
++    ensure_parent_dir(base, &target_path, "config file")?;
++    backup_existing_file(&target_path)?;
++    fs::write(&target_path, content)
++        .map_err(|e| format!("Failed to write config file {}: {e}", target_path.display()))?;
++
++    read_config_file_sync(base, project_path, file_id)
++}
++
++fn reset_config_file_sync(
++    base: &Path,
++    project_path: &str,
++    file_id: &str,
++) -> Result<ConfigFileContent, String> {
++    let (_, default_content) = supported_config_file(file_id)
++        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
++    write_config_file_sync(base, project_path, file_id, default_content)
++}
++
++/// Reads a supported configuration file using project overrides first, then built-in defaults.
++#[tauri::command]
++async fn read_config_file(
++    project_path: String,
++    file_id: String,
++) -> Result<ConfigFileContent, String> {
++    tokio::task::spawn_blocking(move || {
++        let base = Path::new(&project_path);
++        read_config_file_sync(base, &project_path, &file_id)
++    })
++    .await
++    .map_err(|e| format!("Task join error: {e}"))?
++}
++
++/// Writes a supported configuration file into `<project>/.autoresearch/` and creates a `.bak`.
++#[tauri::command]
++async fn write_config_file(
++    project_path: String,
++    file_id: String,
++    content: String,
++) -> Result<ConfigFileContent, String> {
++    tokio::task::spawn_blocking(move || {
++        let base = Path::new(&project_path);
++        write_config_file_sync(base, &project_path, &file_id, &content)
++    })
++    .await
++    .map_err(|e| format!("Task join error: {e}"))?
++}
++
++/// Restores a supported configuration file to the built-in default template.
++#[tauri::command]
++async fn reset_config_file(
++    project_path: String,
++    file_id: String,
++) -> Result<ConfigFileContent, String> {
++    tokio::task::spawn_blocking(move || {
++        let base = Path::new(&project_path);
++        reset_config_file_sync(base, &project_path, &file_id)
++    })
++    .await
++    .map_err(|e| format!("Task join error: {e}"))?
++}
++
+ /// Retrieves the most recently opened project path from the Tauri store.
+ #[tauri::command]
+ async fn get_recent_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
+@@ -1611,6 +1871,9 @@ pub fn run() {
+             select_project_dir,
+             detect_project_config,
+             init_project_config,
++            read_config_file,
++            write_config_file,
++            reset_config_file,
+             get_recent_project,
+             save_recent_project,
+             list_issues,
+@@ -1632,10 +1895,11 @@ mod tests {
+     #[cfg(unix)]
+     use super::RunProcessState;
+     use super::{
+-        build_iteration_progress, build_score_history, find_latest_review_content,
+-        get_iteration_progress_sync, infer_phase, init_project_config_sync,
+-        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
+-        SubtaskStatus,
++        build_iteration_progress, build_score_history, detect_project_config_sync,
++        find_latest_review_content, get_iteration_progress_sync, infer_phase,
++        init_project_config_sync, parse_iteration_from_log_md, parse_iteration_from_terminal,
++        parse_tasks_json, read_config_file_sync, reset_config_file_sync, write_config_file_sync,
++        Phase, SubtaskStatus,
+     };
+     use super::{build_run_args, build_run_env_vars, StartRunRequest};
+     use super::{
+@@ -1645,6 +1909,8 @@ mod tests {
+     };
+     use super::{extract_review_summary, extract_score};
+     use std::fs;
++    #[cfg(unix)]
++    use std::os::unix::fs as unix_fs;
+     use std::path::PathBuf;
+ 
+     fn create_temp_project_dir(test_name: &str) -> PathBuf {
+@@ -1766,6 +2032,460 @@ mod tests {
+         fs::remove_dir_all(project_dir).expect("cleanup");
+     }
+ 
++    #[test]
++    fn detect_project_config_only_counts_autoresearch_overrides() {
++        let project_dir = create_temp_project_dir("detect-project-config-overrides");
++        fs::create_dir_all(project_dir.join("agents")).expect("root agents dir should exist");
++        fs::write(project_dir.join("program.md"), "root program\n")
++            .expect("root program should exist");
++
++        let config =
++            detect_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
++                .expect("config should load");
++
++        assert!(!config.has_autoresearch_dir);
++        assert!(!config.has_program_md);
++        assert!(!config.has_agents_dir);
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_prefers_project_override() {
++        let project_dir = create_temp_project_dir("read-config-project-override");
++        let config_dir = project_dir.join(".autoresearch");
++        fs::create_dir_all(config_dir.join("agents")).expect("agents dir should exist");
++        fs::write(config_dir.join("program.md"), "custom program\n").expect("program should exist");
++
++        let config = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "program.md",
++        )
++        .expect("config should load");
++
++        assert_eq!(config.file_id, "program.md");
++        assert_eq!(config.relative_path, "program.md");
++        assert_eq!(config.content, "custom program\n");
++        assert_eq!(config.source, "project");
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_falls_back_to_default_template() {
++        let project_dir = create_temp_project_dir("read-config-default");
++
++        let config = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++        )
++        .expect("config should load");
++
++        assert_eq!(config.file_id, "agents/claude.md");
++        assert_eq!(config.relative_path, "agents/claude.md");
++        assert_eq!(config.content, super::CLAUDE_AGENT_TEMPLATE);
++        assert_eq!(config.source, "default");
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_fails_when_target_path_is_directory() {
++        let project_dir = create_temp_project_dir("read-config-directory-target");
++        let target_dir = project_dir.join(".autoresearch/agents/codex.md");
++        fs::create_dir_all(&target_dir).expect("target directory should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++        )
++        .expect_err("directory target should fail");
++
++        assert!(
++            error.contains("Config file path is not a file"),
++            "unexpected error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_fails_when_autoresearch_path_is_file() {
++        let project_dir = create_temp_project_dir("read-config-file-ancestor");
++        fs::write(project_dir.join(".autoresearch"), "broken").expect("broken file should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++        )
++        .expect_err("ancestor file should fail");
++
++        assert!(
++            error.contains("Config path ancestor is not a directory"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains(".autoresearch"),
++            "expected ancestor path in error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_creates_project_override_and_backup() {
++        let project_dir = create_temp_project_dir("write-config-backup");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("codex.md"), "old codex\n")
++            .expect("existing config should exist");
++
++        let config = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++            "new codex\n",
++        )
++        .expect("write should succeed");
++
++        assert_eq!(config.content, "new codex\n");
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(target_dir.join("codex.md")).expect("new config should exist"),
++            "new codex\n"
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("codex.md.bak")).expect("backup should exist"),
++            "old codex\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_materializes_first_project_override() {
++        let project_dir = create_temp_project_dir("write-config-first-materialization");
++        let target_path = project_dir.join(".autoresearch/program.md");
++
++        let config = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "program.md",
++            "custom program\n",
++        )
++        .expect("first write should succeed");
++
++        assert_eq!(config.file_id, "program.md");
++        assert_eq!(config.relative_path, "program.md");
++        assert_eq!(config.content, "custom program\n");
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(&target_path).expect("project override should exist"),
++            "custom program\n"
++        );
++        assert!(
++            !target_path.with_file_name("program.md.bak").exists(),
++            "first write should not create a backup when no previous file exists"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn reset_config_file_restores_default_template() {
++        let project_dir = create_temp_project_dir("reset-config-default");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("opencode.md"), "custom opencode\n")
++            .expect("existing config should exist");
++
++        let config = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/opencode.md",
++        )
++        .expect("reset should succeed");
++
++        assert_eq!(config.content, super::OPENCODE_AGENT_TEMPLATE);
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(target_dir.join("opencode.md")).expect("reset config should exist"),
++            super::OPENCODE_AGENT_TEMPLATE
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("opencode.md.bak")).expect("backup should exist"),
++            "custom opencode\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn reset_config_file_materializes_first_project_override() {
++        let project_dir = create_temp_project_dir("reset-config-first-materialization");
++        let target_path = project_dir.join(".autoresearch/agents/claude.md");
++
++        let config = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++        )
++        .expect("reset should materialize project override");
++
++        assert_eq!(config.file_id, "agents/claude.md");
++        assert_eq!(config.relative_path, "agents/claude.md");
++        assert_eq!(config.content, super::CLAUDE_AGENT_TEMPLATE);
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(&target_path).expect("reset config should exist"),
++            super::CLAUDE_AGENT_TEMPLATE
++        );
++        assert!(
++            !target_path.with_file_name("claude.md.bak").exists(),
++            "first reset should not create a backup when no previous file exists"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn config_file_commands_reject_unsupported_file_id() {
++        let project_dir = create_temp_project_dir("config-file-invalid-id");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "../secret.txt",
++        )
++        .expect_err("invalid file id should fail");
++
++        assert_eq!(error, "Unsupported config file: ../secret.txt");
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_rejects_unsupported_file_id() {
++        let project_dir = create_temp_project_dir("write-config-invalid-id");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "../secret.txt",
++            "value",
++        )
++        .expect_err("invalid file id should fail");
++
++        assert_eq!(error, "Unsupported config file: ../secret.txt");
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn reset_config_file_rejects_unsupported_file_id() {
++        let project_dir = create_temp_project_dir("reset-config-invalid-id");
++
++        let error = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "../secret.txt",
++        )
++        .expect_err("invalid file id should fail");
++
++        assert_eq!(error, "Unsupported config file: ../secret.txt");
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_fails_when_target_path_is_directory() {
++        let project_dir = create_temp_project_dir("write-config-directory-target");
++        let target_dir = project_dir.join(".autoresearch/agents/codex.md");
++        fs::create_dir_all(&target_dir).expect("target directory should exist");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++            "new codex\n",
++        )
++        .expect_err("directory target should fail");
++
++        assert!(
++            error.contains("Config file path is not a file"),
++            "unexpected error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn read_config_file_rejects_symlinked_config_ancestor() {
++        let project_dir = create_temp_project_dir("read-config-symlink-ancestor");
++        let external_dir = create_temp_project_dir("read-config-symlink-ancestor-external");
++        unix_fs::symlink(&external_dir, project_dir.join(".autoresearch"))
++            .expect("symlinked config dir should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "program.md",
++        )
++        .expect_err("symlinked config dir should fail");
++
++        assert!(
++            error.contains("Config path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains(".autoresearch"),
++            "expected symlink path in error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++        fs::remove_dir_all(external_dir).expect("cleanup external");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn write_config_file_rejects_symlinked_target_file() {
++        let project_dir = create_temp_project_dir("write-config-symlink-target");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let external_dir = create_temp_project_dir("write-config-symlink-target-external");
++        let external_file = external_dir.join("codex.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(&external_file, "external codex\n").expect("external file should exist");
++        unix_fs::symlink(&external_file, target_dir.join("codex.md"))
++            .expect("symlinked target file should exist");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++            "new codex\n",
++        )
++        .expect_err("symlinked target file should fail");
++
++        assert!(
++            error.contains("Config path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains("codex.md"),
++            "expected target path in error: {error}"
++        );
++        assert_eq!(
++            fs::read_to_string(&external_file).expect("external file should remain unchanged"),
++            "external codex\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++        fs::remove_dir_all(external_dir).expect("cleanup external");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn read_config_file_rejects_broken_symlink_target() {
++        let project_dir = create_temp_project_dir("read-config-broken-symlink-target");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let missing_target = project_dir.join("missing-codex.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        unix_fs::symlink(&missing_target, target_dir.join("codex.md"))
++            .expect("broken symlink target should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++        )
++        .expect_err("broken symlink target should fail");
++
++        assert!(
++            error.contains("Config path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains("codex.md"),
++            "expected target path in error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn write_config_file_rejects_broken_symlink_backup_path() {
++        let project_dir = create_temp_project_dir("write-config-broken-symlink-backup");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let missing_backup_target = project_dir.join("missing-claude-backup.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("claude.md"), "custom claude\n")
++            .expect("project config should exist");
++        unix_fs::symlink(&missing_backup_target, target_dir.join("claude.md.bak"))
++            .expect("broken symlink backup path should exist");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++            "new claude\n",
++        )
++        .expect_err("broken symlink backup path should fail");
++
++        assert!(
++            error.contains("Backup path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("claude.md"))
++                .expect("project config should remain unchanged"),
++            "custom claude\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn reset_config_file_rejects_symlinked_backup_path() {
++        let project_dir = create_temp_project_dir("reset-config-symlink-backup");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let external_dir = create_temp_project_dir("reset-config-symlink-backup-external");
++        let backup_target = external_dir.join("claude.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("claude.md"), "custom claude\n")
++            .expect("project config should exist");
++        fs::write(&backup_target, "external backup\n").expect("external backup should exist");
++        unix_fs::symlink(&backup_target, target_dir.join("claude.md.bak"))
++            .expect("symlinked backup path should exist");
++
++        let error = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++        )
++        .expect_err("symlinked backup path should fail");
++
++        assert!(
++            error.contains("Backup path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("claude.md"))
++                .expect("project config should remain unchanged"),
++            "custom claude\n"
++        );
++        assert_eq!(
++            fs::read_to_string(&backup_target).expect("external backup should remain unchanged"),
++            "external backup\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++        fs::remove_dir_all(external_dir).expect("cleanup external");
++    }
++
+     #[test]
+     fn parse_issue_detail_returns_structured_data() {
+         let detail = parse_issue_detail(
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index 99daedb..9cbb498 100644
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -58,6 +58,15 @@
+ - In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+ - `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+ - Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
++- Settings-style editors that refetch data on tab switch or manual reload must guard unsaved edits. If `editorContent` can be replaced from an effect, add a dirty-state confirmation or block the action; otherwise switching files silently loses user changes.
++- For Settings-style editors, keep the dirty-state policy in a nearby pure helper (for example action type + confirm message builder) and have the React component call that helper before mutating selection/reload state. This keeps the UX rule testable without a browser runner.
++- For config editors, treat "reset to default" as a destructive content replacement just like reload/switch-file, and route it through the same pending-action confirmation helper instead of bespoke UI logic.
++- For config editors, project changes are also destructive content replacement: if `projectPath` changes while the editor is dirty, do not auto-replace `editorContent`; confirm discard first, or hold the new project in a pending state until the user explicitly reloads it.
++- For SettingsPage async editor flows, prefer a thin component that delegates load/save/reset effects to helper functions with injected `invoke`/`refreshConfig` dependencies; this lets Node tests verify the full action chain without a dedicated DOM harness.
++- If a Settings page owns button disabled state and click wiring itself, extract a pure view-model/helper from the hook component and render from that object. This gives tests one place to lock `disabled`, `readOnly`, pending-project callouts, and tab switch wiring without introducing a browser runner.
++- If a Settings page owns the actual click handlers, move the handler sequencing itself (confirm -> clear feedback -> invoke -> refresh -> state update) into exported helpers too; otherwise tests only prove the low-level primitives work, not that the page wires them together correctly.
++- For config editors with async persistence, dirty-state guards are not enough: while save/reset/load is in flight, freeze file switching, reload, and textarea editing, or a late response can overwrite the newly selected file's state.
++- If a Settings page can keep editing the old project while a new `projectPath` is pending, route every save/reset/reload/refresh call through an `effectiveProjectPath` derived from the last loaded project; using the store's latest `projectPath` directly can write stale editor content into the wrong repository.
+ 
+ ## IssuesPage 约定
+ 
+@@ -127,6 +136,21 @@
+ - 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+ - 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+ 
++## SettingsPage 约定
++
++### 配置编辑器
++
++- 设置页中的配置编辑器直接消费 Tauri 白名单命令 `read_config_file` / `write_config_file` / `reset_config_file`；前端不要自行拼任意文件路径。
++- 编辑器切换文件时要展示“当前来源”和“写入位置”，让用户明确区分“内置默认模板”和“项目覆写”。
++- “写入位置”是用户可见文案，不能用简单的 `'/'` 字符串拼接；至少要按 `projectPath` 的分隔符风格生成，避免 Windows 下出现混合路径。
++- 如果 `projectPath` 带 Windows 盘符（例如 `C:/repo`），展示路径时也要整体转成反斜杠风格，而不是只替换追加段落。
++- 保存或重置成功后，需要刷新 `projectStore.config`，否则概览页的配置状态徽章会滞后于实际文件系统状态。
++- 浏览器 fallback 只允许展示占位内容用于页面开发，不要假装能读取真实本地文件。
++- 浏览器 fallback 也不应伪造“保存成功”或“已重置为默认值”的持久化结果；无 Tauri 后端时，配置编辑器应明确表现为只读演示态。
++- 配置加载失败时，不要让编辑器停留在“空白但可输入”的假可编辑状态；textarea 应保持只读/禁用，并把恢复路径引导到“重新加载”或“重置为默认值”。
++- 如果 dirty 状态下拦截了 `projectPath` 切换，保存、重置和“写入位置”展示都必须继续绑定旧的已加载项目路径；不能直接改用最新 store `projectPath`，否则保留下来的旧项目草稿会被误写到新项目目录。
++- 审核或实现 US-007 时，不要把“配置文件编辑器”和“运行参数配置”视为同一块功能已经自动覆盖；当前 `SettingsPage` 负责文件编辑器，而 `RunConfigPanel` 仍挂在 `IssueDetailPanel`，验收时要分别确认两处入口是否都满足需求。
++
+ ## LogViewer 约定
+ 
+ ### 性能
+diff --git a/desktop_app/src/pages/SettingsPage.tsx b/desktop_app/src/pages/SettingsPage.tsx
+index e2d09c9..a038d23 100644
+--- a/desktop_app/src/pages/SettingsPage.tsx
++++ b/desktop_app/src/pages/SettingsPage.tsx
+@@ -1,15 +1,396 @@
++import { useEffect, useRef, useState } from 'react';
+ import AgentSelector from '../components/AgentSelector';
++import RunConfigPanel from '../components/RunConfigPanel';
++import { useProjectStore } from '../stores/projectStore';
++import { normalizeUserFacingError } from '../stores/uiError';
++import {
++  buildConfigEditorViewModel,
++  clearConfigEditorFeedback,
++  CONFIG_EDITOR_MESSAGES,
++  type ConfigEditorPendingAction,
++  type ConfigFileContent,
++  type ConfigFileId,
++  getConfigEditorMode,
++  isConfigEditorInteractionLocked,
++  loadConfigEditorFile,
++  reloadConfigEditorFile,
++  resolveConfigEditorLoadPlan,
++  resolveConfigEditorProjectPath,
++  submitConfigEditorReset,
++  submitConfigEditorSave,
++  shouldProceedWithPendingAction,
++} from './configEditor';
++
++const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
++
++async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
++  const { invoke } = await import('@tauri-apps/api/core');
++  return invoke<T>(cmd, args);
++}
+ 
+ function SettingsPage() {
++  const { projectPath, refreshConfig } = useProjectStore();
++  const [activeFileId, setActiveFileId] = useState<ConfigFileId>('program.md');
++  const [currentFile, setCurrentFile] = useState<ConfigFileContent | null>(null);
++  const [editorContent, setEditorContent] = useState('');
++  const [isLoading, setIsLoading] = useState(false);
++  const [isSaving, setIsSaving] = useState(false);
++  const [isResetting, setIsResetting] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [statusMessage, setStatusMessage] = useState<string | null>(null);
++  const [reloadKey, setReloadKey] = useState(0);
++  const [runConfigCollapsed, setRunConfigCollapsed] = useState(false);
++  const [pendingProjectPath, setPendingProjectPath] = useState<string | null>(null);
++  const loadedProjectPathRef = useRef<string | null>(null);
++  const isDirtyRef = useRef(false);
++
++  const isDirty = currentFile !== null && editorContent !== currentFile.content;
++  const editorMode = getConfigEditorMode(isTauri);
++  const isProjectSwitchPending = pendingProjectPath !== null;
++  const effectiveProjectPath = resolveConfigEditorProjectPath({
++    projectPath,
++    loadedProjectPath: loadedProjectPathRef.current,
++    pendingProjectPath,
++  });
++  const isInteractionLocked =
++    isProjectSwitchPending ||
++    isConfigEditorInteractionLocked(isLoading, isSaving, isResetting);
++
++  const confirmPendingAction = (action: ConfigEditorPendingAction) =>
++    shouldProceedWithPendingAction(isDirty, action, (message) => window.confirm(message));
++  const feedback = { setError, setStatusMessage };
++  const clearFeedback = () => clearConfigEditorFeedback(feedback);
++
++  useEffect(() => {
++    isDirtyRef.current = isDirty;
++  }, [isDirty]);
++
++  useEffect(() => {
++    let cancelled = false;
++
++    async function loadConfigFile() {
++      const loadPlan = resolveConfigEditorLoadPlan({
++        projectPath,
++        loadedProjectPath: loadedProjectPathRef.current,
++        isDirty: isDirtyRef.current,
++        confirmDiscard: (message) => window.confirm(message),
++      });
++
++      if (loadPlan.type === 'clear') {
++        loadedProjectPathRef.current = null;
++        setPendingProjectPath(null);
++        setCurrentFile(null);
++        setEditorContent('');
++        setError(null);
++        setStatusMessage(null);
++        return;
++      }
++
++      if (loadPlan.type === 'block-project-switch') {
++        setPendingProjectPath(loadPlan.nextProjectPath);
++        setError(null);
++        setStatusMessage(loadPlan.statusMessage);
++        return;
++      }
++
++      setPendingProjectPath(null);
++      setIsLoading(true);
++      setError(null);
++      setStatusMessage(null);
++
++      try {
++        const config = await loadConfigEditorFile({
++          fileId: activeFileId,
++          hasTauriBackend: isTauri,
++          readConfigFile: (fileId) =>
++            tauriInvoke<ConfigFileContent>('read_config_file', {
++              projectPath: loadPlan.projectPath,
++              fileId,
++            }),
++        });
++
++        if (!cancelled) {
++          loadedProjectPathRef.current = loadPlan.projectPath;
++          setCurrentFile(config);
++          setEditorContent(config.content);
++        }
++      } catch (loadError) {
++        if (!cancelled) {
++          setCurrentFile(null);
++          setEditorContent('');
++          setError(normalizeUserFacingError(loadError, CONFIG_EDITOR_MESSAGES.loadError));
++        }
++      } finally {
++        if (!cancelled) {
++          setIsLoading(false);
++        }
++      }
++    }
++
++    void loadConfigFile();
++
++    return () => {
++      cancelled = true;
++    };
++  }, [activeFileId, projectPath, reloadKey]);
++
++  const handleSave = async () => {
++    await submitConfigEditorSave({
++      projectPath: effectiveProjectPath,
++      currentFile,
++      fileId: activeFileId,
++      content: editorContent,
++      editorMode,
++      writeConfigFile: (fileId, content) =>
++        tauriInvoke<ConfigFileContent>('write_config_file', {
++          projectPath: effectiveProjectPath,
++          fileId,
++          content,
++        }),
++      refreshConfig: () => refreshConfig(effectiveProjectPath ?? undefined),
++      setIsSaving,
++      setCurrentFile,
++      setEditorContent,
++      normalizeError: normalizeUserFacingError,
++      feedback,
++    });
++  };
++
++  const handleReset = async () => {
++    await submitConfigEditorReset({
++      projectPath: effectiveProjectPath,
++      confirmPendingAction,
++      fileId: activeFileId,
++      editorMode,
++      resetConfigFile: (fileId) =>
++        tauriInvoke<ConfigFileContent>('reset_config_file', {
++          projectPath: effectiveProjectPath,
++          fileId,
++        }),
++      refreshConfig: () => refreshConfig(effectiveProjectPath ?? undefined),
++      setIsResetting,
++      setCurrentFile,
++      setEditorContent,
++      normalizeError: normalizeUserFacingError,
++      feedback,
++    });
++  };
++
++  const handleReload = () =>
++    reloadConfigEditorFile({
++      projectPath: effectiveProjectPath,
++      isInteractionLocked,
++      confirmPendingAction,
++      clearFeedback,
++      bumpReloadKey: () => setReloadKey((value) => value + 1),
++    });
++
++  const handleLoadPendingProject = () => {
++    if (!pendingProjectPath) {
++      return;
++    }
++
++    loadedProjectPathRef.current = pendingProjectPath;
++    setPendingProjectPath(null);
++    setCurrentFile(null);
++    setEditorContent('');
++    setError(null);
++    setStatusMessage(null);
++    setReloadKey((value) => value + 1);
++  };
++
++  const configEditorView = effectiveProjectPath
++    ? buildConfigEditorViewModel({
++        projectPath: effectiveProjectPath,
++        activeFileId,
++        currentFile,
++        editorContent,
++        editorMode,
++        isDirty,
++        isLoading,
++        isSaving,
++        isResetting,
++        isInteractionLocked,
++        pendingProjectPath,
++        clearFeedback,
++        clearStatusMessage: () => setStatusMessage(null),
++        confirmPendingAction,
++        setActiveFileId,
++        setEditorContent,
++        onReload: handleReload,
++        onSave: handleSave,
++        onReset: handleReset,
++        onLoadPendingProject: handleLoadPendingProject,
++      })
++    : null;
++
+   return (
+-    <div className="p-6">
+-      <h1 className="text-2xl font-bold mb-4">设置</h1>
+-      <p className="text-gray-500 mb-6">配置应用偏好与 Agent 选择顺序。</p>
+-      
+-      <div className="max-w-2xl">
+-        <h2 className="text-lg font-semibold mb-4">Agent 配置</h2>
+-        <AgentSelector />
++    <div className="p-6 space-y-8">
++      <div>
++        <h1 className="text-2xl font-bold mb-4">设置</h1>
++        <p className="text-gray-500 mb-6">配置应用偏好与 Agent 选择顺序。</p>
+       </div>
++
++      <section className="bg-white border border-gray-200 rounded-xl shadow-sm">
++        <div className="p-6 border-b border-gray-200">
++          <h2 className="text-lg font-semibold mb-2">配置文件编辑器</h2>
++          <p className="text-sm text-gray-500">
++            编辑 `program.md` 与各 Agent 指令文件。保存后会写入当前项目的
++            `.autoresearch/` 目录，并在覆盖前自动创建 `.bak` 备份。
++          </p>
++        </div>
++
++        {!projectPath ? (
++          <div className="p-6 text-sm text-amber-800 bg-amber-50 rounded-b-xl">
++            请先在概览页选择项目目录，然后再编辑配置文件。
++          </div>
++        ) : (
++          <div className="p-6 space-y-4">
++            <div className="flex flex-wrap gap-3">
++              {configEditorView?.fileTabs.map((file) => (
++                <button
++                  key={file.id}
++                  type="button"
++                  onClick={file.onSelect}
++                  disabled={file.disabled}
++                  className={`px-4 py-2 rounded-lg border text-left transition-colors ${
++                    file.selected
++                      ? 'bg-blue-50 border-blue-300 text-blue-700'
++                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
++                  } disabled:opacity-60 disabled:cursor-not-allowed`}
++                >
++                  <div className="text-sm font-medium">{file.label}</div>
++                  <div className="text-xs opacity-80">{file.description}</div>
++                </button>
++              ))}
++            </div>
++
++            <div className="grid gap-3 md:grid-cols-2">
++              <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
++                <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">
++                  当前来源
++                </div>
++                <div className="text-sm text-gray-700">
++                  {configEditorView?.currentSourceLabel}
++                </div>
++              </div>
++              <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
++                <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">
++                  写入位置
++                </div>
++                <div className="text-sm text-gray-700 break-all">
++                  {configEditorView?.savePath}
++                </div>
++              </div>
++            </div>
++
++            {error && (
++              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
++                {error}
++              </div>
++            )}
++
++            {statusMessage && (
++              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
++                {statusMessage}
++              </div>
++            )}
++
++            {configEditorView?.pendingProjectCallout && (
++              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-3">
++                <p>{configEditorView.pendingProjectCallout.message}</p>
++                <button
++                  type="button"
++                  onClick={configEditorView.pendingProjectCallout.onConfirmDiscard}
++                  className="px-4 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
++                >
++                  {configEditorView.pendingProjectCallout.actionLabel}
++                </button>
++              </div>
++            )}
++
++            {!editorMode.canPersist && (
++              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
++                {editorMode.hint}
++              </div>
++            )}
++
++            <div className="flex flex-wrap gap-3">
++                <button
++                  type="button"
++                  onClick={configEditorView?.onReload}
++                  disabled={configEditorView?.reloadDisabled}
++                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
++                >
++                  重新加载
++                </button>
++              <button
++                type="button"
++                onClick={configEditorView?.onSave}
++                disabled={configEditorView?.saveDisabled}
++                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
++              >
++                {isSaving ? '保存中...' : '保存配置'}
++              </button>
++              <button
++                type="button"
++                onClick={configEditorView?.onReset}
++                disabled={configEditorView?.resetDisabled}
++                className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
++              >
++                {isResetting ? '重置中...' : '重置为默认值'}
++              </button>
++            </div>
++
++            <label className="block">
++              <span className="block text-sm font-medium text-gray-700 mb-2">
++                {configEditorView?.activeDefinition.label}
++              </span>
++              <textarea
++                value={configEditorView?.editorValue}
++                onChange={(event) => {
++                  configEditorView?.onEditorChange(event.target.value);
++                }}
++                spellCheck={false}
++                disabled={configEditorView?.editorDisabled}
++                readOnly={configEditorView?.editorReadOnly}
++                className="w-full min-h-[420px] rounded-xl border border-gray-200 bg-gray-950 text-gray-100 font-mono text-sm leading-6 p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
++              />
++            </label>
++
++            <p className="text-xs text-gray-500">
++              {configEditorView?.helperText}
++            </p>
++          </div>
++        )}
++      </section>
++
++      <section className="max-w-3xl bg-white border border-gray-200 rounded-xl shadow-sm">
++        <div className="p-6 border-b border-gray-200">
++          <h2 className="text-lg font-semibold mb-2">运行参数</h2>
++          <p className="text-sm text-gray-500">
++            在设置页集中调整 passing score、最大迭代次数与继续模式。
++          </p>
++        </div>
++        <div className="p-6">
++          <RunConfigPanel
++            collapsed={runConfigCollapsed}
++            onCollapsedChange={setRunConfigCollapsed}
++          />
++        </div>
++      </section>
++
++      <section className="max-w-3xl bg-white border border-gray-200 rounded-xl shadow-sm">
++        <div className="p-6 border-b border-gray-200">
++          <h2 className="text-lg font-semibold mb-2">Agent 配置</h2>
++          <p className="text-sm text-gray-500">
++            调整默认 Agent 选择顺序，运行参数面板会复用这里的排列结果。
++          </p>
++        </div>
++        <div className="p-6">
++          <AgentSelector />
++        </div>
++      </section>
+     </div>
+   );
+ }
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 2b7ddfa..42a269c 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -25,6 +25,7 @@ interface ProjectState {
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+   loadRecentProjects: () => Promise<void>;
++  refreshConfig: (_projectPath?: string) => Promise<void>;
+   clearError: () => void;
+ }
+ 
+@@ -184,5 +185,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     }
+   },
+ 
++  refreshConfig: async (targetProjectPath?: string) => {
++    const projectPath = targetProjectPath ?? get().projectPath;
++    if (!projectPath) {
++      return;
++    }
++
++    try {
++      if (isTauri) {
++        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          projectPath,
++        });
++        if (get().projectPath === projectPath) {
++          set({ config });
++        }
++      } else {
++        if (get().projectPath === projectPath) {
++          set({ config: detectConfigBrowser(projectPath) });
++        }
++      }
++    } catch (e) {
++      if (get().projectPath === projectPath) {
++        set({ error: normalizeProjectError(e) });
++      }
++    }
++  },
++
+   clearError: () => set({ error: null }),
+ }));
+diff --git a/desktop_app/tests/CLAUDE.md b/desktop_app/tests/CLAUDE.md
+index b02166d..06b3a66 100644
+--- a/desktop_app/tests/CLAUDE.md
++++ b/desktop_app/tests/CLAUDE.md
+@@ -4,6 +4,22 @@
+ 
+ - **模式**: 前端中文化可用 `node --test --experimental-strip-types` 直接做源码字符串断言，不必引入浏览器测试框架。
+ - **模式**: 如果组件文件是 `.tsx` 且 Node 测试入口不能直接加载，优先把可测试的数据转换或 tooltip 文案 helper 提到邻近的 `.ts` 文件，再对 `.tsx` 做源码级护栏断言。
++- **模式**: 对设置页这类依赖 Tauri 环境分支的组件，优先把“浏览器 fallback / 桌面可写态”的模式判断提成纯函数，再用 Node 单测锁住只读语义和提示文案。
++- **模式**: 如果设置页交互依赖异步 `invoke + refresh` 链路，但仓库没有 DOM 测试基建，优先把“加载/保存/重置”动作封装成可注入依赖的 async helper，然后用 stub 断言调用顺序和成功文案，避免测试只停留在静态字符串层。
++- **模式**: 配置编辑器除了 helper 单测，还要覆盖“dirty 状态下切换文件/重新加载不会静默丢失输入”的交互约束；否则文案和纯函数都通过，真实编辑流程仍可能丢数据。
++- **模式**: dirty-state 测试不要只覆盖 switch/reload；`reset` 这类会用默认内容覆盖编辑器的动作同样属于 destructive action，必须走同一套确认分支。
++- **模式**: 如果设置页会随着 `projectPath` 变化从 effect 中重载内容，测试必须覆盖“dirty 状态下切换项目不会静默覆盖编辑器”这条分支；否则文件切换都受保护，项目切换仍然会丢稿。
++- **模式**: 如果项目没有浏览器测试基建，可先把“切换/重载是否允许继续”的状态机提成纯函数，再用 `node --test --experimental-strip-types` 覆盖 clean/dirty、确认/取消两条分支。
++- **模式**: 路径展示 helper 如果服务于跨平台 UI，要在纯单测里同时锁住 POSIX 和 Windows 两种输出，避免只在 macOS 开发时漏掉反斜杠路径回归。
++- **模式**: 对设置页这类聚合配置入口，除了测 helper，还要加源码级护栏断言关键子组件确实被挂到目标页面；否则 `RunConfigPanel` 一类功能可能只留在别处页面，验收仍会漏项。
++- **模式**: 对 `SettingsPage` 这类自己持有 `useState` + 事件处理器的页面，helper 测试只能证明规则正确，不能证明按钮 wiring 正确；只要仓库允许，仍应补一层组件交互验证或浏览器验收来覆盖实际点击后的状态切换。
++- **模式**: 如果暂时没有组件交互测试基建，至少要同时做两层护栏：纯 helper 单测锁住 `busy => 不允许切换/重载`，再加源码断言确认 `SettingsPage` 真的把 `disabled/readOnly` 接到对应控件上。
++- **模式**: 对 `SettingsPage` 这类 hook 很重但又缺少 DOM 测试基建的页面，可以把控件接线提成纯 view-model helper；测试直接调用返回的 `onSelect` / `onEditorChange` / `onConfirmDiscard`，就能覆盖真实 wiring，而不必只停在源码字符串断言。
++- **模式**: 配置编辑器的错误态也要锁住 view-model 行为；加载失败时 textarea 应保持只读，避免出现“空白可编辑但无法保存”的假交互。
++- **模式**: 如果设置页在 dirty 状态下允许“挂起项目切换”，测试必须同时锁住两件事：pure helper 返回旧的已加载项目路径，以及 `SettingsPage` 源码确实把 save/reset/refresh 接到了这个有效路径，而不是直接使用最新 store `projectPath`。
++- **经验**: 配置编辑器验收要同时跑 `npm --prefix desktop_app test` 和 Rust 侧 `cargo test config_file` / `cargo clippy -- -D warnings`；前端测试能证明交互规则，但白名单路径、`.bak` 备份和 `.autoresearch` 物化语义仍依赖 Tauri 后端校验。
++- **经验**: 对 `SettingsPage` 这类聚合式前端改动，验收不要停在 `test + typecheck + lint`；还要补跑 `npm --prefix desktop_app run build`，否则 Vite 打包层面的 TS/模块问题会漏掉。
++- **经验**: 审核配置编辑器时要把“前端状态机”和“Rust 文件命令”视为同一个验收面；如果只验证 helper 交互而不验证后端白名单/备份规则，或反过来只看 Rust 测试不看 `SettingsPage` wiring，都会留下真实回归缺口。
+ - **模式**: 中文化回归测试除了页面组件，还要直接检查 `src/stores` 里的错误文案；store 抛出的字符串同样会进入 UI。
+ - **模式**: “全面中文化”测试要把 `IterationProgressPanel` / `iterationProgressView` 这类状态面板也纳入覆盖，它们常含阶段名、状态标签和进度摘要，容易遗漏残留英文。
+ - **模式**: 如果组件展示的是后端英文枚举，测试要同时检查“映射后的中文文案存在”以及“原始英文枚举不再直接出现在展示常量里”，这样才能防止把内部 key 泄漏到 UI。
+diff --git a/desktop_app/tests/uiLocalization.test.mjs b/desktop_app/tests/uiLocalization.test.mjs
+index 1f877ff..fe87934 100644
+--- a/desktop_app/tests/uiLocalization.test.mjs
++++ b/desktop_app/tests/uiLocalization.test.mjs
+@@ -29,12 +29,30 @@ test('settings, history, and agent selection copy is localized', () => {
+   const settingsSource = readSource('../src/pages/SettingsPage.tsx');
+   const historySource = readSource('../src/pages/HistoryPage.tsx');
+   const dashboardSource = readSource('../src/pages/DashboardPage.tsx');
++  const configEditorSource = readSource('../src/pages/configEditor.ts');
+   const agentSelectorSource = readSource('../src/components/AgentSelector.tsx');
+   const runConfigSource = readSource('../src/components/RunConfigPanel.tsx');
+   const logViewerSource = readSource('../src/components/LogViewer.tsx');
+ 
+   assert.match(settingsSource, />设置</);
+   assert.match(settingsSource, /配置应用偏好与 Agent 选择顺序。/);
++  assert.match(settingsSource, /配置文件编辑器/);
++  assert.match(settingsSource, /保存配置/);
++  assert.match(settingsSource, /重置为默认值/);
++  assert.match(settingsSource, /请先在概览页选择项目目录/);
++  assert.match(configEditorSource, /放弃当前修改并加载新项目配置/);
++  assert.match(configEditorSource, /pendingProjectSwitchMessage/);
++  assert.match(settingsSource, /运行参数/);
++  assert.match(settingsSource, /passing score、最大迭代次数与继续模式/);
++  assert.match(settingsSource, /<RunConfigPanel/);
++  assert.match(settingsSource, /disabled=\{configEditorView\?\.editorDisabled\}/);
++  assert.match(settingsSource, /readOnly=\{configEditorView\?\.editorReadOnly\}/);
++  assert.match(settingsSource, /projectPath: effectiveProjectPath/);
++  assert.match(settingsSource, /refreshConfig\(effectiveProjectPath \?\? undefined\)/);
++  assert.match(configEditorSource, /浏览器模式下仅支持查看占位内容，保存与重置需在桌面应用中进行。/);
++  assert.match(configEditorSource, /isConfigEditorInteractionLocked/);
++  assert.match(configEditorSource, /buildConfigEditorViewModel/);
++  assert.match(configEditorSource, /resolveConfigEditorProjectPath/);
+   assert.match(settingsSource, /Agent 配置/);
+   assert.doesNotMatch(settingsSource, />Settings</);
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git stash show -p 2>/dev/null | wc -l
+1395
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-34/terminal.log[90m [offset=1, limit=100][0m
+Let me continue examining the full implementation by reading more of the stash and the actual source files.
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git stash show -p 2>/dev/null | head -800
+diff --git a/CLAUDE.md b/CLAUDE.md
+index c13ce23..d240006 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -77,6 +77,7 @@ Planning phase (before iteration 1) asks the first agent to split the Issue into
+ - Quality gate passes → `mark_subtask_passed()` sets `passes: true`
+ - `all_subtasks_passed()` → enters PR/merge flow
+ - No tasks.json (planning failure) → backward-compatible original mode
++- When reviewing archived workflow iterations, treat `.autoresearch/workflows/issue-N/planning.log` as the source of truth for the original subtask acceptance criteria. `tasks.json` inside the workflow can contain placeholder or truncated subtask text in later iterations and is not always reliable for audit scoring.
+ 
+ ### Agent Invocation
+ 
+diff --git a/desktop_app/src-tauri/CLAUDE.md b/desktop_app/src-tauri/CLAUDE.md
+index 01cf1e4..79ae9e2 100644
+--- a/desktop_app/src-tauri/CLAUDE.md
++++ b/desktop_app/src-tauri/CLAUDE.md
+@@ -28,8 +28,21 @@
+ - `init_project_config` should only create missing files under `<project>/.autoresearch/`; never overwrite an existing `program.md` or existing agent template file.
+ - Reuse the repo-root `program.md` and `agents/*.md` as built-in templates via `include_str!`, so desktop init stays aligned with CLI defaults without runtime filesystem lookups.
+ - Keep the command return type consistent with `detect_project_config` by returning the refreshed `ProjectConfig` after initialization; the frontend can use that directly to refresh badge state.
++- `detect_project_config` must report only `.autoresearch/` overrides, not similarly named files at the repo root; the desktop app should reflect the same config source that `run.sh` actually reads.
++- Config editor commands should expose only a fixed whitelist (`program.md`, `agents/claude.md`, `agents/codex.md`, `agents/opencode.md`) instead of arbitrary relative paths; read falls back to built-in templates, while write/reset always materialize the project override under `<project>/.autoresearch/`.
++- When saving or resetting a project config override, create a sibling `.bak` backup of the previous project file before overwriting so the frontend does not need separate backup logic.
++- `read_config_file` should fail fast when a whitelisted target path exists but is not a regular file; silently falling back to the built-in template hides broken project state from the UI.
++- Apply the same fail-fast rule to ancestor path conflicts too: if `<project>/.autoresearch` or an intermediate parent exists as a regular file, `read_config_file` should surface that broken state instead of pretending the default template is usable.
++- Whitelisting logical file ids is not enough for config-file commands: reject symlinked ancestors and symlinked target files too, otherwise `<project>/.autoresearch` can point outside the project and `fs::write` / `fs::copy` will still touch arbitrary paths.
++- Do not use `Path::exists()` / `is_file()` alone for config security checks; broken symlinks return false there. Use `symlink_metadata`-based inspection so dangling target files and dangling `.bak` symlinks are rejected before read/write.
+ 
+ ## Tests
+ - Keep process-management tests in `src/lib.rs` as pure helper tests where possible; use a short-lived `sh -c "exit 0"` child on Unix to verify shared state stores both PID and handle without adding sleeps.
++- For frontend-facing file commands, return enough metadata (`file_id`, `relative_path`, `source`) for the UI to render source/target labels without reconstructing backend path rules on the client.
++- For config-file write/reset work (Issue #34 / T-002), Rust tests must cover both first-time materialization into `<project>/.autoresearch/` and overwrite-with-backup; covering only the overwrite case is not enough for acceptance.
++- Do not treat `reset_config_file` as covered just because `write_config_file` already has a first-write test; reset needs its own first-materialization test to prove default-template restore also creates the project override when the file was previously absent.
++- Add a negative test for symlink escapes in config-file commands; directory/file-shape validation alone does not prove writes stay under the selected project root.
++- Symlink-escape coverage should include dangling symlinks too; a broken target or broken backup symlink can still be followed by `fs::write` / `fs::copy` if validation only checks `exists()`.
++- T-002 review should be scored against `.autoresearch/workflows/issue-N/planning.log` when `tasks.json` contains placeholder acceptance text; the Rust acceptance bar here is command registration plus `.autoresearch` materialization, `.bak` backup, default-template reset, and rejection of non-whitelisted targets.
+ - Helper functions that only exist for unit tests should either be exercised by production code or annotated deliberately; this crate runs `cargo clippy -- -D warnings`, so otherwise `dead_code` will fail the build.
+ - For review-text helpers, prefer deterministic line-based extraction around the matched score line: keep the score line itself plus the nearest non-empty context lines, instead of taking an arbitrary leading window that may drop the actual summary sentence after the score.
+diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+index 0dd7ad2..61f7836 100644
+--- a/desktop_app/src-tauri/src/lib.rs
++++ b/desktop_app/src-tauri/src/lib.rs
+@@ -60,6 +60,15 @@ struct ProjectConfig {
+     has_agents_dir: bool,
+ }
+ 
++/// Frontend-facing contents for a supported configuration file.
++#[derive(Debug, serde::Serialize, PartialEq, Eq)]
++struct ConfigFileContent {
++    file_id: String,
++    relative_path: String,
++    content: String,
++    source: String,
++}
++
+ /// A label attached to a GitHub Issue.
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+ struct GhLabel {
+@@ -234,6 +243,16 @@ const CLAUDE_AGENT_TEMPLATE: &str = include_str!("../../../agents/claude.md");
+ const CODEX_AGENT_TEMPLATE: &str = include_str!("../../../agents/codex.md");
+ const OPENCODE_AGENT_TEMPLATE: &str = include_str!("../../../agents/opencode.md");
+ 
++fn supported_config_file(file_id: &str) -> Option<(&'static str, &'static str)> {
++    match file_id {
++        "program.md" => Some(("program.md", PROGRAM_TEMPLATE)),
++        "agents/claude.md" => Some(("agents/claude.md", CLAUDE_AGENT_TEMPLATE)),
++        "agents/codex.md" => Some(("agents/codex.md", CODEX_AGENT_TEMPLATE)),
++        "agents/opencode.md" => Some(("agents/opencode.md", OPENCODE_AGENT_TEMPLATE)),
++        _ => None,
++    }
++}
++
+ fn score_number_regex() -> &'static Regex {
+     static REGEX: OnceLock<Regex> = OnceLock::new();
+     REGEX.get_or_init(|| Regex::new(r"\d+\.?\d*").expect("valid score number regex"))
+@@ -522,7 +541,10 @@ fn build_score_history(workflow_dir: &Path) -> Vec<ScoreHistoryPoint> {
+ 
+     for entry in entries.flatten() {
+         let path = entry.path();
+-        let Some(name) = path.file_name().map(|name| name.to_string_lossy().to_string()) else {
++        let Some(name) = path
++            .file_name()
++            .map(|name| name.to_string_lossy().to_string())
++        else {
+             continue;
+         };
+ 
+@@ -907,8 +929,8 @@ fn detect_project_config_sync(base: &Path, project_path: &str) -> Result<Project
+     let ar = base.join(".autoresearch");
+     Ok(ProjectConfig {
+         has_autoresearch_dir: ar.is_dir(),
+-        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+-        has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
++        has_program_md: ar.join("program.md").is_file(),
++        has_agents_dir: ar.join("agents").is_dir(),
+     })
+ }
+ 
+@@ -972,6 +994,244 @@ fn write_file_if_missing(path: &Path, content: &str, label: &str) -> Result<(),
+         .map_err(|e| format!("Failed to write {label} at {}: {e}", path.display()))
+ }
+ 
++fn resolve_project_config_file_path(
++    base: &Path,
++    file_id: &str,
++) -> Result<std::path::PathBuf, String> {
++    let (relative_path, _) = supported_config_file(file_id)
++        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
++
++    Ok(base.join(".autoresearch").join(relative_path))
++}
++
++enum ConfigPathState {
++    Missing,
++    Metadata(fs::Metadata),
++}
++
++fn config_path_state(path: &Path) -> Result<ConfigPathState, String> {
++    match fs::symlink_metadata(path) {
++        Ok(metadata) => Ok(ConfigPathState::Metadata(metadata)),
++        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ConfigPathState::Missing),
++        Err(error) => Err(format!(
++            "Failed to inspect config path {}: {error}",
++            path.display()
++        )),
++    }
++}
++
++fn validate_config_path(base: &Path, path: &Path) -> Result<(), String> {
++    let relative_path = path.strip_prefix(base).map_err(|_| {
++        format!(
++            "Config file path escapes project directory: {}",
++            path.display()
++        )
++    })?;
++    let mut current = base.to_path_buf();
++
++    for component in relative_path.components() {
++        current.push(component);
++
++        let ConfigPathState::Metadata(metadata) = config_path_state(&current)? else {
++            continue;
++        };
++        if metadata.file_type().is_symlink() {
++            return Err(format!(
++                "Config path contains symlink: {}",
++                current.display()
++            ));
++        }
++
++        if current == path {
++            if !metadata.is_file() {
++                return Err(format!(
++                    "Config file path is not a file: {}",
++                    current.display()
++                ));
++            }
++        } else if !metadata.is_dir() {
++            return Err(format!(
++                "Config path ancestor is not a directory: {}",
++                current.display()
++            ));
++        }
++    }
++
++    Ok(())
++}
++
++fn read_config_file_sync(
++    base: &Path,
++    project_path: &str,
++    file_id: &str,
++) -> Result<ConfigFileContent, String> {
++    let (relative_path, default_content) = supported_config_file(file_id)
++        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
++
++    if !base.is_dir() {
++        return Err(format!("Path is not a directory: {project_path}"));
++    }
++
++    let project_config_path = resolve_project_config_file_path(base, file_id)?;
++    validate_config_path(base, &project_config_path)?;
++
++    let (content, source) = if matches!(
++        config_path_state(&project_config_path)?,
++        ConfigPathState::Metadata(metadata) if metadata.is_file()
++    ) {
++        (
++            fs::read_to_string(&project_config_path).map_err(|e| {
++                format!(
++                    "Failed to read config file {}: {e}",
++                    project_config_path.display()
++                )
++            })?,
++            "project",
++        )
++    } else {
++        (default_content.to_string(), "default")
++    };
++
++    Ok(ConfigFileContent {
++        file_id: file_id.to_string(),
++        relative_path: relative_path.to_string(),
++        content,
++        source: source.to_string(),
++    })
++}
++
++fn ensure_parent_dir(base: &Path, path: &Path, label: &str) -> Result<(), String> {
++    validate_config_path(base, path)?;
++    let parent = path
++        .parent()
++        .ok_or_else(|| format!("Missing parent directory for {label}"))?;
++    fs::create_dir_all(parent).map_err(|e| {
++        format!(
++            "Failed to create parent directory for {label} at {}: {e}",
++            parent.display()
++        )
++    })
++}
++
++fn backup_existing_file(path: &Path) -> Result<(), String> {
++    match config_path_state(path)? {
++        ConfigPathState::Missing => return Ok(()),
++        ConfigPathState::Metadata(metadata) => {
++            if metadata.file_type().is_symlink() {
++                return Err(format!("Config path contains symlink: {}", path.display()));
++            }
++            if !metadata.is_file() {
++                return Err(format!(
++                    "Cannot back up config file because path is not a file: {}",
++                    path.display()
++                ));
++            }
++        }
++    }
++
++    let file_name = path
++        .file_name()
++        .and_then(|name| name.to_str())
++        .ok_or_else(|| format!("Invalid config filename: {}", path.display()))?;
++    let backup_path = path.with_file_name(format!("{file_name}.bak"));
++    if let ConfigPathState::Metadata(metadata) = config_path_state(&backup_path)? {
++        if metadata.file_type().is_symlink() {
++            return Err(format!(
++                "Backup path contains symlink: {}",
++                backup_path.display()
++            ));
++        }
++        if !metadata.is_file() {
++            return Err(format!(
++                "Backup path is not a file: {}",
++                backup_path.display()
++            ));
++        }
++    }
++
++    fs::copy(path, &backup_path).map_err(|e| {
++        format!(
++            "Failed to create backup {} from {}: {e}",
++            backup_path.display(),
++            path.display()
++        )
++    })?;
++
++    Ok(())
++}
++
++fn write_config_file_sync(
++    base: &Path,
++    project_path: &str,
++    file_id: &str,
++    content: &str,
++) -> Result<ConfigFileContent, String> {
++    if !base.is_dir() {
++        return Err(format!("Path is not a directory: {project_path}"));
++    }
++
++    let target_path = resolve_project_config_file_path(base, file_id)?;
++    ensure_parent_dir(base, &target_path, "config file")?;
++    backup_existing_file(&target_path)?;
++    fs::write(&target_path, content)
++        .map_err(|e| format!("Failed to write config file {}: {e}", target_path.display()))?;
++
++    read_config_file_sync(base, project_path, file_id)
++}
++
++fn reset_config_file_sync(
++    base: &Path,
++    project_path: &str,
++    file_id: &str,
++) -> Result<ConfigFileContent, String> {
++    let (_, default_content) = supported_config_file(file_id)
++        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
++    write_config_file_sync(base, project_path, file_id, default_content)
++}
++
++/// Reads a supported configuration file using project overrides first, then built-in defaults.
++#[tauri::command]
++async fn read_config_file(
++    project_path: String,
++    file_id: String,
++) -> Result<ConfigFileContent, String> {
++    tokio::task::spawn_blocking(move || {
++        let base = Path::new(&project_path);
++        read_config_file_sync(base, &project_path, &file_id)
++    })
++    .await
++    .map_err(|e| format!("Task join error: {e}"))?
++}
++
++/// Writes a supported configuration file into `<project>/.autoresearch/` and creates a `.bak`.
++#[tauri::command]
++async fn write_config_file(
++    project_path: String,
++    file_id: String,
++    content: String,
++) -> Result<ConfigFileContent, String> {
++    tokio::task::spawn_blocking(move || {
++        let base = Path::new(&project_path);
++        write_config_file_sync(base, &project_path, &file_id, &content)
++    })
++    .await
++    .map_err(|e| format!("Task join error: {e}"))?
++}
++
++/// Restores a supported configuration file to the built-in default template.
++#[tauri::command]
++async fn reset_config_file(
++    project_path: String,
++    file_id: String,
++) -> Result<ConfigFileContent, String> {
++    tokio::task::spawn_blocking(move || {
++        let base = Path::new(&project_path);
++        reset_config_file_sync(base, &project_path, &file_id)
++    })
++    .await
++    .map_err(|e| format!("Task join error: {e}"))?
++}
++
+ /// Retrieves the most recently opened project path from the Tauri store.
+ #[tauri::command]
+ async fn get_recent_project(app: tauri::AppHandle) -> Result<Option<String>, String> {
+@@ -1611,6 +1871,9 @@ pub fn run() {
+             select_project_dir,
+             detect_project_config,
+             init_project_config,
++            read_config_file,
++            write_config_file,
++            reset_config_file,
+             get_recent_project,
+             save_recent_project,
+             list_issues,
+@@ -1632,10 +1895,11 @@ mod tests {
+     #[cfg(unix)]
+     use super::RunProcessState;
+     use super::{
+-        build_iteration_progress, build_score_history, find_latest_review_content,
+-        get_iteration_progress_sync, infer_phase, init_project_config_sync,
+-        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
+-        SubtaskStatus,
++        build_iteration_progress, build_score_history, detect_project_config_sync,
++        find_latest_review_content, get_iteration_progress_sync, infer_phase,
++        init_project_config_sync, parse_iteration_from_log_md, parse_iteration_from_terminal,
++        parse_tasks_json, read_config_file_sync, reset_config_file_sync, write_config_file_sync,
++        Phase, SubtaskStatus,
+     };
+     use super::{build_run_args, build_run_env_vars, StartRunRequest};
+     use super::{
+@@ -1645,6 +1909,8 @@ mod tests {
+     };
+     use super::{extract_review_summary, extract_score};
+     use std::fs;
++    #[cfg(unix)]
++    use std::os::unix::fs as unix_fs;
+     use std::path::PathBuf;
+ 
+     fn create_temp_project_dir(test_name: &str) -> PathBuf {
+@@ -1766,6 +2032,460 @@ mod tests {
+         fs::remove_dir_all(project_dir).expect("cleanup");
+     }
+ 
++    #[test]
++    fn detect_project_config_only_counts_autoresearch_overrides() {
++        let project_dir = create_temp_project_dir("detect-project-config-overrides");
++        fs::create_dir_all(project_dir.join("agents")).expect("root agents dir should exist");
++        fs::write(project_dir.join("program.md"), "root program\n")
++            .expect("root program should exist");
++
++        let config =
++            detect_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
++                .expect("config should load");
++
++        assert!(!config.has_autoresearch_dir);
++        assert!(!config.has_program_md);
++        assert!(!config.has_agents_dir);
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_prefers_project_override() {
++        let project_dir = create_temp_project_dir("read-config-project-override");
++        let config_dir = project_dir.join(".autoresearch");
++        fs::create_dir_all(config_dir.join("agents")).expect("agents dir should exist");
++        fs::write(config_dir.join("program.md"), "custom program\n").expect("program should exist");
++
++        let config = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "program.md",
++        )
++        .expect("config should load");
++
++        assert_eq!(config.file_id, "program.md");
++        assert_eq!(config.relative_path, "program.md");
++        assert_eq!(config.content, "custom program\n");
++        assert_eq!(config.source, "project");
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_falls_back_to_default_template() {
++        let project_dir = create_temp_project_dir("read-config-default");
++
++        let config = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++        )
++        .expect("config should load");
++
++        assert_eq!(config.file_id, "agents/claude.md");
++        assert_eq!(config.relative_path, "agents/claude.md");
++        assert_eq!(config.content, super::CLAUDE_AGENT_TEMPLATE);
++        assert_eq!(config.source, "default");
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_fails_when_target_path_is_directory() {
++        let project_dir = create_temp_project_dir("read-config-directory-target");
++        let target_dir = project_dir.join(".autoresearch/agents/codex.md");
++        fs::create_dir_all(&target_dir).expect("target directory should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++        )
++        .expect_err("directory target should fail");
++
++        assert!(
++            error.contains("Config file path is not a file"),
++            "unexpected error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn read_config_file_fails_when_autoresearch_path_is_file() {
++        let project_dir = create_temp_project_dir("read-config-file-ancestor");
++        fs::write(project_dir.join(".autoresearch"), "broken").expect("broken file should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++        )
++        .expect_err("ancestor file should fail");
++
++        assert!(
++            error.contains("Config path ancestor is not a directory"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains(".autoresearch"),
++            "expected ancestor path in error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_creates_project_override_and_backup() {
++        let project_dir = create_temp_project_dir("write-config-backup");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("codex.md"), "old codex\n")
++            .expect("existing config should exist");
++
++        let config = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++            "new codex\n",
++        )
++        .expect("write should succeed");
++
++        assert_eq!(config.content, "new codex\n");
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(target_dir.join("codex.md")).expect("new config should exist"),
++            "new codex\n"
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("codex.md.bak")).expect("backup should exist"),
++            "old codex\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_materializes_first_project_override() {
++        let project_dir = create_temp_project_dir("write-config-first-materialization");
++        let target_path = project_dir.join(".autoresearch/program.md");
++
++        let config = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "program.md",
++            "custom program\n",
++        )
++        .expect("first write should succeed");
++
++        assert_eq!(config.file_id, "program.md");
++        assert_eq!(config.relative_path, "program.md");
++        assert_eq!(config.content, "custom program\n");
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(&target_path).expect("project override should exist"),
++            "custom program\n"
++        );
++        assert!(
++            !target_path.with_file_name("program.md.bak").exists(),
++            "first write should not create a backup when no previous file exists"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn reset_config_file_restores_default_template() {
++        let project_dir = create_temp_project_dir("reset-config-default");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("opencode.md"), "custom opencode\n")
++            .expect("existing config should exist");
++
++        let config = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/opencode.md",
++        )
++        .expect("reset should succeed");
++
++        assert_eq!(config.content, super::OPENCODE_AGENT_TEMPLATE);
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(target_dir.join("opencode.md")).expect("reset config should exist"),
++            super::OPENCODE_AGENT_TEMPLATE
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("opencode.md.bak")).expect("backup should exist"),
++            "custom opencode\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn reset_config_file_materializes_first_project_override() {
++        let project_dir = create_temp_project_dir("reset-config-first-materialization");
++        let target_path = project_dir.join(".autoresearch/agents/claude.md");
++
++        let config = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++        )
++        .expect("reset should materialize project override");
++
++        assert_eq!(config.file_id, "agents/claude.md");
++        assert_eq!(config.relative_path, "agents/claude.md");
++        assert_eq!(config.content, super::CLAUDE_AGENT_TEMPLATE);
++        assert_eq!(config.source, "project");
++        assert_eq!(
++            fs::read_to_string(&target_path).expect("reset config should exist"),
++            super::CLAUDE_AGENT_TEMPLATE
++        );
++        assert!(
++            !target_path.with_file_name("claude.md.bak").exists(),
++            "first reset should not create a backup when no previous file exists"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn config_file_commands_reject_unsupported_file_id() {
++        let project_dir = create_temp_project_dir("config-file-invalid-id");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "../secret.txt",
++        )
++        .expect_err("invalid file id should fail");
++
++        assert_eq!(error, "Unsupported config file: ../secret.txt");
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_rejects_unsupported_file_id() {
++        let project_dir = create_temp_project_dir("write-config-invalid-id");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "../secret.txt",
++            "value",
++        )
++        .expect_err("invalid file id should fail");
++
++        assert_eq!(error, "Unsupported config file: ../secret.txt");
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn reset_config_file_rejects_unsupported_file_id() {
++        let project_dir = create_temp_project_dir("reset-config-invalid-id");
++
++        let error = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "../secret.txt",
++        )
++        .expect_err("invalid file id should fail");
++
++        assert_eq!(error, "Unsupported config file: ../secret.txt");
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[test]
++    fn write_config_file_fails_when_target_path_is_directory() {
++        let project_dir = create_temp_project_dir("write-config-directory-target");
++        let target_dir = project_dir.join(".autoresearch/agents/codex.md");
++        fs::create_dir_all(&target_dir).expect("target directory should exist");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++            "new codex\n",
++        )
++        .expect_err("directory target should fail");
++
++        assert!(
++            error.contains("Config file path is not a file"),
++            "unexpected error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn read_config_file_rejects_symlinked_config_ancestor() {
++        let project_dir = create_temp_project_dir("read-config-symlink-ancestor");
++        let external_dir = create_temp_project_dir("read-config-symlink-ancestor-external");
++        unix_fs::symlink(&external_dir, project_dir.join(".autoresearch"))
++            .expect("symlinked config dir should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "program.md",
++        )
++        .expect_err("symlinked config dir should fail");
++
++        assert!(
++            error.contains("Config path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains(".autoresearch"),
++            "expected symlink path in error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++        fs::remove_dir_all(external_dir).expect("cleanup external");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn write_config_file_rejects_symlinked_target_file() {
++        let project_dir = create_temp_project_dir("write-config-symlink-target");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let external_dir = create_temp_project_dir("write-config-symlink-target-external");
++        let external_file = external_dir.join("codex.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(&external_file, "external codex\n").expect("external file should exist");
++        unix_fs::symlink(&external_file, target_dir.join("codex.md"))
++            .expect("symlinked target file should exist");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++            "new codex\n",
++        )
++        .expect_err("symlinked target file should fail");
++
++        assert!(
++            error.contains("Config path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains("codex.md"),
++            "expected target path in error: {error}"
++        );
++        assert_eq!(
++            fs::read_to_string(&external_file).expect("external file should remain unchanged"),
++            "external codex\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++        fs::remove_dir_all(external_dir).expect("cleanup external");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn read_config_file_rejects_broken_symlink_target() {
++        let project_dir = create_temp_project_dir("read-config-broken-symlink-target");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let missing_target = project_dir.join("missing-codex.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        unix_fs::symlink(&missing_target, target_dir.join("codex.md"))
++            .expect("broken symlink target should exist");
++
++        let error = read_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/codex.md",
++        )
++        .expect_err("broken symlink target should fail");
++
++        assert!(
++            error.contains("Config path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert!(
++            error.contains("codex.md"),
++            "expected target path in error: {error}"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn write_config_file_rejects_broken_symlink_backup_path() {
++        let project_dir = create_temp_project_dir("write-config-broken-symlink-backup");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let missing_backup_target = project_dir.join("missing-claude-backup.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("claude.md"), "custom claude\n")
++            .expect("project config should exist");
++        unix_fs::symlink(&missing_backup_target, target_dir.join("claude.md.bak"))
++            .expect("broken symlink backup path should exist");
++
++        let error = write_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++            "new claude\n",
++        )
++        .expect_err("broken symlink backup path should fail");
++
++        assert!(
++            error.contains("Backup path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("claude.md"))
++                .expect("project config should remain unchanged"),
++            "custom claude\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn reset_config_file_rejects_symlinked_backup_path() {
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git stash show -p 2>/dev/null | sed -n '800,1395p'
++    fn reset_config_file_rejects_symlinked_backup_path() {
++        let project_dir = create_temp_project_dir("reset-config-symlink-backup");
++        let target_dir = project_dir.join(".autoresearch/agents");
++        let external_dir = create_temp_project_dir("reset-config-symlink-backup-external");
++        let backup_target = external_dir.join("claude.md");
++        fs::create_dir_all(&target_dir).expect("agents dir should exist");
++        fs::write(target_dir.join("claude.md"), "custom claude\n")
++            .expect("project config should exist");
++        fs::write(&backup_target, "external backup\n").expect("external backup should exist");
++        unix_fs::symlink(&backup_target, target_dir.join("claude.md.bak"))
++            .expect("symlinked backup path should exist");
++
++        let error = reset_config_file_sync(
++            &project_dir,
++            project_dir.to_string_lossy().as_ref(),
++            "agents/claude.md",
++        )
++        .expect_err("symlinked backup path should fail");
++
++        assert!(
++            error.contains("Backup path contains symlink"),
++            "unexpected error: {error}"
++        );
++        assert_eq!(
++            fs::read_to_string(target_dir.join("claude.md"))
++                .expect("project config should remain unchanged"),
++            "custom claude\n"
++        );
++        assert_eq!(
++            fs::read_to_string(&backup_target).expect("external backup should remain unchanged"),
++            "external backup\n"
++        );
++
++        fs::remove_dir_all(project_dir).expect("cleanup project");
++        fs::remove_dir_all(external_dir).expect("cleanup external");
++    }
++
+     #[test]
+     fn parse_issue_detail_returns_structured_data() {
+         let detail = parse_issue_detail(
+diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+index 99daedb..9cbb498 100644
+--- a/desktop_app/src/CLAUDE.md
++++ b/desktop_app/src/CLAUDE.md
+@@ -58,6 +58,15 @@
+ - In `.map()` callbacks, avoid naming variables the same as component props (e.g. `projectPath`) to prevent shadowing. Use descriptive names like `recentPath`.
+ - `loadRecentProjects` auto-loads the last project on app startup. If the project directory was deleted/moved, `detect_project_config` will fail. Consider adding a "back to welcome" escape hatch or error recovery in the UI.
+ - Use unique identifiers (e.g. path strings) as React keys in `.map()`, not array indices.
++- Settings-style editors that refetch data on tab switch or manual reload must guard unsaved edits. If `editorContent` can be replaced from an effect, add a dirty-state confirmation or block the action; otherwise switching files silently loses user changes.
++- For Settings-style editors, keep the dirty-state policy in a nearby pure helper (for example action type + confirm message builder) and have the React component call that helper before mutating selection/reload state. This keeps the UX rule testable without a browser runner.
++- For config editors, treat "reset to default" as a destructive content replacement just like reload/switch-file, and route it through the same pending-action confirmation helper instead of bespoke UI logic.
++- For config editors, project changes are also destructive content replacement: if `projectPath` changes while the editor is dirty, do not auto-replace `editorContent`; confirm discard first, or hold the new project in a pending state until the user explicitly reloads it.
++- For SettingsPage async editor flows, prefer a thin component that delegates load/save/reset effects to helper functions with injected `invoke`/`refreshConfig` dependencies; this lets Node tests verify the full action chain without a dedicated DOM harness.
++- If a Settings page owns button disabled state and click wiring itself, extract a pure view-model/helper from the hook component and render from that object. This gives tests one place to lock `disabled`, `readOnly`, pending-project callouts, and tab switch wiring without introducing a browser runner.
++- If a Settings page owns the actual click handlers, move the handler sequencing itself (confirm -> clear feedback -> invoke -> refresh -> state update) into exported helpers too; otherwise tests only prove the low-level primitives work, not that the page wires them together correctly.
++- For config editors with async persistence, dirty-state guards are not enough: while save/reset/load is in flight, freeze file switching, reload, and textarea editing, or a late response can overwrite the newly selected file's state.
++- If a Settings page can keep editing the old project while a new `projectPath` is pending, route every save/reset/reload/refresh call through an `effectiveProjectPath` derived from the last loaded project; using the store's latest `projectPath` directly can write stale editor content into the wrong repository.
+ 
+ ## IssuesPage 约定
+ 
+@@ -127,6 +136,21 @@
+ - 初始化提示：琥珀色主题（`bg-amber-50`, `text-amber-800`）
+ - 配置卡片边框：缺失配置时边框变为琥珀色（`border-amber-300`）
+ 
++## SettingsPage 约定
++
++### 配置编辑器
++
++- 设置页中的配置编辑器直接消费 Tauri 白名单命令 `read_config_file` / `write_config_file` / `reset_config_file`；前端不要自行拼任意文件路径。
++- 编辑器切换文件时要展示“当前来源”和“写入位置”，让用户明确区分“内置默认模板”和“项目覆写”。
++- “写入位置”是用户可见文案，不能用简单的 `'/'` 字符串拼接；至少要按 `projectPath` 的分隔符风格生成，避免 Windows 下出现混合路径。
++- 如果 `projectPath` 带 Windows 盘符（例如 `C:/repo`），展示路径时也要整体转成反斜杠风格，而不是只替换追加段落。
++- 保存或重置成功后，需要刷新 `projectStore.config`，否则概览页的配置状态徽章会滞后于实际文件系统状态。
++- 浏览器 fallback 只允许展示占位内容用于页面开发，不要假装能读取真实本地文件。
++- 浏览器 fallback 也不应伪造“保存成功”或“已重置为默认值”的持久化结果；无 Tauri 后端时，配置编辑器应明确表现为只读演示态。
++- 配置加载失败时，不要让编辑器停留在“空白但可输入”的假可编辑状态；textarea 应保持只读/禁用，并把恢复路径引导到“重新加载”或“重置为默认值”。
++- 如果 dirty 状态下拦截了 `projectPath` 切换，保存、重置和“写入位置”展示都必须继续绑定旧的已加载项目路径；不能直接改用最新 store `projectPath`，否则保留下来的旧项目草稿会被误写到新项目目录。
++- 审核或实现 US-007 时，不要把“配置文件编辑器”和“运行参数配置”视为同一块功能已经自动覆盖；当前 `SettingsPage` 负责文件编辑器，而 `RunConfigPanel` 仍挂在 `IssueDetailPanel`，验收时要分别确认两处入口是否都满足需求。
++
+ ## LogViewer 约定
+ 
+ ### 性能
+diff --git a/desktop_app/src/pages/SettingsPage.tsx b/desktop_app/src/pages/SettingsPage.tsx
+index e2d09c9..a038d23 100644
+--- a/desktop_app/src/pages/SettingsPage.tsx
++++ b/desktop_app/src/pages/SettingsPage.tsx
+@@ -1,15 +1,396 @@
++import { useEffect, useRef, useState } from 'react';
+ import AgentSelector from '../components/AgentSelector';
++import RunConfigPanel from '../components/RunConfigPanel';
++import { useProjectStore } from '../stores/projectStore';
++import { normalizeUserFacingError } from '../stores/uiError';
++import {
++  buildConfigEditorViewModel,
++  clearConfigEditorFeedback,
++  CONFIG_EDITOR_MESSAGES,
++  type ConfigEditorPendingAction,
++  type ConfigFileContent,
++  type ConfigFileId,
++  getConfigEditorMode,
++  isConfigEditorInteractionLocked,
++  loadConfigEditorFile,
++  reloadConfigEditorFile,
++  resolveConfigEditorLoadPlan,
++  resolveConfigEditorProjectPath,
++  submitConfigEditorReset,
++  submitConfigEditorSave,
++  shouldProceedWithPendingAction,
++} from './configEditor';
++
++const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
++
++async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
++  const { invoke } = await import('@tauri-apps/api/core');
++  return invoke<T>(cmd, args);
++}
+ 
+ function SettingsPage() {
++  const { projectPath, refreshConfig } = useProjectStore();
++  const [activeFileId, setActiveFileId] = useState<ConfigFileId>('program.md');
++  const [currentFile, setCurrentFile] = useState<ConfigFileContent | null>(null);
++  const [editorContent, setEditorContent] = useState('');
++  const [isLoading, setIsLoading] = useState(false);
++  const [isSaving, setIsSaving] = useState(false);
++  const [isResetting, setIsResetting] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [statusMessage, setStatusMessage] = useState<string | null>(null);
++  const [reloadKey, setReloadKey] = useState(0);
++  const [runConfigCollapsed, setRunConfigCollapsed] = useState(false);
++  const [pendingProjectPath, setPendingProjectPath] = useState<string | null>(null);
++  const loadedProjectPathRef = useRef<string | null>(null);
++  const isDirtyRef = useRef(false);
++
++  const isDirty = currentFile !== null && editorContent !== currentFile.content;
++  const editorMode = getConfigEditorMode(isTauri);
++  const isProjectSwitchPending = pendingProjectPath !== null;
++  const effectiveProjectPath = resolveConfigEditorProjectPath({
++    projectPath,
++    loadedProjectPath: loadedProjectPathRef.current,
++    pendingProjectPath,
++  });
++  const isInteractionLocked =
++    isProjectSwitchPending ||
++    isConfigEditorInteractionLocked(isLoading, isSaving, isResetting);
++
++  const confirmPendingAction = (action: ConfigEditorPendingAction) =>
++    shouldProceedWithPendingAction(isDirty, action, (message) => window.confirm(message));
++  const feedback = { setError, setStatusMessage };
++  const clearFeedback = () => clearConfigEditorFeedback(feedback);
++
++  useEffect(() => {
++    isDirtyRef.current = isDirty;
++  }, [isDirty]);
++
++  useEffect(() => {
++    let cancelled = false;
++
++    async function loadConfigFile() {
++      const loadPlan = resolveConfigEditorLoadPlan({
++        projectPath,
++        loadedProjectPath: loadedProjectPathRef.current,
++        isDirty: isDirtyRef.current,
++        confirmDiscard: (message) => window.confirm(message),
++      });
++
++      if (loadPlan.type === 'clear') {
++        loadedProjectPathRef.current = null;
++        setPendingProjectPath(null);
++        setCurrentFile(null);
++        setEditorContent('');
++        setError(null);
++        setStatusMessage(null);
++        return;
++      }
++
++      if (loadPlan.type === 'block-project-switch') {
++        setPendingProjectPath(loadPlan.nextProjectPath);
++        setError(null);
++        setStatusMessage(loadPlan.statusMessage);
++        return;
++      }
++
++      setPendingProjectPath(null);
++      setIsLoading(true);
++      setError(null);
++      setStatusMessage(null);
++
++      try {
++        const config = await loadConfigEditorFile({
++          fileId: activeFileId,
++          hasTauriBackend: isTauri,
++          readConfigFile: (fileId) =>
++            tauriInvoke<ConfigFileContent>('read_config_file', {
++              projectPath: loadPlan.projectPath,
++              fileId,
++            }),
++        });
++
++        if (!cancelled) {
++          loadedProjectPathRef.current = loadPlan.projectPath;
++          setCurrentFile(config);
++          setEditorContent(config.content);
++        }
++      } catch (loadError) {
++        if (!cancelled) {
++          setCurrentFile(null);
++          setEditorContent('');
++          setError(normalizeUserFacingError(loadError, CONFIG_EDITOR_MESSAGES.loadError));
++        }
++      } finally {
++        if (!cancelled) {
++          setIsLoading(false);
++        }
++      }
++    }
++
++    void loadConfigFile();
++
++    return () => {
++      cancelled = true;
++    };
++  }, [activeFileId, projectPath, reloadKey]);
++
++  const handleSave = async () => {
++    await submitConfigEditorSave({
++      projectPath: effectiveProjectPath,
++      currentFile,
++      fileId: activeFileId,
++      content: editorContent,
++      editorMode,
++      writeConfigFile: (fileId, content) =>
++        tauriInvoke<ConfigFileContent>('write_config_file', {
++          projectPath: effectiveProjectPath,
++          fileId,
++          content,
++        }),
++      refreshConfig: () => refreshConfig(effectiveProjectPath ?? undefined),
++      setIsSaving,
++      setCurrentFile,
++      setEditorContent,
++      normalizeError: normalizeUserFacingError,
++      feedback,
++    });
++  };
++
++  const handleReset = async () => {
++    await submitConfigEditorReset({
++      projectPath: effectiveProjectPath,
++      confirmPendingAction,
++      fileId: activeFileId,
++      editorMode,
++      resetConfigFile: (fileId) =>
++        tauriInvoke<ConfigFileContent>('reset_config_file', {
++          projectPath: effectiveProjectPath,
++          fileId,
++        }),
++      refreshConfig: () => refreshConfig(effectiveProjectPath ?? undefined),
++      setIsResetting,
++      setCurrentFile,
++      setEditorContent,
++      normalizeError: normalizeUserFacingError,
++      feedback,
++    });
++  };
++
++  const handleReload = () =>
++    reloadConfigEditorFile({
++      projectPath: effectiveProjectPath,
++      isInteractionLocked,
++      confirmPendingAction,
++      clearFeedback,
++      bumpReloadKey: () => setReloadKey((value) => value + 1),
++    });
++
++  const handleLoadPendingProject = () => {
++    if (!pendingProjectPath) {
++      return;
++    }
++
++    loadedProjectPathRef.current = pendingProjectPath;
++    setPendingProjectPath(null);
++    setCurrentFile(null);
++    setEditorContent('');
++    setError(null);
++    setStatusMessage(null);
++    setReloadKey((value) => value + 1);
++  };
++
++  const configEditorView = effectiveProjectPath
++    ? buildConfigEditorViewModel({
++        projectPath: effectiveProjectPath,
++        activeFileId,
++        currentFile,
++        editorContent,
++        editorMode,
++        isDirty,
++        isLoading,
++        isSaving,
++        isResetting,
++        isInteractionLocked,
++        pendingProjectPath,
++        clearFeedback,
++        clearStatusMessage: () => setStatusMessage(null),
++        confirmPendingAction,
++        setActiveFileId,
++        setEditorContent,
++        onReload: handleReload,
++        onSave: handleSave,
++        onReset: handleReset,
++        onLoadPendingProject: handleLoadPendingProject,
++      })
++    : null;
++
+   return (
+-    <div className="p-6">
+-      <h1 className="text-2xl font-bold mb-4">设置</h1>
+-      <p className="text-gray-500 mb-6">配置应用偏好与 Agent 选择顺序。</p>
+-      
+-      <div className="max-w-2xl">
+-        <h2 className="text-lg font-semibold mb-4">Agent 配置</h2>
+-        <AgentSelector />
++    <div className="p-6 space-y-8">
++      <div>
++        <h1 className="text-2xl font-bold mb-4">设置</h1>
++        <p className="text-gray-500 mb-6">配置应用偏好与 Agent 选择顺序。</p>
+       </div>
++
++      <section className="bg-white border border-gray-200 rounded-xl shadow-sm">
++        <div className="p-6 border-b border-gray-200">
++          <h2 className="text-lg font-semibold mb-2">配置文件编辑器</h2>
++          <p className="text-sm text-gray-500">
++            编辑 `program.md` 与各 Agent 指令文件。保存后会写入当前项目的
++            `.autoresearch/` 目录，并在覆盖前自动创建 `.bak` 备份。
++          </p>
++        </div>
++
++        {!projectPath ? (
++          <div className="p-6 text-sm text-amber-800 bg-amber-50 rounded-b-xl">
++            请先在概览页选择项目目录，然后再编辑配置文件。
++          </div>
++        ) : (
++          <div className="p-6 space-y-4">
++            <div className="flex flex-wrap gap-3">
++              {configEditorView?.fileTabs.map((file) => (
++                <button
++                  key={file.id}
++                  type="button"
++                  onClick={file.onSelect}
++                  disabled={file.disabled}
++                  className={`px-4 py-2 rounded-lg border text-left transition-colors ${
++                    file.selected
++                      ? 'bg-blue-50 border-blue-300 text-blue-700'
++                      : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
++                  } disabled:opacity-60 disabled:cursor-not-allowed`}
++                >
++                  <div className="text-sm font-medium">{file.label}</div>
++                  <div className="text-xs opacity-80">{file.description}</div>
++                </button>
++              ))}
++            </div>
++
++            <div className="grid gap-3 md:grid-cols-2">
++              <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
++                <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">
++                  当前来源
++                </div>
++                <div className="text-sm text-gray-700">
++                  {configEditorView?.currentSourceLabel}
++                </div>
++              </div>
++              <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
++                <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">
++                  写入位置
++                </div>
++                <div className="text-sm text-gray-700 break-all">
++                  {configEditorView?.savePath}
++                </div>
++              </div>
++            </div>
++
++            {error && (
++              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
++                {error}
++              </div>
++            )}
++
++            {statusMessage && (
++              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
++                {statusMessage}
++              </div>
++            )}
++
++            {configEditorView?.pendingProjectCallout && (
++              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-3">
++                <p>{configEditorView.pendingProjectCallout.message}</p>
++                <button
++                  type="button"
++                  onClick={configEditorView.pendingProjectCallout.onConfirmDiscard}
++                  className="px-4 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
++                >
++                  {configEditorView.pendingProjectCallout.actionLabel}
++                </button>
++              </div>
++            )}
++
++            {!editorMode.canPersist && (
++              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
++                {editorMode.hint}
++              </div>
++            )}
++
++            <div className="flex flex-wrap gap-3">
++                <button
++                  type="button"
++                  onClick={configEditorView?.onReload}
++                  disabled={configEditorView?.reloadDisabled}
++                  className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
++                >
++                  重新加载
++                </button>
++              <button
++                type="button"
++                onClick={configEditorView?.onSave}
++                disabled={configEditorView?.saveDisabled}
++                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
++              >
++                {isSaving ? '保存中...' : '保存配置'}
++              </button>
++              <button
++                type="button"
++                onClick={configEditorView?.onReset}
++                disabled={configEditorView?.resetDisabled}
++                className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
++              >
++                {isResetting ? '重置中...' : '重置为默认值'}
++              </button>
++            </div>
++
++            <label className="block">
++              <span className="block text-sm font-medium text-gray-700 mb-2">
++                {configEditorView?.activeDefinition.label}
++              </span>
++              <textarea
++                value={configEditorView?.editorValue}
++                onChange={(event) => {
++                  configEditorView?.onEditorChange(event.target.value);
++                }}
++                spellCheck={false}
++                disabled={configEditorView?.editorDisabled}
++                readOnly={configEditorView?.editorReadOnly}
++                className="w-full min-h-[420px] rounded-xl border border-gray-200 bg-gray-950 text-gray-100 font-mono text-sm leading-6 p-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
++              />
++            </label>
++
++            <p className="text-xs text-gray-500">
++              {configEditorView?.helperText}
++            </p>
++          </div>
++        )}
++      </section>
++
++      <section className="max-w-3xl bg-white border border-gray-200 rounded-xl shadow-sm">
++        <div className="p-6 border-b border-gray-200">
++          <h2 className="text-lg font-semibold mb-2">运行参数</h2>
++          <p className="text-sm text-gray-500">
++            在设置页集中调整 passing score、最大迭代次数与继续模式。
++          </p>
++        </div>
++        <div className="p-6">
++          <RunConfigPanel
++            collapsed={runConfigCollapsed}
++            onCollapsedChange={setRunConfigCollapsed}
++          />
++        </div>
++      </section>
++
++      <section className="max-w-3xl bg-white border border-gray-200 rounded-xl shadow-sm">
++        <div className="p-6 border-b border-gray-200">
++          <h2 className="text-lg font-semibold mb-2">Agent 配置</h2>
++          <p className="text-sm text-gray-500">
++            调整默认 Agent 选择顺序，运行参数面板会复用这里的排列结果。
++          </p>
++        </div>
++        <div className="p-6">
++          <AgentSelector />
++        </div>
++      </section>
+     </div>
+   );
+ }
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 2b7ddfa..42a269c 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -25,6 +25,7 @@ interface ProjectState {
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+   loadRecentProjects: () => Promise<void>;
++  refreshConfig: (_projectPath?: string) => Promise<void>;
+   clearError: () => void;
+ }
+ 
+@@ -184,5 +185,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     }
+   },
+ 
++  refreshConfig: async (targetProjectPath?: string) => {
++    const projectPath = targetProjectPath ?? get().projectPath;
++    if (!projectPath) {
++      return;
++    }
++
++    try {
++      if (isTauri) {
++        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          projectPath,
++        });
++        if (get().projectPath === projectPath) {
++          set({ config });
++        }
++      } else {
++        if (get().projectPath === projectPath) {
++          set({ config: detectConfigBrowser(projectPath) });
++        }
++      }
++    } catch (e) {
++      if (get().projectPath === projectPath) {
++        set({ error: normalizeProjectError(e) });
++      }
++    }
++  },
++
+   clearError: () => set({ error: null }),
+ }));
+diff --git a/desktop_app/tests/CLAUDE.md b/desktop_app/tests/CLAUDE.md
+index b02166d..06b3a66 100644
+--- a/desktop_app/tests/CLAUDE.md
++++ b/desktop_app/tests/CLAUDE.md
+@@ -4,6 +4,22 @@
+ 
+ - **模式**: 前端中文化可用 `node --test --experimental-strip-types` 直接做源码字符串断言，不必引入浏览器测试框架。
+ - **模式**: 如果组件文件是 `.tsx` 且 Node 测试入口不能直接加载，优先把可测试的数据转换或 tooltip 文案 helper 提到邻近的 `.ts` 文件，再对 `.tsx` 做源码级护栏断言。
++- **模式**: 对设置页这类依赖 Tauri 环境分支的组件，优先把“浏览器 fallback / 桌面可写态”的模式判断提成纯函数，再用 Node 单测锁住只读语义和提示文案。
++- **模式**: 如果设置页交互依赖异步 `invoke + refresh` 链路，但仓库没有 DOM 测试基建，优先把“加载/保存/重置”动作封装成可注入依赖的 async helper，然后用 stub 断言调用顺序和成功文案，避免测试只停留在静态字符串层。
++- **模式**: 配置编辑器除了 helper 单测，还要覆盖“dirty 状态下切换文件/重新加载不会静默丢失输入”的交互约束；否则文案和纯函数都通过，真实编辑流程仍可能丢数据。
++- **模式**: dirty-state 测试不要只覆盖 switch/reload；`reset` 这类会用默认内容覆盖编辑器的动作同样属于 destructive action，必须走同一套确认分支。
++- **模式**: 如果设置页会随着 `projectPath` 变化从 effect 中重载内容，测试必须覆盖“dirty 状态下切换项目不会静默覆盖编辑器”这条分支；否则文件切换都受保护，项目切换仍然会丢稿。
++- **模式**: 如果项目没有浏览器测试基建，可先把“切换/重载是否允许继续”的状态机提成纯函数，再用 `node --test --experimental-strip-types` 覆盖 clean/dirty、确认/取消两条分支。
++- **模式**: 路径展示 helper 如果服务于跨平台 UI，要在纯单测里同时锁住 POSIX 和 Windows 两种输出，避免只在 macOS 开发时漏掉反斜杠路径回归。
++- **模式**: 对设置页这类聚合配置入口，除了测 helper，还要加源码级护栏断言关键子组件确实被挂到目标页面；否则 `RunConfigPanel` 一类功能可能只留在别处页面，验收仍会漏项。
++- **模式**: 对 `SettingsPage` 这类自己持有 `useState` + 事件处理器的页面，helper 测试只能证明规则正确，不能证明按钮 wiring 正确；只要仓库允许，仍应补一层组件交互验证或浏览器验收来覆盖实际点击后的状态切换。
++- **模式**: 如果暂时没有组件交互测试基建，至少要同时做两层护栏：纯 helper 单测锁住 `busy => 不允许切换/重载`，再加源码断言确认 `SettingsPage` 真的把 `disabled/readOnly` 接到对应控件上。
++- **模式**: 对 `SettingsPage` 这类 hook 很重但又缺少 DOM 测试基建的页面，可以把控件接线提成纯 view-model helper；测试直接调用返回的 `onSelect` / `onEditorChange` / `onConfirmDiscard`，就能覆盖真实 wiring，而不必只停在源码字符串断言。
++- **模式**: 配置编辑器的错误态也要锁住 view-model 行为；加载失败时 textarea 应保持只读，避免出现“空白可编辑但无法保存”的假交互。
++- **模式**: 如果设置页在 dirty 状态下允许“挂起项目切换”，测试必须同时锁住两件事：pure helper 返回旧的已加载项目路径，以及 `SettingsPage` 源码确实把 save/reset/refresh 接到了这个有效路径，而不是直接使用最新 store `projectPath`。
++- **经验**: 配置编辑器验收要同时跑 `npm --prefix desktop_app test` 和 Rust 侧 `cargo test config_file` / `cargo clippy -- -D warnings`；前端测试能证明交互规则，但白名单路径、`.bak` 备份和 `.autoresearch` 物化语义仍依赖 Tauri 后端校验。
++- **经验**: 对 `SettingsPage` 这类聚合式前端改动，验收不要停在 `test + typecheck + lint`；还要补跑 `npm --prefix desktop_app run build`，否则 Vite 打包层面的 TS/模块问题会漏掉。
++- **经验**: 审核配置编辑器时要把“前端状态机”和“Rust 文件命令”视为同一个验收面；如果只验证 helper 交互而不验证后端白名单/备份规则，或反过来只看 Rust 测试不看 `SettingsPage` wiring，都会留下真实回归缺口。
+ - **模式**: 中文化回归测试除了页面组件，还要直接检查 `src/stores` 里的错误文案；store 抛出的字符串同样会进入 UI。
+ - **模式**: “全面中文化”测试要把 `IterationProgressPanel` / `iterationProgressView` 这类状态面板也纳入覆盖，它们常含阶段名、状态标签和进度摘要，容易遗漏残留英文。
+ - **模式**: 如果组件展示的是后端英文枚举，测试要同时检查“映射后的中文文案存在”以及“原始英文枚举不再直接出现在展示常量里”，这样才能防止把内部 key 泄漏到 UI。
+diff --git a/desktop_app/tests/uiLocalization.test.mjs b/desktop_app/tests/uiLocalization.test.mjs
+index 1f877ff..fe87934 100644
+--- a/desktop_app/tests/uiLocalization.test.mjs
++++ b/desktop_app/tests/uiLocalization.test.mjs
+@@ -29,12 +29,30 @@ test('settings, history, and agent selection copy is localized', () => {
+   const settingsSource = readSource('../src/pages/SettingsPage.tsx');
+   const historySource = readSource('../src/pages/HistoryPage.tsx');
+   const dashboardSource = readSource('../src/pages/DashboardPage.tsx');
++  const configEditorSource = readSource('../src/pages/configEditor.ts');
+   const agentSelectorSource = readSource('../src/components/AgentSelector.tsx');
+   const runConfigSource = readSource('../src/components/RunConfigPanel.tsx');
+   const logViewerSource = readSource('../src/components/LogViewer.tsx');
+ 
+   assert.match(settingsSource, />设置</);
+   assert.match(settingsSource, /配置应用偏好与 Agent 选择顺序。/);
++  assert.match(settingsSource, /配置文件编辑器/);
++  assert.match(settingsSource, /保存配置/);
++  assert.match(settingsSource, /重置为默认值/);
++  assert.match(settingsSource, /请先在概览页选择项目目录/);
++  assert.match(configEditorSource, /放弃当前修改并加载新项目配置/);
++  assert.match(configEditorSource, /pendingProjectSwitchMessage/);
++  assert.match(settingsSource, /运行参数/);
++  assert.match(settingsSource, /passing score、最大迭代次数与继续模式/);
++  assert.match(settingsSource, /<RunConfigPanel/);
++  assert.match(settingsSource, /disabled=\{configEditorView\?\.editorDisabled\}/);
++  assert.match(settingsSource, /readOnly=\{configEditorView\?\.editorReadOnly\}/);
++  assert.match(settingsSource, /projectPath: effectiveProjectPath/);
++  assert.match(settingsSource, /refreshConfig\(effectiveProjectPath \?\? undefined\)/);
++  assert.match(configEditorSource, /浏览器模式下仅支持查看占位内容，保存与重置需在桌面应用中进行。/);
++  assert.match(configEditorSource, /isConfigEditorInteractionLocked/);
++  assert.match(configEditorSource, /buildConfigEditorViewModel/);
++  assert.match(configEditorSource, /resolveConfigEditorProjectPath/);
+   assert.match(settingsSource, /Agent 配置/);
+   assert.doesNotMatch(settingsSource, />Settings</);
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git stash show -p 2>/dev/null | grep -n "diff --git\|new file"
+1:diff --git a/CLAUDE.md b/CLAUDE.md
+13:diff --git a/desktop_app/src-tauri/CLAUDE.md b/desktop_app/src-tauri/CLAUDE.md
+39:diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+840:diff --git a/desktop_app/src/CLAUDE.md b/desktop_app/src/CLAUDE.md
+882:diff --git a/desktop_app/src/pages/SettingsPage.tsx b/desktop_app/src/pages/SettingsPage.tsx
+1290:diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+1334:diff --git a/desktop_app/tests/CLAUDE.md b/desktop_app/tests/CLAUDE.md
+1361:diff --git a/desktop_app/tests/uiLocalization.test.mjs b/desktop_app/tests/uiLocalization.test.mjs
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline feature/issue-34 -5
+33ed825 Merge pull request #78 from smallnest/feature/issue-33
+a303498 feat: implement issue #33 - [desktop-app] 评分趋势折线图
+f1aadaf Merge pull request #77 from smallnest/feature/issue-73
+ae6246d feat: implement issue #73 - [desktop-app] 项目配置模板初始化
+1be412f Merge pull request #76 from smallnest/feature/issue-74
+[0m
+[0m✱ [0mGlob "desktop_app/src/pages/configEditor*"[90m 0 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git stash list
+stash@{0}: On feature/issue-34: autoresearch-temp-continue-34-1777115688
+stash@{1}: On feature/issue-74: autoresearch-temp-continue-74-1777095588
+stash@{2}: On feature/issue-74: autoresearch-temp-continue-74-1777095414
+stash@{3}: On feature/issue-30: autoresearch-temp-continue-30-1777080077
+stash@{4}: On feature/issue-29: autoresearch-temp-continue-29-1777076893
+stash@{5}: On feature/issue-28: autoresearch-temp-continue-28-1777074022
+[0m
+                                                          

@@ -60,6 +60,15 @@ struct ProjectConfig {
     has_agents_dir: bool,
 }
 
+/// Frontend-facing contents for a supported configuration file.
+#[derive(Debug, serde::Serialize, PartialEq, Eq)]
+struct ConfigFileContent {
+    file_id: String,
+    relative_path: String,
+    content: String,
+    source: String,
+}
+
 /// A label attached to a GitHub Issue.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct GhLabel {
@@ -233,6 +242,16 @@ const PROGRAM_TEMPLATE: &str = include_str!("../../../program.md");
 const CLAUDE_AGENT_TEMPLATE: &str = include_str!("../../../agents/claude.md");
 const CODEX_AGENT_TEMPLATE: &str = include_str!("../../../agents/codex.md");
 const OPENCODE_AGENT_TEMPLATE: &str = include_str!("../../../agents/opencode.md");
+
+fn supported_config_file(file_id: &str) -> Option<(&'static str, &'static str)> {
+    match file_id {
+        "program.md" => Some(("program.md", PROGRAM_TEMPLATE)),
+        "agents/claude.md" => Some(("agents/claude.md", CLAUDE_AGENT_TEMPLATE)),
+        "agents/codex.md" => Some(("agents/codex.md", CODEX_AGENT_TEMPLATE)),
+        "agents/opencode.md" => Some(("agents/opencode.md", OPENCODE_AGENT_TEMPLATE)),
+        _ => None,
+    }
+}
 
 fn score_number_regex() -> &'static Regex {
     static REGEX: OnceLock<Regex> = OnceLock::new();
@@ -522,7 +541,10 @@ fn build_score_history(workflow_dir: &Path) -> Vec<ScoreHistoryPoint> {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        let Some(name) = path.file_name().map(|name| name.to_string_lossy().to_string()) else {
+        let Some(name) = path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+        else {
             continue;
         };
 
@@ -907,8 +929,8 @@ fn detect_project_config_sync(base: &Path, project_path: &str) -> Result<Project
     let ar = base.join(".autoresearch");
     Ok(ProjectConfig {
         has_autoresearch_dir: ar.is_dir(),
-        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
-        has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
+        has_program_md: ar.join("program.md").is_file(),
+        has_agents_dir: ar.join("agents").is_dir(),
     })
 }
 
@@ -970,6 +992,244 @@ fn write_file_if_missing(path: &Path, content: &str, label: &str) -> Result<(), 
 
     fs::write(path, content)
         .map_err(|e| format!("Failed to write {label} at {}: {e}", path.display()))
+}
+
+fn resolve_project_config_file_path(
+    base: &Path,
+    file_id: &str,
+) -> Result<std::path::PathBuf, String> {
+    let (relative_path, _) = supported_config_file(file_id)
+        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
+
+    Ok(base.join(".autoresearch").join(relative_path))
+}
+
+enum ConfigPathState {
+    Missing,
+    Metadata(fs::Metadata),
+}
+
+fn config_path_state(path: &Path) -> Result<ConfigPathState, String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(ConfigPathState::Metadata(metadata)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ConfigPathState::Missing),
+        Err(error) => Err(format!(
+            "Failed to inspect config path {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+fn validate_config_path(base: &Path, path: &Path) -> Result<(), String> {
+    let relative_path = path.strip_prefix(base).map_err(|_| {
+        format!(
+            "Config file path escapes project directory: {}",
+            path.display()
+        )
+    })?;
+    let mut current = base.to_path_buf();
+
+    for component in relative_path.components() {
+        current.push(component);
+
+        let ConfigPathState::Metadata(metadata) = config_path_state(&current)? else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            return Err(format!(
+                "Config path contains symlink: {}",
+                current.display()
+            ));
+        }
+
+        if current == path {
+            if !metadata.is_file() {
+                return Err(format!(
+                    "Config file path is not a file: {}",
+                    current.display()
+                ));
+            }
+        } else if !metadata.is_dir() {
+            return Err(format!(
+                "Config path ancestor is not a directory: {}",
+                current.display()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn read_config_file_sync(
+    base: &Path,
+    project_path: &str,
+    file_id: &str,
+) -> Result<ConfigFileContent, String> {
+    let (relative_path, default_content) = supported_config_file(file_id)
+        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
+
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let project_config_path = resolve_project_config_file_path(base, file_id)?;
+    validate_config_path(base, &project_config_path)?;
+
+    let (content, source) = if matches!(
+        config_path_state(&project_config_path)?,
+        ConfigPathState::Metadata(metadata) if metadata.is_file()
+    ) {
+        (
+            fs::read_to_string(&project_config_path).map_err(|e| {
+                format!(
+                    "Failed to read config file {}: {e}",
+                    project_config_path.display()
+                )
+            })?,
+            "project",
+        )
+    } else {
+        (default_content.to_string(), "default")
+    };
+
+    Ok(ConfigFileContent {
+        file_id: file_id.to_string(),
+        relative_path: relative_path.to_string(),
+        content,
+        source: source.to_string(),
+    })
+}
+
+fn ensure_parent_dir(base: &Path, path: &Path, label: &str) -> Result<(), String> {
+    validate_config_path(base, path)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("Missing parent directory for {label}"))?;
+    fs::create_dir_all(parent).map_err(|e| {
+        format!(
+            "Failed to create parent directory for {label} at {}: {e}",
+            parent.display()
+        )
+    })
+}
+
+fn backup_existing_file(path: &Path) -> Result<(), String> {
+    match config_path_state(path)? {
+        ConfigPathState::Missing => return Ok(()),
+        ConfigPathState::Metadata(metadata) => {
+            if metadata.file_type().is_symlink() {
+                return Err(format!("Config path contains symlink: {}", path.display()));
+            }
+            if !metadata.is_file() {
+                return Err(format!(
+                    "Cannot back up config file because path is not a file: {}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid config filename: {}", path.display()))?;
+    let backup_path = path.with_file_name(format!("{file_name}.bak"));
+    if let ConfigPathState::Metadata(metadata) = config_path_state(&backup_path)? {
+        if metadata.file_type().is_symlink() {
+            return Err(format!(
+                "Backup path contains symlink: {}",
+                backup_path.display()
+            ));
+        }
+        if !metadata.is_file() {
+            return Err(format!(
+                "Backup path is not a file: {}",
+                backup_path.display()
+            ));
+        }
+    }
+
+    fs::copy(path, &backup_path).map_err(|e| {
+        format!(
+            "Failed to create backup {} from {}: {e}",
+            backup_path.display(),
+            path.display()
+        )
+    })?;
+
+    Ok(())
+}
+
+fn write_config_file_sync(
+    base: &Path,
+    project_path: &str,
+    file_id: &str,
+    content: &str,
+) -> Result<ConfigFileContent, String> {
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let target_path = resolve_project_config_file_path(base, file_id)?;
+    ensure_parent_dir(base, &target_path, "config file")?;
+    backup_existing_file(&target_path)?;
+    fs::write(&target_path, content)
+        .map_err(|e| format!("Failed to write config file {}: {e}", target_path.display()))?;
+
+    read_config_file_sync(base, project_path, file_id)
+}
+
+fn reset_config_file_sync(
+    base: &Path,
+    project_path: &str,
+    file_id: &str,
+) -> Result<ConfigFileContent, String> {
+    let (_, default_content) = supported_config_file(file_id)
+        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
+    write_config_file_sync(base, project_path, file_id, default_content)
+}
+
+/// Reads a supported configuration file using project overrides first, then built-in defaults.
+#[tauri::command]
+async fn read_config_file(
+    project_path: String,
+    file_id: String,
+) -> Result<ConfigFileContent, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        read_config_file_sync(base, &project_path, &file_id)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Writes a supported configuration file into `<project>/.autoresearch/` and creates a `.bak`.
+#[tauri::command]
+async fn write_config_file(
+    project_path: String,
+    file_id: String,
+    content: String,
+) -> Result<ConfigFileContent, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        write_config_file_sync(base, &project_path, &file_id, &content)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Restores a supported configuration file to the built-in default template.
+#[tauri::command]
+async fn reset_config_file(
+    project_path: String,
+    file_id: String,
+) -> Result<ConfigFileContent, String> {
+    tokio::task::spawn_blocking(move || {
+        let base = Path::new(&project_path);
+        reset_config_file_sync(base, &project_path, &file_id)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 /// Retrieves the most recently opened project path from the Tauri store.
@@ -1611,6 +1871,9 @@ pub fn run() {
             select_project_dir,
             detect_project_config,
             init_project_config,
+            read_config_file,
+            write_config_file,
+            reset_config_file,
             get_recent_project,
             save_recent_project,
             list_issues,
@@ -1632,10 +1895,11 @@ mod tests {
     #[cfg(unix)]
     use super::RunProcessState;
     use super::{
-        build_iteration_progress, build_score_history, find_latest_review_content,
-        get_iteration_progress_sync, infer_phase, init_project_config_sync,
-        parse_iteration_from_log_md, parse_iteration_from_terminal, parse_tasks_json, Phase,
-        SubtaskStatus,
+        build_iteration_progress, build_score_history, detect_project_config_sync,
+        find_latest_review_content, get_iteration_progress_sync, infer_phase,
+        init_project_config_sync, parse_iteration_from_log_md, parse_iteration_from_terminal,
+        parse_tasks_json, read_config_file_sync, reset_config_file_sync, write_config_file_sync,
+        Phase, SubtaskStatus,
     };
     use super::{build_run_args, build_run_env_vars, StartRunRequest};
     use super::{
@@ -1645,6 +1909,8 @@ mod tests {
     };
     use super::{extract_review_summary, extract_score};
     use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs as unix_fs;
     use std::path::PathBuf;
 
     fn create_temp_project_dir(test_name: &str) -> PathBuf {
@@ -1764,6 +2030,460 @@ mod tests {
         );
 
         fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn detect_project_config_only_counts_autoresearch_overrides() {
+        let project_dir = create_temp_project_dir("detect-project-config-overrides");
+        fs::create_dir_all(project_dir.join("agents")).expect("root agents dir should exist");
+        fs::write(project_dir.join("program.md"), "root program\n")
+            .expect("root program should exist");
+
+        let config =
+            detect_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+                .expect("config should load");
+
+        assert!(!config.has_autoresearch_dir);
+        assert!(!config.has_program_md);
+        assert!(!config.has_agents_dir);
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn read_config_file_prefers_project_override() {
+        let project_dir = create_temp_project_dir("read-config-project-override");
+        let config_dir = project_dir.join(".autoresearch");
+        fs::create_dir_all(config_dir.join("agents")).expect("agents dir should exist");
+        fs::write(config_dir.join("program.md"), "custom program\n").expect("program should exist");
+
+        let config = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "program.md",
+        )
+        .expect("config should load");
+
+        assert_eq!(config.file_id, "program.md");
+        assert_eq!(config.relative_path, "program.md");
+        assert_eq!(config.content, "custom program\n");
+        assert_eq!(config.source, "project");
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn read_config_file_falls_back_to_default_template() {
+        let project_dir = create_temp_project_dir("read-config-default");
+
+        let config = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/claude.md",
+        )
+        .expect("config should load");
+
+        assert_eq!(config.file_id, "agents/claude.md");
+        assert_eq!(config.relative_path, "agents/claude.md");
+        assert_eq!(config.content, super::CLAUDE_AGENT_TEMPLATE);
+        assert_eq!(config.source, "default");
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn read_config_file_fails_when_target_path_is_directory() {
+        let project_dir = create_temp_project_dir("read-config-directory-target");
+        let target_dir = project_dir.join(".autoresearch/agents/codex.md");
+        fs::create_dir_all(&target_dir).expect("target directory should exist");
+
+        let error = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/codex.md",
+        )
+        .expect_err("directory target should fail");
+
+        assert!(
+            error.contains("Config file path is not a file"),
+            "unexpected error: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn read_config_file_fails_when_autoresearch_path_is_file() {
+        let project_dir = create_temp_project_dir("read-config-file-ancestor");
+        fs::write(project_dir.join(".autoresearch"), "broken").expect("broken file should exist");
+
+        let error = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/codex.md",
+        )
+        .expect_err("ancestor file should fail");
+
+        assert!(
+            error.contains("Config path ancestor is not a directory"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.contains(".autoresearch"),
+            "expected ancestor path in error: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn write_config_file_creates_project_override_and_backup() {
+        let project_dir = create_temp_project_dir("write-config-backup");
+        let target_dir = project_dir.join(".autoresearch/agents");
+        fs::create_dir_all(&target_dir).expect("agents dir should exist");
+        fs::write(target_dir.join("codex.md"), "old codex\n")
+            .expect("existing config should exist");
+
+        let config = write_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/codex.md",
+            "new codex\n",
+        )
+        .expect("write should succeed");
+
+        assert_eq!(config.content, "new codex\n");
+        assert_eq!(config.source, "project");
+        assert_eq!(
+            fs::read_to_string(target_dir.join("codex.md")).expect("new config should exist"),
+            "new codex\n"
+        );
+        assert_eq!(
+            fs::read_to_string(target_dir.join("codex.md.bak")).expect("backup should exist"),
+            "old codex\n"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn write_config_file_materializes_first_project_override() {
+        let project_dir = create_temp_project_dir("write-config-first-materialization");
+        let target_path = project_dir.join(".autoresearch/program.md");
+
+        let config = write_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "program.md",
+            "custom program\n",
+        )
+        .expect("first write should succeed");
+
+        assert_eq!(config.file_id, "program.md");
+        assert_eq!(config.relative_path, "program.md");
+        assert_eq!(config.content, "custom program\n");
+        assert_eq!(config.source, "project");
+        assert_eq!(
+            fs::read_to_string(&target_path).expect("project override should exist"),
+            "custom program\n"
+        );
+        assert!(
+            !target_path.with_file_name("program.md.bak").exists(),
+            "first write should not create a backup when no previous file exists"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn reset_config_file_restores_default_template() {
+        let project_dir = create_temp_project_dir("reset-config-default");
+        let target_dir = project_dir.join(".autoresearch/agents");
+        fs::create_dir_all(&target_dir).expect("agents dir should exist");
+        fs::write(target_dir.join("opencode.md"), "custom opencode\n")
+            .expect("existing config should exist");
+
+        let config = reset_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/opencode.md",
+        )
+        .expect("reset should succeed");
+
+        assert_eq!(config.content, super::OPENCODE_AGENT_TEMPLATE);
+        assert_eq!(config.source, "project");
+        assert_eq!(
+            fs::read_to_string(target_dir.join("opencode.md")).expect("reset config should exist"),
+            super::OPENCODE_AGENT_TEMPLATE
+        );
+        assert_eq!(
+            fs::read_to_string(target_dir.join("opencode.md.bak")).expect("backup should exist"),
+            "custom opencode\n"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn reset_config_file_materializes_first_project_override() {
+        let project_dir = create_temp_project_dir("reset-config-first-materialization");
+        let target_path = project_dir.join(".autoresearch/agents/claude.md");
+
+        let config = reset_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/claude.md",
+        )
+        .expect("reset should materialize project override");
+
+        assert_eq!(config.file_id, "agents/claude.md");
+        assert_eq!(config.relative_path, "agents/claude.md");
+        assert_eq!(config.content, super::CLAUDE_AGENT_TEMPLATE);
+        assert_eq!(config.source, "project");
+        assert_eq!(
+            fs::read_to_string(&target_path).expect("reset config should exist"),
+            super::CLAUDE_AGENT_TEMPLATE
+        );
+        assert!(
+            !target_path.with_file_name("claude.md.bak").exists(),
+            "first reset should not create a backup when no previous file exists"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn config_file_commands_reject_unsupported_file_id() {
+        let project_dir = create_temp_project_dir("config-file-invalid-id");
+
+        let error = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "../secret.txt",
+        )
+        .expect_err("invalid file id should fail");
+
+        assert_eq!(error, "Unsupported config file: ../secret.txt");
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn write_config_file_rejects_unsupported_file_id() {
+        let project_dir = create_temp_project_dir("write-config-invalid-id");
+
+        let error = write_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "../secret.txt",
+            "value",
+        )
+        .expect_err("invalid file id should fail");
+
+        assert_eq!(error, "Unsupported config file: ../secret.txt");
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn reset_config_file_rejects_unsupported_file_id() {
+        let project_dir = create_temp_project_dir("reset-config-invalid-id");
+
+        let error = reset_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "../secret.txt",
+        )
+        .expect_err("invalid file id should fail");
+
+        assert_eq!(error, "Unsupported config file: ../secret.txt");
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn write_config_file_fails_when_target_path_is_directory() {
+        let project_dir = create_temp_project_dir("write-config-directory-target");
+        let target_dir = project_dir.join(".autoresearch/agents/codex.md");
+        fs::create_dir_all(&target_dir).expect("target directory should exist");
+
+        let error = write_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/codex.md",
+            "new codex\n",
+        )
+        .expect_err("directory target should fail");
+
+        assert!(
+            error.contains("Config file path is not a file"),
+            "unexpected error: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_config_file_rejects_symlinked_config_ancestor() {
+        let project_dir = create_temp_project_dir("read-config-symlink-ancestor");
+        let external_dir = create_temp_project_dir("read-config-symlink-ancestor-external");
+        unix_fs::symlink(&external_dir, project_dir.join(".autoresearch"))
+            .expect("symlinked config dir should exist");
+
+        let error = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "program.md",
+        )
+        .expect_err("symlinked config dir should fail");
+
+        assert!(
+            error.contains("Config path contains symlink"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.contains(".autoresearch"),
+            "expected symlink path in error: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup project");
+        fs::remove_dir_all(external_dir).expect("cleanup external");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_config_file_rejects_symlinked_target_file() {
+        let project_dir = create_temp_project_dir("write-config-symlink-target");
+        let target_dir = project_dir.join(".autoresearch/agents");
+        let external_dir = create_temp_project_dir("write-config-symlink-target-external");
+        let external_file = external_dir.join("codex.md");
+        fs::create_dir_all(&target_dir).expect("agents dir should exist");
+        fs::write(&external_file, "external codex\n").expect("external file should exist");
+        unix_fs::symlink(&external_file, target_dir.join("codex.md"))
+            .expect("symlinked target file should exist");
+
+        let error = write_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/codex.md",
+            "new codex\n",
+        )
+        .expect_err("symlinked target file should fail");
+
+        assert!(
+            error.contains("Config path contains symlink"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.contains("codex.md"),
+            "expected target path in error: {error}"
+        );
+        assert_eq!(
+            fs::read_to_string(&external_file).expect("external file should remain unchanged"),
+            "external codex\n"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup project");
+        fs::remove_dir_all(external_dir).expect("cleanup external");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_config_file_rejects_broken_symlink_target() {
+        let project_dir = create_temp_project_dir("read-config-broken-symlink-target");
+        let target_dir = project_dir.join(".autoresearch/agents");
+        let missing_target = project_dir.join("missing-codex.md");
+        fs::create_dir_all(&target_dir).expect("agents dir should exist");
+        unix_fs::symlink(&missing_target, target_dir.join("codex.md"))
+            .expect("broken symlink target should exist");
+
+        let error = read_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/codex.md",
+        )
+        .expect_err("broken symlink target should fail");
+
+        assert!(
+            error.contains("Config path contains symlink"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.contains("codex.md"),
+            "expected target path in error: {error}"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup project");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_config_file_rejects_broken_symlink_backup_path() {
+        let project_dir = create_temp_project_dir("write-config-broken-symlink-backup");
+        let target_dir = project_dir.join(".autoresearch/agents");
+        let missing_backup_target = project_dir.join("missing-claude-backup.md");
+        fs::create_dir_all(&target_dir).expect("agents dir should exist");
+        fs::write(target_dir.join("claude.md"), "custom claude\n")
+            .expect("project config should exist");
+        unix_fs::symlink(&missing_backup_target, target_dir.join("claude.md.bak"))
+            .expect("broken symlink backup path should exist");
+
+        let error = write_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/claude.md",
+            "new claude\n",
+        )
+        .expect_err("broken symlink backup path should fail");
+
+        assert!(
+            error.contains("Backup path contains symlink"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            fs::read_to_string(target_dir.join("claude.md"))
+                .expect("project config should remain unchanged"),
+            "custom claude\n"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup project");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reset_config_file_rejects_symlinked_backup_path() {
+        let project_dir = create_temp_project_dir("reset-config-symlink-backup");
+        let target_dir = project_dir.join(".autoresearch/agents");
+        let external_dir = create_temp_project_dir("reset-config-symlink-backup-external");
+        let backup_target = external_dir.join("claude.md");
+        fs::create_dir_all(&target_dir).expect("agents dir should exist");
+        fs::write(target_dir.join("claude.md"), "custom claude\n")
+            .expect("project config should exist");
+        fs::write(&backup_target, "external backup\n").expect("external backup should exist");
+        unix_fs::symlink(&backup_target, target_dir.join("claude.md.bak"))
+            .expect("symlinked backup path should exist");
+
+        let error = reset_config_file_sync(
+            &project_dir,
+            project_dir.to_string_lossy().as_ref(),
+            "agents/claude.md",
+        )
+        .expect_err("symlinked backup path should fail");
+
+        assert!(
+            error.contains("Backup path contains symlink"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            fs::read_to_string(target_dir.join("claude.md"))
+                .expect("project config should remain unchanged"),
+            "custom claude\n"
+        );
+        assert_eq!(
+            fs::read_to_string(&backup_target).expect("external backup should remain unchanged"),
+            "external backup\n"
+        );
+
+        fs::remove_dir_all(project_dir).expect("cleanup project");
+        fs::remove_dir_all(external_dir).expect("cleanup external");
     }
 
     #[test]

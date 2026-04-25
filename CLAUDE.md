@@ -77,6 +77,7 @@ Planning phase (before iteration 1) asks the first agent to split the Issue into
 - Quality gate passes → `mark_subtask_passed()` sets `passes: true`
 - `all_subtasks_passed()` → enters PR/merge flow
 - No tasks.json (planning failure) → backward-compatible original mode
+- When reviewing archived workflow iterations, treat `.autoresearch/workflows/issue-N/planning.log` as the source of truth for the original subtask acceptance criteria. `tasks.json` inside the workflow can contain placeholder or truncated subtask text in later iterations and is not always reliable for audit scoring.
 
 ### Agent Invocation
 

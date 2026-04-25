@@ -28,8 +28,21 @@
 - `init_project_config` should only create missing files under `<project>/.autoresearch/`; never overwrite an existing `program.md` or existing agent template file.
 - Reuse the repo-root `program.md` and `agents/*.md` as built-in templates via `include_str!`, so desktop init stays aligned with CLI defaults without runtime filesystem lookups.
 - Keep the command return type consistent with `detect_project_config` by returning the refreshed `ProjectConfig` after initialization; the frontend can use that directly to refresh badge state.
+- `detect_project_config` must report only `.autoresearch/` overrides, not similarly named files at the repo root; the desktop app should reflect the same config source that `run.sh` actually reads.
+- Config editor commands should expose only a fixed whitelist (`program.md`, `agents/claude.md`, `agents/codex.md`, `agents/opencode.md`) instead of arbitrary relative paths; read falls back to built-in templates, while write/reset always materialize the project override under `<project>/.autoresearch/`.
+- When saving or resetting a project config override, create a sibling `.bak` backup of the previous project file before overwriting so the frontend does not need separate backup logic.
+- `read_config_file` should fail fast when a whitelisted target path exists but is not a regular file; silently falling back to the built-in template hides broken project state from the UI.
+- Apply the same fail-fast rule to ancestor path conflicts too: if `<project>/.autoresearch` or an intermediate parent exists as a regular file, `read_config_file` should surface that broken state instead of pretending the default template is usable.
+- Whitelisting logical file ids is not enough for config-file commands: reject symlinked ancestors and symlinked target files too, otherwise `<project>/.autoresearch` can point outside the project and `fs::write` / `fs::copy` will still touch arbitrary paths.
+- Do not use `Path::exists()` / `is_file()` alone for config security checks; broken symlinks return false there. Use `symlink_metadata`-based inspection so dangling target files and dangling `.bak` symlinks are rejected before read/write.
 
 ## Tests
 - Keep process-management tests in `src/lib.rs` as pure helper tests where possible; use a short-lived `sh -c "exit 0"` child on Unix to verify shared state stores both PID and handle without adding sleeps.
+- For frontend-facing file commands, return enough metadata (`file_id`, `relative_path`, `source`) for the UI to render source/target labels without reconstructing backend path rules on the client.
+- For config-file write/reset work (Issue #34 / T-002), Rust tests must cover both first-time materialization into `<project>/.autoresearch/` and overwrite-with-backup; covering only the overwrite case is not enough for acceptance.
+- Do not treat `reset_config_file` as covered just because `write_config_file` already has a first-write test; reset needs its own first-materialization test to prove default-template restore also creates the project override when the file was previously absent.
+- Add a negative test for symlink escapes in config-file commands; directory/file-shape validation alone does not prove writes stay under the selected project root.
+- Symlink-escape coverage should include dangling symlinks too; a broken target or broken backup symlink can still be followed by `fs::write` / `fs::copy` if validation only checks `exists()`.
+- T-002 review should be scored against `.autoresearch/workflows/issue-N/planning.log` when `tasks.json` contains placeholder acceptance text; the Rust acceptance bar here is command registration plus `.autoresearch` materialization, `.bak` backup, default-template reset, and rejection of non-whitelisted targets.
 - Helper functions that only exist for unit tests should either be exercised by production code or annotated deliberately; this crate runs `cargo clippy -- -D warnings`, so otherwise `dead_code` will fail the build.
 - For review-text helpers, prefer deterministic line-based extraction around the matched score line: keep the score line itself plus the nearest non-empty context lines, instead of taking an arbitrary leading window that may drop the actual summary sentence after the score.

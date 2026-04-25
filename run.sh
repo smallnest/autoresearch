@@ -2068,27 +2068,6 @@ restore_continue_state() {
         BRANCH_NAME="$branch"
     fi
 
-    # 检测 dirty working tree 并自动 stash
-    local dirty_files
-    dirty_files=$(git status --porcelain 2>/dev/null)
-    if [ -n "$dirty_files" ]; then
-        local stash_msg="autoresearch-temp-continue-$ISSUE_NUMBER-$(date +%s)"
-        log_console "⚠️ 检测到未提交的更改，自动 stash..."
-        log "检测到 dirty working tree，执行 git stash push -m \"$stash_msg\""
-        if git stash push -u -m "$stash_msg" 2>/dev/null; then
-            log_console "已 stash 未提交的更改: $stash_msg"
-            log "stash 成功: $stash_msg"
-            # 记录 stash ref 以便后续恢复
-            CONTINUE_STASH_REF="$stash_msg"
-        else
-            log_console "⚠️ stash 失败，继续运行（dirty 文件可能影响后续操作）"
-            log "stash 失败，降级继续"
-            CONTINUE_STASH_REF=""
-        fi
-    else
-        CONTINUE_STASH_REF=""
-    fi
-
     # 检测本地分支与 remote tracking branch 的分叉状态
     local remote_branch="origin/$branch"
     if git show-ref --verify --quiet "refs/remotes/$remote_branch" 2>/dev/null; then
@@ -2113,11 +2092,7 @@ restore_continue_state() {
     # 检测是否有残留的 autoresearch stash（上次中断遗留）
     # 只警告，不自动 pop，避免冲突导致脚本中断
     local residual_stash
-    if [ -n "$CONTINUE_STASH_REF" ]; then
-        residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | grep -v "$CONTINUE_STASH_REF" | head -1 || true)
-    else
-        residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | head -1 || true)
-    fi
+    residual_stash=$(git stash list 2>/dev/null | grep 'autoresearch-temp-' | head -1 || true)
     if [ -n "$residual_stash" ]; then
         local stash_index
         stash_index=$(echo "$residual_stash" | grep -oE 'stash@\{[0-9]+\}' | head -1)
@@ -2220,7 +2195,6 @@ PREVIOUS_FEEDBACK=""
 FINAL_SCORE=0
 CONSECUTIVE_ITERATION_FAILURES=0
 CONTEXT_RETRIES=0
-CONTINUE_STASH_REF=""
 
 if [ $CONTINUE_MODE -eq 1 ]; then
     restore_continue_state
@@ -2656,23 +2630,6 @@ done
 
 # ==================== 最终处理 ====================
 
-# Continue 模式下恢复 stash 的 dirty 文件（如有）
-if [ -n "$CONTINUE_STASH_REF" ]; then
-    log_console "恢复 continue 时 stash 的更改..."
-    local_stash=$(git stash list 2>/dev/null | grep "$CONTINUE_STASH_REF" | grep -oE 'stash@\{[0-9]+\}' | head -1 || true)
-    if [ -n "$local_stash" ]; then
-        if git stash pop "$local_stash" 2>/dev/null; then
-            log "continue stash 恢复成功: $local_stash"
-        else
-            log_console "⚠️ continue stash pop 失败（可能有冲突），请手动处理"
-            log "continue stash pop 失败: $local_stash"
-        fi
-    else
-        log "continue stash 未找到: $CONTINUE_STASH_REF"
-    fi
-    CONTINUE_STASH_REF=""
-fi
-
 if check_score_passed "$FINAL_SCORE"; then
     record_final_result "$ISSUE_NUMBER" "completed" "$ITERATION" "$FINAL_SCORE"
 
@@ -2787,13 +2744,24 @@ EOF
         main_branch=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
         [ -z "$main_branch" ] && main_branch="master"
 
-        # 如果有未提交的更改，先 stash
+        # 切换回主分支前，如果有未提交的更改，先 stash
+        local stashed=0
         if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
             log "检测到未提交的更改，暂存..."
-            git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null || true
+            if git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null; then
+                stashed=1
+            fi
         fi
 
         cleanup_merged_branch "$main_branch" "$BRANCH_NAME"
+
+        # 恢复 stash（.autoresearch/ 为临时数据，恢复失败直接 drop）
+        if [ $stashed -eq 1 ]; then
+            if ! git stash pop 2>/dev/null; then
+                log "stash pop 失败（文件冲突），跳过恢复"
+                git stash drop 2>/dev/null || true
+            fi
+        fi
 
         # 添加评论到 Issue（仅包含总结信息）
         log_console "添加评论到 Issue #$ISSUE_NUMBER..."

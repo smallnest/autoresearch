@@ -25,6 +25,7 @@ interface ProjectState {
   selectProject: () => Promise<void>;
   loadProject: (_path: string) => Promise<void>;
   loadRecentProjects: () => Promise<void>;
+  refreshConfig: (_projectPath?: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -181,6 +182,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
     } catch (e) {
       console.error('Failed to load recent projects:', e);
+    }
+  },
+
+  refreshConfig: async (targetProjectPath?: string) => {
+    const projectPath = targetProjectPath ?? get().projectPath;
+    if (!projectPath) {
+      return;
+    }
+
+    try {
+      if (isTauri) {
+        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+          projectPath,
+        });
+        if (get().projectPath === projectPath) {
+          set({ config });
+        }
+      } else {
+        if (get().projectPath === projectPath) {
+          set({ config: detectConfigBrowser(projectPath) });
+        }
+      }
+    } catch (e) {
+      if (get().projectPath === projectPath) {
+        set({ error: normalizeProjectError(e) });
+      }
     }
   },
 
