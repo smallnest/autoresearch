@@ -110,6 +110,40 @@ struct IssueDetail {
     comments: Vec<GhComment>,
 }
 
+/// A GitHub Pull Request returned by `gh pr list`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct GhPullRequest {
+    number: i64,
+    title: String,
+    #[serde(rename = "headRefName")]
+    head_ref_name: String,
+    body: String,
+}
+
+/// A file changed in a Pull Request, returned by `gh pr view --json files`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct PrFileChange {
+    path: String,
+    additions: i64,
+    deletions: i64,
+}
+
+/// Detailed information about a GitHub Pull Request.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+struct PrDetail {
+    files: Vec<PrFileChange>,
+    additions: i64,
+    deletions: i64,
+    #[serde(rename = "changedFiles")]
+    changed_files: i64,
+}
+
+/// Raw diff output for a Pull Request.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct PrDiff {
+    diff: String,
+}
+
 /// Metadata for a workflow log source under `.autoresearch/workflows/issue-N/`.
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
 struct IssueLogSource {
@@ -1522,6 +1556,130 @@ fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueD
     parse_issue_detail(&stdout)
 }
 
+/// Lists open GitHub Pull Requests for the repository at `project_path`.
+#[tauri::command]
+async fn list_prs(project_path: String) -> Result<Vec<GhPullRequest>, String> {
+    tokio::task::spawn_blocking(move || list_prs_sync(&project_path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn list_prs_sync(project_path: &str) -> Result<Vec<GhPullRequest>, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let output = Command::new("gh")
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--json",
+            "number,title,headRefName,body",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gh pr list failed: {}", stderr.trim()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_pr_list(&stdout)
+}
+
+fn parse_pr_list(stdout: &str) -> Result<Vec<GhPullRequest>, String> {
+    serde_json::from_str(stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+}
+
+/// Retrieves detailed information about a specific GitHub Pull Request.
+#[tauri::command]
+async fn get_pr_detail(project_path: String, pr_number: i64) -> Result<PrDetail, String> {
+    tokio::task::spawn_blocking(move || get_pr_detail_sync(&project_path, pr_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn get_pr_detail_sync(project_path: &str, pr_number: i64) -> Result<PrDetail, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let output = Command::new("gh")
+        .args([
+            "pr",
+            "view",
+            &pr_number.to_string(),
+            "--json",
+            "files,additions,deletions,changedFiles",
+        ])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(map_pr_command_error(pr_number, &stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_pr_detail(&stdout)
+}
+
+fn parse_pr_detail(stdout: &str) -> Result<PrDetail, String> {
+    serde_json::from_str(stdout)
+        .map_err(|e| format!("Failed to parse gh output: {e}. Output: {stdout}"))
+}
+
+fn map_pr_command_error(pr_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Pull request #{pr_number} not found");
+    }
+    format!("gh pr view failed: {}", stderr.trim())
+}
+
+/// Retrieves the raw diff for a specific GitHub Pull Request.
+#[tauri::command]
+async fn get_pr_diff(project_path: String, pr_number: i64) -> Result<PrDiff, String> {
+    tokio::task::spawn_blocking(move || get_pr_diff_sync(&project_path, pr_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn get_pr_diff_sync(project_path: &str, pr_number: i64) -> Result<PrDiff, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let output = Command::new("gh")
+        .args(["pr", "diff", &pr_number.to_string()])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(map_pr_diff_error(pr_number, &stderr));
+    }
+
+    let diff = String::from_utf8_lossy(&output.stdout).into_owned();
+    Ok(PrDiff { diff })
+}
+
+fn map_pr_diff_error(pr_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Pull request #{pr_number} not found");
+    }
+    format!("gh pr diff failed: {}", stderr.trim())
+}
+
 /// Lists available workflow log sources for a processed Issue.
 #[tauri::command]
 async fn list_issue_log_sources(
@@ -2346,10 +2504,7 @@ async fn get_subtask_status(
 }
 
 /// Builds a formatted plain-text export of all iteration logs for an Issue.
-fn format_export_log(
-    project_path: &Path,
-    issue_number: i64,
-) -> Result<String, String> {
+fn format_export_log(project_path: &Path, issue_number: i64) -> Result<String, String> {
     let issue_dir = project_path
         .join(".autoresearch")
         .join("workflows")
@@ -2431,11 +2586,10 @@ async fn export_history_log(
     issue_number: i64,
 ) -> Result<(), String> {
     let pp = project_path.clone();
-    let content = tokio::task::spawn_blocking(move || {
-        format_export_log(Path::new(&pp), issue_number)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))??;
+    let content =
+        tokio::task::spawn_blocking(move || format_export_log(Path::new(&pp), issue_number))
+            .await
+            .map_err(|e| format!("Task join error: {e}"))??;
 
     // Open a save-file dialog.
     let file_path = tauri_plugin_dialog::DialogExt::dialog(&app)
@@ -2529,6 +2683,9 @@ pub fn run() {
             get_iteration_log,
             get_subtask_status,
             export_history_log,
+            list_prs,
+            get_pr_detail,
+            get_pr_diff,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -2555,10 +2712,13 @@ mod tests {
         determine_history_status, extract_field, extract_history_end_time,
         extract_history_final_score, extract_history_title, extract_total_iterations,
         format_export_log, get_history_detail_sync, get_iteration_log_sync,
-        get_subtask_status_sync,
-        list_history_sync, HistoryRunStatus,
+        get_subtask_status_sync, list_history_sync, HistoryRunStatus,
     };
     use super::{extract_review_summary, extract_score};
+    use super::{
+        get_pr_detail_sync, get_pr_diff_sync, list_prs_sync, map_pr_command_error,
+        map_pr_diff_error, parse_pr_detail, parse_pr_list, GhPullRequest, PrDetail, PrFileChange,
+    };
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs as unix_fs;
@@ -3200,6 +3360,151 @@ mod tests {
         let error = get_issue_detail_sync("/path/that/does/not/exist", 27)
             .expect_err("invalid path should fail");
 
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    // ========================================
+    // PR command tests
+    // ========================================
+
+    #[test]
+    fn parse_pr_list_returns_structured_data() {
+        let prs = parse_pr_list(
+            r#"[
+                {
+                    "number": 42,
+                    "title": "feat: add login page",
+                    "headRefName": "feature/login",
+                    "body": "Implements the login UI"
+                },
+                {
+                    "number": 43,
+                    "title": "fix: correct date format",
+                    "headRefName": "bugfix/date",
+                    "body": ""
+                }
+            ]"#,
+        )
+        .expect("pr list should parse");
+
+        assert_eq!(prs.len(), 2);
+        assert_eq!(
+            prs[0],
+            GhPullRequest {
+                number: 42,
+                title: "feat: add login page".to_string(),
+                head_ref_name: "feature/login".to_string(),
+                body: "Implements the login UI".to_string(),
+            }
+        );
+        assert_eq!(prs[1].number, 43);
+        assert!(prs[1].body.is_empty());
+    }
+
+    #[test]
+    fn parse_pr_list_returns_empty_for_empty_array() {
+        let prs = parse_pr_list("[]").expect("empty array should parse");
+        assert!(prs.is_empty());
+    }
+
+    #[test]
+    fn parse_pr_list_reports_invalid_json() {
+        let error = parse_pr_list("{invalid json").expect_err("invalid json should fail");
+        assert!(error.contains("Failed to parse gh output"));
+        assert!(error.contains("{invalid json"));
+    }
+
+    #[test]
+    fn parse_pr_detail_returns_structured_data() {
+        let detail = parse_pr_detail(
+            r#"{
+                "files": [
+                    { "path": "src/main.rs", "additions": 10, "deletions": 2 },
+                    { "path": "src/lib.rs", "additions": 5, "deletions": 0 }
+                ],
+                "additions": 15,
+                "deletions": 2,
+                "changedFiles": 2
+            }"#,
+        )
+        .expect("pr detail should parse");
+
+        assert_eq!(
+            detail,
+            PrDetail {
+                files: vec![
+                    PrFileChange {
+                        path: "src/main.rs".to_string(),
+                        additions: 10,
+                        deletions: 2,
+                    },
+                    PrFileChange {
+                        path: "src/lib.rs".to_string(),
+                        additions: 5,
+                        deletions: 0,
+                    },
+                ],
+                additions: 15,
+                deletions: 2,
+                changed_files: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_pr_detail_reports_invalid_json() {
+        let error = parse_pr_detail("not json").expect_err("invalid json should fail");
+        assert!(error.contains("Failed to parse gh output"));
+    }
+
+    #[test]
+    fn pr_command_error_maps_missing_pr() {
+        let error = map_pr_command_error(
+            99,
+            "GraphQL: Could not resolve to a PullRequest with the number of 99.",
+        );
+        assert_eq!(error, "Pull request #99 not found");
+    }
+
+    #[test]
+    fn pr_command_error_preserves_other_gh_failures() {
+        let error = map_pr_command_error(99, "network timeout");
+        assert_eq!(error, "gh pr view failed: network timeout");
+    }
+
+    #[test]
+    fn pr_diff_error_maps_missing_pr() {
+        let error = map_pr_diff_error(
+            99,
+            "GraphQL: Could not resolve to a PullRequest with the number of 99.",
+        );
+        assert_eq!(error, "Pull request #99 not found");
+    }
+
+    #[test]
+    fn pr_diff_error_preserves_other_gh_failures() {
+        let error = map_pr_diff_error(99, "connection refused");
+        assert_eq!(error, "gh pr diff failed: connection refused");
+    }
+
+    #[test]
+    fn list_prs_rejects_non_directory_path() {
+        let error =
+            list_prs_sync("/path/that/does/not/exist").expect_err("invalid path should fail");
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn get_pr_detail_rejects_non_directory_path() {
+        let error = get_pr_detail_sync("/path/that/does/not/exist", 42)
+            .expect_err("invalid path should fail");
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn get_pr_diff_rejects_non_directory_path() {
+        let error = get_pr_diff_sync("/path/that/does/not/exist", 42)
+            .expect_err("invalid path should fail");
         assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
     }
 

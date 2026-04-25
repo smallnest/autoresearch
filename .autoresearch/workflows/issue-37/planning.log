@@ -1,0 +1,73 @@
+我现在对代码库有了全面的了解。这是我对 Issue #37 的分析：
+
+**问题分析：**
+- 此 Issue 为 PR 信息查看和 diff 显示增加了 3 个 Tauri 命令（Rust 后端）
+- 添加了 PR 列表 UI、PR 详情以及带有语法高亮的 diff 查看器
+- 需要：新页面/组件、新 Zustand store、新 Tauri 命令
+- 依赖于 Issue #24（项目目录选择）
+
+**子任务划分理由：**
+
+1. **T-001 (Rust backend)**：所有 3 个 `gh` CLI 封装器 (`list_prs`、`get_pr_detail`、`get_pr_diff`) 都应该在同一个任务中，因为它们密切相关的，遵循与现有 `list_issues`/`get_issue_detail` 命令完全相同的模式，并且可以一起测试。
+
+2. **T-002 (Frontend store + PR list page)**：用于 PR 数据的 Zustand store 和显示带有基本信息的 PR 列表的页面。这是一个独立的、可测试的功能。
+
+3. **T-003 (Diff viewer component)**：diff 解析和渲染（统一 diff 格式，绿色/红色背景，等宽字体）是一个复杂、独立的 UI 组件，值得单独规划一个任务。
+
+```json
+{
+  "issueNumber": 37,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端：实现 list_prs / get_pr_detail / get_pr_diff Tauri 命令",
+      "description": "在 src-tauri/src/lib.rs 中新增三个 Tauri command：\n1. `list_prs(project_path)` — 调用 `gh pr list --state open --json number,title,headRefName,body`，返回 PR 列表\n2. `get_pr_detail(project_path, pr_number)` — 调用 `gh pr view N --json files,additions,deletions,changedFiles`，返回文件变更详情\n3. `get_pr_diff(project_path, pr_number)` — 调用 `gh pr diff N`，返回原始 diff 文本\n\n遵循现有 `list_issues` / `get_issue_detail` 的模式：定义 serde 结构体、spawn_blocking 调用 gh CLI、解析 JSON 输出、处理 stderr 错误。将三个命令注册到 invoke_handler。",
+      "acceptanceCriteria": [
+        "三个 Tauri command 均在 lib.rs 中定义并注册到 invoke_handler",
+        "每个命令使用 spawn_blocking 调用 gh CLI，并通过 Result<T, String> 返回错误",
+        "定义合适的 serde 序列化结构体（GhPullRequest、PrFileChange 等）",
+        "gh CLI 调用失败时返回有意义的错误信息",
+        "cargo clippy -- -D warnings 无新增警告",
+        "cargo test 通过",
+        "为 JSON 解析和 stderr 映射编写纯函数单元测试"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "前端 Store 与 PR 列表页面",
+      "description": "创建 `src/stores/prStore.ts`（Zustand store）和 `src/pages/PRsPage.tsx`（PR 列表页面）：\n1. prStore 管理 PR 列表、选中的 PR 编号、加载/错误状态，调用 Tauri list_prs / get_pr_detail\n2. PRsPage 展示 PR 列表（编号、标题、分支名、文件变更统计），点击展开文件列表\n3. 在 Sidebar 导航中添加「PR」入口，在 App.tsx 添加路由\n4. 遵循 IssuesPage 的页面布局模式和样式约定",
+      "acceptanceCriteria": [
+        "prStore.ts 遵循现有 store 模式（isTauri 检测、mock fallback、loading/error 状态）",
+        "PRsPage 展示 PR 编号、标题、分支名、文件变更统计",
+        "点击 PR 展示文件变更列表（文件名、additions/deletions）",
+        "Sidebar 新增 PR 导航项，App.tsx 新增 /prs 路由",
+        "未选择项目时显示引导提示",
+        "遵循项目现有的 Tailwind 样式约定",
+        "TypeScript 类型检查通过，无 lint 错误"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "Diff 查看器组件与集成",
+      "description": "创建 `src/components/DiffViewer.tsx` 组件，在 PR 详情页集成 diff 展示：\n1. 解析 `gh pr diff` 输出的 unified diff 格式，按文件分割\n2. 使用等宽字体渲染代码差异\n3. 新增行绿色背景（bg-green-50/text-green-800），删除行红色背景（bg-red-50/text-red-800）\n4. 支持文件列表导航（点击文件名跳转到对应 diff 区块）\n5. 在 PR 详情面板中集成 DiffViewer，调用 get_pr_diff 获取数据",
+      "acceptanceCriteria": [
+        "DiffViewer 组件正确解析 unified diff 格式并按文件分割",
+        "新增行使用绿色背景样式，删除行使用红色背景样式",
+        "代码使用等宽字体（font-mono）渲染",
+        "支持文件列表导航（从文件列表点击跳转到对应 diff 区块）",
+        "在 PR 详情面板中集成，点击 PR 后可查看完整 diff",
+        "TypeScript 类型检查通过，无 lint 错误",
+        "浏览器中验证 diff 渲染效果"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

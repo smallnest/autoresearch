@@ -1,0 +1,51 @@
+## 审核报告 - 无法完成审核
+
+### Issue
+- 编号: #37
+- 标题: [desktop-app] PR 信息查看与 Diff 展示
+- 子任务: T-002 - 前端 Store 与 PR 列表页面
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-002 子任务**尚未实现**，无代码可审核。
+
+---
+
+### 阻塞原因
+
+经验证，以下文件均不存在：
+
+| 验收条件要求 | 状态 |
+|---|---|
+| `desktop_app/src/stores/prStore.ts` | 不存在 |
+| `desktop_app/src/pages/PRsPage.tsx` | 不存在 |
+| `desktop_app/src/App.tsx` 新增 `/prs` 路由 | 未修改 |
+| `desktop_app/src/components/Sidebar.tsx` 新增 PR 导航项 | 未修改 |
+
+### 当前状态分析
+
+- **T-001** (Rust 后端): 已完成，`passes: true`，三个 Tauri 命令 (`list_prs` / `get_pr_detail` / `get_pr_diff`) 已实现并注册
+- **T-002** (前端 Store & PR 列表页面): `passes: false`，无任何前端代码产出
+- **Iteration 3** 日志为空（仅 1 行），说明实现未成功执行
+- `git diff` 显示唯一修改文件为 `desktop_app/src-tauri/src/lib.rs`（T-001 的后端代码）
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - 子任务未实现，无代码可审核
+
+**下一步行动**:
+需要实现 T-002，创建以下文件/修改：
+
+1. **新建 `desktop_app/src/stores/prStore.ts`** — 参考 `issueStore.ts` 的模式（isTauri 检测、mock fallback、loading/error 状态管理）
+2. **新建 `desktop_app/src/pages/PRsPage.tsx`** — 参考 `IssuesPage.tsx` 的布局和样式约定
+3. **修改 `desktop_app/src/App.tsx`** — 添加 `/prs` 路由指向 `PRsPage`
+4. **修改 `desktop_app/src/components/Sidebar.tsx`** — 在 `navItems` 数组中添加 PR 导航项
+5. 实现 PR 列表展示（编号、标题、分支名、文件变更统计）和点击展开文件详情
+
+后端 API 已就绪（`list_prs`、`get_pr_detail`、`get_pr_diff`），前端可直接调用。
