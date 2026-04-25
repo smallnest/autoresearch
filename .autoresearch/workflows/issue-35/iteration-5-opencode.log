@@ -1,0 +1,125 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 35 codebase[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 35 codebase[90m Explore Agent[0m
+Now I have a comprehensive understanding. Let me present the implementation plan.
+
+---
+
+## Plan for Issue #35 — Implementing T-001 (Rust History List Command)
+
+### Current State
+- **5 iterations completed, zero code written.** All iterations were stuck in explore mode.
+- `lib.rs` has no `HistoryEntry`, `RunStatus`, `list_history`, or log.md parsing.
+- `run.sh` has a regression: 5 `local` keyword declarations were removed.
+- Branch: `feature/issue-35`, 12 real workflow directories available as test data.
+
+### Implementation Plan
+
+#### Task 1: Revert `run.sh` regression
+- Restore `local` keyword to variables at lines ~1241-1251 (`log_file`, `agent_ret`, `tasks_file`, `json_content`, `stashed`)
+- These `local` declarations were part of the existing code style; removal leaks variables to global scope
+
+#### Task 2: Add Rust types to `lib.rs`
+Insert after existing struct definitions (~line 135, after `IterationProgressEvent`):
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RunHistoryStatus {
+    Success,
+    Fail,
+    Interrupt,
+    InProgress,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub issue_number: u32,
+    pub title: String,
+    pub final_score: Option<u32>,
+    pub status: RunHistoryStatus,
+    pub start_time: Option<String>,
+    pub end_time: Optional<String>,
+    pub total_iterations: Option<u32>,
+}
+```
+
+#### Task 3: Add `parse_log_md_for_history()` helper
+Parse a `log.md` file to extract:
+- **Title**: From `- Issue: #N - Title` line (regex)
+- **Final score**: From `## 最终结果` block → `最终评分: X/100` (reuse `extract_score` logic)
+- **Status**: By scanning file for **last occurring** event:
+  1. If `## 最终结果` block exists with `completed` → score >= 85 = Success, else Fail
+  2. If `⚠️ 脚本被中断` appears AFTER the last `## 最终结果` block → Interrupt
+  3. If neither → InProgress
+  4. Compare byte positions of `## 最终结果` and `⚠️ 脚本被中断` to determine which is later
+- **Total iterations**: From `## 最终结果` → `总迭代次数: N`
+- **Start time**: From `- 开始时间: YYYY-MM-DD HH:MM:SS`
+- **End time**: From `## 最终结果` → `结束时间: YYYY-MM-DD HH:MM:SS`
+
+Edge cases handled:
+- No `log.md` file → InProgress with partial data
+- Missing `## 基本信息` header (issue-29 pattern) → extract title from first `# Issue #N` line
+- `completed` + later interrupt (issue-34 pattern) → Status is Interrupt (last event wins)
+- Interrupt then resume and complete (issue-28 pattern) → Status is completed (last event wins)
+
+#### Task 4: Add `list_history` Tauri command
+
+```rust
+#[tauri::command]
+fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String>
+```
+
+Logic:
+1. Build path `<project_path>/.autoresearch/workflows/`
+2. If directory doesn't exist, return `Ok(vec![])`
+3. Scan for `issue-*` subdirectories (reuse pattern from `get_processed_issue_numbers()` line ~1256)
+4. For each dir: read `log.md`, call `parse_log_md_for_history()`
+5. Collect results, sorted by issue number descending
+
+Wrap sync I/O in `tokio::task::spawn_blocking`.
+
+#### Task 5: Register command
+Add to `invoke_handler` in `run()` function (~line 1870):
+```rust
+list_history,
+```
+
+#### Task 6: Write tests in `#[cfg(test)] mod tests`
+Add `mod history_tests` with:
+
+1. **`parse_success_status`** — Parse a log.md with `completed` + score 90 → Success
+2. **`parse_fail_status`** — Parse a log.md with `completed` + score 50 → Fail
+3. **`parse_interrupt_status`** — Parse a log.md with interrupt marker (no final result) → Interrupt
+4. **`parse_in_progress_status`** — Parse a log.md with iterations but no final result → InProgress
+5. **`parse_interrupt_after_completed`** — Score 94 + completed then interrupt → Interrupt (last event)
+6. **`parse_resume_complete`** — Interrupt then completed → Success (last event)
+7. **`parse_missing_header`** — Missing `## 基本信息` → still extracts issue number from title
+8. **`parse_empty_dir`** — Non-existent workflows dir → empty vec
+
+#### Task 7: Quality checks
+```bash
+cd desktop_app/src-tauri && cargo clippy -- -D warnings
+cd desktop_app/src-tauri && cargo test
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| All code in `lib.rs` | Project convention — no separate module files |
+| `serde(rename_all = "lowercase")` on enum | Matches frontend camelCase convention |
+| Status = **last occurring event** | Fixes issue-28 (resume) and issue-34 (cleanup interrupt) |
+| `tokio::spawn_blocking` for I/O | Follows existing command pattern |
+| `Option<u32>` for score/timing | Handles incomplete workflows gracefully |
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `run.sh` | Restore `local` keywords (lines ~1241-1255, ~2742) |
+| `desktop_app/src-tauri/src/lib.rs` | Add types, parser, command, handler registration, tests |
+
+Ready to implement when you give the go-ahead.

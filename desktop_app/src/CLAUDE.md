@@ -25,7 +25,7 @@
 
 ## Testing
 
-- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern.
+- Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)`, `createIterationStore(overrides)`, `createHistoryStore(overrides)` for that pattern.
 - Persisted Zustand stores should also expose a factory (for example `createRunConfigStore`) so tests can inject in-memory storage and explicitly exercise hydration behavior.
 - `node --test --experimental-strip-types` works in this project for lightweight TypeScript store tests without adding Vitest/Jest.
 - When a desktop store mirrors backend process state, do not assume the frontend knows the active resource after a failed `invoke`; prefer clearing unknown identifiers instead of showing a wrong Issue number.
@@ -67,6 +67,28 @@
 - If a Settings page owns the actual click handlers, move the handler sequencing itself (confirm -> clear feedback -> invoke -> refresh -> state update) into exported helpers too; otherwise tests only prove the low-level primitives work, not that the page wires them together correctly.
 - For config editors with async persistence, dirty-state guards are not enough: while save/reset/load is in flight, freeze file switching, reload, and textarea editing, or a late response can overwrite the newly selected file's state.
 - If a Settings page can keep editing the old project while a new `projectPath` is pending, route every save/reset/reload/refresh call through an `effectiveProjectPath` derived from the last loaded project; using the store's latest `projectPath` directly can write stale editor content into the wrong repository.
+
+## HistoryPage 约定
+
+### 组件结构
+
+- `StatusBadge`: 状态徽章组件，颜色编码：成功绿、失败红、中断黄、进行中蓝
+- `HistoryListItem`: 单条历史记录卡片，显示 Issue 编号、标题、评分、状态徽章、时间、迭代次数
+- `SkeletonRow`: 骨架屏加载行，复用 `.skeleton-shimmer` 类
+- `EmptyState`: 空状态提示（"暂无历史记录"）
+- `NoProjectState`: 未选择项目时的占位提示
+
+### 数据流
+
+- 使用 `useHistoryStore` 获取 entries、过滤/排序状态和加载方法
+- 使用 `useProjectStore` 获取 projectPath
+- `useEffect` 监听 projectPath 变化自动调用 `loadHistory`
+- 列表数据通过 `getFilteredAndSortedHistory` 纯函数过滤和排序
+
+### 状态映射
+
+- `RunStatus` 枚举（Success/Fail/Interrupt/InProgress）通过 `STATUS_LABEL` 映射为中文
+- 状态颜色通过 `STATUS_BADGE_CLASS` 和 `STATUS_DOT_CLASS` 常量映射
 
 ## IssuesPage 约定
 

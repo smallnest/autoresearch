@@ -1,0 +1,99 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore project structure[90m Explore Agent[0m
+[0m✓ [0mExplore project structure[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/pages/HistoryPage.tsx
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=100][0m
+[0m✱ [0mGrep "fn list_issue_log_sources|fn read_issue_log_content|struct.*IssueLog"[90m 8 matches[0m
+Let me examine the existing Rust commands and frontend code more closely before finalizing the plan.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=100, limit=50][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1400, limit=200][0m
+[0m✱ [0mGlob "desktop_app/src/stores/*.ts"[90m 8 matches[0m
+[0m✱ [0mGrep "fn workflow_issue_dir|fn list_issues"[90m 4 matches[0m
+[0m→ [0mRead desktop_app/src/stores/issueStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1286, limit=120][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=150, limit=50][0m
+[0m✱ [0mGrep "fn get_processed_issue_numbers"[90m 1 match[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1256, limit=30][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=200, limit=55][0m
+Now I have a thorough understanding of the codebase. Let me analyze the Issue requirements and design the subtask breakdown.
+
+## Analysis Summary
+
+**Current state:**
+- `HistoryPage.tsx` is a bare placeholder (just "历史" heading)
+- Rust backend already scans workflows for `issue-N` dirs (`get_processed_issue_numbers` at `lib.rs:1256`)
+- `log.md` has a well-known format with score, status, timing, and interruption markers
+- Frontend stores follow the `issueStore.ts` pattern (Zustand + `tauriInvoke` + browser fallback)
+
+**What needs to be built:**
+1. A new Rust Tauri command that scans all workflows, parses `log.md` + `tasks.json`, returns structured history entries
+2. A frontend Zustand store for fetching/managing history data
+3. The History page UI with status badges, filters, sorting, and empty state
+
+---
+
+## Subtask Breakdown
+
+```json
+{
+  "issueNumber": 35,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 侧实现历史记录扫描与解析命令",
+      "description": "在 lib.rs 中新增 list_history Tauri 命令，扫描 .autoresearch/workflows/ 下所有 issue-N 目录，解析每个目录的 log.md 和 tasks.json，提取 Issue 编号、标题、最终评分、状态（成功/失败/中断/进行中）、处理时间、总迭代次数等结构化数据，返回 Vec<HistoryEntry>。复用现有 get_processed_issue_numbers 的扫描模式。\n\n状态判定逻辑：\n- 存在最终结果 + 状态 completed + 最终评分 >= 85 → success\n- 存在最终结果 + 状态 completed + 最终评分 < 85 → fail\n- log.md 中包含中断标记（⚠️ 脚本被中断 或中断信号）→ interrupt\n- 无最终结果 → in_progress\n\n标题从 log.md 中 \"- Issue: #N - 标题\" 行提取。处理时间从 \"开始时间\" 和 \"结束时间\" 字段提取。",
+      "acceptanceCriteria": [
+        "新增 HistoryEntry struct 和 RunStatus 枚举，派生 Serialize/Debug/Clone",
+        "新增 list_history Tauri command，接受 project_path 参数，返回 Vec<HistoryEntry>",
+        "扫描 .autoresearch/workflows/issue-* 目录，目录不存在时返回空列表",
+        "正确解析 log.md 中的最终评分（支持 最终评分: X/100 格式）",
+        "正确判定四种状态：success（绿）、fail（红）、interrupt（黄）、in_progress（蓝）",
+        "从 log.md 提取 Issue 标题和处理时间",
+        "cargo clippy -- -D warnings 通过",
+        "cargo test 通过，包含对四种状态的解析测试"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "前端历史记录数据层（Types + Store）",
+      "description": "创建前端 TypeScript 类型定义和 Zustand store 用于管理历史记录数据。\n\n1. 定义 HistoryEntry、RunStatus 等 TypeScript 接口，与 Rust 返回的 snake_case JSON 对齐\n2. 创建 historyStore.ts，遵循现有 store 模式（Zustand + tauriInvoke + isTauri 分支 + mock fallback）\n3. 实现 loadHistory(projectPath) 调用 T-001 的 list_history 命令\n4. Store 管理筛选状态（statusFilter: 'all' | RunStatus）和排序方向（sortOrder: 'asc' | 'desc'）\n5. 提取 getFilteredAndSortedHistory 作为纯函数（从 store 外部也可测试），支持按状态过滤和按时间排序\n6. 处理加载中、错误和空列表状态\n7. 浏览器模式提供 mock 数据用于页面开发",
+      "acceptanceCriteria": [
+        "TypeScript 接口与 Rust snake_case 字段对齐，无 any 类型",
+        "historyStore.ts 可被 React 组件消费，导出 useHistoryStore hook",
+        "getFilteredAndSortedHistory 纯函数可独立测试",
+        "状态过滤支持 'all'、'success'、'fail'、'interrupt'、'in_progress'",
+        "排序支持按开始时间升序/降序",
+        "错误消息通过 normalizeUserFacingError 归一化",
+        "npm run typecheck 通过",
+        "npm run lint 通过"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "History 页面 UI 实现（列表、状态徽章、过滤、空状态）",
+      "description": "替换 HistoryPage.tsx 中的占位内容为完整的历史记录列表页面。\n\n1. 页面顶部标题区域：显示 \"历史记录\" 标题和记录总数\n2. 工具栏区域：\n   - 状态过滤下拉框（全部/成功/失败/中断/进行中）\n   - 时间排序切换按钮（最新优先/最早优先）\n3. 列表区域：表格或卡片列表，每项显示：\n   - Issue 编号（链接样式，如 #35）\n   - 标题（截断显示，过长省略）\n   - 最终评分（如 \"94/100\"，无评分时显示 \"-\"）\n   - 状态徽章：成功（绿）、失败（红）、中断（黄）、进行中（蓝）\n   - 处理时间（如 \"2026-04-25 14:47\"，无时间时显示 \"-\"）\n4. 空状态：居中显示友好提示图标和文案 \"暂无历史记录\"\n5. 加载状态：骨架屏（复用 .skeleton-shimmer 类）\n6. 错误状态：显示错误消息和重试按钮\n7. 监听 projectPath 变化，自动重新加载历史数据\n8. 所有用户可见文案使用中文",
+      "acceptanceCriteria": [
+        "History 页面展示所有已处理的 Issue 记录，含编号、标题、评分、状态、时间",
+        "状态颜色编码正确：成功（绿色/绿底白字）、失败（红色）、中断（黄色）、进行中（蓝色）",
+        "按状态过滤功能正常（下拉选择后列表即时更新）",
+        "按时间排序功能正常（升序/降序切换）",
+        "无历史记录时显示友好空状态提示",
+        "页面加载中显示骨架屏动画",
+        "加载失败时显示错误提示和重试按钮",
+        "所有用户可见文案为中文",
+        "npm run typecheck 和 npm run lint 通过",
+        "在浏览器中可正常渲染验证"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

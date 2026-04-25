@@ -1,0 +1,32 @@
+## 实现总结
+
+### `desktop_app/src-tauri/src/lib.rs` 中的变更
+
+**新增类型：**
+- `HistoryRunStatus` enum：`Success`、`Fail`、`Interrupt`、`InProgress` — 不同于现有的 `RunStatus`(Idle/Running)
+- `HistoryEntry` struct：`issue_number`、`title`、`status`、`final_score`、`total_iterations`、`start_time`、`end_time`
+
+**新增函数：**
+- `list_history_sync(project_path)` — 扫描 `.autoresearch/workflows/issue-*`，解析 `log.md`，返回 `Vec<HistoryEntry>`
+- `list_history` — 包装了 `spawn_blocking` 的 Tauri 命令
+- `determine_history_status()` — 使用**最后出现的事件**逻辑（解决了 issue-34 问题，即完成后的中断 = 中断）
+- 辅助函数：`extract_history_title`、`extract_history_end_time`、`extract_field`、`extract_total_iterations`、`extract_history_final_score`
+
+**新增测试（8个）：**
+- `history_status_success` — 评分 ≥ 85 + 已完成
+- `history_status_fail` — 评分 < 85 + 已完成
+- `history_status_interrupt` — 仅中断标记
+- `history_status_interrupt_after_completion` — issue-34 场景（完成后的中断）
+- `history_status_in_progress` — 无最终结果
+- `history_list_sync_scans_workflows` — 带有多个 issue 目录的端到端测试
+- `history_list_sync_empty_dir` — 空项目返回 []
+- `history_no_log_md` — 缺少 `log.md` 的情况
+
+**验证：** `cargo clippy -- -D warnings` 干净通过，`cargo test` 87/87 通过。
+
+## 学习要点
+
+- **模式**: 复用了 `get_processed_issue_numbers()` 中的目录扫描模式（`read_dir` → `strip_prefix("issue-")` → `parse::<i64>`）
+- **模式**: Tauri 命令标准封装是 `tokio::task::spawn_blocking(move || sync_fn(...)).await`
+- **陷阱**: issue-34 的 `log.md` 中既有 `## 最终结果` + `状态: completed`，也有 `## ⚠️ 脚本被中断`。状态判定必须按**最后出现的位置**（`rfind`），而非全局优先级
+- **经验**: `extract_history_end_time` 需同时搜索 `结束时间` 和 `中断时间`，两者都取最后出现值

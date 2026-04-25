@@ -1,0 +1,10 @@
+
+> desktop_app@0.1.0 dev
+> vite
+
+
+  VITE v7.3.2  ready in 193 ms
+
+  ➜  Local:   http://localhost:1420/
+6:23:38 AM [vite] (client) ✨ new dependencies optimized: recharts
+6:23:38 AM [vite] (client) ✨ optimized dependencies changed. reloading

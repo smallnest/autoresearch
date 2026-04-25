@@ -1,0 +1,30 @@
+所有任务已完成。以下是已实现内容的总结：
+
+## T-002 实现总结
+
+已创建 **`desktop_app/src/stores/historyStore.ts`**，包含：
+
+### 类型定义
+- `RunStatus`: `'Success' | 'Fail' | 'Interrupt' | 'InProgress'` — 与 Rust `HistoryRunStatus` PascalCase 序列化保持一致
+- `StatusFilter`: `'all' | 'success' | 'fail' | 'interrupt' | 'in_progress'` — 用于 UI 的小写值
+- `SortOrder`: `'asc' | 'desc'`
+- `HistoryEntry`: 带有 `snake_case` 字段 (`issue_number`, `title`, `status`, `final_score`, `total_iterations`, `start_time`, `end_time`) 的接口 — 与 Rust 结构体对齐
+
+### 纯函数
+- `getFilteredAndSortedHistory(entries, statusFilter, sortOrder)` — 独立于 `store`，通过 `RUN_STATUS_TO_FILTER` 映射表进行 `PascalCase` 到小写状态的比较，按 `start_time` 排序
+
+### Store (`useHistoryStore`)
+- `loadHistory(projectPath)` — 调用 `list_history` Tauri 命令，为浏览器提供 `mock` 回退
+- `statusFilter` / `sortOrder` 状态管理
+- 通过 `normalizeUserFacingError` 进行错误归一化
+- 加载/错误/空状态处理
+- 遵循 `issueStore.ts` 模式：`isTauri` + `tauriInvoke` + `normalizeUserFacingError`
+
+### 验证
+- `npx tsc --noEmit` — 通过（零错误）
+- `npx eslint src/stores/historyStore.ts` — 通过（零警告）
+
+## 学习要点
+- **模式**: Rust `HistoryRunStatus` 枚举序列化为 `PascalCase` (`"Success"`, `"Fail"` 等)，但前端筛选器使用小写值。`RUN_STATUS_TO_FILTER` 映射表弥补了这一差距。
+- **模式**: `issueStore.ts` 的直接 `create()` 模式适用于只获取数据且无需事件订阅的 `store`。对于事件驱动的 `store`（如 `iterationStore`），工厂模式更适合用于测试。
+- **约定**: 项目中的 `snake_case` 字段直接镜像 Rust，而不是转换为 `camelCase` — 与 `iterationStore.ts` 保持一致（参见 `current_iteration`, `total_iterations` 等）。

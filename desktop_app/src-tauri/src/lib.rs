@@ -1817,6 +1817,226 @@ async fn stop_run(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
+/// Completion status of a processed Issue history entry.
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryRunStatus {
+    /// Score >= 85, completed successfully.
+    Success,
+    /// Score < 85, completed but below threshold.
+    Fail,
+    /// Script was interrupted (contains interrupt markers).
+    Interrupt,
+    /// No final result yet, still in progress.
+    InProgress,
+}
+
+/// A single history entry summarising one processed Issue.
+#[derive(serde::Serialize, Debug, Clone)]
+struct HistoryEntry {
+    issue_number: i64,
+    title: String,
+    status: HistoryRunStatus,
+    final_score: Option<i32>,
+    total_iterations: Option<i32>,
+    start_time: Option<String>,
+    end_time: Option<String>,
+}
+
+/// Scan all `issue-*` directories and return structured history entries.
+fn list_history_sync(project_path: &Path) -> Result<Vec<HistoryEntry>, String> {
+    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+    if !workflows_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let mut numbers = Vec::new();
+    let entries =
+        fs::read_dir(&workflows_dir).map_err(|e| format!("Failed to read workflows dir: {e}"))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if let Some(suffix) = name_str.strip_prefix("issue-") {
+            if let Ok(num) = suffix.parse::<i64>() {
+                numbers.push(num);
+            }
+        }
+    }
+    numbers.sort();
+
+    let mut history = Vec::new();
+    for num in numbers {
+        let issue_dir = workflows_dir.join(format!("issue-{num}"));
+        let log_path = issue_dir.join("log.md");
+        let log_content = match fs::read_to_string(&log_path) {
+            Ok(c) => c,
+            Err(_) => {
+                // No log.md — create a minimal in-progress entry.
+                history.push(HistoryEntry {
+                    issue_number: num,
+                    title: String::new(),
+                    status: HistoryRunStatus::InProgress,
+                    final_score: None,
+                    total_iterations: None,
+                    start_time: None,
+                    end_time: None,
+                });
+                continue;
+            }
+        };
+
+        let title = extract_history_title(&log_content);
+        let start_time = extract_field(&log_content, "开始时间");
+        let end_time = extract_history_end_time(&log_content);
+        let total_iterations = extract_total_iterations(&log_content);
+        let final_score = extract_history_final_score(&log_content);
+        let status = determine_history_status(&log_content, &final_score);
+
+        history.push(HistoryEntry {
+            issue_number: num,
+            title,
+            status,
+            final_score,
+            total_iterations,
+            start_time,
+            end_time,
+        });
+    }
+
+    Ok(history)
+}
+
+/// Extract the Issue title from a `log.md` line like `- Issue: #N - 标题`.
+fn extract_history_title(log: &str) -> String {
+    for line in log.lines() {
+        if let Some(rest) = line.strip_prefix("- Issue: #") {
+            // rest is like "35 - [desktop-app] 处理历史列表"
+            if let Some(idx) = rest.find(" - ") {
+                return rest[idx + 3..].trim().to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+/// Extract `结束时间` from log.md, taking the **last** occurrence so that
+/// an interrupt-after-completion scenario (issue-34) still yields a value.
+fn extract_history_end_time(log: &str) -> Option<String> {
+    let mut result = None;
+    for line in log.lines() {
+        if let Some(val) = extract_field_line(line, "结束时间") {
+            result = Some(val);
+        }
+        if let Some(val) = extract_field_line(line, "中断时间") {
+            result = Some(val);
+        }
+    }
+    result
+}
+
+/// Extract a named field value from lines matching `- <name>: <value>`.
+fn extract_field(log: &str, field_name: &str) -> Option<String> {
+    for line in log.lines() {
+        if let Some(val) = extract_field_line(line, field_name) {
+            return Some(val);
+        }
+    }
+    None
+}
+
+fn extract_field_line(line: &str, field_name: &str) -> Option<String> {
+    let prefix = format!("- {field_name}: ");
+    if let Some(rest) = line.strip_prefix(&prefix) {
+        let val = rest.trim().to_string();
+        if !val.is_empty() {
+            return Some(val);
+        }
+    }
+    // Also try `**field**: value` variant used in interrupt blocks.
+    let bold_prefix = format!("- **{field_name}**: ");
+    if let Some(rest) = line.strip_prefix(&bold_prefix) {
+        let val = rest.trim().to_string();
+        if !val.is_empty() {
+            return Some(val);
+        }
+    }
+    None
+}
+
+/// Extract `总迭代次数` from log.md.
+fn extract_total_iterations(log: &str) -> Option<i32> {
+    if let Some(val) = extract_field(log, "总迭代次数") {
+        return val.parse::<i32>().ok();
+    }
+    None
+}
+
+/// Extract `最终评分` from log.md, parsing the `X/100` format.
+fn extract_history_final_score(log: &str) -> Option<i32> {
+    if let Some(val) = extract_field(log, "最终评分") {
+        // Handle "94/100" format.
+        if let Some(slash) = val.find('/') {
+            let num_part = &val[..slash];
+            return num_part.parse::<i32>().ok();
+        }
+        return val.parse::<i32>().ok();
+    }
+    None
+}
+
+/// Determine the status of a history entry based on the **last** relevant event.
+///
+/// Priority (last-occurrence wins):
+/// - If log contains `## 最终结果` + `状态: completed` + score >= 85 → Success
+/// - If log contains `## 最终结果` + `状态: completed` + score < 85 → Fail
+/// - If log contains interrupt markers → Interrupt
+/// - Otherwise → InProgress
+fn determine_history_status(log: &str, final_score: &Option<i32>) -> HistoryRunStatus {
+    let has_final_result = log.contains("## 最终结果");
+    let has_completed = log.contains("状态: completed");
+    let has_interrupt = log.contains("⚠️ 脚本被中断") || log.contains("中断信号");
+
+    // Determine which event comes last in the file.
+    let final_pos = log.rfind("## 最终结果");
+    let interrupt_pos = log.rfind("⚠️ 脚本被中断");
+
+    match (has_final_result, has_interrupt, final_pos, interrupt_pos) {
+        (true, true, Some(fp), Some(ip)) => {
+            // Both exist — whichever comes last wins.
+            if ip > fp {
+                HistoryRunStatus::Interrupt
+            } else if has_completed {
+                match final_score {
+                    Some(s) if *s >= 85 => HistoryRunStatus::Success,
+                    _ => HistoryRunStatus::Fail,
+                }
+            } else {
+                HistoryRunStatus::Interrupt
+            }
+        }
+        (true, false, _, _) | (true, true, _, None) => {
+            if has_completed {
+                match final_score {
+                    Some(s) if *s >= 85 => HistoryRunStatus::Success,
+                    _ => HistoryRunStatus::Fail,
+                }
+            } else {
+                HistoryRunStatus::InProgress
+            }
+        }
+        (false, true, _, _) => HistoryRunStatus::Interrupt,
+        _ => HistoryRunStatus::InProgress,
+    }
+}
+
+/// Lists processed Issue history entries for the project at `project_path`.
+#[tauri::command]
+async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String> {
+    let path = project_path.clone();
+    tokio::task::spawn_blocking(move || list_history_sync(Path::new(&path)))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
 /// Current status of run.sh process management.
 #[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 enum RunStatus {
@@ -1885,6 +2105,7 @@ pub fn run() {
             stop_run,
             get_run_status,
             get_iteration_progress,
+            list_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1908,6 +2129,11 @@ mod tests {
         resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
     };
     use super::{extract_review_summary, extract_score};
+    use super::{
+        determine_history_status, extract_field, extract_history_end_time,
+        extract_history_final_score, extract_history_title, extract_total_iterations,
+        list_history_sync, HistoryRunStatus,
+    };
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs as unix_fs;
@@ -3361,6 +3587,189 @@ mod tests {
         assert_eq!(progress.last_score, None);
         assert_eq!(progress.review_summary, None);
         assert!(progress.score_history.is_empty());
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    // ── History list tests ──────────────────────────────────────────
+
+    #[test]
+    fn history_status_success() {
+        let log = "\
+# Issue #33 实现日志
+
+## 基本信息
+- Issue: #33 - [desktop-app] 评分趋势折线图
+- 开始时间: 2026-04-25 14:59:50
+
+## 最终结果
+- 总迭代次数: 2
+- 最终评分: 88/100
+- 状态: completed
+- 结束时间: 2026-04-25 15:12:14
+";
+        let score = extract_history_final_score(log);
+        assert_eq!(score, Some(88));
+        assert_eq!(
+            determine_history_status(log, &score),
+            HistoryRunStatus::Success
+        );
+        assert_eq!(extract_history_title(log), "[desktop-app] 评分趋势折线图");
+        assert_eq!(extract_total_iterations(log), Some(2));
+        assert_eq!(extract_field(log, "开始时间"), Some("2026-04-25 14:59:50".to_string()));
+        assert_eq!(extract_history_end_time(log), Some("2026-04-25 15:12:14".to_string()));
+    }
+
+    #[test]
+    fn history_status_fail() {
+        let log = "\
+## 最终结果
+- 总迭代次数: 10
+- 最终评分: 50/100
+- 状态: completed
+- 结束时间: 2026-04-25 16:00:00
+";
+        let score = extract_history_final_score(log);
+        assert_eq!(score, Some(50));
+        assert_eq!(
+            determine_history_status(log, &score),
+            HistoryRunStatus::Fail
+        );
+    }
+
+    #[test]
+    fn history_status_interrupt() {
+        let log = "\
+## ⚠️ 脚本被中断
+
+- **中断信号**: EXIT
+- **退出码**: 0
+- **中断时间**: 2026-04-25 08:24:04
+- **Issue**: #29
+";
+        assert_eq!(
+            determine_history_status(log, &None),
+            HistoryRunStatus::Interrupt
+        );
+        assert_eq!(extract_history_end_time(log), Some("2026-04-25 08:24:04".to_string()));
+    }
+
+    #[test]
+    fn history_status_interrupt_after_completion() {
+        // issue-34 scenario: completed then interrupted during cleanup
+        let log = "\
+## 最终结果
+- 总迭代次数: 31
+- 最终评分: 94/100
+- 状态: completed
+- 结束时间: 2026-04-25 19:38:03
+
+---
+
+## ⚠️ 脚本被中断
+
+- **中断信号**: EXIT
+- **中断时间**: 2026-04-25 19:38:19
+";
+        let score = extract_history_final_score(log);
+        assert_eq!(score, Some(94));
+        // Interrupt comes after final result → Interrupt
+        assert_eq!(
+            determine_history_status(log, &score),
+            HistoryRunStatus::Interrupt
+        );
+    }
+
+    #[test]
+    fn history_status_in_progress() {
+        let log = "\
+# Issue #35 实现日志
+
+## 基本信息
+- Issue: #35 - [desktop-app] 处理历史列表
+- 开始时间: 2026-04-25 19:48:37
+
+### 迭代 1 - OpenCode (实现)
+- 审核评分 (OpenCode): 50/100
+";
+        assert_eq!(
+            determine_history_status(log, &None),
+            HistoryRunStatus::InProgress
+        );
+        assert_eq!(extract_history_title(log), "[desktop-app] 处理历史列表");
+        assert!(extract_history_final_score(log).is_none());
+        assert!(extract_history_end_time(log).is_none());
+    }
+
+    #[test]
+    fn history_list_sync_scans_workflows() {
+        let dir = create_temp_project_dir("history-list-sync");
+
+        // Create issue-10 (success)
+        let issue10 = dir.join(".autoresearch").join("workflows").join("issue-10");
+        fs::create_dir_all(&issue10).expect("dir");
+        fs::write(
+            issue10.join("log.md"),
+            "# Issue #10 实现日志\n\
+             \n\
+             ## 基本信息\n\
+             - Issue: #10 - Test issue alpha\n\
+             - 开始时间: 2026-04-24 10:00:00\n\
+             \n\
+             ## 最终结果\n\
+             - 总迭代次数: 3\n\
+             - 最终评分: 90/100\n\
+             - 状态: completed\n\
+             - 结束时间: 2026-04-24 11:00:00\n",
+        )
+        .expect("write");
+
+        // Create issue-20 (interrupt, no final result)
+        let issue20 = dir.join(".autoresearch").join("workflows").join("issue-20");
+        fs::create_dir_all(&issue20).expect("dir");
+        fs::write(
+            issue20.join("log.md"),
+            "## ⚠️ 脚本被中断\n\
+             \n\
+             - **中断信号**: EXIT\n\
+             - **中断时间**: 2026-04-24 12:00:00\n",
+        )
+        .expect("write");
+
+        let entries = list_history_sync(&dir).expect("list_history_sync");
+        assert_eq!(entries.len(), 2);
+
+        // Sorted by issue number
+        assert_eq!(entries[0].issue_number, 10);
+        assert_eq!(entries[0].status, HistoryRunStatus::Success);
+        assert_eq!(entries[0].final_score, Some(90));
+        assert_eq!(entries[0].title, "Test issue alpha");
+
+        assert_eq!(entries[1].issue_number, 20);
+        assert_eq!(entries[1].status, HistoryRunStatus::Interrupt);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn history_list_sync_empty_dir() {
+        let dir = create_temp_project_dir("history-empty");
+        let entries = list_history_sync(&dir).expect("list_history_sync");
+        assert!(entries.is_empty());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn history_no_log_md() {
+        let dir = create_temp_project_dir("history-no-log");
+        let issue_dir = dir.join(".autoresearch").join("workflows").join("issue-99");
+        fs::create_dir_all(&issue_dir).expect("dir");
+
+        let entries = list_history_sync(&dir).expect("list_history_sync");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].issue_number, 99);
+        assert_eq!(entries[0].status, HistoryRunStatus::InProgress);
+        assert!(entries[0].title.is_empty());
 
         fs::remove_dir_all(dir).expect("cleanup");
     }

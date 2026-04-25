@@ -1,0 +1,62 @@
+确认：**未实现任何内容**。`HistoryEntry`、`list_history` 以及整个 T-001 子任务都未编写任何代码。代码库中不存在任何相关类型或函数。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 当前子任务: T-001 - Rust 侧实现历史记录扫描与解析命令
+- 迭代次数: 11
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-001 子任务经过 11 次迭代（迭代 1-6 由 OpenCode，迭代 7-11 继续）仍然没有任何代码实现。`desktop_app/src-tauri/src/lib.rs` 中不存在 `HistoryEntry`、`HistoryRunStatus`、`list_history` 等任何与 T-001 相关的类型、函数或命令注册。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 完全没有实现代码
+
+**位置**: `desktop_app/src-tauri/src/lib.rs`
+
+**问题描述**:
+11 次迭代均未能产出任何实现代码。验收条件中的所有项目均未完成：
+- 没有 `HistoryEntry` struct
+- 没有 `HistoryRunStatus` 枚举
+- 没有 `list_history` Tauri command
+- 没有目录扫描和 log.md/tasks.json 解析逻辑
+- 没有测试
+- `cargo clippy`/`cargo test` 无法验证不存在的代码
+
+**根因分析**: 从 `progress.md` 可以明确看到，迭代 1-5 的 OpenCode agent 均使用了 **Explore Agent**（只读、只能规划），而非实现 Agent。迭代 6 才意识到这个问题，但仍未成功输出代码。后续迭代 7-11 的 review log 基本为空，表明 agent 没有有效执行。
+
+**原因**: Agent 类型选择错误导致 11 次迭代全部浪费。
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - 存在严重问题，需要重新实现
+
+**下一步行动**:
+需要由一个**实现型 Agent**（具有文件写入权限）从零开始实现 T-001。关键参考：
+
+1. 复用 `get_processed_issue_numbers()` 的目录扫描模式（`lib.rs:1256`）
+2. 新枚举命名避免与已有 `RunStatus`(Idle/Running) 冲突，建议 `HistoryRunStatus`
+3. 状态判定按 log.md 中**最后出现的事件**（非全局优先级）—— issue-34 既有 completed 又有 interrupt
+4. Tauri command 使用 `tokio::task::spawn_blocking` 包装同步函数
+
+---
+
+## Learnings
+
+- **踩坑**: OpenCode 的 Explore Agent 只有只读权限（Glob/Grep/Read），无法执行 Edit/Write。连续 5+ 次迭代被浪费在"探索后无代码输出"的循环中。实现型子任务必须由具有写入能力的 Agent 执行。
+- **经验**: 审核时应先 `Grep` 关键标识符（如 `list_history`），如果完全不存在则直接判定为阻塞，无需逐行阅读无关代码。
+- **经验**: 对于历史数据解析类任务，已有 `get_processed_issue_numbers()` 和 `build_score_history()` 等可复用模式，实现时优先搜索现有代码再设计新方案。

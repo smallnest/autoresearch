@@ -1,0 +1,488 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m# [0mTodos
+[ ] Step 1: Explore codebase - understand existing patterns (lib.rs, test patterns, existing commands)
+[ ] Step 2: Examine sample log.md files to understand data format
+[ ] Step 3: Read tasks.json to understand subtask details
+[ ] Step 4: Create detailed implementation plan
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=150][0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m
+[0m$ [0mls /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/
+issue-27
+issue-28
+issue-29
+issue-30
+issue-31
+issue-32
+issue-33
+issue-34
+issue-35
+issue-50
+issue-73
+issue-74
+[0m
+Let me explore the codebase and understand the existing patterns.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=150, limit=200][0m
+[0m
+[0m$ [0mfor d in issue-28 issue-29 issue-30 issue-34 issue-50; do echo "=== .autoresearch/workflows/$d/log.md (first 80 lines) ==="; head -80 ".autoresearch/workflows/$d/log.md" 2>/dev/null || echo "FILE NOT FOUND"; echo ""; echo "---"; done
+=== .autoresearch/workflows/issue-28/l## Plan: Issue #35 T-001 — Rust 侧历史记录扫描与解析命令
+
+### 背景
+
+Issue #35 的 T-001 在迭代 1 中**未产生任何代码**（agent 仅输出了分析计划），迭代 2 审核评为 0/100。需要从头实现。
+
+### 涉及文件
+
+| 文件 | 操作 |
+|------|------|
+| `desktop_app/src-tauri/src/lib.rs` | 修改：新增 struct/enum、helper 函数、Tauri 命令、注册、测试 |
+
+### 实现任务清单
+
+**1. 新增 `RunHistoryStatus` 枚举** (插入位置：lib.rs ~line 143，在 `IssuesResult` 之后)
+
+```rust
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum RunHistoryStatus { Success, Fail, Interrupt, InProgress }
+```
+- 不与现有 `RunStatus`（Idle/Running，进程管理用）冲突
+
+**2. 新增 `HistoryEntry` 结构体**
+
+```rust
+#[derive(serde::Serialize, Debug, Clone)]
+struct HistoryEntry {
+    issue_number: i64,
+    title: String,
+    status: RunHistoryStatus,
+    final_score: Option<i64>,
+    total_iterations: i64,
+    start_time: Option<String>,
+    end_time: Option<String>,
+}
+```
+
+**3. 实现 `list_history_sync()` 同步函数** (插入位置：~line 1275，`get_processed_issue_numbers` 之后)
+
+- 复用 `get_processed_issue_numbers` 的目录扫描模式
+- 遍历 `issue-*` 目录，读取 `log.md`，调用解析函数
+- 目录不存在时返回空列表
+
+**4. 实现 `parse_history_from_log_md()` 解析函数**
+
+状态判定（按优先级）：
+1. `⚠️ 脚本被中断` 存在 → `Interrupt`（**最高优先级**，即使有 最终结果 也按此处理，遵循审核反馈要求）
+2. `## 最终结果` 存在 + `状态: completed` + `最终评分 >= 85` → `Success`
+3. `## 最终结果` 存在 + `状态: completed` + `最终评分 < 85` → `Fail`
+4. 无 `## 最终结果` → `InProgress`
+
+解析字段：
+- **title**: 从 `- Issue: #N - 标题` 行提取（`## 基本信息` 块）；缺失时回退为 `"Issue #N"`
+- **final_score**: 从最后一个 `## 最终结果` 块提取 `最终评分: X/100`
+- **total_iterations**: 从最后的 `## 最终结果` 块提取 `总迭代次数: N`
+- **start_time**: 从 `- 开始时间:` 提取（缺失时 `None`）
+- **end_time**: 从最后的 `## 最终结果` 块提取 `- 结束时间:`
+
+**5. 新增 `list_history` Tauri 命令**
+
+```rust
+#[tauri::command]
+async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String> {
+    tokio::task::spawn_blocking(move || list_history_sync(&project_path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+```
+遵循 `list_issues` / `check_processed_issues` 的双函数模式。
+
+**6. 在 `run()` 中注册命令** (lib.rs:1870, `generate_handler![]` 中追加 `list_history`)
+
+**7. 编写测试** (在 `#[cfg(test)] mod tests` 末尾追加)
+
+测试用例覆盖：
+- `test_list_history_success` — 构造 log.md 模拟 completed + score 88/100
+- `test_list_history_fail` — 构造 log.md 模拟 completed + score 50/100
+- `test_list_history_interrupt` — 构造 log.md 含 `⚠️ 脚本被中断`
+- `test_list_history_in_progress` — 构造 log.md 无 `## 最终结果`
+- `test_list_history_interrupt_after_completion` — 最终结果 + 中断标记（issue-34 模式）
+- `test_list_history_missing_header` — 缺失 `## 基本信息` 块（issue-29/30 模式）
+- `test_list_history_empty_dir` — workflows 目录不存在
+- `test_list_history_no_log_md` — issue 目录存在但无 log.md
+- `test_list_history_multiple_results` — 多次 最终结果 块（issue-29 模式）
+
+**8. 运行验证**
+
+```bash
+cd desktop_app/src-tauri && cargo clippy -- -D warnings && cargo test
+```
+
+### 需要关注的边缘情况
+
+| 场景 | 来源 | 处理方式 |
+|------|------|----------|
+| 缺失 `## 基本信息` 块 | issue-29/30/34 | title 回退 `"Issue #N"`, start_time 为 `None` |
+| 多个 `## 最终结果` 块 | issue-29 (5次) | 取最后一个块的值 |
+| 中断在完成后触发 | issue-34 | 中断优先级最高 → 状态为 `Interrupt` |
+| 目录无 log.md | issue-50 示例 | 返回 `InProgress` 状态，字段为默认值 |
+| log.md 解析失败 | — | 跳过该 issue，不中断整个扫描 |
+| `状态: push_failed` | issue-29 | 视为 `Fail`（代码已完成但 push 失败） |
+
+### 前置条件检查
+
+- [x] 现有 `RunStatus` 枚举用于进程管理，语义不同，使用新 `RunHistoryStatus`
+- [x] `get_processed_issue_numbers` 提供了可复用的目录扫描模式
+- [x] 项目已使用 `regex::Regex` + `OnceLock` 模式（line 239+）
+- [x] 测试使用 `create_temp_project_dir()` 辅助函数创建临时工作流目录
+
+---
+
+是否按此计划开始实现？
+md (first 80 lines) ===
+
+---
+
+## 继续运行 (从迭代 29 继续)
+- 继续时间: 2026-04-25 19:14:48
+- 上次评分: 78/100
+
+
+---
+
+## 继续运行 (从迭代 30 继续)
+- 继续时间: 2026-04-25 19:32:33
+- 上次评分: 0/100
+
+
+---
+
+## 继续运行 (从迭代 31 继续)
+- 继续时间: 2026-04-25 19:32:51
+- 上次评分: 78/100
+- 子任务: 子任务进度: 1/2 已完成 | 当前子任务: T-002 - 子任务标题
+
+- 审核评分 (OpenCode): 94/100
+
+## 最终结果
+- 总迭代次数: 31
+- 最终评分: 94/100
+- 状态: completed
+- 分支: feature/issue-34
+- 结束时间: 2026-04-25 19:38:03
+
+---
+
+## ⚠️ 脚本被中断
+
+- **中断信号**: EXIT
+- **退出码**: 0
+- **退出原因**: 正常退出（但 SCRIPT_COMPLETED_NORMALLY 未设置）
+- **中断时间**: 2026-04-25 19:38:19
+- **Issue**: #34
+- **当前迭代**: 31
+- **当前评分**: 94/100
+- **当前分支**: feature/issue-34
+- **最后执行命令**: `local stashed=0`
+
+> 使用 `./run.sh -c 34` 可继续运行
+
+---
+=== .autoresearch/workflows/issue-50/log.md (first 80 lines) ===
+FILE NOT FOUND
+
+---
+[0m
+[0m✱ [0mGrep "fn get_processed_issue_numbers"[90m in desktop_app/src-tauri/src/lib.rs · 1 match[0m
+[0m✱ [0mGrep "fn list_issues"[90m in desktop_app/src-tauri/src/lib.rs · 2 matches[0m
+[0m✱ [0mGrep "fn run\(\)"[90m in desktop_app/src-tauri/src/lib.rs · 1 match[0m
+[0m✱ [0mGrep "check_processed_issues|list_issues"[90m in desktop_app/src-tauri/src/lib.rs · 7 matches[0m
+Now let me read the `get_processed_issue_numbers` function and the `run()` command registration area.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1250, limit=120][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1860, limit=80][0m
+[0m
+[0m$ [0mfor d in issue-27 issue-31 issue-32 issue-33; do echo "=== issue $d ==="; head -20 ".autoresearch/workflows/$d/log.md" 2>/dev/null || echo "FILE NOT FOUND"; echo ""; echo "---"; done
+=== issue issue-27 ===
+# Issue #27 实现日志
+
+## 基本信息
+- Issue: #27 - [desktop-app] Issue 详情查看
+- 项目: /Users/chaoyuepan/ai/autoresearch
+- 语言: unknown
+- 开始时间: 2026-04-24 10:32:43
+- 标签: enhancement,desktop-app
+
+## 迭代记录
+
+
+### 规划阶段
+
+已拆分为 2 个子任务，详见: [tasks.json](./tasks.json)
+
+### 迭代 1 - Claude (实现)
+
+详见: [iteration-1-claude.log](./iteration-1-claude.log)
+- 审核评分 (Codex): 62/100
+
+---
+=== issue issue-31 ===
+# Issue #31 实现日志
+
+## 基本信息
+- Issue: #31 - [desktop-app] 迭代进度与阶段展示
+- 项目: /Users/chaoyuepan/ai/autoresearch
+- 语言: unknown
+- 开始时间: 2026-04-25 09:55:07
+- 标签: enhancement,desktop-app
+
+## 迭代记录
+
+
+### 规划阶段
+
+已拆分为 3 个子任务，详见: [tasks.json](./tasks.json)
+
+### 迭代 1 - Claude (实现)
+
+详见: [iteration-1-claude.log](./iteration-1-claude.log)
+- 审核评分 (Codex): 79/100
+
+---
+=== issue issue-32 ===
+# Issue #32 实现日志
+
+## 基本信息
+- Issue: #32 - [desktop-app] 评分提取与展示
+- 项目: /Users/chaoyuepan/ai/autoresearch
+- 语言: unknown
+- 开始时间: 2026-04-25 10:47:18
+- 标签: enhancement,desktop-app
+
+## 迭代记录
+
+
+### 规划阶段
+
+已拆分为 3 个子任务，详见: [tasks.json](./tasks.json)
+
+### 迭代 1 - Claude (实现)
+
+详见: [iteration-1-claude.log](./iteration-1-claude.log)
+- 审核评分 (Codex): 78/100
+
+---
+=== issue issue-33 ===
+# Issue #33 实现日志
+
+## 基本信息
+- Issue: #33 - [desktop-app] 评分趋势折线图
+- 项目: /Users/chaoyuepan/ai/autoresearch
+- 语言: unknown
+- 开始时间: 2026-04-25 14:59:50
+- 标签: enhancement,desktop-app
+
+## 迭代记录
+
+- 审核评分 (Codex): 88/100
+
+## 最终结果
+- 总迭代次数: 2
+- 最终评分: 88/100
+- 状态: completed
+- 分支: feature/issue-33
+- 结束时间: 2026-04-25 15:12:14
+
+---
+[0m
+[0m✱ [0mGrep "RunStatus"[90m in desktop_app/src-tauri/src/lib.rs · 6 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1800, limit=65][0m
+[0m
+[0m$ [0mfor d in issue-27 issue-28; do echo "=== issue $d (tail 30) ==="; tail -30 ".autoresearch/workflows/$d/log.md" 2>/dev/null || echo "FILE NOT FOUND"; echo ""; done
+=== issue issue-27 (tail 30) ===
+- 语言: unknown
+- 开始时间: 2026-04-24 10:32:43
+- 标签: enhancement,desktop-app
+
+## 迭代记录
+
+
+### 规划阶段
+
+已拆分为 2 个子任务，详见: [tasks.json](./tasks.json)
+
+### 迭代 1 - Claude (实现)
+
+详见: [iteration-1-claude.log](./iteration-1-claude.log)
+- 审核评分 (Codex): 62/100
+
+### 迭代 2 - Codex (实现)
+
+详见: [iteration-2-codex.log](./iteration-2-codex.log)
+- 审核评分 (Claude): 92/100
+- 审核评分 (Codex): 50/100
+- 审核评分 (Claude): 90/100
+- UI 验证: true - LLM 验证调用失败，跳过验证
+
+## 最终结果
+- 总迭代次数: 7
+- 最终评分: 90/100
+- 状态: completed
+- 分支: feature/issue-27
+- 结束时间: 2026-04-24 12:50:27
+
+=== issue issue-28 (tail 30) ===
+
+---
+
+## 继续运行 (从迭代 6 继续)
+- 继续时间: 2026-04-25 07:31:48
+- 上次评分: 50/100
+- 子任务: 子任务进度: 1/2 已完成 | 当前子任务: T-002 - 前端运行状态管理与 UI 组件
+
+
+---
+
+## 继续运行 (从迭代 6 继续)
+- 继续时间: 2026-04-25 07:40:22
+- 上次评分: 50/100
+- 子任务: 子任务进度: 1/2 已完成 | 当前子任务: T-002 - 前端运行状态管理与 UI 组件
+
+- 审核评分 (Codex): 50/100
+
+### 迭代 6 - Codex (实现)
+
+详见: [iteration-6-codex.log](./iteration-6-codex.log)
+- 审核评分 (Claude): 88/100
+- UI 验证: true - LLM 验证调用失败，跳过验证
+
+## 最终结果
+- 总迭代次数: 7
+- 最终评分: 88/100
+- 状态: completed
+- 分支: feature/issue-28
+- 结束时间: 2026-04-25 08:05:28
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=80, offset=3287][0m
+[0m
+[0m$ [0mfor d in issue-29; do echo "=== full log for $d ==="; wc -l ".autoresearch/workflows/$d/log.md" 2>/dev/null; head -5 ".autoresearch/workflows/$d/log.md" 2>/dev/null; echo "---"; done
+=== full log for issue-29 ===
+     152 .autoresearch/workflows/issue-29/log.md
+
+---
+
+## 继续运行 (从迭代 3 继续)
+- 继续时间: 2026-04-25 08:23:43
+---
+[0m
+[0m$ [0mrg "cargo clippy|cargo test|npm run" /Users/chaoyuepan/ai/autoresearch/desktop_app/package.json 2>/dev/null | head -10
+(no output)
+[0m
+[0m$ [0mrg "Issue:|Issue #" ".autoresearch/workflows/issue-29/log.md"
+zsh:1: command not found: rg
+[0m
+[0m$ [0mrg '"scripts"' /Users/chaoyuepan/ai/autoresearch/desktop_app/package.json -A 30
+zsh:1: command not found: rg
+[0m
+[0m✱ [0mGrep "Issue:"[90m in .autoresearch/workflows/issue-29 · 0 matches[0m
+[0m→ [0mRead desktop_app/package.json
+[0m
+[0m$ [0mhead -20 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-29/log.md
+---
+
+## 继续运行 (从迭代 3 继续)
+- 继续时间: 2026-04-25 08:23:43
+- 上次评分: 72/100
+
+
+---
+
+## ⚠️ 脚本被中断
+
+- **中断信号**: EXIT
+- **退出码**: 0
+- **退出原因**: 正常退出（但 SCRIPT_COMPLETED_NORMALLY 未设置）
+- **中断时间**: 2026-04-25 08:24:04
+- **Issue**: #29
+- **当前迭代**: 0
+- **当前评分**: 0/100
+- **当前分支**: feature/issue-29
+[0m
+[0m# [0mTodos
+[x] Step 1: Explore codebase - understand existing patterns (lib.rs, test patterns, existing commands)
+[x] Step 2: Examine sample log.md files to understand data format
+[x] Step 3: Read tasks.json to understand subtask details
+[ ] Step 4: Create detailed implementation plan
+[0m
+Now I have a comprehensive understanding of the codebase. Let me finalize the plan.
+[0m# [0mTodos
+[x] Step 1: Explore codebase - understand existing patterns (lib.rs, test patterns, existing commands)
+[x] Step 2: Examine sample log.md files to understand data format
+[x] Step 3: Read tasks.json to understand subtask details
+[x] Step 4: Create detailed implementation plan
+[0m
+## Implementation Plan for Issue #35 / T-001
+
+### Problem Summary
+
+Previous iteration did **zero implementation** — the agent only did exploration and output a plan, but never wrote any code. All 8 acceptance criteria are unmet. We need to implement the full `list_history` Tauri command from scratch.
+
+### Key Findings from Codebase Exploration
+
+**Existing patterns to reuse:**
+- `get_processed_issue_numbers()` at `lib.rs:1256` — scans `.autoresearch/workflows/issue-*` directories
+- `check_processed_issues` at `lib.rs:1324` — async Tauri command wrapping `spawn_blocking`
+- `extract_score()` at `lib.rs:326` — parses `X/100` from review text (reusable for final score)
+- `run()` at `lib.rs:1865` — command registration via `tauri::generate_handler![]`
+- Test helpers: `create_temp_project_dir()` at `lib.rs:1916` — creates temp dirs for tests
+
+**Existing `RunStatus` enum (lib.rs:1822):** has `Idle`/`Running` — this is for **process management**, NOT history status. We need a **new** `RunHistoryStatus` enum with `Success`/`Fail`/`Interrupt`/`InProgress`. The audit correctly warns against reusing the existing enum.
+
+**log.md format patterns discovered:**
+- `# Issue #N 实现日志` / `## 基本信息` / `- Issue: #N - {title}` / `- 开始时间: {timestamp}`
+- `## 最终结果` section: `- 最终评分: X/100`, `- 总迭代次数: N`, `- 状态: completed`, `- 结束时间: {timestamp}`
+- `## ⚠️ 脚本被中断` marker (interrupt detection)
+- Edge case: issue-29 has no basic info section (starts directly with "## 继续运行")
+- Edge case: issue-34 has "最终结果" followed by "⚠️ 脚本被中断" → interrupt takes priority
+- Multiple "最终结果" sections possible → take the last one
+
+**Build/lint commands:**
+- Rust: `cargo clippy -- -D warnings`, `cargo test` (run from `desktop_app/src-tauri/`)
+- Frontend: `npm run typecheck`, `npm run lint` (run from `desktop_app/`)
+
+---
+
+### Implementation Tasks
+
+| # | Task | Details |
+|---|------|---------|
+| **1** | Add `RunHistoryStatus` enum | 4 variants: `Success`, `Fail`, `Interrupt`, `InProgress`. Derive `Serialize`, `Deserialize`, `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`. Use `#[serde(rename_all = "snake_case")]` for frontend compatibility. |
+| **2** | Add `HistoryEntry` struct | Fields: `issue_number: i64`, `title: Option<String>`, `final_score: Option<i32>`, `status: RunHistoryStatus`, `start_time: Option<String>`, `end_time: Option<String>`, `total_iterations: Option<i32>`. Derive `Serialize`, `Debug`, `Clone`. |
+| **3** | Implement `parse_log_metadata()` | Pure function to extract metadata from log.md text. Uses regex to find Issue title (`- Issue: #N - {title}`), start time (`- 开始时间: {ts}`), final result block (last `## 最终结果` section → score, iterations, end_time). |
+| **4** | Implement `determine_history_status()` | Pure function: interrupt check first (contains `⚠️ 脚本被中断`), then completed check from last "最终结果" section (score >= 85 → Success, score < 85 → Fail), else InProgress. |
+| **5** | Implement `list_history_sync()` | Non-async version that: 1) builds workflows dir path, 2) returns empty vec if dir missing, 3) iterates `issue-*` dirs, 4) for each dir reads `log.md`, 5) calls `parse_log_metadata()` + `determine_history_status()`, 6) sorts by issue_number descending. |
+| **6** | Add `list_history` Tauri command | Async wrapper: `#[tauri::command] async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String>` using `tokio::task::spawn_blocking` pattern from `check_processed_issues`. |
+| **7** | Register command in `run()` | Add `list_history` to `tauri::generate_handler![]` in `run()`. |
+| **8** | Write tests | 4 test cases: success parsing (score >= 85), fail parsing (score < 85), interrupt detection, in_progress detection. Use `create_temp_project_dir()` pattern. |
+
+---
+
+### Status Priority Logic
+
+```
+1. log.md contains "⚠️ 脚本被中断" → Interrupt (even if "最终结果" exists)
+2. Last "## 最终结果" section exists + status=completed + score >= 85 → Success
+3. Last "## 最终结果" section exists + status=completed + score < 85 → Fail
+4. Otherwise → InProgress
+```
+
+---
+
+### Questions for You
+
+Before I proceed to implementation:
+
+1. The plan follows existing patterns in `lib.rs` (regex-based parsing, `spawn_blocking`, same test helper). Any objections?
+2. For issues with no log.md at all (like issue-50), should we skip them or include them with `InProgress` status and no metadata? Or skip entirely? (I plan to skip — only process dirs that have a `log.md`.)
+3. The title format includes the label prefix like `[desktop-app]` (e.g., `[desktop-app] 处理历史列表`). Should the extracted title include or exclude the `[tag]` prefix? I plan to include it as-is for fidelity.
+The plan is complete. I have 3 clarifying questions above about edge cases before I start implementing. Let me know your preferences and I'll proceed.

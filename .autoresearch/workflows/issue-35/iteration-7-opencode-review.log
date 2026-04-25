@@ -1,0 +1,156 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 35 implementation[90m Explore Agent[0m
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff --name-only HEAD master -- desktop_app/
+desktop_app/src-tauri/CLAUDE.md
+desktop_app/src-tauri/src/lib.rs
+desktop_app/src/CLAUDE.md
+desktop_app/src/pages/SettingsPage.tsx
+desktop_app/src/pages/configEditor.ts
+desktop_app/src/stores/projectStore.ts
+desktop_app/tests/CLAUDE.md
+desktop_app/tests/configEditor.test.mjs
+desktop_app/tests/uiLocalization.test.mjs
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff --name-only HEAD
+.autoresearch/workflows/issue-34/log.md
+run.sh
+[0m
+[0m$ [0mwc -l /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/*.log 2>/dev/null
+14 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/hard-gate-1.log
+      14 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/hard-gate-2.log
+      14 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/hard-gate-3.log
+      14 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/hard-gate-4.log
+      14 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/hard-gate-5.log
+      14 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/hard-gate-6.log
+     858 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-1-opencode.log
+     110 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-2-opencode-review.log
+     488 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-2-opencode.log
+     533 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-3-opencode-review.log
+     187 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-3-opencode.log
+     581 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-4-opencode-review.log
+     123 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-4-opencode.log
+     201 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-5-opencode-review.log
+     125 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-5-opencode.log
+     746 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-6-opencode-review.log
+     194 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-6-opencode.log
+      21 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/iteration-7-opencode-review.log
+      99 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/planning.log
+     127 /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-35/terminal.log
+    4477 total
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch log --oneline master..HEAD 2>/dev/null
+c78e166 feat: implement issue #34 - [desktop-app] 配置文件编辑器
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch branch --show-current
+feature/issue-35
+[0m
+[0m$ [0mgit -C /Users/chaoyuepan/ai/autoresearch diff master..HEAD -- desktop_app/src-tauri/src/lib.rs | head -100
+diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+index 0dd7ad2..61f7836 100644
+--- a/desktop_app/src-tauri/src/lib.rs
++++ b/desktop_app/src-tauri/src/lib.rs
+@@ -60,6 +60,15 @@ struct ProjectConfig {
+     has_agents_dir: bool,
+ }
+ 
++/// Frontend-facing contents for a supported configuration file.
++#[derive(Debug, serde::Serialize, PartialEq, Eq)]
++struct ConfigFileContent {
++    file_id: String,
++    relative_path: String,
++    content: String,
++    source: String,
++}
++
+ /// A label attached to a GitHub Issue.
+ #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+ struct GhLabel {
+@@ -234,6 +243,16 @@ const CLAUDE_AGENT_TEMPLATE: &str = include_str!("../../../agents/claude.md");
+ const CODEX_AGENT_TEMPLATE: &str = include_str!("../../../agents/codex.md");
+ const OPENCODE_AGENT_TEMPLATE: &str = include_str!("../../../agents/opencode.md");
+ 
++fn supported_config_file(file_id: &str) -> Option<(&'static str, &'static str)> {
++    match file_id {
++        "program.md" => Some(("program.md", PROGRAM_TEMPLATE)),
++        "agents/claude.md" => Some(("agents/claude.md", CLAUDE_AGENT_TEMPLATE)),
++        "agents/codex.md" => Some(("agents/codex.md", CODEX_AGENT_TEMPLATE)),
++        "agents/opencode.md" => Some(("agents/opencode.md", OPENCODE_AGENT_TEMPLATE)),
++        _ => None,
++    }
++}
++
+ fn score_number_regex() -> &'static Regex {
+     static REGEX: OnceLock<Regex> = OnceLock::new();
+     REGEX.get_or_init(|| Regex::new(r"\d+\.?\d*").expect("valid score number regex"))
+@@ -522,7 +541,10 @@ fn build_score_history(workflow_dir: &Path) -> Vec<ScoreHistoryPoint> {
+ 
+     for entry in entries.flatten() {
+         let path = entry.path();
+-        let Some(name) = path.file_name().map(|name| name.to_string_lossy().to_string()) else {
++        let Some(name) = path
++            .file_name()
++            .map(|name| name.to_string_lossy().to_string())
++        else {
+             continue;
+         };
+ 
+@@ -907,8 +929,8 @@ fn detect_project_config_sync(base: &Path, project_path: &str) -> Result<Project
+     let ar = base.join(".autoresearch");
+     Ok(ProjectConfig {
+         has_autoresearch_dir: ar.is_dir(),
+-        has_program_md: ar.join("program.md").is_file() || base.join("program.md").is_file(),
+-        has_agents_dir: ar.join("agents").is_dir() || base.join("agents").is_dir(),
++        has_program_md: ar.join("program.md").is_file(),
++        has_agents_dir: ar.join("agents").is_dir(),
+     })
+ }
+ 
+@@ -972,6 +994,244 @@ fn write_file_if_missing(path: &Path, content: &str, label: &str) -> Result<(),
+         .map_err(|e| format!("Failed to write {label} at {}: {e}", path.display()))
+ }
+ 
++fn resolve_project_config_file_path(
++    base: &Path,
++    file_id: &str,
++) -> Result<std::path::PathBuf, String> {
++    let (relative_path, _) = supported_config_file(file_id)
++        .ok_or_else(|| format!("Unsupported config file: {file_id}"))?;
++
++    Ok(base.join(".autoresearch").join(relative_path))
++}
++
++enum ConfigPathState {
++    Missing,
++    Metadata(fs::Metadata),
++}
++
++fn config_path_state(path: &Path) -> Result<ConfigPathState, String> {
++    match fs::symlink_metadata(path) {
++        Ok(metadata) => Ok(ConfigPathState::Metadata(metadata)),
++        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ConfigPathState::Missing),
++        Err(error) => Err(format!(
++            "Failed to inspect config path {}: {error}",
++            path.display()
++        )),
++    }
++}
++
++fn validate_config_path(base: &Path, path: &Path) -> Result<(), String> {
++    let relative_path = path.strip_prefix(base).map_err(|_| {
++        format!(
++            "Config file path escapes project directory: {}",
++            path.display()
++        )
++    })?;
++    let mut current = base.to_path_buf();
++
++    for component in relative_path.components() {
+[0m
+[0m✱ [0mGrep "list_history|HistoryEntry|HistoryRunStatus|HistoryStatus|parse_workflow_log|list_history_sync"[90m in desktop_app · 0 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-35/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-35/planning.log
+                                                          

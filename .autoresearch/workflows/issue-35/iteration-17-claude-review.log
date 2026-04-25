@@ -1,0 +1,127 @@
+很好 — `typecheck` 和 `lint` 都通过了。现在我已经掌握了进行全面审查所需的所有信息。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #35
+- 标题: [desktop-app] 处理历史列表
+- 迭代次数: 16（当前审核针对 T-002）
+
+---
+
+### 总体评价
+
+**评分: 72/100**
+
+`historyStore.ts` 实现了 T-002 要求的大部分功能：TypeScript 类型与 Rust snake_case 对齐、`getFilteredAndSortedHistory` 纯函数、`useHistoryStore` hook、mock 数据、`normalizeUserFacingError` 归一化。`typecheck` 和 `lint` 均通过。但存在以下问题：缺少测试文件、store 未采用工厂模式（与 `runStore` / `iterationStore` 不一致）、`isTauri` 重复导出。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少测试文件
+
+**位置**: `desktop_app/tests/` 目录
+
+**问题描述**:
+验收条件明确要求 `getFilteredAndSortedHistory` 纯函数可独立测试，但 `desktop_app/tests/` 下没有任何 `historyStore.test.mjs` 或类似测试文件。迭代 16 的审核也指出了同样的问题，仍未修复。
+
+跨迭代 learnings 明确记录："`getFilteredAndSortedHistory` 这类刻意导出为纯函数的工具方法，验收条件写'可独立测试'就应在 tests/ 下有对应 `.test.mjs` 文件"。
+
+**建议修复**:
+创建 `desktop_app/tests/historyStore.test.mjs`，覆盖：
+- `statusFilter: 'all'` 返回全部条目
+- 按 `success`/`fail`/`interrupt`/`in_progress` 过滤
+- `sortOrder: 'asc'` / `'desc'` 按 `start_time` 排序
+- `start_time` 为 `null` 时的排序行为（空字符串兜底）
+- 空数组输入
+
+---
+
+#### 问题 2: store 未采用工厂模式，无法在 Node 环境测试
+
+**位置**: `desktop_app/src/stores/historyStore.ts:156-190`
+
+**问题描述**:
+`useHistoryStore` 直接 `create<HistoryState>()` 并闭包引用顶层 `isTauri` / `tauriInvoke`，与 `runStore.ts` 的 `createRunStore(overrides)` 工厂模式不一致。这意味着 store 的 Tauri 调用逻辑无法在 `node --test` 中注入 mock 依赖进行测试。
+
+项目 `desktop_app/src/CLAUDE.md` 明确记录："Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports; this repo uses `createRunStore(overrides)` for that pattern."
+
+**代码片段**:
+```ts
+// 当前：直接创建，无法注入依赖
+export const useHistoryStore = create<HistoryState>((set) => ({
+  ...
+  loadHistory: async (projectPath: string) => {
+    ...
+    if (isTauri) {                    // 闭包捕获顶层 isTauri
+      const data = await tauriInvoke<HistoryEntry[]>('list_history', {
+```
+
+**建议修复**:
+参照 `runStore.ts` 的 `createRunStoreDeps` + `createRunStore` 模式，将 `isTauri` 和 `invoke` 作为可注入依赖。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: `isTauri` 重复导出
+
+**位置**: `desktop_app/src/stores/historyStore.ts:192`
+
+**问题描述**:
+文件末尾 `export { isTauri }` 导出了与 `issueStore.ts:243` 完全相同的 `isTauri` 常量。两个文件各自定义了相同的模块级变量，如果消费方同时从两个 store 导入会产生歧义。
+
+**建议修复**:
+将 `isTauri` 和 `tauriInvoke` 提取到独立的 `src/stores/tauriEnv.ts` 共享模块，各 store 统一从此处导入。或者如采用工厂模式，则不需要导出 `isTauri`。
+
+---
+
+#### 问题 4: mock 数据静态硬编码，无运行时随机性
+
+**位置**: `desktop_app/src/stores/historyStore.ts:91-137`
+
+**问题描述**:
+mock 数据直接引用了当前项目真实的 Issue 编号（#34, #33, #30, #35, #28），这在浏览器开发时可以，但如果这些 mock 数据随项目状态变化需要手动维护。这属于 minor 问题，当前可接受。
+
+---
+
+### 建议改进 (可选)
+
+- `getFilteredAndSortedHistory` 中 `start_time` 为 `null` 时退化为空字符串 `''`，排序时会排到最前面。考虑是否应将 `null` 排到最后（`desc` 时排到末尾）以更符合用户预期。
+- Store 的 `loadHistory` 在非 Tauri 模式下静默使用 mock 数据、不设 error，这对开发体验友好，但建议在 UI 层加一个浏览器模式的提示（类似 `issueStore` 的做法）。
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 | 备注 |
+|---|---|---|
+| TypeScript 接口与 Rust snake_case 字段对齐，无 any 类型 | ✅ 通过 | `HistoryEntry` 字段与 Rust struct 完全对齐 |
+| historyStore.ts 可被 React 组件消费，导出 useHistoryStore hook | ✅ 通过 | |
+| getFilteredAndSortedHistory 纯函数可独立测试 | ⚠️ 部分 | 纯函数已导出，但无测试文件 |
+| 状态过滤支持 'all'、'success'、'fail'、'interrupt'、'in_progress' | ✅ 通过 | `StatusFilter` 类型和 `RUN_STATUS_TO_FILTER` 映射正确 |
+| 排序支持按开始时间升序/降序 | ✅ 通过 | |
+| 错误消息通过 normalizeUserFacingError 归一化 | ✅ 通过 | |
+| npm run typecheck 通过 | ✅ 通过 | |
+| npm run lint 通过 | ✅ 通过 | |
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 创建 `desktop_app/tests/historyStore.test.mjs`，至少覆盖 `getFilteredAndSortedHistory` 的过滤和排序逻辑
+2. 将 `useHistoryStore` 改为工厂模式（`createHistoryStore(overrides)`），支持依赖注入以便测试
+
+---
+
+## Learnings
+
+- **模式**: `runStore.ts` 的 `createRunStore(overrides)` + `createRunStoreDeps()` 是本项目的标准 store 工厂模式。新 store 应始终遵循此模式，否则无法在 Node 测试中注入 mock。
+- **踩坑**: 迭代 15-16 均指出缺少测试文件和工厂模式，但修复只添加了 store 实现而未补充测试。验收条件中"可独立测试"的表述需要在 tests/ 目录落地为实际文件。
+- **经验**: 审核 store 实现时，先检查 `tests/` 目录是否有对应测试文件，再检查 store 是否采用工厂模式，这两项是本项目的硬性要求。

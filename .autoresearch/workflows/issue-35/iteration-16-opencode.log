@@ -1,0 +1,122 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore existing store patterns[90m Explore Agent[0m
+[0m• [0mExplore Rust backend types[90m Explore Agent[0m
+[0m• [0mCheck existing history implementation[90m Explore Agent[0m
+[0m✓ [0mCheck existing history implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Rust backend types[90m Explore Agent[0m
+[0m✓ [0mExplore existing store patterns[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+[0m✱ [0mGlob "**/CLAUDE.md"[90m in desktop_app/src/stores · 0 matches[0m
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+Let me read the current `historyStore.ts` implementation and existing stores directory CLAUDE.md to complete my analysis.
+现在我已经收集了所有需要的信息。以下是改进 Issue #35 T-002 实现的完整计划。
+
+---
+
+## 计划：根据审核反馈改进 T-002
+
+### 审核发现的问题
+
+| # | 问题 | 严重性 | 权重影响 |
+|---|------|--------|----------|
+| 1 | 无测试覆盖 (`getFilteredAndSortedHistory` 零测试) | 严重 | 测试质量 10→目标 90+ |
+| 2 | 缺少工厂模式/依赖注入 (当前用普通 `create<>`) | 严重 | 代码质量 75→目标 90+ |
+| 3 | 缺少请求竞态保护 (无 `requestKey`) | 一般 | 正确性 |
+| 4 | 排序空值处理未验证 (`start_time ?? ''`) | 一般 | 正确性 |
+
+### 改动文件清单
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `desktop_app/src/stores/historyStore.ts` | 重构 | 添加工厂模式 + requestKey 竞态保护 |
+| `desktop_app/tests/historyStore.test.mjs` | 新建 | 完整测试覆盖 |
+| `desktop_app/src/stores/CLAUDE.md` | 新建/更新 | 记录 store 模式约定 |
+
+### 第 1 步：重构 `historyStore.ts` — 工厂模式 + 竞态保护
+
+具体改动点：
+
+1. **添加 `HistoryStoreDeps` 接口**（模仿 `iterationStore.ts:26-30`）：
+   ```ts
+   interface HistoryStoreDeps {
+     isTauri: boolean;
+     invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+   }
+   ```
+
+2. **添加 `createHistoryStoreDeps(overrides)` 工厂**（模仿 `runStore.ts` 的 `createRunStoreDeps`）：
+   ```ts
+   function createHistoryStoreDeps(overrides: Partial<HistoryStoreDeps> = {}): HistoryStoreDeps {
+     return { isTauri, invoke: tauriInvoke, ...overrides };
+   }
+   ```
+
+3. **导出 `createHistoryStore(overrides)` 工厂函数**（模仿 `createIterationStore`）：
+   ```ts
+   export function createHistoryStore(overrides: Partial<HistoryStoreDeps> = {}) {
+     const deps = createHistoryStoreDeps(overrides);
+     return create<HistoryState>((set, get) => ({
+       // ... use deps.isTauri, deps.invoke instead of module-level isTauri/tauriInvoke
+     }));
+   }
+   ```
+
+4. **添加 `requestKey` 竞态保护**（模仿 `issueStore.ts` 的 `detailRequestKey` 模式）：
+   - 在 `HistoryState` 中添加 `requestKey: number`
+   - `loadHistory` 中：抓取 `nextRequestKey = get().requestKey + 1`，设置 key，await invoke，返回后检查 `requestKey !== nextRequestKey`，不匹配则丢弃 stale 响应
+   - `reset()` 中 bump requestKey
+
+5. **移除模块级 `isTauri` export**，改为通过 deps 注入
+
+6. **保留不变的部分**：类型、`getFilteredAndSortedHistory` 纯函数、mock 数据、`normalizeHistoryError`
+
+### 第 2 步：编写 `tests/historyStore.test.mjs`
+
+测试结构（模仿 `iterationStore.test.mjs`）：
+
+```
+test/getFilteredAndSortedHistory
+  ✓ 过滤单个状态 (success/fail/interrupt/in_progress)
+  ✓ 'all' 返回全部
+  ✓ 升序排序
+  ✓ 降序排序
+  ✓ 空列表
+  ✓ null start_time 排序行为（排在最前）
+  ✓ filter + sort 组合
+
+test/normalizeHistoryError
+  ✓ 中文错误保留原文
+  ✓ 英文错误回退到中文 fallback
+  ✓ 空消息回退到 fallback
+
+test/RUN_STATUS_TO_FILTER 映射
+  ✓ Success → success, Fail → fail, Interrupt → interrupt, InProgress → in_progress
+
+test/createHistoryStore
+  ✓ loadHistory Tauri 模式调用 list_history
+  ✓ loadHistory 浏览器模式返回 mock 数据
+  ✓ loadHistory 错误处理 + 中文 fallback
+  ✓ setStatusFilter / setSortOrder / clearError
+  ✓ 快速两次 loadHistory 旧请求被丢弃（竞态保护）
+  ✓ reset 恢复初始状态并作废进行中的请求
+  ✓ isTauri: false 时使用 mock 数据
+```
+
+### 第 3 步：验证
+
+```bash
+cd /Users/chaoyuepan/ai/autoresearch/desktop_app
+npm run typecheck     # tsc --noEmit
+npm run lint          # eslint
+npm test              # node --test --experimental-strip-types tests/*.test.mjs
+```
+
+### 第 4 步：更新 `desktop_app/src/stores/CLAUDE.md`
+
+记录 store 工厂模式约定，确保后续 store 开发遵循同一模式。
+
+---
+
+是否同意此计划？我将等待确认后进入实现阶段。

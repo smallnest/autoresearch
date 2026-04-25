@@ -56,8 +56,10 @@ test('settings, history, and agent selection copy is localized', () => {
   assert.match(settingsSource, /Agent 配置/);
   assert.doesNotMatch(settingsSource, />Settings</);
 
-  assert.match(historySource, />历史</);
-  assert.match(historySource, /查看过去的工作流执行记录与结果。/);
+  assert.match(historySource, />历史记录</);
+  assert.match(historySource, /暂无历史记录/);
+  assert.match(historySource, /按状态过滤/);
+  assert.match(historySource, /aria-label="关闭错误提示"/);
   assert.doesNotMatch(historySource, />History</);
 
   assert.match(dashboardSource, /欢迎使用 Autoresearch/);

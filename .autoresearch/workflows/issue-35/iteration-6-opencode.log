@@ -1,0 +1,194 @@
+[0m
+> plan · deepseek-v4-pro
+[0m
+[0m• [0mExplore desktop_app codebase[90m Explore Agent[0m
+Let me explore the codebase to understand existing patterns before creating a plan.
+[0m✓ [0mExplore desktop_app codebase[90m Explore Agent[0m
+[0m
+[0m# [0mTodos
+[ ] 在 lib.rs 中新增 HistoryEntry struct 和 HistoryRunStatus 枚举（区别于已有 RunStatus）
+[ ] 实现 log.md 解析函数 parse_workflow_log()：提取标题、开始/结束时间、最终评分、状态、标签、迭代次数
+[ ] 实现 list_history Tauri command（spawn_blocking + _sync 辅助函数模式）
+[ ] 在 run() 的 generate_handler![] 中注册 list_history 命令
+[ ] 编写 Rust 单元测试（四种状态解析、缺失字段、无目录、边缘情况）
+[ ] 运行 cargo clippy 和 cargo test 验证
+[ ] 更新 desktop_app/src-tauri/CLAUDE.md 记录模式和经验
+[0m
+Now I have a thorough understanding of the codebase. Let me create the implementation plan.
+
+---
+
+## 修复计划 — Issue #35 T-001: Rust 侧实现历史记录扫描与解析命令
+
+### 背景
+
+审核反馈确认：`feature/issue-35` 分支上 `desktop_app/` **无任何代码变更**，T-001 完全未实现。需要从头实现 `list_history` Tauri command。
+
+### 任务清单
+### 详细实现方案
+
+#### 1. 新增数据结构（`lib.rs` 中，约第 140 行附近）
+
+```rust
+/// 历史记录运行状态
+#[derive(serde::Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryRunStatus {
+    #[serde(rename = "success")]
+    Success,
+    #[serde(rename = "fail")]
+    Fail,
+    #[serde(rename = "interrupt")]
+    Interrupt,
+    #[serde(rename = "in_progress")]
+    InProgress,
+}
+
+/// 单条历史记录
+#[derive(serde::Serialize, Debug, Clone)]
+struct HistoryEntry {
+    issue_number: i64,
+    issue_title: Option<String>,       // 从 "Issue: #N - 标题" 提取
+    start_time: Option<String>,       // "开始时间: YYYY-MM-DD HH:MM:SS"
+    end_time: Option<String>,         // "结束时间: ..."
+    total_iterations: Option<i32>,    // "总迭代次数: N"
+    final_score: Option<i32>,         // "最终评分: X/100"
+    status: HistoryRunStatus,
+    branch: Option<String>,           // "分支: feature/issue-N"
+    labels: Option<Vec<String>>,      // "标签: a,b,c" → ["a","b","c"]
+}
+```
+
+**关键决策**：名称使用 `HistoryRunStatus` 而非 `RunStatus`，因为 `lib.rs:1821` 已有 `RunStatus { Idle, Running }` 用于进程管理。
+
+#### 2. log.md 解析逻辑
+
+复用现有基础：
+- **目录扫描**：直接调用 `get_processed_issue_numbers()` 获取所有 issue 编号
+- **评分提取**：直接调用 `extract_score()` 解析 `最终评分: X/100`
+
+新增解析函数 `parse_workflow_log(log_content: &str, issue_number: i64) -> HistoryEntry`，按行解析：
+
+| 行模式 | 提取字段 |
+|---------|---------|
+| `Issue: #N - 标题` | issue_title |
+| `开始时间: YYYY-MM-DD HH:MM:SS` | start_time |
+| `结束时间: YYYY-MM-DD HH:MM:SS` | end_time |
+| `总迭代次数: N` | total_iterations |
+| `最终评分: X/100` | final_score (调用 extract_score) |
+| `状态: completed` | 状态判定输入 |
+| `分支: feature/issue-N` | branch |
+| `标签: a,b,c` | labels |
+
+**状态判定（按最后出现事件优先）**：
+```
+扫描 log.md 全文，按出现顺序记录事件：
+1. 遇到 "## 最终结果" + "状态: completed" + 最终评分 >= 85 → success
+2. 遇到 "## 最终结果" + "状态: completed" + 最终评分 < 85 → fail
+3. 遇到 "⚠️ 脚本被中断" 或 "中断信号" → interrupt
+4. 以上都未出现 → in_progress
+```
+
+#### 3. Tauri Command 实现
+
+```rust
+#[tauri::command]
+async fn list_history(project_path: String) -> Result<Vec<HistoryEntry>, String> {
+    tokio::task::spawn_blocking(move || list_history_sync(&project_path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn list_history_sync(project_path: &str) -> Result<Vec<HistoryEntry>, String> {
+    let project_path = Path::new(project_path);
+    let numbers = get_processed_issue_numbers(project_path)?;
+    let workflows_dir = project_path.join(".autoresearch").join("workflows");
+    let mut entries = Vec::new();
+    for num in numbers {
+        let log_path = workflows_dir.join(format!("issue-{num}")).join("log.md");
+        match fs::read_to_string(&log_path) {
+            Ok(content) => entries.push(parse_workflow_log(&content, num)),
+            Err(_) => {
+                entries.push(HistoryEntry {
+                    issue_number: num,
+                    issue_title: None,
+                    start_time: None,
+                    end_time: None,
+                    total_iterations: None,
+                    final_score: None,
+                    status: HistoryRunStatus::InProgress,
+                    branch: None,
+                    labels: None,
+                });
+            }
+        }
+    }
+    entries.sort_by_key(|e| e.issue_number);
+    Ok(entries)
+}
+```
+
+#### 4. 注册命令
+
+在 `run()` 函数中的 `generate_handler![]` 宏内添加 `list_history`。
+
+#### 5. 测试计划
+
+在 `lib.rs` 底部（现有 `#[cfg(test)]` 模块内或新增）添加测试：
+
+```rust
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_completed_success() {
+        let content = "...issue-27 真实 log.md 内容...";
+        let entry = parse_workflow_log(content, 27);
+        assert_eq!(entry.issue_title.as_deref(), Some("[desktop-app] Issue 详情查看"));
+        assert_eq!(entry.final_score, Some(90));
+        assert!(matches!(entry.status, HistoryRunStatus::Success));
+    }
+
+    #[test]
+    fn test_parse_interrupted() {
+        let content = "...包含 ⚠️ 脚本被中断 的内容...";
+        let entry = parse_workflow_log(content, 28);
+        assert!(matches!(entry.status, HistoryRunStatus::Interrupt));
+    }
+
+    #[test]
+    fn test_parse_in_progress_no_final_result() {
+        let content = "# Issue #99 ...\n## 迭代记录\n### 迭代 1";
+        let entry = parse_workflow_log(content, 99);
+        assert!(matches!(entry.status, HistoryRunStatus::InProgress));
+    }
+
+    #[test]
+    fn test_list_history_empty_dir() {
+        // 测试不存在的 workflows 目录返回空列表
+    }
+}
+```
+
+#### 6. 验证
+
+```bash
+cd desktop_app/src-tauri && cargo clippy -- -D warnings && cargo test
+```
+
+---
+
+### 风险与边缘情况
+
+| 场景 | 处理方式 |
+|------|---------|
+| workflows/ 目录不存在 | 返回空 Vec |
+| log.md 文件不存在 | 返回仅有 issue_number + InProgress 状态的条目 |
+| log.md 内容为空 | InProgress 状态，所有 Option 字段为 None |
+| issue-29 缺少 `## 基本信息` 头部 | 优雅降级，不影响解析 |
+| issue-34 先 completed 后 interrupt | 按最后出现事件判定为 interrupt |
+| 中文编码 | log.md 是 UTF-8，`fs::read_to_string` 直接处理 |
+
+---
+
+是否同意此方案？我可以立即开始实现。
