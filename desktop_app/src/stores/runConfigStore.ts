@@ -16,7 +16,7 @@ export const MIN_PASSING_SCORE = 1;
 export const MAX_PASSING_SCORE = 100;
 export const DEFAULT_PASSING_SCORE = 85;
 
-export const DEFAULT_CONTINUE_MODE = false;
+export const DEFAULT_CONTINUE_MODE = true;
 
 interface RunConfigValues {
   maxIterations: number;

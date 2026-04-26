@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, type JSX } from 'react';
+import Dropdown from './Dropdown';
 import { useRunStore } from '../stores/runStore';
 import {
   buildLogEntries,
@@ -322,20 +323,16 @@ export default function LogViewer({
             日志查看器
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={selectedSourceId}
-              onChange={(event) => {
+            <Dropdown
+              value={selectedSourceId ?? ''}
+              options={sources.map((s) => ({ value: s.id, label: s.label }))}
+              onChange={(v) => {
                 clearError();
-                selectSource(event.target.value);
+                selectSource(v);
               }}
-              className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
-            >
-              {sources.map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.label}
-                </option>
-              ))}
-            </select>
+              ariaLabel="选择日志源"
+              variant="dark"
+            />
             <button
               type="button"
               onClick={() => {

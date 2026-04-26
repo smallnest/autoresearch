@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import IssueDetailPanel from '../components/IssueDetailPanel';
 import {
@@ -351,6 +351,40 @@ function IssuesPage(): JSX.Element {
     [issues, selectedIssueNumber]
   );
 
+  // --- Detail panel resize handle ---
+  const MIN_DETAIL_WIDTH = 320;
+  const MAX_DETAIL_WIDTH = 1080;
+  const [detailWidth, setDetailWidth] = useState(384);
+  const dragRef = useRef({ isDragging: false, startX: 0, startWidth: 0 });
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { isDragging: true, startX: e.clientX, startWidth: detailWidth };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [detailWidth]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current.isDragging) return;
+      const delta = dragRef.current.startX - e.clientX;
+      const next = Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, dragRef.current.startWidth + delta));
+      setDetailWidth(next);
+    };
+    const onMouseUp = () => {
+      if (!dragRef.current.isDragging) return;
+      dragRef.current.isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -464,8 +498,8 @@ function IssuesPage(): JSX.Element {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <section className="min-w-0">
+      <div className="flex flex-col xl:flex-row">
+        <section className="min-w-0 flex-1 overflow-hidden xl:pr-4">
           {/* Search bar */}
           <div className="mb-4">
             <div className="relative">
@@ -595,8 +629,44 @@ function IssuesPage(): JSX.Element {
           )}
         </section>
 
+        {/* Resize handle — desktop only */}
+        <div
+          className="hidden xl:flex flex-col items-center justify-between w-5 cursor-col-resize group flex-shrink-0 py-4"
+          onMouseDown={handleResizeMouseDown}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖拽调整详情面板宽度"
+          title="拖拽调整宽度"
+        >
+          <svg width="4" height="10" viewBox="0 0 4 10" className="text-gray-300 group-hover:text-blue-400 transition-colors">
+            <circle cx="1" cy="1" r="1" fill="currentColor" />
+            <circle cx="3" cy="1" r="1" fill="currentColor" />
+            <circle cx="1" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="3" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="1" cy="8" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+          </svg>
+          <svg width="4" height="10" viewBox="0 0 4 10" className="my-1 text-gray-300 group-hover:text-blue-400 transition-colors">
+            <circle cx="1" cy="1" r="1" fill="currentColor" />
+            <circle cx="3" cy="1" r="1" fill="currentColor" />
+            <circle cx="1" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="3" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="1" cy="8" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+          </svg>
+          <svg width="4" height="10" viewBox="0 0 4 10" className="text-gray-300 group-hover:text-blue-400 transition-colors">
+            <circle cx="1" cy="1" r="1" fill="currentColor" />
+            <circle cx="3" cy="1" r="1" fill="currentColor" />
+            <circle cx="1" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="3" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="1" cy="8" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+          </svg>
+        </div>
+
         <section
-          className={`min-w-0 ${selectedIssue ? 'block' : 'hidden xl:block'}`}
+          className={`min-w-0 shrink-0 ${selectedIssue ? 'block' : 'hidden xl:block'}`}
+          style={{ width: detailWidth }}
         >
           <IssueDetailPanel
             issue={selectedIssue}

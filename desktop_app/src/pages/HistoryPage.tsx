@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, useCallback, type JSX } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, type JSX } from 'react';
 import { useProjectStore } from '../stores/projectStore';
+import Dropdown from '../components/Dropdown';
 import {
   useHistoryStore,
   getFilteredAndSortedHistory,
@@ -247,6 +248,40 @@ function HistoryPage(): JSX.Element {
     clearDetail();
   }, [clearDetail]);
 
+  // --- Detail panel resize handle ---
+  const MIN_DETAIL_WIDTH = 400;
+  const MAX_DETAIL_WIDTH = 1080;
+  const [detailWidth, setDetailWidth] = useState(600);
+  const dragRef = useRef({ isDragging: false, startX: 0, startWidth: 0 });
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { isDragging: true, startX: e.clientX, startWidth: detailWidth };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [detailWidth]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current.isDragging) return;
+      const delta = e.clientX - dragRef.current.startX;
+      const next = Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, dragRef.current.startWidth + delta));
+      setDetailWidth(next);
+    };
+    const onMouseUp = () => {
+      if (!dragRef.current.isDragging) return;
+      dragRef.current.isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
   if (!projectPath) {
     return (
       <div className="p-6">
@@ -258,7 +293,7 @@ function HistoryPage(): JSX.Element {
   return (
     <div className="flex h-full">
       {/* Left: List */}
-      <div className={`p-6 ${selectedIssue != null ? 'w-1/2 border-r border-gray-200' : 'w-full'} overflow-y-auto`}>
+      <div className={`p-6 ${selectedIssue != null ? 'flex-1' : 'w-full'} overflow-y-auto`}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -301,31 +336,19 @@ function HistoryPage(): JSX.Element {
 
         {/* Toolbar */}
         <div className="mb-4 flex items-center gap-3">
-          <select
+          <Dropdown
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            aria-label="按状态过滤"
-            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          >
-            {FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            options={FILTER_OPTIONS}
+            onChange={(v) => setStatusFilter(v as StatusFilter)}
+            ariaLabel="按状态过滤"
+          />
 
-          <select
+          <Dropdown
             value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-            aria-label="时间排序"
-            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            options={SORT_OPTIONS}
+            onChange={(v) => setSortOrder(v as SortOrder)}
+            ariaLabel="时间排序"
+          />
         </div>
 
         {/* Content */}
@@ -352,9 +375,46 @@ function HistoryPage(): JSX.Element {
         )}
       </div>
 
+      {/* Resize handle */}
+      {selectedIssue != null && (
+        <div
+          className="flex flex-col items-center justify-between cursor-col-resize group flex-shrink-0 py-4"
+          onMouseDown={handleResizeMouseDown}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖拽调整详情面板宽度"
+          title="拖拽调整宽度"
+        >
+          <svg width="4" height="10" viewBox="0 0 4 10" className="text-gray-300 group-hover:text-blue-400 transition-colors">
+            <circle cx="1" cy="1" r="1" fill="currentColor" />
+            <circle cx="3" cy="1" r="1" fill="currentColor" />
+            <circle cx="1" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="3" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="1" cy="8" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+          </svg>
+          <svg width="4" height="10" viewBox="0 0 4 10" className="my-1 text-gray-300 group-hover:text-blue-400 transition-colors">
+            <circle cx="1" cy="1" r="1" fill="currentColor" />
+            <circle cx="3" cy="1" r="1" fill="currentColor" />
+            <circle cx="1" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="3" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="1" cy="8" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+          </svg>
+          <svg width="4" height="10" viewBox="0 0 4 10" className="text-gray-300 group-hover:text-blue-400 transition-colors">
+            <circle cx="1" cy="1" r="1" fill="currentColor" />
+            <circle cx="3" cy="1" r="1" fill="currentColor" />
+            <circle cx="1" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="3" cy="4.5" r="1" fill="currentColor" />
+            <circle cx="1" cy="8" r="1" fill="currentColor" />
+            <circle cx="3" cy="8" r="1" fill="currentColor" />
+          </svg>
+        </div>
+      )}
+
       {/* Right: Detail panel */}
       {selectedIssue != null && (
-        <div className="w-1/2 overflow-y-auto bg-gray-50">
+        <div className="shrink-0 overflow-y-auto bg-gray-50" style={{ width: detailWidth }}>
           <HistoryDetailPanel
             issueNumber={selectedIssue}
             onClose={handleCloseDetail}
