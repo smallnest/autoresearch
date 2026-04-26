@@ -1,0 +1,147 @@
+## 审核报告
+
+### Issue
+- 编号: #83
+- 子任务: T-002 - 配置 tauri.conf.json 的 macOS bundle 及 DMG 打包选项
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-002 子任务**完全未实现**。`tauri.conf.json` 与初始状态完全一致，未做任何修改；`desktop_app/src-tauri/dmg/` 目录不存在。所有 5 项验收条件均未满足。
+
+---
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | `bundle.macOS` 对象，category: DeveloperTool，minimumSystemVersion: 10.15 | ❌ | `bundle` 下无 `macOS` 字段 |
+| 2 | `bundle.dmg` 对象，配置 appPosition 和 applicationFolderPosition | ❌ | `bundle` 下无 `dmg` 字段 |
+| 3 | `bundle.shortDescription` 和 `bundle.longDescription` | ❌ | `bundle` 下无 description 字段 |
+| 4 | DMG 背景图文件存在且路径正确引用 | ❌ | `dmg/` 目录不存在，无背景图 |
+| 5 | `bundle.targets` 配置为包含 dmg 的目标列表 | ❌ | 当前为 `"all"`（默认值，非针对 DMG 优先配置） |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: tauri.conf.json 缺少所有 macOS bundle 配置
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json:25-38`
+
+**问题描述**:
+当前 `bundle` 配置仅包含 `active`、`targets`、`resources`、`icon` 四个字段，缺少 T-002 要求的全部 macOS 专属配置项。
+
+**当前代码**:
+```json
+"bundle": {
+  "active": true,
+  "targets": "all",
+  "resources": ["resources/runtime/"],
+  "icon": [...]
+}
+```
+
+**建议修复**:
+```json
+"bundle": {
+  "active": true,
+  "targets": ["dmg", "app", "app-bundle"],
+  "resources": ["resources/runtime/"],
+  "icon": [...],
+  "macOS": {
+    "category": "DeveloperTool",
+    "minimumSystemVersion": "10.15"
+  },
+  "dmg": {
+    "background": "dmg/background.png",
+    "appPosition": { "x": 180, "y": 170 },
+    "applicationFolderPosition": { "x": 480, "y": 170 },
+    "windowSize": { "width": 660, "height": 400 }
+  },
+  "shortDescription": "Autoresearch Desktop",
+  "longDescription": "Autoresearch Desktop - 自动化软件开发工具，基于多 Agent 迭代审核实现 GitHub Issue 自动实现、PR 创建与合并"
+}
+```
+
+**原因**: 这是 T-002 的核心需求，缺失则无法生成合格的 DMG 安装包。
+
+---
+
+#### 问题 2: DMG 背景图文件缺失
+
+**位置**: `desktop_app/src-tauri/dmg/`
+
+**问题描述**:
+`dmg/` 目录不存在，缺少 DMG 安装包的背景图文件。Tauri 的 DMG 打包支持自定义背景图，用于在 Finder 中展示美观的安装引导界面。
+
+**建议修复**:
+1. 创建 `desktop_app/src-tauri/dmg/` 目录
+2. 生成一张 DMG 背景图（建议 660x400 或 540x360 的 PNG，包含应用图标和 Applications 文件夹的视觉提示）
+3. 在 `tauri.conf.json` 的 `bundle.dmg.background` 中引用该路径
+
+**原因**: 验收条件要求 DMG 背景图文件存在且路径正确引用。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: bundle.targets 应明确指定 DMG 优先
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json:27`
+
+**问题描述**:
+当前 `targets` 为 `"all"`，虽然包含 DMG 但不符合"DMG 优先"的需求描述。且 `"all"` 会生成不必要的平台包（如 deb、appimage 等 Linux 包）。
+
+**建议修复**:
+```json
+"targets": ["dmg", "app", "app-bundle"]
+```
+
+**原因**: 明确指定目标列表可避免构建无关平台的包，缩短构建时间。
+
+---
+
+#### 问题 4: 缺少 code signing / notarization 预留配置
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json`
+
+**问题描述**:
+T-002 描述中要求"预留 code signing 和 notarization 配置项（entitlements 路径等，不强制要求证书）"，但当前未包含。
+
+**建议修复**:
+在 `bundle.macOS` 中添加注释性配置（Tauri v2 中 signing 由环境变量控制，但 entitlements 路径可在配置中预留）:
+```json
+"macOS": {
+  "category": "DeveloperTool",
+  "minimumSystemVersion": "10.15",
+  "entitlements": null,
+  "exceptionDomain": ""
+}
+```
+
+**原因**: 为后续正式签名和公证流程预留配置入口。
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - 存在严重问题，T-002 完全未实现
+
+**下一步行动**:
+1. 修改 `tauri.conf.json`，添加完整的 `bundle.macOS`、`bundle.dmg`、`shortDescription`、`longDescription` 配置
+2. 创建 `desktop_app/src-tauri/dmg/` 目录并生成 DMG 背景图
+3. 将 `bundle.targets` 修改为明确的 DMG 优先目标列表
+4. 预留 code signing / notarization 配置项
+
+---
+
+## Learnings
+
+- **踩坑**: 迭代 2 的 OpenCode 审核虽然标注为 "T-002"，但实际审核内容是 T-001（图标），导致 T-002 从未被实现。后续审核应严格核对子任务 ID 与实际审核内容的一致性。
+- **模式**: Tauri v2 的 `bundle.macOS` 和 `bundle.dmg` 配置结构需要参考 Tauri v2 官方文档，字段命名可能与 v1 不同。
+- **经验**: DMG 背景图的标准尺寸为 660x400（Retina 下 1320x800），应包含应用图标和 Applications 文件夹的视觉暗示，引导用户拖拽安装。

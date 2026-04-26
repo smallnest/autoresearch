@@ -1,0 +1,64 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+[0m✱ [0mGlob "**/dmg/**"[90m in desktop_app/src-tauri · 1 match[0m
+[0m→ [0mRead .autoresearch/workflows/issue-83
+[0m→ [0mRead .autoresearch/workflows/issue-83/iteration-4-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-83/hard-gate-3.log
+[0m→ [0mRead .autoresearch/workflows/issue-83/log.md
+[0m→ [0mRead .autoresearch/workflows/issue-83/iteration-3-claude.log
+[0m→ [0mRead .autoresearch/workflows/issue-83/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-83/progress.md
+[0m
+[0m$ [0mfile /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/dmg/background.png && wc -c /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/dmg/background.png
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/dmg/background.png: PNG image data, 660 x 400, 16-bit/color RGBA, non-interlaced
+   50482 /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/dmg/background.png
+[0m
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+## 审核报告
+
+### Issue
+- 编号: #83
+- 子任务: T-002 - 配置 tauri.conf.json 的 macOS bundle 及 DMG 打包选项
+- 当前迭代: 4 (OpenCode 审核)
+
+### 总体评价
+**评分: 100/100**
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权得分 |
+|------|------|------|----------|
+| 正确性 | 35% | 100 | 35.0 |
+| 测试质量 | 25% | 100(豁免) | 25.0 |
+| 代码质量 | 20% | 100 | 20.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | `bundle.macOS` 对象，category: DeveloperTool, minimumSystemVersion: 10.15 | ✅ | `bundle.macOS` 在第 41-45 行，含 `minimumSystemVersion: "10.15"`、`entitlements: null`（预留）、`exceptionDomain: ""`；`category: "DeveloperTool"` 在 `bundle.category`（第 38 行）——Tauri v2 的正确位置 |
+| 2 | `bundle.dmg` 对象含 appPosition 和 applicationFolderPosition | ✅ | 第 46-55 行，`appPosition: {x:180, y:170}`，`applicationFolderPosition: {x:480, y:170}`，含标准化 `windowSize` |
+| 3 | `bundle.shortDescription` 和 `bundle.longDescription` | ✅ | 第 39-40 行，中文描述，内容与 App 定位一致 |
+| 4 | DMG 背景图文件存在且路径正确引用 | ✅ | `desktop_app/src-tauri/dmg/background.png`（660x400 RGBA PNG, ~50KB），路径 `"dmg/background.png"` 正确 |
+| 5 | `bundle.targets` 包含 dmg | ✅ | `["dmg", "app", "app-bundle"]`（第 27 行） |
+
+### 额外验证
+
+- **category 位置**: Tauri v2 中 `category` 属于 `bundle.category`（顶层）而非 `bundle.macOS.category`，当前配置符合 v2 schema ✓
+- **Code signing 预留**: `bundle.macOS.entitlements: null` + `exceptionDomain: ""` 符合需求中"预留但不强制"的要求 ✓
+- **DMG 背景图尺寸**: 660x400 与 `bundle.dmg.windowSize` 一致 ✓
+
+### 审核结论
+所有 5 项验收条件均满足，实现完整、符合 Tauri v2 规范。DMG 背景图尺寸、窗口布局坐标、路径引用均正确。
+
+**结论**: ✅ **通过** — 可直接标记 T-002 为 `passes: true`，进入 T-003（构建验证）。
+
+## Learnings
+
+- **模式**: Tauri v2 中将 `bundle.dmg.windowSize` 设为与背景图尺寸匹配（660x400），可确保 DMG 窗口打开时完整显示背景且无缩放失真。
+- **模式**: DMG 布局坐标的标准做法是将 app 图标和 Applications 文件夹图标沿窗口水平中线对称放置（180 和 480，中线在 330），这符合 macOS 用户对拖拽安装的直觉预期。
+- **经验**: 迭代 3 中 Claude 正确识别了 Tauri v2 与 v1 在 `category` 字段位置上的差异，避免了按照 Tauri v1 文档将 `category` 放到 `macOS` 对象内的错误。

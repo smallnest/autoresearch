@@ -1,0 +1,142 @@
+我现在已经掌握了完整的信息。让我来整理我的审核意见。
+
+## 审核报告
+
+### Issue
+- 编号: #83
+- 子任务: T-003 - 验证 DMG 打包构建与应用安装运行
+- 迭代次数: 5
+
+---
+
+### 总体评价
+
+**评分: 25/100**
+
+T-003 的核心要求是**执行构建并验证产物**，但 `pnpm tauri build` 从未被执行。同时发现 `bundle.targets` 配置中包含无效值 `"app-bundle"`，将导致构建失败。两项关键问题叠加，该子任务实质上未完成。
+
+---
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | pnpm tauri build 成功执行，无构建错误 | ❌ | 构建从未执行，且配置含无效值，预计会失败 |
+| 2 | 构建产物中包含 .dmg 文件 | ❌ | 无 release/bundle 目录，无任何构建产物 |
+| 3 | DMG 挂载后显示背景图和应用+Applications 快捷方式 | ❌ | 无 DMG 产物可验证 |
+| 4 | 安装后应用可正常启动运行 | ❌ | 无构建产物可验证 |
+| 5 | 应用在 Dock/Launchpad 中显示自定义图标 | ❌ | 无构建产物可验证 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `pnpm tauri build` 从未执行
+
+**位置**: T-003 子任务整体
+
+**问题描述**:
+T-003 是"验证 DMG 打包构建与应用安装运行"子任务，核心要求是执行 `pnpm tauri build` 并验证产物。但整个迭代流程中，构建从未被触发。`target/release/` 目录不存在，没有 `.dmg` 文件或任何 release 构建产物。
+
+**建议修复**:
+需要实际执行构建命令并验证结果：
+```bash
+cd desktop_app && pnpm tauri build
+```
+
+**原因**: 不执行构建则无法验证任何验收条件，T-003 完全失去意义。
+
+---
+
+#### 问题 2: `bundle.targets` 包含无效值 `"app-bundle"`
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json:27`
+
+**问题描述**:
+当前配置为 `"targets": ["dmg", "app", "app-bundle"]`，其中 `"app-bundle"` 不是 Tauri v2 的有效 bundle target。
+
+根据 Tauri v2 源码中的 `BundleType` 枚举，macOS 平台的有效值为：
+- `"app"` — 生成 `.app` 应用包
+- `"dmg"` — 生成 `.dmg` 安装镜像
+
+`"app-bundle"` 不是有效值，执行构建时将报错或被静默忽略。
+
+**代码片段**:
+```json
+"targets": ["dmg", "app", "app-bundle"]
+```
+
+**建议修复**:
+```json
+"targets": ["dmg", "app"]
+```
+
+由于 `"dmg"` 依赖 `"app"`（Tauri 会自动先构建 .app），实际上 `["dmg"]` 就足以同时产出 `.app` 和 `.dmg`。但显式列出 `["dmg", "app"]` 更清晰。
+
+**原因**: 无效 target 值会导致构建失败，阻止 DMG 产物生成。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: DMG 背景图缺少 Retina 分辨率支持
+
+**位置**: `desktop_app/src-tauri/dmg/background.png`
+
+**问题描述**:
+当前背景图为 660x400 PNG（标准分辨率）。在 Retina 显示器上，macOS Finder 显示 DMG 窗口时会以 2x 缩放，导致背景图模糊。最佳实践是提供 1320x800 的背景图（2x 分辨率），Tauri 会自动适配。
+
+**建议**: 如果 Retina 支持是必须的，应生成 1320x800 版本的背景图。但此为建议改进，非阻塞性问题。
+
+---
+
+### 配置正确性确认
+
+以下配置经审核确认正确：
+
+| 配置项 | 状态 | 说明 |
+|--------|------|------|
+| `bundle.category: "DeveloperTool"` | ✅ | Tauri v2 正确位置（bundle 顶层，非 macOS 内） |
+| `bundle.macOS.minimumSystemVersion: "10.15"` | ✅ | 正确 |
+| `bundle.macOS.entitlements: null` | ✅ | 预留签名配置，不强制 |
+| `bundle.dmg.appPosition` | ✅ | {x:180, y:170} 与窗口中线对称 |
+| `bundle.dmg.applicationFolderPosition` | ✅ | {x:480, y:170} 标准拖拽安装布局 |
+| `bundle.dmg.windowSize: {660, 400}` | ✅ | 与背景图尺寸一致 |
+| `bundle.dmg.background: "dmg/background.png"` | ✅ | 路径相对于 src-tauri/，文件存在 |
+| 图标文件 | ✅ | icon.png 1024x1024，全套 PNG + icns + ico 均存在 |
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 修复 `tauri.conf.json` 中的 `bundle.targets`，移除无效的 `"app-bundle"`，改为 `["dmg", "app"]`
+2. 执行 `cd desktop_app && pnpm tauri build` 验证完整构建流程
+3. 确认构建产物中包含 `.dmg` 文件
+4. 挂载 DMG 验证背景图和布局（如环境允许）
+
+---
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权得分 |
+|------|------|------|----------|
+| 正确性 | 35% | 15 | 5.25 |
+| 测试质量 | 25% | 100(豁免) | 25.0 |
+| 代码质量 | 20% | 40 | 8.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总计** | | | **58.25 → 25** |
+
+> 测试质量维度已豁免 — T-003 是构建验证任务，不涉及代码实现和单元测试。
+> 正确性低分原因：构建从未执行（5 项验收条件均未满足）+ 配置含无效值（将导致构建失败）。
+> 代码质量扣分：`bundle.targets` 中包含无效值 `"app-bundle"`。
+> 最终评分取整为 25，反映核心验证目标完全未达成。
+
+## Learnings
+
+- **踩坑**: Tauri v2 中有效的 macOS bundle targets 为 `"app"` 和 `"dmg"`，不存在 `"app-bundle"` target。迭代 3 实现 T-002 时引入了无效值，迭代 4 审核未发现此问题。后续审核 tauri.conf.json 时应对照 Tauri v2 schema 校验枚举值。
+- **模式**: T-003 是"验证构建"类子任务，其实现方式是执行 `pnpm tauri build` 并检查产物。autoresearch 迭代流程中，Agent 可能难以直接执行长时间构建命令，审核者应关注构建可行性而非仅检查配置文件。
+- **经验**: 当子任务要求"验证"某个流程时，审核不仅要看配置是否正确，还必须确认验证操作本身是否已执行。配置正确 ≠ 构建能成功 ≠ 产物已生成。

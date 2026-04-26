@@ -1,0 +1,21 @@
+验收标准核对完毕：
+
+| # | 标准 | 状态 | 详情 |
+|---|-----------|--------|---------|
+| 1 | `bundle.macOS` 包含 category: DeveloperTool, minimumSystemVersion: 10.15 | ✅ | `category` 位于 `bundle.category`（Tauri v2 正确位置），`minimumSystemVersion` 位于 `bundle.macOS` |
+| 2 | `bundle.dmg` 包含 appPosition 和 applicationFolderPosition | ✅ | 第 48-55 行 |
+| 3 | `bundle.shortDescription` 和 `bundle.longDescription` | ✅ | 第 39-40 行 |
+| 4 | DMG 背景图文件存在且已引用 | ✅ | `dmg/background.png` (660x400, ~50KB)，已在 `bundle.dmg.background` 中引用 |
+| 5 | `bundle.targets` 包含 dmg 目标列表 | ✅ | `["dmg", "app", "app-bundle"]` 在第 27 行 |
+
+额外补充：
+- `bundle.macOS.entitlements` 和 `exceptionDomain` 已保留用于代码签名/公证（根据评审反馈问题 4 设为 null/空）
+- 注意：在 Tauri v2 中，`category` 是 `bundle.category`，而不是 `bundle.macOS.category`——评审建议将其放在 `macOS` 下的方案在 v2 中是错误的
+
+## 经验总结
+
+- **模式**: 在 Tauri v2 中，`category` 是 `bundle.category`（顶级），而不是 `bundle.macOS.category`。评审的建议结构是针对 Tauri v1 的。务必查阅 v2 schema。
+- **模式**: Tauri v2 `bundle.macOS` 字段包括 `minimumSystemVersion`、`entitlements`、`exceptionDomain`、`frameworks`、`files`、`hardenedRuntime`。不包含 `category`。
+- **踩坑**: Tauri v1 和 v2 的打包配置 schema 存在显著差异。`macOS.category` 在 v1 中但不是 v2 的 `macOS` 配置——它在 v2 中被移动到了 `bundle.category`。
+- **经验**: DMG 背景图标准尺寸为 660x400 (Tauri 默认 windowSize)。背景路径相对于 `src-tauri/` 目录。
+- **经验**: `bundle.dmg` 配置（背景、位置、窗口大小）与 Tauri v1/v2 兼容——字段名称相同。

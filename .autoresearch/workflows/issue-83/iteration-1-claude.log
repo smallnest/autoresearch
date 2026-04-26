@@ -1,0 +1,41 @@
+## T-001 Implementation Summary
+
+**Subtask**: Design and generate Autoresearch custom app icon set
+
+### What was done
+
+1. **Designed a custom SVG icon** (`autoresearch-icon.svg`) featuring:
+   - Blue-to-indigo gradient rounded rectangle background (AI/tech theme)
+   - Magnifying glass with integrated "A" letter (research/autoresearch)
+   - Gear at the handle end (automation)
+   - Subtle circuit-node decorative elements (tech feel)
+
+2. **Generated all icon formats** using `pnpm tauri icon` from the 1024x1024 source:
+   - **15 PNG files**: 32x32, 64x64, 128x128, 128x128@2x, icon.png (1024x1024), plus 10 Square*/StoreLogo Windows tiles
+   - **icon.icns**: macOS icon with 10 resolutions (16x16 through 512x512@2x)
+   - **icon.ico**: Windows icon with 6 resolutions (16x16 through 256x256)
+
+3. **Verified acceptance criteria**:
+   - All 16 original icon files replaced (not Tauri defaults — icon.png went from 14KB to 211KB)
+   - icon.png is 1024x1024 (requirement met)
+   - Visual consistency across sizes — all derived from single SVG source
+   - icns/ico contain complete multi-size icon sets
+
+### Self-check
+
+| Check | Status |
+|-------|--------|
+| Compilation/typecheck | N/A (icon assets only) |
+| Lint | N/A |
+| Tests | N/A (icon assets, no code changes) |
+| Security | No code changes, no vulnerabilities |
+
+---
+
+## Learnings
+
+- **Pattern**: `pnpm tauri icon <source.png>` generates all platform icons (macOS icns, Windows ico, PNG tiles) in one command. The source must be a square PNG (1024x1024 recommended).
+- **Pitfall**: The `tauri icon` command generates `icon.png` at 512x512 by default. For a 1024x1024 source image, manually replace it with the full-resolution version after running the command.
+- **Pattern**: SVG source files should be kept alongside generated icons for future edits. The `autoresearch-icon.svg` serves as the editable source.
+- **Pitfall**: `pnpm tauri icon` also generates `ios/` and `android/` subdirectories that are not needed for a desktop-only app — clean these up after generation.
+- **Tip**: `magick` (ImageMagick v7) replaces the deprecated `convert` command. Use `magick input.svg -background none -resize NxN output.png` for SVG-to-PNG conversion.
