@@ -1,0 +1,194 @@
+现在我已全面了解情况。这是我的审核意见。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #93
+- 标题: Desktop app startup checks for required CLI tools
+- 迭代次数: 4
+- 当前子任务: T-003 - 启动检查结果 UI 展示与运行阻断
+
+---
+
+### 总体评价
+
+**评分: 15/100**
+
+T-003 子任务基本未实现。Store 层（T-002）提供了 `installedAgents`、`ghInstalled`、`isDetecting` 三个状态字段，但**没有任何 UI 组件消费这些字段**。AgentSelector 无变化，IssueDetailPanel 无变化，DashboardPage 仅增加了 `initializeFromDetection()` 调用（属于 T-002）。5 条验收条件全部不满足。
+
+---
+
+### 验收条件逐项核查
+
+| # | 验收条件 | 结果 | 说明 |
+|---|----------|------|------|
+| 1 | gh 未安装时界面显示提示卡片，包含 `brew install gh` 安装命令 | **未实现** | `ghInstalled` 存在于 store 但无组件读取，无提示卡片 |
+| 2 | AgentSelector 中已安装 agent 正常显示，未安装 agent 显示禁用/灰色状态并标注"未安装" | **未实现** | `AgentSelector.tsx` 无任何变更，未读取 `installedAgents` |
+| 3 | 三个 agent 均未安装时，运行任务入口被禁用或显示明确错误引导 | **未实现** | `IssueDetailPanel.tsx` 无变更，`canStart` 逻辑未加入 agent 检查 |
+| 4 | 检测加载期间有适当的 loading 状态，不出现内容闪烁 | **未实现** | `isDetecting` 存在于 store 但无组件消费 |
+| 5 | 安装状态变化后 UI 正确更新 | **部分** | 重启 app 会重新检测（`partialize` 只持久 `selectedAgents`），但无 UI 体现 |
+
+---
+
+### 致命问题 (必须修复)
+
+#### 问题 1: AgentSelector 未区分已安装/未安装 agent
+
+**位置**: `desktop_app/src/components/AgentSelector.tsx:87-184`
+
+**问题描述**:
+`AgentSelector` 完全没有变更。它不读取 `installedAgents`，不区分已安装和未安装的 agent，不显示禁用状态，不标注"未安装"。
+
+**需要实现的内容**:
+1. 从 `useAgentStore` 中读取 `installedAgents` 和 `isDetecting`
+2. 已安装 agent 正常显示（当前蓝色/灰色 tag）
+3. 未安装 agent 显示禁用/灰色状态（`opacity-50`, `cursor-not-allowed`），标注"未安装"
+4. 未安装 agent 的 tag 不可点击（点击时无效或弹出提示）
+5. 已选但未安装的 agent（从 localStorage 恢复的选择）也应有视觉区分
+6. 检测加载中（`isDetecting`）显示骨架屏或 spinner
+
+**建议修复** (核心逻辑):
+```tsx
+// 在 AgentSelector 中
+const { selectedAgents, toggleAgent, reorderAgents, selectAll, clearAll, installedAgents, isDetecting } = useAgentStore();
+
+// 判断是否所有 agent 都未安装
+const hasAnyInstalled = Object.values(installedAgents).some(a => a.installed);
+
+// AgentTag 增加安装状态
+function AgentTag({ name, isSelected, onClick, installed, isDetecting }: AgentTagProps) {
+  if (isDetecting) {
+    return <div className="skeleton-shimmer h-8 w-24 rounded-lg" />;
+  }
+  if (!installed) {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed opacity-50">
+        {name}
+        <span className="text-xs text-gray-400">未安装</span>
+      </span>
+    );
+  }
+  // ... 正常已安装的 tag
+}
+```
+
+---
+
+#### 问题 2: IssueDetailPanel 未阻断无 agent 时的任务启动
+
+**位置**: `desktop_app/src/components/IssueDetailPanel.tsx:229-230`
+
+**问题描述**:
+`canStart` 逻辑完全没有考虑 agent 安装状态：
+```tsx
+const canStart = Boolean(projectPath) && isSupported && !isRunActive;
+```
+
+需要增加：当三个 agent 均未安装时，禁用启动按钮并显示明确错误提示。
+
+**建议修复**:
+```tsx
+const { installedAgents } = useAgentStore();
+const hasAnyInstalledAgent = Object.values(installedAgents).some(a => a.installed);
+
+const canStart = Boolean(projectPath) && isSupported && !isRunActive && hasAnyInstalledAgent;
+
+// 在启动按钮区域增加提示
+{isSupported && !hasAnyInstalledAgent && (
+  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    未检测到已安装的 Agent CLI，请先安装 Claude、Codex 或 OpenCode 后重启应用。
+  </div>
+)}
+```
+
+---
+
+#### 问题 3: DashboardPage 缺少 gh 未安装提示卡片
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx`
+
+**问题描述**:
+`ghInstalled` 状态存在于 store 中，但 `DashboardPage` 没有读取它来显示警告卡片。需要在 `ProjectInfoScreen` 或 `DashboardPage` 中增加提示组件。
+
+**建议修复**:
+```tsx
+// 在 ProjectInfoScreen 中
+const { ghInstalled } = useAgentStore();
+
+// 在 Config Complete / InitTemplate 之前
+{!ghInstalled && (
+  <div className="p-4 rounded-lg bg-red-50 border border-red-200 mb-6">
+    <div className="flex items-start gap-3">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+        <XIcon className="w-4 h-4 text-red-600" />
+      </div>
+      <div className="flex-1">
+        <h4 className="text-sm font-medium text-red-800 mb-1">缺少 GitHub CLI</h4>
+        <p className="text-sm text-red-700 mb-2">
+          Autoresearch 依赖 <code className="bg-red-100 px-1 rounded">gh</code> 来管理 Issue 和 PR。请安装后重启应用：
+        </p>
+        <code className="block bg-red-100 text-red-800 px-3 py-1.5 rounded text-sm font-mono">
+          brew install gh
+        </code>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+---
+
+#### 问题 4: 检测加载期间无 loading 状态
+
+**位置**: `desktop_app/src/components/AgentSelector.tsx`, `desktop_app/src/pages/DashboardPage.tsx`
+
+**问题描述**:
+`isDetecting` 存在于 store 中但没有被任何 UI 消费。在检测完成前，用户会看到空的 agent 列表，造成内容闪烁。应该在检测期间显示骨架屏或加载指示器。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 5: `selectAll` 不应选择未安装的 agent
+
+**位置**: `desktop_app/src/stores/agentStore.ts:139-141`
+
+**问题描述**:
+`selectAll` 仍然选择全部 3 个 agent，不检查安装状态。应改为仅选择已安装的 agent。
+
+**建议修复**:
+```tsx
+selectAll: () => {
+  const installed = AVAILABLE_AGENTS.filter(id => get().installedAgents[id]?.installed);
+  set({ selectedAgents: installed });
+},
+```
+
+---
+
+### 建议改进 (可选)
+
+- `toggleAgent` 应拒绝选中未安装的 agent（或至少在 UI 层阻止）
+- 检测失败时（`catch` 分支）可以设置一个 `detectionError` 状态，在 UI 中提示用户重试
+- 考虑在 DashboardPage 添加"重新检测"按钮，让用户安装工具后无需重启 app
+
+---
+
+### 审核结论
+
+- [ ] 阻塞 - 存在严重问题，需要重新实现
+
+**下一步行动**:
+T-003 的核心 UI 工作全部缺失。需要实现以下内容：
+1. **AgentSelector.tsx** — 读取 `installedAgents`/`isDetecting`，区分已安装/未安装 agent，添加禁用状态和"未安装"标签，加载中显示骨架屏
+2. **IssueDetailPanel.tsx** — 读取 `installedAgents`，检查所有 agent 是否均未安装，若如此则禁用启动按钮并显示错误提示
+3. **DashboardPage.tsx** — 读取 `ghInstalled`，显示 gh 未安装警告卡片（含 `brew install gh` 安装命令）
+4. **agentStore.ts** — 修复 `selectAll` 使其仅选择已安装 agent
+
+## Learnings
+
+- **模式**: Store 中有状态字段但没有 UI 消费，等于功能未实现。审核时必须追踪"store 字段 → 组件读取 → 渲染逻辑"的完整链路
+- **踩坑**: T-002 实现了 store 层和入口调用点，但 T-003 所需的 UI 消费组件（AgentSelector、IssueDetailPanel、DashboardPage 的 gh 卡片）全部缺失。子任务边界清晰但依赖链路不能断
+- **经验**: 对于 UI 类型子任务，验收条件中"显示 XX"比"有 XX 数据"更关键。数据层就绪不等于功能完成，必须验证渲染层

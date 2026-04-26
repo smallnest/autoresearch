@@ -1002,10 +1002,16 @@ fn check_and_notify_progress(
 
     // All subtasks passing → PR was (or will be) created
     let old_all_passed = old_progress.is_some_and(|p| {
-        !p.subtasks.is_empty() && p.subtasks.iter().all(|s| s.status == SubtaskStatus::Passing)
+        !p.subtasks.is_empty()
+            && p.subtasks
+                .iter()
+                .all(|s| s.status == SubtaskStatus::Passing)
     });
     let new_all_passed = !new_progress.subtasks.is_empty()
-        && new_progress.subtasks.iter().all(|s| s.status == SubtaskStatus::Passing);
+        && new_progress
+            .subtasks
+            .iter()
+            .all(|s| s.status == SubtaskStatus::Passing);
 
     if new_all_passed && !old_all_passed {
         notify_pr_created(app, issue_number);
@@ -2080,8 +2086,7 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
     let run_sh_path = runtime_dir.join("run.sh");
     if !run_sh_path.is_file() {
         return Err(
-            "Runtime not installed. Please restart the app to initialize the runtime."
-                .to_string(),
+            "Runtime not installed. Please restart the app to initialize the runtime.".to_string(),
         );
     }
 
@@ -2995,7 +3000,9 @@ async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeResult, St
         if !dest_dir.is_dir() {
             copy_dir_recursive_safe(&src_dir, &dest_dir, false)?;
             set_executable_permissions(&dest_dir)?;
-            return Ok(EnsureRuntimeResult { status: EnsureRuntimeStatus::Installed });
+            return Ok(EnsureRuntimeResult {
+                status: EnsureRuntimeStatus::Installed,
+            });
         }
 
         // Compare versions
@@ -3006,14 +3013,18 @@ async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeResult, St
         if src_version.trim() == dest_version.trim() && !dest_version.trim().is_empty() {
             // Same version, nothing to do — but still ensure run.sh is executable
             set_executable_permissions(&dest_dir)?;
-            return Ok(EnsureRuntimeResult { status: EnsureRuntimeStatus::AlreadyExists });
+            return Ok(EnsureRuntimeResult {
+                status: EnsureRuntimeStatus::AlreadyExists,
+            });
         }
 
         // Version differs: update files, overwriting existing ones
         copy_dir_recursive_safe(&src_dir, &dest_dir, true)?;
         set_executable_permissions(&dest_dir)?;
 
-        Ok(EnsureRuntimeResult { status: EnsureRuntimeStatus::Updated })
+        Ok(EnsureRuntimeResult {
+            status: EnsureRuntimeStatus::Updated,
+        })
     })
     .await
     .map_err(|e| format!("Runtime install task failed: {e}"))?
@@ -3021,8 +3032,7 @@ async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeResult, St
 
 /// Returns the runtime directory path: ~/.autoresearch/runtime/
 fn get_runtime_dir() -> Result<std::path::PathBuf, String> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
     Ok(home.join(".autoresearch").join("runtime"))
 }
 
@@ -3132,6 +3142,173 @@ fn update_tray_stop_menu(app: &tauri::AppHandle, stop_enabled: bool) {
     }
 }
 
+// ========================================
+// CLI tool detection
+// ========================================
+
+/// Detection result for a single CLI tool.
+#[derive(Debug, serde::Serialize, Clone, PartialEq, Eq)]
+struct CliToolStatus {
+    installed: bool,
+    path: Option<String>,
+}
+
+/// Result of detecting all required CLI tools at startup.
+#[derive(Debug, serde::Serialize, Clone, PartialEq, Eq)]
+struct CliToolsResult {
+    gh: CliToolStatus,
+    claude: CliToolStatus,
+    codex: CliToolStatus,
+    opencode: CliToolStatus,
+}
+
+/// Retrieves the full PATH from the user's shell environment.
+///
+/// macOS GUI applications launched from Finder/Dock inherit a minimal PATH
+/// (e.g., `/usr/bin:/bin:/usr/sbin:/sbin`), which misses tools installed
+/// via Homebrew or other package managers that add to shell rc files.
+///
+/// This function spawns a login shell to extract the complete PATH, falling
+/// back to the process environment PATH on non-macOS or on failure.
+fn get_shell_path() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        // macOS GUI apps inherit a minimal PATH from launchd.
+        // Spawn a login shell to get the user's full PATH as seen in Terminal.
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let result = Command::new(&shell)
+            .args(["-l", "-c", "echo $PATH"])
+            .output();
+
+        if let Ok(output) = result {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return path;
+                }
+            }
+        }
+
+        // Fallback: supplement the process PATH with common macOS directories
+        // that are typically present in a shell session but missing in GUI apps.
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let mut extra_paths: Vec<String> = Vec::new();
+
+        // Parse shell rc files for PATH entries
+        if let Some(home) = dirs::home_dir() {
+            let rc_candidates = [".zshrc", ".bashrc", ".bash_profile", ".profile"];
+            for rc in &rc_candidates {
+                let rc_path = home.join(rc);
+                if rc_path.exists() {
+                    if let Ok(content) = fs::read_to_string(&rc_path) {
+                        for line in content.lines() {
+                            let trimmed = line.trim();
+                            if trimmed.starts_with("export PATH=") || trimmed.starts_with("PATH=") {
+                                if let Some(value_part) = trimmed.split_once('=') {
+                                    let value = value_part.1.trim_matches('"').trim_matches('\'');
+                                    for segment in value.split(':') {
+                                        if !segment.starts_with('$') && !segment.is_empty() {
+                                            let p = Path::new(segment);
+                                            if p.is_dir()
+                                                && !extra_paths.contains(&segment.to_string())
+                                            {
+                                                extra_paths.push(segment.to_string());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add common macOS paths that are typically missing in GUI apps
+            let home_str = home.to_string_lossy();
+            let common_paths: Vec<&str> =
+                vec!["/usr/local/bin", "/opt/homebrew/bin", "/opt/homebrew/sbin"];
+            for p in &common_paths {
+                if Path::new(p).is_dir() && !extra_paths.contains(&p.to_string()) {
+                    extra_paths.push(p.to_string());
+                }
+            }
+            let home_local = format!("{home_str}/.local/bin");
+            let home_cargo = format!("{home_str}/.cargo/bin");
+            for p in [&home_local, &home_cargo] {
+                if Path::new(p).is_dir() && !extra_paths.contains(&p.to_string()) {
+                    extra_paths.push(p.to_string());
+                }
+            }
+        }
+
+        if !extra_paths.is_empty() {
+            return format!("{}:{}", extra_paths.join(":"), current_path);
+        }
+
+        current_path
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::var("PATH").unwrap_or_default()
+    }
+}
+
+/// Checks if a CLI tool is available on the system PATH.
+///
+/// Uses `which` to locate the tool, with the shell-enriched PATH if on macOS.
+/// Returns the tool's installation status and path.
+fn check_cli_tool(tool_name: &str, shell_path: &str) -> CliToolStatus {
+    let output = Command::new("which")
+        .arg(tool_name)
+        .env("PATH", shell_path)
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if path.is_empty() {
+                CliToolStatus {
+                    installed: false,
+                    path: None,
+                }
+            } else {
+                CliToolStatus {
+                    installed: true,
+                    path: Some(path),
+                }
+            }
+        }
+        _ => CliToolStatus {
+            installed: false,
+            path: None,
+        },
+    }
+}
+
+/// Synchronous implementation of CLI tool detection.
+fn detect_cli_tools_sync() -> CliToolsResult {
+    let shell_path = get_shell_path();
+    CliToolsResult {
+        gh: check_cli_tool("gh", &shell_path),
+        claude: check_cli_tool("claude", &shell_path),
+        codex: check_cli_tool("codex", &shell_path),
+        opencode: check_cli_tool("opencode", &shell_path),
+    }
+}
+
+/// Detects whether required CLI tools (gh, claude, codex, opencode) are installed.
+///
+/// On macOS, the detection uses the full shell PATH rather than the minimal
+/// GUI app PATH, ensuring tools installed via Homebrew or other package
+/// managers are correctly detected.
+#[tauri::command]
+async fn detect_cli_tools() -> Result<CliToolsResult, String> {
+    tokio::task::spawn_blocking(detect_cli_tools_sync)
+        .await
+        .map_err(|e| format!("Task join error: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let should_exit = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -3164,7 +3341,9 @@ pub fn run() {
                         "quit" => {
                             // Set exit flag so on_window_event allows real close
                             let should_exit = app.state::<ShouldExit>();
-                            should_exit.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                            should_exit
+                                .0
+                                .store(true, std::sync::atomic::Ordering::SeqCst);
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.close();
                             }
@@ -3201,7 +3380,9 @@ pub fn run() {
         .on_menu_event(|app, event| {
             if event.id.as_ref() == "quit_app" {
                 let should_exit = app.state::<ShouldExit>();
-                should_exit.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                should_exit
+                    .0
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.close();
                 }
@@ -3250,6 +3431,7 @@ pub fn run() {
             get_pr_diff,
             merge_pr,
             close_pr,
+            detect_cli_tools,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -3273,17 +3455,17 @@ mod tests {
         resolve_issue_log_source_path, workflow_issue_dir, IssueDetail, IssueLogSource,
     };
     use super::{
+        close_pr_sync, get_pr_detail_sync, get_pr_diff_sync, list_prs_sync, map_pr_close_error,
+        map_pr_command_error, map_pr_diff_error, map_pr_merge_error, merge_pr_sync,
+        parse_pr_detail, parse_pr_list, GhPullRequest, PrDetail, PrFileChange,
+    };
+    use super::{
         determine_history_status, extract_field, extract_history_end_time,
         extract_history_final_score, extract_history_title, extract_total_iterations,
         format_export_log, get_history_detail_sync, get_iteration_log_sync,
         get_subtask_status_sync, list_history_sync, HistoryRunStatus,
     };
     use super::{extract_review_summary, extract_score};
-    use super::{
-        close_pr_sync, get_pr_detail_sync, get_pr_diff_sync, list_prs_sync, map_pr_close_error,
-        map_pr_command_error, map_pr_diff_error, map_pr_merge_error, merge_pr_sync,
-        parse_pr_detail, parse_pr_list, GhPullRequest, PrDetail, PrFileChange,
-    };
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs as unix_fs;
@@ -4078,15 +4260,15 @@ mod tests {
 
     #[test]
     fn merge_pr_rejects_non_directory_path() {
-        let error = merge_pr_sync("/path/that/does/not/exist", 42)
-            .expect_err("invalid path should fail");
+        let error =
+            merge_pr_sync("/path/that/does/not/exist", 42).expect_err("invalid path should fail");
         assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
     }
 
     #[test]
     fn close_pr_rejects_non_directory_path() {
-        let error = close_pr_sync("/path/that/does/not/exist", 42)
-            .expect_err("invalid path should fail");
+        let error =
+            close_pr_sync("/path/that/does/not/exist", 42).expect_err("invalid path should fail");
         assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
     }
 
@@ -5429,7 +5611,10 @@ mod tests {
         assert!(dst.join("run.sh").exists());
         assert!(dst.join("lib/agent.py").exists());
         assert!(dst.join("agents/claude.md").exists());
-        assert_eq!(fs::read_to_string(dst.join("run.sh")).unwrap(), "#!/bin/bash\necho hello");
+        assert_eq!(
+            fs::read_to_string(dst.join("run.sh")).unwrap(),
+            "#!/bin/bash\necho hello"
+        );
 
         cleanup_runtime_test(&(src, dst));
     }
@@ -5448,7 +5633,10 @@ mod tests {
         copy_dir_recursive_safe(&src, &dst, false).expect("copy should succeed");
 
         // Existing file should NOT be overwritten
-        assert_eq!(fs::read_to_string(dst.join("run.sh")).unwrap(), "user customized content");
+        assert_eq!(
+            fs::read_to_string(dst.join("run.sh")).unwrap(),
+            "user customized content"
+        );
         // New file should be copied
         assert_eq!(fs::read_to_string(dst.join("new_file.txt")).unwrap(), "new");
 
@@ -5470,7 +5658,10 @@ mod tests {
         copy_dir_recursive_safe(&src, &dst, true).expect("copy should succeed");
 
         // Files should be overwritten
-        assert_eq!(fs::read_to_string(dst.join("run.sh")).unwrap(), "updated content");
+        assert_eq!(
+            fs::read_to_string(dst.join("run.sh")).unwrap(),
+            "updated content"
+        );
         assert_eq!(fs::read_to_string(dst.join("version.txt")).unwrap(), "2.0");
 
         cleanup_runtime_test(&(src, dst));
@@ -5491,7 +5682,10 @@ mod tests {
 
         // User's extra file should still exist
         assert!(dst.join("my_agent.md").exists());
-        assert_eq!(fs::read_to_string(dst.join("my_agent.md")).unwrap(), "my custom agent");
+        assert_eq!(
+            fs::read_to_string(dst.join("my_agent.md")).unwrap(),
+            "my custom agent"
+        );
 
         cleanup_runtime_test(&(src, dst));
     }
@@ -5529,13 +5723,22 @@ mod tests {
 
         set_executable_permissions(&dir).expect("should succeed");
 
-        let mode = fs::metadata(dir.join("run.sh")).unwrap().permissions().mode();
+        let mode = fs::metadata(dir.join("run.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o111, 0o111, "run.sh should be executable");
 
-        let mode = fs::metadata(sub.join("helper.sh")).unwrap().permissions().mode();
+        let mode = fs::metadata(sub.join("helper.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o111, 0o111, "nested helper.sh should be executable");
 
-        let mode = fs::metadata(dir.join("readme.txt")).unwrap().permissions().mode();
+        let mode = fs::metadata(dir.join("readme.txt"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o111, 0, "readme.txt should NOT be executable");
 
         let _ = fs::remove_dir_all(&base);
@@ -5573,5 +5776,163 @@ mod tests {
     fn get_runtime_dir_path_has_expected_components() {
         let runtime_dir = get_runtime_dir().expect("should succeed");
         assert!(runtime_dir.ends_with(".autoresearch/runtime"));
+    }
+
+    // ========================================
+    // CLI tool detection tests
+    // ========================================
+
+    use super::{
+        check_cli_tool, detect_cli_tools_sync, get_shell_path, CliToolStatus, CliToolsResult,
+    };
+
+    #[test]
+    fn check_cli_tool_finds_existing_command() {
+        // `ls` should exist on any Unix system
+        let path = get_shell_path();
+        let status = check_cli_tool("ls", &path);
+        assert!(status.installed, "ls should be detected as installed");
+        assert!(status.path.is_some(), "ls path should be present");
+        assert!(
+            status.path.as_ref().unwrap().contains("ls"),
+            "path should contain 'ls'"
+        );
+    }
+
+    #[test]
+    fn check_cli_tool_reports_missing_command() {
+        let path = get_shell_path();
+        let status = check_cli_tool("nonexistent_tool_xyz_12345", &path);
+        assert!(
+            !status.installed,
+            "nonexistent tool should not be installed"
+        );
+        assert!(
+            status.path.is_none(),
+            "nonexistent tool should have no path"
+        );
+    }
+
+    #[test]
+    fn check_cli_tool_returns_correct_structure() {
+        let path = get_shell_path();
+        let installed = check_cli_tool("ls", &path);
+        assert_eq!(
+            installed,
+            CliToolStatus {
+                installed: true,
+                path: installed.path.clone(),
+            }
+        );
+
+        let missing = check_cli_tool("nonexistent_tool_xyz_12345", &path);
+        assert_eq!(
+            missing,
+            CliToolStatus {
+                installed: false,
+                path: None,
+            }
+        );
+    }
+
+    #[test]
+    fn detect_cli_tools_sync_returns_all_fields() {
+        let result = detect_cli_tools_sync();
+        // Verify all four fields are populated (even if not installed)
+        // gh
+        if result.gh.installed {
+            assert!(result.gh.path.is_some(), "installed gh should have a path");
+        }
+        // claude
+        if result.claude.installed {
+            assert!(
+                result.claude.path.is_some(),
+                "installed claude should have a path"
+            );
+        }
+        // codex
+        if result.codex.installed {
+            assert!(
+                result.codex.path.is_some(),
+                "installed codex should have a path"
+            );
+        }
+        // opencode
+        if result.opencode.installed {
+            assert!(
+                result.opencode.path.is_some(),
+                "installed opencode should have a path"
+            );
+        }
+    }
+
+    #[test]
+    fn get_shell_path_is_non_empty() {
+        let path = get_shell_path();
+        assert!(!path.is_empty(), "shell PATH should not be empty");
+    }
+
+    #[test]
+    fn get_shell_path_contains_standard_dirs() {
+        let path = get_shell_path();
+        // Standard directories should appear in any Unix PATH
+        assert!(
+            path.contains("/usr/bin") || path.contains("/bin"),
+            "PATH should contain standard system directories: {path}"
+        );
+    }
+
+    #[test]
+    fn cli_tool_status_serializes_correctly() {
+        let status = CliToolStatus {
+            installed: true,
+            path: Some("/usr/local/bin/gh".to_string()),
+        };
+        let json = serde_json::to_string(&status).expect("should serialize");
+        assert!(json.contains("\"installed\":true"));
+        assert!(json.contains("\"path\":\"/usr/local/bin/gh\""));
+
+        let missing = CliToolStatus {
+            installed: false,
+            path: None,
+        };
+        let json = serde_json::to_string(&missing).expect("should serialize");
+        assert!(json.contains("\"installed\":false"));
+        assert!(json.contains("\"path\":null"));
+    }
+
+    #[test]
+    fn cli_tools_result_serializes_correctly() {
+        let result = CliToolsResult {
+            gh: CliToolStatus {
+                installed: true,
+                path: Some("/usr/local/bin/gh".to_string()),
+            },
+            claude: CliToolStatus {
+                installed: false,
+                path: None,
+            },
+            codex: CliToolStatus {
+                installed: false,
+                path: None,
+            },
+            opencode: CliToolStatus {
+                installed: false,
+                path: None,
+            },
+        };
+        let json = serde_json::to_string(&result).expect("should serialize");
+        assert!(json.contains("\"gh\":"));
+        assert!(json.contains("\"claude\":"));
+        assert!(json.contains("\"codex\":"));
+        assert!(json.contains("\"opencode\":"));
+    }
+
+    #[test]
+    fn check_cli_tool_with_empty_path_still_works() {
+        // Even with empty PATH, the check should not panic
+        let status = check_cli_tool("ls", "");
+        // May or may not find it depending on system, but should not panic
+        let _ = status.installed;
     }
 }

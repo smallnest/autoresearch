@@ -1,0 +1,27 @@
+所有4个审核问题已修复。以下是摘要：
+
+## 所做更改
+
+### 问题1 (关键): `toggleAgent` 未防范未安装的代理
+**文件**: `desktop_app/src/stores/agentStore.ts:153-163`
+- 在 else 分支中添加了 `if (!state.installedAgents[_agentId]?.installed) return state;`，防止未安装的代理被添加到 `selectedAgents` 中
+
+### 问题2 (关键): 缺少 agentStore 测试
+**文件**: `desktop_app/tests/agentStore.test.mjs` (新增)
+- 14个测试用例涵盖：`initializeFromDetection`（自动选择、保留用户选择、失败保留、无操作、加载状态）、`selectAll` 仅限于已安装、`toggleAgent` 守卫、`reorderAgents`、`isSelected`、`getSelectedAgentsInfo`、`AVAILABLE_AGENTS` 常量
+
+### 问题3 (一般): gh 警告卡在检测期间闪烁
+**文件**: `desktop_app/src/pages/DashboardPage.tsx:487` 和 `desktop_app/src/components/IssueDetailPanel.tsx:351`
+- 在 gh 警告卡和“无已安装代理”错误提示中都添加了 `!isDetecting` 条件
+- 两个组件现在从 `useAgentStore` 读取 `isDetecting` 状态
+
+### 问题4 (一般): 检测失败状态不精确
+**文件**: `desktop_app/src/stores/agentStore.ts:202-208`
+- 添加了 `detectionDone` 状态字段，用于区分“未检测”和“检测失败”
+- 检测失败现在保留现有的 `ghInstalled`/`installedAgents` 状态，而不是将它们保留在初始的 `false`/`{}` 值，从而防止误导性错误消息
+
+## 经验总结
+
+- **模式**: Store 层数据完整性守卫绝不能仅依赖 UI 层防护。`toggleAgent` 必须在 store 中强制执行“仅已安装”约束，因为其他消费者（未来组件、`selectAll`、测试）可能会绕过 UI 层检查。
+- **问题**: `ghInstalled: false` 和 `isDetecting: false` 作为初始值时，在异步检测期间存在短暂窗口，UI 会错误地显示“未安装”状态。添加 `!isDetecting` 条件可防止此闪烁。`detectionDone` 字段进一步区分了“尚未检测”和“检测失败”。
+- **经验**: 可测试性（工厂模式 + 依赖注入）只有与实际编写的测试配合才有效。`createAgentStore` 是可测试的，但直到现在才真正被测试。

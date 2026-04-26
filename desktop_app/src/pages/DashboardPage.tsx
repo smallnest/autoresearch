@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProjectStore, ProjectConfig, isConfigIncomplete } from '../stores/projectStore';
 import { useRuntimeStore, RuntimeStatus } from '../stores/runtimeStore';
+import { useAgentStore } from '../stores/agentStore';
 
 // Check Icon component
 function CheckIcon({ className }: { className?: string }): JSX.Element {
@@ -432,6 +433,7 @@ function ProjectInfoScreen({
   config: ProjectConfig | null;
 }): JSX.Element {
   const { selectProject } = useProjectStore();
+  const { ghInstalled, isDetecting } = useAgentStore();
 
   // Check if any config is missing
   const hasMissingConfig = config
@@ -480,6 +482,26 @@ function ProjectInfoScreen({
 
       {/* Config Complete Success Notification */}
       {isConfigComplete && <ConfigCompleteNotification />}
+
+      {/* gh CLI Missing Warning */}
+      {ghInstalled === false && !isDetecting && (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 mb-6">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+              <XIcon className="w-4 h-4 text-red-600" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-red-800 mb-1">缺少 GitHub CLI</h4>
+              <p className="text-sm text-red-700 mb-2">
+                Autoresearch 依赖 <code className="bg-red-100 px-1 rounded">gh</code> 来管理 Issue 和 PR。请安装后重启应用：
+              </p>
+              <code className="block bg-red-100 text-red-800 px-3 py-1.5 rounded text-sm font-mono">
+                brew install gh
+              </code>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Init Template Prompt */}
       {hasMissingConfig && (
@@ -710,11 +732,13 @@ function RuntimeInitBanner(): JSX.Element {
 function DashboardPage(): JSX.Element {
   const { projectPath, config, loadRecentProjects } = useProjectStore();
   const { initializeRuntime } = useRuntimeStore();
+  const { initializeFromDetection } = useAgentStore();
 
   useEffect(() => {
     loadRecentProjects();
     initializeRuntime();
-  }, [loadRecentProjects, initializeRuntime]);
+    initializeFromDetection();
+  }, [loadRecentProjects, initializeRuntime, initializeFromDetection]);
 
   if (!projectPath) {
     return (

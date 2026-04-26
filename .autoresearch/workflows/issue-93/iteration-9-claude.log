@@ -1,0 +1,22 @@
+All fixes complete. Summary of changes:
+
+### 1. Added "gh missing" test (`agentStore.test.mjs:29-42`)
+Verifies that when `gh: false`, `ghInstalled` is `false` and installed agents are still auto-selected.
+
+### 2. Added "no agent installed" test (`agentStore.test.mjs:44-58`)
+Verifies that when all agents are `installed: false`, `selectedAgents` is empty and all install statuses are `false`.
+
+### 3. Fixed zustand persist warning noise
+- Added `storage` field to `AgentStoreDeps` in `agentStore.ts` with `StateStorage` type
+- Connected `deps.storage` to the persist config (only injected when provided, defaults to browser localStorage in production)
+- In tests, created `createInMemoryStorage()` factory that gives each test a fresh Map-backed storage, eliminating both the `localStorage` unavailable warning and cross-test state leakage
+
+### Test results
+- Frontend: 16/16 tests pass
+- Rust: 131/131 tests pass
+
+## Learnings
+
+- **模式**: Zustand persist 中间件在 Node.js 环境中因缺少 `localStorage` 会产生警告。解决方案是在 store 工厂中接受 `storage` 依赖注入，测试时传入内存 storage。这遵循了项目已有的 `createRunStore(overrides)` 工厂注入模式。
+- **踩坑**: 多个测试共享同一个内存 storage 实例会导致 persist rehydration 在测试间泄漏状态。第一个测试写入的 `selectedAgents` 会被第二个测试的 store rehydrate，导致"首次启动"判断失效。必须为每个测试创建独立的 storage 实例。
+- **经验**: 验收条件中的"四类场景"是枚举性质的，工厂函数的默认参数（如 `gh = true`）容易让编写测试的人只覆盖"有 gh"的路径。应在测试文件中显式列出所有场景矩阵，或把工厂函数默认值设为最严格的场景。

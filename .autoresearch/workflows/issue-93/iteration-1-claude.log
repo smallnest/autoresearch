@@ -1,0 +1,39 @@
+## T-001 Implementation Report
+
+### Summary
+
+Subtask T-001 is **already fully implemented** in the codebase. The implementation exists in `desktop_app/src-tauri/src/lib.rs` and covers all acceptance criteria:
+
+### Verification of Acceptance Criteria
+
+| Criterion | Status | Implementation |
+|-----------|--------|---------------|
+| `detect_cli_tools` command can be invoked by frontend | ✅ | `#[tauri::command]` at line 3298, registered in `invoke_handler` at line 3423 |
+| Returns struct with gh/claude/codex/opencode `installed` (bool) and `path` (Option<String>) | ✅ | `CliToolsResult` at line 3148 with 4 `CliToolStatus` fields |
+| macOS GUI app correctly detects CLI tools (handles PATH differences) | ✅ | `get_shell_path()` at line 3163 spawns login shell, with rc file parsing + common path fallback |
+| Uninstalled tools return `installed: false, path: null` | ✅ | `check_cli_tool()` at line 3254 returns `CliToolStatus { installed: false, path: None }` for missing tools |
+
+### Test Coverage
+
+7 unit tests cover:
+- `check_cli_tool_finds_existing_command` - existing tool detection
+- `check_cli_tool_reports_missing_command` - missing tool detection
+- `check_cli_tool_returns_correct_structure` - struct shape verification
+- `detect_cli_tools_sync_returns_all_fields` - full result structure
+- `get_shell_path_is_non_empty` - PATH not empty
+- `get_shell_path_contains_standard_dirs` - standard dirs present
+- `cli_tool_status_serializes_correctly` / `cli_tools_result_serializes_correctly` - JSON serialization
+- `check_cli_tool_with_empty_path_still_works` - edge case
+
+### Self-Check Results
+
+- ✅ `cargo check` passes
+- ✅ `cargo clippy -- -D warnings` passes
+- ✅ `cargo fmt` applied
+- ✅ All 131 tests pass (7 CLI tool detection tests included)
+
+## Learnings
+
+- **Pattern**: The Tauri backend uses `spawn_blocking` for synchronous I/O operations (like `detect_cli_tools_sync`) within async `#[tauri::command]` functions, avoiding blocking the Tokio runtime.
+- **Pattern**: macOS PATH resolution uses a 2-tier fallback: (1) spawn login shell to get full PATH, (2) parse shell rc files + add common directories. This handles the GUI app PATH limitation on macOS.
+- **踩坑**: `cargo fmt` had pre-existing formatting issues in `lib.rs` and `build.rs` unrelated to the `detect_cli_tools` implementation — running `cargo fmt` fixed them all.

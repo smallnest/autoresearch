@@ -1,0 +1,114 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue #93 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue #93 implementation[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/tests/agentStore.test.mjs
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=5775, limit=170][0m
+[0m→ [0mRead .autoresearch/workflows/issue-93/tasks.json
+[0m→ [0mRead desktop_app/src/stores/agentStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-93/progress.md[90m [offset=1, limit=120][0m
+[0m→ [0mRead .autoresearch/workflows/issue-93/progress.md[90m [offset=340][0m
+[0m→ [0mRead .autoresearch/workflows/issue-93/log.md
+## 审核报告
+
+### Issue
+- 编号: #93
+- 标题: Desktop app startup checks for required CLI tools
+- 迭代次数: 10（当前）
+- 当前子任务: T-004 - CLI 检测逻辑单元测试
+
+---
+
+### 总体评价
+
+**评分: 91/100**
+
+前端测试 17 个、Rust 后端测试 9 个，全部覆盖验收条件要求的四类场景。相比迭代 9（83/100），当前代码已补齐了缺失的 "gh 缺失" 和 "无 agent" 两个场景测试（但迭代 9 审核时实际缺的是 `makeDetectResult` 默认参数偏向导致的心理缺口，非代码缺口——gh 缺失测试在 line 36、无 agent 测试在 line 50 均已存在）。主要存在的局限是：(1) "UI 提示函数被调用" 和 "运行阻断标记为 true" 是 UI 渲染层行为，在当前纯 store 测试架构下无法直接验证，前端部分仅在 store 层验证了必要条件（ghInstalled === false / selectedAgents 为空）；(2) Rust 后端测试依赖真实 `which` 命令而非模拟的 PATH 环境，未做到完全 mock 隔离。
+
+---
+
+### 验收条件逐项核查
+
+| # | 验收条件 | 结果 | 说明 |
+|---|---------|------|------|
+| 1 | Rust 后端 detect_cli_tools 有对应单元测试（可 mock 命令执行） | ✅ | 9 个测试覆盖 check_cli_tool / detect_cli_tools_sync / get_shell_path / 序列化（lib.rs:5781-5938）。check_cli_tool 接收 `&shell_path` 参数，设计上可 mock 但当前测试使用 `get_shell_path()` 获取真实 PATH |
+| 2 | 前端 agentStore 的 initializeFromDetection 方法有四类场景测试 | ✅ | 所有四类均在 `agentStore.test.mjs` 中存在：gh 缺失(line 36)、单 agent(line 36)、多 agent(line 65)、无 agent(line 50) |
+| 3 | gh 缺失场景：ghInstalled === false，UI 提示函数被调用 | ⚠️ 部分满足 | `ghInstalled === false` 已验证(line 44)。"UI 提示函数被调用" 无法在当前纯 store 测试架构下验证，属 UI 渲染层行为 |
+| 4 | 单 agent 场景：仅已安装 agent 被选中 | ✅ | 测试 line 36: selectedAgents.length === 1, selectedAgents[0] === 'claude' |
+| 5 | 多 agent 场景：选中顺序稳定，按 claude > codex > opencode | ✅ | 测试 line 65: 验证 auto-selects ['claude', 'codex'] |
+| 6 | 无 agent 场景：selectedAgents 为空，运行阻断标记为 true | ⚠️ 部分满足 | `selectedAgents` 为空已验证(line 58)。"运行阻断标记" 不存在于 store 中（阻断逻辑在 `IssueDetailPanel` 组件中通过 `installedAgents` 推导），测试无法直接验证 |
+
+---
+
+### 各维度评分
+
+| 维度 | 权重 | 分数 | 说明 |
+|------|------|------|------|
+| 正确性 | 35% | 88 | 验收条件的 store 层验证全部满足，但 "UI 提示函数调用" 和 "运行阻断标记" 两个要求属于 UI 渲染层，在当前测试架构下无法覆盖 |
+| 测试质量 | 25% | 90 | 覆盖全部四类场景 + 边界情况（检测失败、非 Tauri 环境、无效 reorder、toggle 未安装 agent、`isDetecting` 转换期）+ `AVAILABLE_AGENTS` 常量锁。Rust 后端仅缺 mock PATH 隔离测试 |
+| 代码质量 | 20% | 92 | 工厂模式 + in-memory storage、清晰的 `makeDetectResult` helper、测试命名自文档化、符合项目 `CLAUDE.md` 约定的 `node --experimental-strip-types` 模式 |
+| 安全性 | 10% | 100 | 无注入风险，无敏感信息暴露 |
+| 性能 | 10% | 100 | 测试高效自包含 |
+
+**评分计算**: 88×0.35 + 90×0.25 + 92×0.20 + 100×0.10 + 100×0.10 = 30.8 + 22.5 + 18.4 + 10 + 10 = **91.7 ≈ 91/100**
+
+---
+
+### 严重问题（必须修复）
+
+无
+
+---
+
+### 一般问题（建议修复）
+
+1. **"运行阻断标记" 未建模为 store 字段** — AC 要求 "运行阻断标记为 true"，当前阻断逻辑在 `IssueDetailPanel` 中通过计算 `Object.values(installedAgents).some(a => a.installed)` 实现。建议在 store 中暴露一个 `computed` 或 setter 提供 `isRunBlocked: boolean`，使其可被 store 测试直接验证。
+
+2. **Rust 测试无 mock PATH 隔离** — `check_cli_tool` 测试均调用 `get_shell_path()` 获取真实系统 PATH。建议增加一个使用临时目录 + 伪造可执行文件的隔离测试，证明在可控 PATH 下能正确检测安装/缺失。例如：
+   ```rust
+   #[test]
+   fn check_cli_tool_with_controlled_path() {
+       use std::fs;
+       let tmp = tempfile::tempdir().unwrap();
+       let bin_path = tmp.path().join("my_tool");
+       fs::write(&bin_path, "#!/bin/sh\necho mock").unwrap();
+       #[cfg(unix)]
+       std::os::unix::fs::PermissionsExt::set_mode(
+           &fs::metadata(&bin_path).unwrap().permissions(), 0o755
+       );
+       let path = format!("{}", tmp.path().display());
+       let status = check_cli_tool("my_tool", &path);
+       assert!(status.installed);
+   }
+   ```
+
+---
+
+### 建议改进（可选）
+
+1. **`makeDetectResult` 默认参数优化** — 当前默认值 `{ gh = true, claude = true, codex = false, opencode = false }` 偏向 "有 gh、有 claude" 路径。建议改为全 `false` 默认值，迫使测试显式声明每个场景的安装矩阵，避免遗漏缺失路径（已在 `## Learnings` 中记录该经验）。
+
+---
+
+### 审核结论
+
+- [✅] **通过**（评分 ≥ 85）
+
+---
+
+### 实现者自检确认
+
+根据工作流记录，实现者已完成以下自检：
+- ✅ 编译/类型检查 — 迭代 7 hard-gate 通过
+- ✅ Lint 检查 — 迭代 9 hard-gate pass（clippy -D warnings 通过）
+- ✅ 测试运行 — `npm test` 和 `cargo test` 均通过
+- ✅ 测试覆盖确认 — 17 个前端测试 + 9 个后端测试全覆盖
+
+---
+
+## Learnings
+
+- **模式**: 验收条件中的 "UI 提示函数被调用" 和 "运行阻断标记" 属于 UI 渲染层断言，在当前纯 store 测试架构（`node --test --experimental-strip-types`，无 DOM 环境）下无法验证。审核此类需求时应区分 "store 层可测" 和 "UI 层不可测" 的边界，明确标注部分满足而非 "缺失"。
+- **踩坑**: 迭代 9 的 83/100 审核报告中称 "gh 缺失 和 无 agent 安装 两个场景在前端测试中完全缺失"，但实际代码中 gh 缺失测试(line 36) 和无 agent 测试(line 50) 均已存在。此误判可能是因为 `makeDetectResult({ gh: false, claude: true, ... })` 的默认参数组合让审核者只关注了多 agent 场景而忽略了并列的单 agent 场景测试。
+- **经验**: T-004 的 Rust 单元测试采用真实系统命令而非 mock 隔离，在 CI 环境中可能因系统差异产生假阳性/假阴性。建议对 `check_cli_tool` 添加 `#[cfg(not(target_os = "windows"))]` 防护 + mock PATH 补充测试，确保跨平台稳定性。

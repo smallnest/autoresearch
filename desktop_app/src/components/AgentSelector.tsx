@@ -19,10 +19,11 @@ import { useAgentStore, AVAILABLE_AGENTS, AGENT_METADATA, AgentId } from '../sto
 interface SortableTagProps {
   id: AgentId;
   name: string;
+  installed: boolean;
   onRemove: () => void;
 }
 
-function SortableTag({ id, name, onRemove }: SortableTagProps) {
+function SortableTag({ id, name, installed, onRemove }: SortableTagProps) {
   const {
     attributes,
     listeners,
@@ -35,18 +36,27 @@ function SortableTag({ id, name, onRemove }: SortableTagProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.5 : installed ? 1 : 0.5,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 rounded-lg cursor-grab active:cursor-grabbing hover:bg-blue-500"
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+        installed
+          ? 'bg-blue-600 cursor-grab active:cursor-grabbing hover:bg-blue-500'
+          : 'bg-gray-300 cursor-not-allowed'
+      }`}
       {...attributes}
       {...listeners}
     >
-      <span className="text-sm font-medium text-white">{name}</span>
+      <span className={`text-sm font-medium ${installed ? 'text-white' : 'text-gray-500'}`}>
+        {name}
+      </span>
+      {!installed && (
+        <span className="text-xs text-gray-500">未安装</span>
+      )}
       <button
         type="button"
         onClick={(e) => {
@@ -54,7 +64,11 @@ function SortableTag({ id, name, onRemove }: SortableTagProps) {
           onRemove();
         }}
         aria-label={`移除 ${name}`}
-        className="w-4 h-4 flex items-center justify-center text-blue-200 hover:text-white hover:bg-blue-700 rounded"
+        className={`w-4 h-4 flex items-center justify-center rounded ${
+          installed
+            ? 'text-blue-200 hover:text-white hover:bg-blue-700'
+            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-400'
+        }`}
       >
         ×
       </button>
@@ -65,10 +79,20 @@ function SortableTag({ id, name, onRemove }: SortableTagProps) {
 interface AgentTagProps {
   name: string;
   isSelected: boolean;
+  installed: boolean;
   onClick: () => void;
 }
 
-function AgentTag({ name, isSelected, onClick }: AgentTagProps) {
+function AgentTag({ name, isSelected, installed, onClick }: AgentTagProps) {
+  if (!installed) {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed opacity-50">
+        {name}
+        <span className="text-xs text-gray-400">未安装</span>
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -84,13 +108,27 @@ function AgentTag({ name, isSelected, onClick }: AgentTagProps) {
   );
 }
 
+function AgentSkeletonTag() {
+  return (
+    <div className="skeleton-shimmer inline-flex items-center h-8 w-24 rounded-lg bg-gray-100" />
+  );
+}
+
 export default function AgentSelector() {
-  const { selectedAgents, toggleAgent, reorderAgents, selectAll, clearAll } = useAgentStore();
+  const {
+    selectedAgents,
+    installedAgents,
+    isDetecting,
+    toggleAgent,
+    reorderAgents,
+    selectAll,
+    clearAll,
+  } = useAgentStore();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5, // 需要 5px 移动才触发拖拽，避免误触
+        distance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -112,8 +150,30 @@ export default function AgentSelector() {
   const unselected = AVAILABLE_AGENTS.filter((agent) => !selectedAgents.includes(agent));
 
   const handleToggle = (agentId: AgentId) => {
+    // Only allow toggling installed agents
+    if (!installedAgents[agentId]?.installed) {
+      return;
+    }
     toggleAgent(agentId);
   };
+
+  // Loading state: show skeleton tags
+  if (isDetecting) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-600">已选 Agent</h3>
+          </div>
+          <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <AgentSkeletonTag />
+            <AgentSkeletonTag />
+            <AgentSkeletonTag />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -151,6 +211,7 @@ export default function AgentSelector() {
                     key={agentId}
                     id={agentId}
                     name={AGENT_METADATA[agentId].name}
+                    installed={installedAgents[agentId]?.installed ?? false}
                     onRemove={() => handleToggle(agentId)}
                   />
                 ))}
@@ -173,6 +234,7 @@ export default function AgentSelector() {
                 key={agentId}
                 name={AGENT_METADATA[agentId].name}
                 isSelected={false}
+                installed={installedAgents[agentId]?.installed ?? false}
                 onClick={() => handleToggle(agentId)}
               />
             ))}

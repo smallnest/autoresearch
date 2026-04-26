@@ -1,0 +1,65 @@
+{
+  "issueNumber": 93,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端添加 CLI 工具检测命令",
+      "description": "在 Tauri Rust 后端 (lib.rs) 新增 `detect_cli_tools` 命令，检测 gh、claude、codex、opencode 是否可用。通过 `which`/`command -v` 实现，需处理 macOS GUI app PATH 与 shell PATH 不一致的问题（可参考 shell rc 文件解析或常见路径补充）。返回结构化结果包含每个工具的安装状态和路径。同时新增 `get_shell_path` 辅助函数，从用户 shell 环境中获取完整 PATH，确保检测结果与终端一致。",
+      "acceptanceCriteria": [
+        "detect_cli_tools 命令可被前端 invoke 调用",
+        "返回结构包含 gh/claude/codex/opencode 各自的 installed (bool) 和 path (Option<String>)",
+        "macOS GUI app 环境下能正确检测到 shell 中可用的 CLI 工具（处理 PATH 差异）",
+        "未安装的工具返回 installed: false, path: null"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "前端启动检测与 agent 状态集成",
+      "description": "在应用启动时调用 `detect_cli_tools`，将检测结果存入 agentStore。扩展 agentStore 增加 `installedAgents: Record<AgentId, { installed: boolean; path: string | null }>` 和 `ghInstalled: boolean` 状态。启动时根据检测结果自动初始化 selectedAgents：按 claude > codex > opencode 优先级，仅选已安装的 agent 作为默认值。若用户已有 localStorage 中的 selectedAgents，保留用户选择但标记未安装的 agent。新增 `initializeFromDetection()` 方法供启动流程调用。",
+      "acceptanceCriteria": [
+        "应用启动时自动调用 detect_cli_tools 并更新 store",
+        "installedAgents 记录每个 agent 的安装状态和路径",
+        "首次启动（无 localStorage 数据）时，仅自动选中已安装的 agent，顺序为 claude > codex > opencode",
+        "非首次启动时保留用户已有选择，但 store 中标记未安装 agent 的状态",
+        "ghInstalled 状态正确反映 gh CLI 的安装情况"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "启动检查结果 UI 展示与运行阻断",
+      "description": "在 DashboardPage 或 AppShell 中展示启动检查结果：(1) gh 未安装时显示醒目提示卡片，引导用户执行 `brew install gh`；(2) AgentSelector 组件中区分已安装/未安装 agent，未安装的 agent 显示禁用状态并标注\"未安装\"；(3) 三个 agent 均未安装时，在 IssueDetailPanel 的启动按钮区域显示明确错误提示，禁用启动按钮或显示警告弹窗，阻止用户运行任务。检测结果应在启动后短暂 loading 后展示，避免闪烁。",
+      "acceptanceCriteria": [
+        "gh 未安装时界面显示提示卡片，包含 brew install gh 安装命令",
+        "AgentSelector 中已安装 agent 正常显示，未安装 agent 显示禁用/灰色状态并标注\"未安装\"",
+        "三个 agent 均未安装时，运行任务入口被禁用或显示明确错误引导",
+        "检测加载期间有适当的 loading 状态，不出现内容闪烁",
+        "安装状态变化后（如用户安装工具后重启 app）UI 正确更新"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": true
+    },
+    {
+      "id": "T-004",
+      "title": "CLI 检测逻辑单元测试",
+      "description": "为 CLI 检测相关逻辑编写单元测试，覆盖四类场景：(1) gh 缺失 — 验证 ghInstalled 为 false 且 UI 提示逻辑触发；(2) 单 agent 安装 — 验证仅该 agent 被自动选中为默认；(3) 多 agent 安装 — 验证按 claude > codex > opencode 优先级排序且多个 agent 均被选中；(4) 无 agent 安装 — 验证 selectedAgents 为空且运行阻断逻辑生效。前端测试 mock Tauri invoke 返回值；Rust 后端测试 mock 命令执行环境。",
+      "acceptanceCriteria": [
+        "Rust 后端 detect_cli_tools 有对应单元测试（可 mock 命令执行）",
+        "前端 agentStore 的 initializeFromDetection 方法有四类场景测试",
+        "gh 缺失场景：ghInstalled === false，UI 提示函数被调用",
+        "单 agent 场景：仅已安装 agent 被选中",
+        "多 agent 场景：选中顺序稳定，按 claude > codex > opencode",
+        "无 agent 场景：selectedAgents 为空，运行阻断标记为 true"
+      ],
+      "priority": 4,
+      "type": "code",
+      "passes": true
+    }
+  ]
+}

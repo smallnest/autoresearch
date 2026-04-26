@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, type StateStorage } from 'zustand/middleware';
 
 // Hardcoded list of available agents
 export const AVAILABLE_AGENTS = ['claude', 'codex', 'opencode'] as const;
@@ -31,9 +31,35 @@ export const AGENT_METADATA: Record<AgentId, AgentInfo> = {
   },
 };
 
+// Types mirroring Rust CliToolStatus and CliToolsResult
+export interface CliToolStatus {
+  installed: boolean;
+  path: string | null;
+}
+
+export interface CliToolsResult {
+  gh: CliToolStatus;
+  claude: CliToolStatus;
+  codex: CliToolStatus;
+  opencode: CliToolStatus;
+}
+
+export interface AgentInstallStatus {
+  installed: boolean;
+  path: string | null;
+}
+
 interface AgentState {
   // Ordered array of selected agent IDs
   selectedAgents: AgentId[];
+  // Install status for each agent, populated by detect_cli_tools
+  installedAgents: Record<AgentId, AgentInstallStatus>;
+  // Whether gh CLI is installed
+  ghInstalled: boolean;
+  // Whether detection is in progress
+  isDetecting: boolean;
+  // Whether detection has completed at least once (including failure)
+  detectionDone: boolean;
   // Toggle agent selection (add if not selected, remove if selected)
   toggleAgent: (agentId: AgentId) => void;
   // Reorder agents by moving from one index to another
@@ -46,67 +72,152 @@ interface AgentState {
   isSelected: (agentId: AgentId) => boolean;
   // Get ordered list of selected agents with metadata
   getSelectedAgentsInfo: () => AgentInfo[];
+  // Detect CLI tools and initialize store accordingly
+  initializeFromDetection: () => Promise<void>;
 }
 
-export const useAgentStore = create<AgentState>()(
-  persist(
-    (set, get) => ({
-      selectedAgents: [],
+interface AgentStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+  storage?: StateStorage;
+}
 
-      isSelected: (_agentId: AgentId) => {
-        return get().selectedAgents.includes(_agentId);
-      },
+const isTauri =
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-      getSelectedAgentsInfo: () => {
-        return get().selectedAgents.map((id) => AGENT_METADATA[id]);
-      },
+async function tauriInvoke<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
+}
 
-      reorderAgents: (_fromIndex: number, _toIndex: number) => {
-        set((state) => {
-          const agents = [...state.selectedAgents];
-          if (
-            _fromIndex < 0 ||
-            _fromIndex >= agents.length ||
-            _toIndex < 0 ||
-            _toIndex >= agents.length
-          ) {
-            return state;
+function createAgentStoreDeps(overrides: Partial<AgentStoreDeps> = {}): AgentStoreDeps {
+  return {
+    isTauri,
+    invoke: tauriInvoke,
+    ...overrides,
+  };
+}
+
+export function createAgentStore(overrides: Partial<AgentStoreDeps> = {}) {
+  const deps = createAgentStoreDeps(overrides);
+
+  return create<AgentState>()(
+    persist(
+      (set, get) => ({
+        selectedAgents: [],
+        installedAgents: {} as Record<AgentId, AgentInstallStatus>,
+        ghInstalled: false,
+        isDetecting: false,
+        detectionDone: false,
+
+        isSelected: (_agentId: AgentId) => {
+          return get().selectedAgents.includes(_agentId);
+        },
+
+        getSelectedAgentsInfo: () => {
+          return get().selectedAgents.map((id) => AGENT_METADATA[id]);
+        },
+
+        reorderAgents: (_fromIndex: number, _toIndex: number) => {
+          set((state) => {
+            const agents = [...state.selectedAgents];
+            if (
+              _fromIndex < 0 ||
+              _fromIndex >= agents.length ||
+              _toIndex < 0 ||
+              _toIndex >= agents.length
+            ) {
+              return state;
+            }
+
+            const [movedAgent] = agents.splice(_fromIndex, 1);
+            agents.splice(_toIndex, 0, movedAgent);
+
+            return { selectedAgents: agents };
+          });
+        },
+
+        selectAll: () => {
+          const installed = AVAILABLE_AGENTS.filter(
+            (id) => get().installedAgents[id]?.installed
+          );
+          set({ selectedAgents: installed });
+        },
+
+        clearAll: () => {
+          set({ selectedAgents: [] });
+        },
+
+        toggleAgent: (_agentId: AgentId) => {
+          set((state) => {
+            const isSelected = state.selectedAgents.includes(_agentId);
+            if (isSelected) {
+              // Remove agent
+              return {
+                selectedAgents: state.selectedAgents.filter((id) => id !== _agentId),
+              };
+            } else {
+              // Only allow selecting installed agents
+              if (!state.installedAgents[_agentId]?.installed) return state;
+              return {
+                selectedAgents: [...state.selectedAgents, _agentId],
+              };
+            }
+          });
+        },
+
+        initializeFromDetection: async () => {
+          if (!deps.isTauri) {
+            return;
           }
 
-          const [movedAgent] = agents.splice(_fromIndex, 1);
-          agents.splice(_toIndex, 0, movedAgent);
+          set({ isDetecting: true });
 
-          return { selectedAgents: agents };
-        });
-      },
+          try {
+            const result = await deps.invoke<CliToolsResult>('detect_cli_tools');
 
-      selectAll: () => {
-        set({ selectedAgents: [...AVAILABLE_AGENTS] });
-      },
-
-      clearAll: () => {
-        set({ selectedAgents: [] });
-      },
-
-      toggleAgent: (_agentId: AgentId) => {
-        set((state) => {
-          const isSelected = state.selectedAgents.includes(_agentId);
-          if (isSelected) {
-            // Remove agent
-            return {
-              selectedAgents: state.selectedAgents.filter((id) => id !== _agentId),
+            // Map detection results to installedAgents
+            const installedAgents: Record<AgentId, AgentInstallStatus> = {
+              claude: { installed: result.claude.installed, path: result.claude.path },
+              codex: { installed: result.codex.installed, path: result.codex.path },
+              opencode: { installed: result.opencode.installed, path: result.opencode.path },
             };
-          } else {
-            // Add agent to the end
-            return {
-              selectedAgents: [...state.selectedAgents, _agentId],
-            };
+
+            const ghInstalled = result.gh.installed;
+
+            set((state) => {
+              // If selectedAgents is empty (first launch), auto-select installed agents
+              // in priority order: claude > codex > opencode
+              if (state.selectedAgents.length === 0) {
+                const autoSelected: AgentId[] = [];
+                for (const agentId of AVAILABLE_AGENTS) {
+                  if (installedAgents[agentId]?.installed) {
+                    autoSelected.push(agentId);
+                  }
+                }
+                return { installedAgents, ghInstalled, isDetecting: false, detectionDone: true, selectedAgents: autoSelected };
+              }
+
+              // Non-first launch: keep user selection, just update install status
+              return { installedAgents, ghInstalled, isDetecting: false, detectionDone: true };
+            });
+          } catch {
+            // Detection failed — preserve existing detection state, just stop loading
+            set({ isDetecting: false, detectionDone: true });
           }
-        });
-      },
-    }),
-    {
-      name: 'autoresearch-agents',
-    }
-  )
-);
+        },
+      }),
+      {
+        name: 'autoresearch-agents',
+        // Only persist selectedAgents; detection results are re-computed on each launch
+        partialize: (state) => ({ selectedAgents: state.selectedAgents }),
+        ...(deps.storage ? { storage: deps.storage } : {}),
+      }
+    )
+  );
+}
+
+export const useAgentStore = createAgentStore();
