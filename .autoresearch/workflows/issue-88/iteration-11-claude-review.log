@@ -1,0 +1,149 @@
+现在我已全面了解情况。请允许我撰写审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #88
+- 标题: [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+- 子任务: T-004 - 前端集成：应用启动时自动初始化运行时并显示进度
+- 类型: UI
+- 迭代次数: 10
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+**T-004 前端集成完全未实现。** 后端 `ensure_runtime` 命令已就绪（T-002 已完成），`start_run` 已正确使用 `get_runtime_dir()`（T-003 已完成），但前端没有任何代码调用 `ensure_runtime`。不存在 runtimeStore，没有 UI 加载/错误状态，没有启动时初始化逻辑。5 项验收条件无一满足。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 前端未调用 ensure_runtime
+
+**位置**: `desktop_app/src/App.tsx`, `desktop_app/src/pages/DashboardPage.tsx`
+
+**问题描述**:
+`App.tsx` 仅为静态路由配置，无任何启动时副作用。`DashboardPage.tsx` 仅调用 `loadRecentProjects()` 加载最近项目，从未调用 `ensure_runtime`。
+
+**验收条件缺失**:
+- "应用启动时自动调用 ensure_runtime 检查/安装运行时" — **未实现**
+- "运行时状态（已安装/未安装/版本）可在前端获取" — **未实现**
+
+**建议修复**:
+在 `App.tsx` 或 `DashboardPage.tsx` 中添加 `useEffect` 调用 `ensure_runtime`：
+
+```typescript
+// App.tsx 或 DashboardPage.tsx
+useEffect(() => {
+  if (isTauri) {
+    tauriInvoke<string>('ensure_runtime').then(status => {
+      console.log('Runtime status:', status);
+    }).catch(err => {
+      console.error('Runtime init failed:', err);
+    });
+  }
+}, []);
+```
+
+---
+
+#### 问题 2: 缺少 runtimeStore 状态管理
+
+**位置**: `desktop_app/src/stores/` (缺失文件)
+
+**问题描述**:
+没有 `runtimeStore.ts` 来管理运行时安装状态。验收条件要求前端能获取运行时状态（已安装/未安装/版本），但前端完全没有对应的状态管理。
+
+**建议修复**:
+新建 `desktop_app/src/stores/runtimeStore.ts`：
+
+```typescript
+interface RuntimeState {
+  isInitializing: boolean;
+  status: 'idle' | 'initializing' | 'installed' | 'already_exists' | 'updated' | 'error';
+  error: string | null;
+  initializeRuntime: () => Promise<void>;
+}
+```
+
+---
+
+#### 问题 3: 缺少运行时初始化 UI 反馈
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx`
+
+**问题描述**:
+没有运行时安装进度、成功/失败的 UI 反馈。验收条件要求：
+- "安装过程中 UI 显示 loading 状态" — **未实现**
+- "安装失败时显示错误提示但不阻塞其他功能" — **未实现**
+- "安装成功后 UI 正常切换到可用状态" — **未实现**
+
+`DashboardPage` 现有 `InitTemplatePrompt` 组件处理项目配置初始化，但没有对应的运行时初始化 UI。可以参考其模式（loading/success/error 三态）新建运行时状态组件。
+
+---
+
+#### 问题 4: 后端 ensure_runtime 返回类型不够前端友好
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:2786`
+
+**问题描述**:
+`ensure_runtime` 返回 `Result<String, String>`，手动用 `serde_json::to_string` 序列化枚举。虽然功能正确，但前端需要额外 `JSON.parse` 来解析。建议返回 `Result<EnsureRuntimeStatus, String>` 让 Tauri 自动序列化为结构化 JSON，且前端可直接消费。
+
+（此为次要问题，不阻碍功能实现，但影响前端集成质量。）
+
+---
+
+### 实现者自检确认
+- [ ] 实现者未执行前端编译/类型检查（无前端代码变更）
+- [ ] 实现者未运行相关测试（无前端测试变更）
+- [ ] 自检未执行
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - T-004 前端集成完全未实现
+
+**下一步行动**:
+需要实现以下内容：
+1. **新建 `runtimeStore.ts`** — 管理运行时状态（isInitializing, status, error），提供 `initializeRuntime` action
+2. **在 `App.tsx` 或 `DashboardPage.tsx` 添加启动时调用** — 应用启动时自动调用 `ensure_runtime`
+3. **添加运行时状态 UI 组件** — 参考 `InitTemplatePrompt` 的 loading/success/error 模式，显示运行时初始化进度
+4. **确保非阻塞** — 运行时初始化失败不应阻止用户浏览历史、查看 Issue 列表等其他功能
+
+---
+
+### 正确性 (35%): 0/100
+
+5 项验收条件无一满足。前端未调用后端命令，无状态管理，无 UI 反馈。
+
+### 测试质量 (25%): 100/100（豁免）
+
+当前无前端代码，测试维度豁免。实现后需补充测试。
+
+### 代码质量 (20%): 0/100
+
+无前端代码可评审。
+
+### 安全性 (10%): 100/100
+
+后端 `ensure_runtime` 实现无安全问题（在 T-002 审核中已验证）。前端无新增代码。
+
+### 性能 (10%): 100/100
+
+无性能问题（无前端代码）。
+
+**加权总分**: 0×0.35 + 100×0.25 + 0×0.20 + 100×0.10 + 100×0.10 = **35/100**
+
+但考虑到 T-004 核心功能完全缺失，综合评分为 **0/100**。
+
+## Learnings
+
+- **踩坑**: 迭代 10 的 OpenCode agent 报告了 98/100，但实际上审核的焦点在 T-003 的后端代码（`start_run`, `get_runtime_dir`），并未真正检查 T-004 的前端集成实现。后续审核需严格对齐子任务验收条件，不能因为后端正确而默认前端也完成
+- **模式**: 前端集成子任务应同时检查 stores/、pages/、components/ 目录的文件变更，如果 git diff 中无前端文件变更，则前端集成大概率未实现
+- **经验**: T-004 的实现可参考 DashboardPage 中已有的 `InitTemplatePrompt` 组件模式（loading/success/error 三态 + 非阻塞），以及 `projectStore.ts` 的 `ensureConfigInitialized` 异步初始化模式

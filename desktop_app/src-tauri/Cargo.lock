@@ -712,6 +712,7 @@ dependencies = [
 name = "desktop_app"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "libc",
  "nix",
  "notify",

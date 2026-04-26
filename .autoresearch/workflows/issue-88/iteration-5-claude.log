@@ -1,0 +1,46 @@
+## 实现总结
+
+### 已进行的更改
+
+**1. `desktop_app/src-tauri/src/lib.rs`** — 新增 `ensure_runtime` Tauri 命令及相关辅助函数：
+
+- **`ensure_runtime`** 命令（第 2785 行）：包含 `#[tauri::command]` 的异步函数，其功能包括：
+  - 使用 `dirs::home_dir()` 解析 `~/.autoresearch/runtime/`
+  - 使用 `app.path().resource_dir()`（通过 `Manager` trait）解析捆绑资源
+  - 首次安装：完整复制所有文件
+  - 版本比较：读取 `version.txt`，版本匹配时跳过
+  - 版本升级：使用 `overwrite=true` 复制
+  - 返回 JSON 状态：`"installed"` / `"already_exists"` / `"updated"`
+  - 通过 `Result<T, String>` 进行适当的错误处理（无 panic）
+
+- **`copy_dir_recursive_safe`**（第 2836 行）：可递归的目录复制，具有可配置的覆盖行为
+
+- **`set_executable_permissions`** / **`set_executable_permissions_recursive`**（第 2869-2905 行）：在 Unix 上将 `.sh` 文件设置为 `0o755` 模式，在非 Unix 系统上为无操作
+
+- 在 `invoke_handler` 中注册了 `ensure_runtime`
+
+- 添加了 `use tauri::Manager` 导入
+
+**2. `desktop_app/src-tauri/tauri.conf.json`** — 修复了 glob 模式：
+- `"resources/runtime/*"` → `"resources/runtime/"`（尾部斜杠在 Tauri v2 中会递归包含）
+
+**3. `desktop_app/src-tauri/Cargo.toml`** — 添加了 `dirs = "6"` 依赖
+
+**4. `desktop_app/src-tauri/build.rs`** — 修复了已有的 clippy 警告（内联格式字符串）
+
+### 验收标准验证
+
+| 标准 | 状态 |
+|---|---|
+| 将资源安装到 `~/.autoresearch/runtime/` | 完成 |
+| 现有文件不被覆盖 | 完成（首次安装时 `overwrite=false`） |
+| 通过 `version.txt` 进行版本比较 | 完成 |
+| `run.sh` 设置了可执行权限 | 完成（`0o755` 模式） |
+| 错误通过 `Result::Err` 返回，没有 panic | 完成 |
+| macOS 和 Linux 路径兼容性 | 完成（`dirs::home_dir()`，`PermissionsExt` 仅在 Unix 上） |
+
+## 经验总结
+
+- **模式**：Tauri v2 的 `bundle.resources` 接受 `"dir/"`（尾部斜杠）用于递归包含所有文件；`"dir/*"` 只匹配顶级文件；`"dir/**"` 会因“路径未找到”错误而失败
+- **陷阱**：`app.path().resource_dir()` 需要 `use tauri::Manager` trait——没有它，该方法在 `AppHandle` 上不可用
+- **模式**：平台特定代码应使用 `#[cfg(unix)]` 块而不是 `#[cfg(not(windows))]` 以提高清晰度；在 Unix 平台上，`std::os::unix::fs::PermissionsExt` 是设置文件模式所必需的

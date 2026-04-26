@@ -1,0 +1,97 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2948, limit=400][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=50][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4159, limit=100][0m
+[0m✱ [0mGrep "fn ensure_runtime|fn copy_dir_recursive_safe|fn set_executable_permissions|#\[tauri::command\]\s*(async)?\s*fn ensure_runtime|EnsureRuntimeStatus"[90m in desktop_app/src-tauri/src · 8 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2755, limit=200][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4159, limit=200][0m
+[0m✱ [0mGrep "spawn_blocking"[90m in desktop_app/src-tauri/src · 22 matches[0m
+[0m✱ [0mGrep "fn init_project_config_sync|fn read_config_file_sync|fn write_config_file_sync|fn detect_project_config_sync"[90m in desktop_app/src-tauri/src · 4 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=940, limit=40][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4359, limit=200][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4559, limit=200][0m
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m
+[0m# [0mTodos
+[ ] Extract ensure_runtime_sync() and refactor async command to use spawn_blocking
+[ ] Change return type from Result<String, String> to Result<EnsureRuntimeStatus, String>
+[ ] Add unit tests for copy_dir_recursive_safe (skip, overwrite, missing source)
+[ ] Add unit tests for set_executable_permissions (.sh files get 0o755)
+[ ] Add unit tests for ensure_runtime_sync (first install, already exists, version mismatch, missing resource)
+[ ] Add unit test for EnsureRuntimeStatus serialization
+[ ] Run cargo test to verify all tests pass
+[ ] Add Learnings section summarizing changes
+[0m
+Now I have a thorough understanding of the code. Here's my plan:
+
+## Plan
+
+### Problem 1: Blocking I/O in async command (Must Fix)
+
+**Root cause**: `ensure_runtime` is `async fn` but calls `std::fs` directly without `spawn_blocking`.
+
+**Fix**: Extract the body into a sync function `ensure_runtime_sync(resource_dir: &Path, home_dir: &Path) -> Result<EnsureRuntimeStatus, String>`, then wrap it in `tokio::task::spawn_blocking`.
+
+This follows the codebase pattern used by `init_project_config`, `read_config_file`, etc. (see lines 940-957).
+
+### Problem 2: Return type inconsistency (Must Fix)
+
+**Root cause**: Returns `Result<String, String>` with JSON-encoded `EnsureRuntimeStatus` enum. Other commands return typed structs directly.
+
+**Fix**: Change signature to `async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeStatus, String>`. Remove `serde_json::to_string` calls and `unwrap_or_else` fallbacks.
+
+### Problem 3: Missing unit tests (Must Fix)
+
+**Need to add tests in the `#[cfg(test)] mod tests` block**:
+
+| Test | What it verifies |
+|------|-----------------|
+| `ensure_runtime_sync_first_install` | dest doesn't exist → `Installed`, files created |
+| `ensure_runtime_sync_already_exists` | version matches → `AlreadyExists` |
+| `ensure_runtime_sync_version_mismatch` | version differs → `Updated`, files overwritten |
+| `ensure_runtime_sync_missing_resource` | src_dir doesn't exist → error |
+| `copy_dir_recursive_safe_skip_existing` | `overwrite=false` skips existing files |
+| `copy_dir_recursive_safe_overwrite_all` | `overwrite=true` replaces existing files |
+| `copy_dir_recursive_safe_missing_source` | missing src → error |
+| `set_executable_permissions_sets_sh_mode` | `.sh` files get `0o755`, non-`.sh` don't |
+| `ensure_runtime_status_serialization` | enum variants serialize to expected snake_case JSON |
+
+### Summary of changes to `desktop_app/src-tauri/src/lib.rs`
+
+1. **Extract sync helper**: Create `fn ensure_runtime_sync(src_dir: &Path, dest_dir: &Path) -> Result<EnsureRuntimeStatus, String>`
+2. **Refactor async command**: Use `spawn_blocking` and return `Result<EnsureRuntimeStatus, String>`
+3. **Add tests**: ~9 unit tests following the existing `create_temp_project_dir` pattern
+
+No new dependencies needed. No other files need changes.
+## Plan Overview
+
+The plan addresses all 3 review issues:
+
+### Changes to `desktop_app/src-tauri/src/lib.rs`
+
+**1. Refactor `ensure_runtime`** (lines 2786-2829):
+- Extract sync body into `fn ensure_runtime_sync(src_dir: &Path, dest_dir: &Path) -> Result<EnsureRuntimeStatus, String>`
+- Change async command to use `spawn_blocking` wrapping the sync helper
+- Change return type from `Result<String, String>` to `Result<EnsureRuntimeStatus, String>` — Tauri auto-serializes, so no more `serde_json::to_string` / `unwrap_or_else`
+
+**2. Add 9 unit tests** in the `#[cfg(test)] mod tests` block (near line 5075):
+
+| Test | Coverage |
+|------|----------|
+| `copy_dir_recursive_safe_skip_existing` | `overwrite=false` skips destination files |
+| `copy_dir_recursive_safe_overwrite_all` | `overwrite=true` replaces existing files |
+| `copy_dir_recursive_safe_missing_source` | Error on nonexistent src |
+| `set_executable_permissions_sets_sh_mode` | `.sh` → `0o755`, `.txt` unchanged |
+| `ensure_runtime_sync_first_install` | Dir missing → `Installed` |
+| `ensure_runtime_sync_already_exists` | Version matches → `AlreadyExists` |
+| `ensure_runtime_sync_version_mismatch` | Version differs → `Updated` |
+| `ensure_runtime_sync_missing_resource` | src missing → error |
+| `ensure_runtime_status_serialization` | Enum → expected snake_case JSON |
+
+All tests follow existing patterns: `create_temp_project_dir`, `fs` operations, and `remove_dir_all` cleanup.
+
+**No new dependencies, no other file changes.**
+
+Shall I proceed with implementation?

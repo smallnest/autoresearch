@@ -1,0 +1,94 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m✱ [0mGlob "**/ensure_runtime*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "**/runtime/**"[90m in desktop_app · 0 matches[0m
+[0m✱ [0mGrep "ensure_runtime"[90m in . · 85 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1589][0m
+[0m→ [0mRead desktop_app/src-tauri/build.rs
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+Let me find the `ensure_runtime` implementation and examine the rest of the file, plus the build.rs and tauri.conf.json for resource bundling config.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3057][0m
+Let me now read the test section related to `ensure_runtime` and the full test block.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4479][0m
+[0m→ [0mRead desktop_app/src-tauri/resources
+[0m→ [0mRead .autoresearch/workflows/issue-88/planning.log[90m [limit=50][0m
+Let me also check what files are in the resources directory and look at the current issue's planning.log for more context.
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime
+## 审核报告
+
+### Issue
+- 编号: #88
+- 标题: [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+- 子任务: T-002 - 运行时安装：实现 ensure_runtime Rust 命令安装运行时到 ~/.autoresearch/runtime/
+- 迭代: 7 (claude 修复后)
+
+---
+
+### 总体评价
+
+**评分: 89/100**
+
+子任务 T-002 验收条件全部满足。`ensure_runtime` 命令功能完整，辅助函数 `copy_dir_recursive_safe`、`set_executable_permissions` 均有单元测试覆盖，`spawn_blocking` 问题已修复。主要不足是返回类型不一致（`Result<String, String>` 而非 typed struct）和版本比对逻辑缺少直接测试。
+
+---
+
+### 各维度评分
+
+| 维度 | 得分 | 理由 |
+|------|------|------|
+| 正确性 (35%) | 90 | 6 项验收条件均实现；`copy_dir_recursive_safe` overwrite 参数设计合理；错误路径返回清晰消息 |
+| 测试质量 (25%) | 80 | 辅助函数 4+2 个测试覆盖良好；但 version 比对三路分支（首次/一致/更新）缺少直接集成测试 |
+| 代码质量 (20%) | 85 | 命名清晰、结构合理；但返回 `Result<String, String>` 需前端手动 JSON.parse，与代码库中其他命令的 typed 返回模式不一致 |
+| 安全性 (10%) | 100 | 无用户输入注入路径，无 shell 执行，无敏感数据 |
+| 性能 (10%) | 100 | `spawn_blocking` 包装了所有同步文件 I/O，与迭代 6/7 经验一致 |
+
+---
+
+### 一般问题 (建议修复)
+
+**1. 返回类型应为 typed struct 而非 String** (`lib.rs:2786`)
+
+`ensure_runtime` 返回 `Result<String, String>` 并将 `EnsureRuntimeStatus` 手动序列化为 JSON。代码库中其他 Tauri 命令（如 `detect_project_config` 返回 `ProjectConfig`、`merge_pr` 返回 `PrActionResponse`）均直接返回 typed struct。应改为：
+
+```rust
+#[tauri::command]
+async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeStatus, String> {
+    // ... body returns Ok(EnsureRuntimeStatus::Installed) etc.
+}
+```
+
+当前模式增加前端心智负担（需 `JSON.parse`），且 `serde_json::to_string` 的 `unwrap_or_else` 后备字符串是冗余代码。
+
+**2. 版本比对逻辑缺少直接测试** (`lib.rs:5089` 附近)
+
+`copy_dir_recursive_safe` 和 `set_executable_permissions` 的测试覆盖良好，但 `ensure_runtime` 内部的三路分支逻辑（version.txt 一致→返回 AlreadyExists / 不一致→覆盖更新）没有直接测试。建议将同步逻辑抽取为 `ensure_runtime_sync(src_dir: &Path, dest_dir: &Path) -> Result<EnsureRuntimeStatus, String>`，使其可直接被单元测试覆盖。
+
+---
+
+### 建议改进 (可选)
+
+**1. 空 version.txt 行为** (`lib.rs:2820`)
+
+当 `dest_version.trim().is_empty()` 时回退到更新分支。如果 src 侧 version.txt 也为空，会触发全量覆盖写入。虽非严重问题，但建议添加注释说明设计意图。
+
+**2. `serde_json::to_string` 后备字符串** (`lib.rs:2811`)
+
+三处 `unwrap_or_else(|_| "\"installed\"".to_string())` 后备字符串虽与 `#[serde(rename_all = "snake_case")]` 一致，但属于永远不应执行的防御代码。改为 typed return 后可移除这些后备。
+
+---
+
+### 审核结论
+
+- [ ] 通过 / **建议修复后通过** / 阻塞
+
+评分 89/100 ≥ 85，符合进入人工审核的标准。建议在下一个子任务（T-003）中一并解决返回类型问题。
+
+---
+
+## Learnings
+
+- **模式**: `ensure_runtime` 的三路分支模式（首次安装 / 版本一致 / 版本更新）在迭代 6/7 被反复验证，是运行时安装的标准模式
+- **踩坑**: `async fn` 中的同步文件 I/O 必须通过 `spawn_blocking` 包装，否则 tokio 运行时在复制大目录时会阻塞
+- **经验**: 使用 typed return struct（`Result<EnsureRuntimeStatus, String>`）比 `Result<String, String>` + 手动序列化更符合 Tauri 惯例，且能移除 `serde_json::to_string` 和后备字符串等冗余代码

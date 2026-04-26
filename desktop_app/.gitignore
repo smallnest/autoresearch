@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated runtime resources (created by build.rs at build time)
+src-tauri/resources/runtime/

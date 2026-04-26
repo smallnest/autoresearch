@@ -1,0 +1,133 @@
+现在我已掌握所有所需信息。这是我的审核结果。
+
+## 审核报告
+
+### Issue
+- 编号: #88
+- 标题: [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+- 子任务: T-001 - 构建时打包：将 run.sh 及依赖文件复制到 Tauri resources 目录
+- 迭代次数: 3 (均被中断)
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+**T-001 子任务完全未实现。** 所有 3 次迭代均被 INT 信号中断，未产生任何代码变更。`build.rs` 仍是默认空壳、`tauri.conf.json` 未配置 `bundle.resources`、`src-tauri/resources/runtime/` 目录不存在。
+
+---
+
+### 严重问题
+
+#### 问题 1: 无任何代码变更
+
+**位置**: `desktop_app/src-tauri/build.rs`, `desktop_app/src-tauri/tauri.conf.json`
+
+**问题描述**:
+三次迭代（iteration-1-claude、iteration-2-opencode-review、iteration-3-claude-review）均被 INT 信号中断，未产生任何实现。`git diff HEAD --stat` 返回空结果，无任何文件修改。
+
+**验收条件逐项检查**:
+
+| 验收条件 | 状态 |
+|---------|------|
+| build.rs 在构建前将 run.sh、lib/、agents/、program.md 复制到 src-tauri/resources/runtime/ | ❌ 未实现 |
+| tauri.conf.json 中配置 bundle.resources 包含 runtime 目录 | ❌ 未实现 |
+| 生成的 resources 中包含 version.txt 记录应用版本号 | ❌ 未实现 |
+| 运行 cargo build 后 src-tauri/resources/runtime/ 目录存在且文件完整 | ❌ 未实现 |
+
+**当前 build.rs** (完全未改动):
+```rust
+fn main() {
+    tauri_build::build()
+}
+```
+
+**当前 tauri.conf.json** 的 bundle 部分 (无 resources 配置):
+```json
+"bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [...]
+}
+```
+
+---
+
+### 建议 (T-001 实现方向)
+
+需要实现以下内容：
+
+**1. `build.rs`** — 构建前复制运行时文件:
+```rust
+use std::fs;
+use std::path::Path;
+
+fn main() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let workspace_root = Path::new(&manifest_dir)
+        .parent()  // desktop_app/
+        .unwrap()
+        .parent()  // autoresearch root
+        .unwrap();
+
+    let resources_dir = Path::new(&manifest_dir).join("resources").join("runtime");
+
+    // Clean and recreate
+    if resources_dir.exists() {
+        fs::remove_dir_all(&resources_dir).unwrap();
+    }
+    fs::create_dir_all(&resources_dir).unwrap();
+
+    // Copy run.sh
+    fs::copy(workspace_root.join("run.sh"), resources_dir.join("run.sh")).unwrap();
+
+    // Copy program.md
+    fs::copy(workspace_root.join("program.md"), resources_dir.join("program.md")).unwrap();
+
+    // Copy lib/
+    copy_dir_recursive(
+        &workspace_root.join("lib"),
+        &resources_dir.join("lib"),
+    );
+
+    // Copy agents/
+    copy_dir_recursive(
+        &workspace_root.join("agents"),
+        &resources_dir.join("agents"),
+    );
+
+    // Generate version.txt from tauri.conf.json
+    let version = "0.1.0"; // or parse from tauri.conf.json
+    fs::write(resources_dir.join("version.txt"), version).unwrap();
+
+    tauri_build::build()
+}
+```
+
+**2. `tauri.conf.json`** — 添加 bundle.resources:
+```json
+"bundle": {
+    "resources": ["resources/runtime/*"],
+    ...
+}
+```
+
+---
+
+### 审核结论
+
+- [ ] 阻塞 - 无任何实现，需从头开始
+
+**下一步行动**:
+实现者需要从头实现 T-001 的所有验收条件：
+1. 修改 `build.rs` 在编译前将 `run.sh`、`lib/`、`agents/`、`program.md` 复制到 `src-tauri/resources/runtime/`
+2. 在 `tauri.conf.json` 中配置 `bundle.resources`
+3. 生成 `version.txt`
+4. 需注意 `build.rs` 中路径解析应使用 `CARGO_MANIFEST_DIR` 向上推导到 autoresearch 根目录，并处理源文件不存在的情况（开发环境 vs CI 环境的差异）
+
+## Learnings
+
+- **模式**: Tauri 的 `build.rs` 可以在编译前执行文件复制操作，使用 `CARGO_MANIFEST_DIR` 环境变量定位路径
+- **踩坑**: 多次迭代均被 INT 信号中断导致无任何实现产出，可能是手动中断或 Agent 超时
+- **经验**: T-001 是后续 T-002/T-003 的基础（runtime 打包 → runtime 安装 → runtime 使用），必须先完成才能推进后续子任务。当前 `start_run` 在 `lib.rs:1919-1922` 通过 `project_path.parent()` 推导 autoresearch 根目录来定位 `run.sh`，T-003 将改为使用 `~/.autoresearch/runtime/run.sh`

@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use std::time::UNIX_EPOCH;
 
 use tauri::Emitter;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 #[cfg(unix)]
@@ -1914,14 +1915,14 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
         ));
     }
 
-    // Find run.sh in autoresearch directory (relative to the app)
-    // run.sh is in the autoresearch project root, which is the parent of desktop_app
-    let autoresearch_root = project_path
-        .parent()
-        .ok_or("Cannot determine autoresearch root directory")?;
-    let run_sh_path = autoresearch_root.join("run.sh");
+    // Use the installed runtime at ~/.autoresearch/runtime/run.sh
+    let runtime_dir = get_runtime_dir()?;
+    let run_sh_path = runtime_dir.join("run.sh");
     if !run_sh_path.is_file() {
-        return Err(format!("run.sh not found at: {}", run_sh_path.display()));
+        return Err(
+            "Runtime not installed. Please restart the app to initialize the runtime."
+                .to_string(),
+        );
     }
 
     // Build command arguments and environment variables
@@ -1931,7 +1932,7 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
     // Spawn the process with a new process group
     let mut cmd = TokioCommand::new(&run_sh_path);
     cmd.args(&args)
-        .current_dir(autoresearch_root)
+        .current_dir(&runtime_dir)
         .stdout(StdStdio::piped())
         .stderr(StdStdio::piped())
         .kill_on_drop(false); // Don't kill on drop - we want to manage the process lifecycle
@@ -2767,6 +2768,160 @@ async fn stop_run(_app: tauri::AppHandle) -> Result<(), String> {
     Err("run.sh process management is only supported on Unix systems".to_string())
 }
 
+/// Result of the ensure_runtime operation.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum EnsureRuntimeStatus {
+    Installed,
+    AlreadyExists,
+    Updated,
+}
+
+/// Frontend-friendly result for ensure_runtime command.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+struct EnsureRuntimeResult {
+    status: EnsureRuntimeStatus,
+}
+
+/// Ensure the autoresearch runtime is installed at ~/.autoresearch/runtime/.
+///
+/// Copies bundled resource files from the app's resource directory to
+/// ~/.autoresearch/runtime/. Skips files that already exist (preserving user
+/// customizations). Uses version.txt to detect when an update is needed.
+#[tauri::command]
+async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeResult, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let dest_dir = home.join(".autoresearch").join("runtime");
+
+    // Resolve the bundled resource directory
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to resolve resource directory: {e}"))?;
+    let src_dir = resource_dir.join("runtime");
+
+    if !src_dir.is_dir() {
+        return Err(format!(
+            "Runtime resources not found at: {}. The app bundle may be corrupted.",
+            src_dir.display()
+        ));
+    }
+
+    // Move all synchronous file I/O into a blocking task to avoid stalling
+    // the tokio runtime when the runtime directory is large.
+    tokio::task::spawn_blocking(move || -> Result<EnsureRuntimeResult, String> {
+        // If destination doesn't exist at all, do a full install
+        if !dest_dir.is_dir() {
+            copy_dir_recursive_safe(&src_dir, &dest_dir, false)?;
+            set_executable_permissions(&dest_dir)?;
+            return Ok(EnsureRuntimeResult { status: EnsureRuntimeStatus::Installed });
+        }
+
+        // Compare versions
+        let src_version = fs::read_to_string(src_dir.join("version.txt"))
+            .map_err(|e| format!("Failed to read source version.txt: {e}"))?;
+        let dest_version = fs::read_to_string(dest_dir.join("version.txt")).unwrap_or_default();
+
+        if src_version.trim() == dest_version.trim() && !dest_version.trim().is_empty() {
+            // Same version, nothing to do — but still ensure run.sh is executable
+            set_executable_permissions(&dest_dir)?;
+            return Ok(EnsureRuntimeResult { status: EnsureRuntimeStatus::AlreadyExists });
+        }
+
+        // Version differs: update files, overwriting existing ones
+        copy_dir_recursive_safe(&src_dir, &dest_dir, true)?;
+        set_executable_permissions(&dest_dir)?;
+
+        Ok(EnsureRuntimeResult { status: EnsureRuntimeStatus::Updated })
+    })
+    .await
+    .map_err(|e| format!("Runtime install task failed: {e}"))?
+}
+
+/// Returns the runtime directory path: ~/.autoresearch/runtime/
+fn get_runtime_dir() -> Result<std::path::PathBuf, String> {
+    let home = dirs::home_dir()
+        .ok_or_else(|| "Cannot determine home directory".to_string())?;
+    Ok(home.join(".autoresearch").join("runtime"))
+}
+
+/// Recursively copy a directory.
+///
+/// When `overwrite` is false, existing destination files are skipped.
+/// When `overwrite` is true, all files are copied (used for version upgrades).
+fn copy_dir_recursive_safe(src: &Path, dst: &Path, overwrite: bool) -> Result<(), String> {
+    fs::create_dir_all(dst)
+        .map_err(|e| format!("Failed to create directory {}: {}", dst.display(), e))?;
+
+    let entries = fs::read_dir(src)
+        .map_err(|e| format!("Failed to read directory {}: {}", src.display(), e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if src_path.is_dir() {
+            copy_dir_recursive_safe(&src_path, &dst_path, overwrite)?;
+        } else {
+            // Skip existing files unless overwrite is requested
+            if !overwrite && dst_path.exists() {
+                continue;
+            }
+            fs::copy(&src_path, &dst_path).map_err(|e| {
+                format!(
+                    "Failed to copy {} to {}: {}",
+                    src_path.display(),
+                    dst_path.display(),
+                    e
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Set executable permissions on run.sh (and any other .sh files) under the
+/// given directory tree. On non-Unix platforms this is a no-op.
+fn set_executable_permissions(dir: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        set_executable_permissions_recursive(dir)?;
+    }
+    let _ = dir; // suppress unused variable warning on non-unix
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_executable_permissions_recursive(dir: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            set_executable_permissions_recursive(&path)?;
+        } else if path.extension().is_some_and(|ext| ext == "sh") {
+            let perms = fs::Permissions::from_mode(0o755);
+            fs::set_permissions(&path, perms).map_err(|e| {
+                format!(
+                    "Failed to set executable permission on {}: {}",
+                    path.display(),
+                    e
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2791,6 +2946,7 @@ pub fn run() {
             stop_run,
             get_run_status,
             get_iteration_progress,
+            ensure_runtime,
             list_history,
             get_history_detail,
             get_iteration_log,
@@ -4939,5 +5095,187 @@ mod tests {
         let result = format_export_log(&dir, 999);
         assert!(result.is_err());
         fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    // --- ensure_runtime helper tests ---
+
+    use super::{copy_dir_recursive_safe, set_executable_permissions};
+
+    fn create_runtime_test_dirs(test_name: &str) -> (PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!(
+            "autoresearch-runtime-test-{test_name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        let src = base.join("src");
+        let dst = base.join("dst");
+        fs::create_dir_all(&src).expect("create src dir");
+        (src, dst)
+    }
+
+    fn cleanup_runtime_test(dirs: &(PathBuf, PathBuf)) {
+        let _ = fs::remove_dir_all(&dirs.0.parent().unwrap());
+    }
+
+    #[test]
+    fn copy_dir_recursive_fresh_install() {
+        let (src, dst) = create_runtime_test_dirs("fresh-install");
+
+        // Set up source: run.sh + lib/agent.py + agents/claude.md
+        fs::write(src.join("run.sh"), "#!/bin/bash\necho hello").unwrap();
+        fs::create_dir_all(src.join("lib")).unwrap();
+        fs::write(src.join("lib/agent.py"), "print('hi')").unwrap();
+        fs::create_dir_all(src.join("agents")).unwrap();
+        fs::write(src.join("agents/claude.md"), "# Claude").unwrap();
+
+        copy_dir_recursive_safe(&src, &dst, false).expect("copy should succeed");
+
+        assert!(dst.join("run.sh").exists());
+        assert!(dst.join("lib/agent.py").exists());
+        assert!(dst.join("agents/claude.md").exists());
+        assert_eq!(fs::read_to_string(dst.join("run.sh")).unwrap(), "#!/bin/bash\necho hello");
+
+        cleanup_runtime_test(&(src, dst));
+    }
+
+    #[test]
+    fn copy_dir_recursive_skip_existing() {
+        let (src, dst) = create_runtime_test_dirs("skip-existing");
+
+        fs::write(src.join("run.sh"), "new content").unwrap();
+        fs::write(src.join("new_file.txt"), "new").unwrap();
+
+        // Pre-create destination with a user-customized run.sh
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(dst.join("run.sh"), "user customized content").unwrap();
+
+        copy_dir_recursive_safe(&src, &dst, false).expect("copy should succeed");
+
+        // Existing file should NOT be overwritten
+        assert_eq!(fs::read_to_string(dst.join("run.sh")).unwrap(), "user customized content");
+        // New file should be copied
+        assert_eq!(fs::read_to_string(dst.join("new_file.txt")).unwrap(), "new");
+
+        cleanup_runtime_test(&(src, dst));
+    }
+
+    #[test]
+    fn copy_dir_recursive_overwrite_mode() {
+        let (src, dst) = create_runtime_test_dirs("overwrite-mode");
+
+        fs::write(src.join("run.sh"), "updated content").unwrap();
+        fs::write(src.join("version.txt"), "2.0").unwrap();
+
+        // Pre-create destination with old content
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(dst.join("run.sh"), "old content").unwrap();
+        fs::write(dst.join("version.txt"), "1.0").unwrap();
+
+        copy_dir_recursive_safe(&src, &dst, true).expect("copy should succeed");
+
+        // Files should be overwritten
+        assert_eq!(fs::read_to_string(dst.join("run.sh")).unwrap(), "updated content");
+        assert_eq!(fs::read_to_string(dst.join("version.txt")).unwrap(), "2.0");
+
+        cleanup_runtime_test(&(src, dst));
+    }
+
+    #[test]
+    fn copy_dir_recursive_preserves_user_extra_files() {
+        let (src, dst) = create_runtime_test_dirs("preserve-extra");
+
+        fs::write(src.join("run.sh"), "content").unwrap();
+
+        // Destination has extra user files not in source
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(dst.join("run.sh"), "old").unwrap();
+        fs::write(dst.join("my_agent.md"), "my custom agent").unwrap();
+
+        copy_dir_recursive_safe(&src, &dst, true).expect("copy should succeed");
+
+        // User's extra file should still exist
+        assert!(dst.join("my_agent.md").exists());
+        assert_eq!(fs::read_to_string(dst.join("my_agent.md")).unwrap(), "my custom agent");
+
+        cleanup_runtime_test(&(src, dst));
+    }
+
+    #[test]
+    fn copy_dir_recursive_src_not_found() {
+        let (_src, dst) = create_runtime_test_dirs("src-not-found");
+        let nonexistent = _src.parent().unwrap().join("nonexistent");
+
+        let result = copy_dir_recursive_safe(&nonexistent, &dst, false);
+        assert!(result.is_err());
+
+        cleanup_runtime_test(&(_src, dst));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn set_executable_permissions_on_sh_files() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base = std::env::temp_dir().join(format!(
+            "autoresearch-runtime-test-exec-perms-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        let dir = base.join("runtime");
+        fs::create_dir_all(&dir).unwrap();
+
+        fs::write(dir.join("run.sh"), "#!/bin/bash\necho hi").unwrap();
+        fs::write(dir.join("setup.sh"), "#!/bin/bash\necho setup").unwrap();
+        fs::write(dir.join("readme.txt"), "readme").unwrap();
+        let sub = dir.join("scripts");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("helper.sh"), "#!/bin/bash\necho helper").unwrap();
+
+        set_executable_permissions(&dir).expect("should succeed");
+
+        let mode = fs::metadata(dir.join("run.sh")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "run.sh should be executable");
+
+        let mode = fs::metadata(sub.join("helper.sh")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "nested helper.sh should be executable");
+
+        let mode = fs::metadata(dir.join("readme.txt")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0, "readme.txt should NOT be executable");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn set_executable_permissions_empty_dir() {
+        let base = std::env::temp_dir().join(format!(
+            "autoresearch-runtime-test-exec-empty-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        let dir = base.join("empty_runtime");
+        fs::create_dir_all(&dir).unwrap();
+
+        // Should succeed on empty directory
+        set_executable_permissions(&dir).expect("should succeed on empty dir");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    // --- get_runtime_dir tests ---
+
+    use super::get_runtime_dir;
+
+    #[test]
+    fn get_runtime_dir_returns_home_based_path() {
+        let runtime_dir = get_runtime_dir().expect("should succeed");
+        let home = dirs::home_dir().expect("home dir should exist");
+        assert_eq!(runtime_dir, home.join(".autoresearch").join("runtime"));
+    }
+
+    #[test]
+    fn get_runtime_dir_path_has_expected_components() {
+        let runtime_dir = get_runtime_dir().expect("should succeed");
+        assert!(runtime_dir.ends_with(".autoresearch/runtime"));
     }
 }
