@@ -1,0 +1,33 @@
+{
+  "issueNumber": 85,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "修改 normalizeUserFacingError 保留英文错误详情",
+      "description": "修改 `src/stores/uiError.ts` 中的 `normalizeUserFacingError` 函数：当错误消息不含中文字符时，不再丢弃原始英文消息，而是将中文 fallback 与原始错误拼接展示（格式：`{fallbackMessage}：{originalMessage}`）。这样所有 12 个调用点（runStore、issueStore、projectStore、historyStore、logViewerStore、prStore、historyDetailStore、SettingsPage）自动受益，无需逐个修改。",
+      "acceptanceCriteria": [
+        "中文错误消息保持原样展示（行为不变）",
+        "英文错误消息拼接在中文 fallback 后展示，格式如：'启动任务失败，请重试：run.sh not found at: /path/to/run.sh'",
+        "空错误消息仍返回纯 fallback",
+        "所有 store 调用 normalizeUserFacingError 的地方无需修改即自动获得改善",
+        "TypeScript 编译通过，无 lint 错误"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "为 normalizeUserFacingError 添加单元测试",
+      "description": "为 `normalizeUserFacingError` 和 `extractErrorMessage` 函数编写单元测试，覆盖以下场景：1) 中文错误消息原样返回；2) 英文错误消息与 fallback 拼接；3) 空错误消息返回 fallback；4) Error 实例和字符串两种输入类型；5) 包含混合中英文的消息。测试文件放在 `src/stores/__tests__/uiError.test.ts`。",
+      "acceptanceCriteria": [
+        "测试覆盖中文/英文/空/混合消息场景",
+        "测试覆盖 Error 实例和字符串输入",
+        "所有测试通过",
+        "测试覆盖率 ≥ 90%"
+      ],
+      "priority": 2,
+      "passes": true
+    }
+  ]
+}

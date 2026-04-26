@@ -1,0 +1,19 @@
+## 子任务 T-001 完成
+
+**改动总结：**
+
+1. **`desktop_app/src/stores/uiError.ts:18-20`** — 当错误消息不含中文时，不再丢弃英文消息，而是拼接展示：`{fallbackMessage}：{originalMessage}`
+2. **`desktop_app/tests/storeErrorLocalization.test.mjs`** — 更新现有测试断言 + 新增 3 个 `normalizeUserFacingError` 直接测试
+
+**验证结果：**
+- TypeScript 编译通过
+- ESLint 无错误
+- 全部 92 个测试通过（含 5 个直接覆盖此次改动的测试）
+
+**影响范围：** 所有 9 个调用 `normalizeUserFacingError` 的 store/页面自动受益，无需逐个修改。
+
+## Learnings
+
+- **模式**: `normalizeUserFacingError` 是全局错误归一化入口——修改它比逐个修改 store 的 fallback 更高效
+- **踩坑**: `String(null)` 返回 `"null"` 而非空字符串，所以 `null`/`undefined` 作为 error 传入时实际会走拼接路径而非 fallback；这是既有行为，不要在测试中假设它们返回纯 fallback
+- **经验**: 修改核心工具函数后，搜索全部引用该函数的测试文件并同步更新断言，避免测试套件部分失败
