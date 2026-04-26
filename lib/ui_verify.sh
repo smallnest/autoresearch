@@ -742,13 +742,6 @@ run_ui_verification() {
   log "启动 dev server..." >&2
   cd "$PROJECT_ROOT"
 
-  # 保存原 trap 并设置清理 trap
-  local prev_trap_exit prev_trap_int prev_trap_term
-  prev_trap_exit=$(trap -p EXIT | sed "s/trap -- '//;s/' EXIT$//")
-  prev_trap_int=$(trap -p INT | sed "s/trap -- '//;s/' INT$//")
-  prev_trap_term=$(trap -p TERM | sed "s/trap -- '//;s/' TERM$//")
-  trap cleanup_dev_server EXIT INT TERM
-
   # 后台启动 dev server
   bash -c "$dev_cmd" > "$work_dir/dev-server.log" 2>&1 &
   _UI_DEV_SERVER_PID=$!
@@ -757,9 +750,6 @@ run_ui_verification() {
   # 步骤 4: 等待 dev server 就绪
   if ! wait_for_dev_server "$port" "$UI_VERIFY_TIMEOUT"; then
     cleanup_dev_server
-    [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
-    [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
-    [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
     echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}" >> "$work_dir/log.md" 2>/dev/null
     echo "{\"pass\": false, \"feedback\": \"dev server 启动超时或失败\"}"
     return 1
@@ -788,10 +778,6 @@ run_ui_verification() {
 
   # 步骤 7: 清理 dev server
   cleanup_dev_server
-  # 恢复原 trap
-  [ -n "$prev_trap_exit" ] && trap "$prev_trap_exit" EXIT || trap - EXIT
-  [ -n "$prev_trap_int" ] && trap "$prev_trap_int" INT || trap - INT
-  [ -n "$prev_trap_term" ] && trap "$prev_trap_term" TERM || trap - TERM
 
   # 保存验证结果
   echo "$verify_result" > "$result_file"

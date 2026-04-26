@@ -41,3 +41,4 @@
 2026-04-26T07:28:32+08:00	36	[desktop-app] 历史详情查看与日志导出	completed	8	false	92	92	feature/issue-36	
 2026-04-26T07:57:11+08:00	37	[desktop-app] PR 信息查看与 Diff 展示	completed	6	false	89	89	feature/issue-37	
 2026-04-26T08:22:19+08:00	38	[desktop-app] PR 操作（合并/关闭）	completed	5	false	87	87	feature/issue-38	
+2026-04-26T08:33:01+08:00	85	[desktop-app] 启动任务失败时无有效错误信息，无法排查原因	completed	3	false	88	88	feature/issue-85	

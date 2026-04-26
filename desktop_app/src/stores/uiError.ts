@@ -15,5 +15,7 @@ export function normalizeUserFacingError(
   if (!message) {
     return fallbackMessage;
   }
-  return CHINESE_CHAR_PATTERN.test(message) ? message : fallbackMessage;
+  return CHINESE_CHAR_PATTERN.test(message)
+    ? message
+    : `${fallbackMessage}：${message}`;
 }
