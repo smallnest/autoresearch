@@ -13,21 +13,17 @@ fn main() {
 
     let resources_dir = manifest.join("resources").join("runtime");
 
-    // Clean and recreate resources directory
-    if resources_dir.exists() {
-        fs::remove_dir_all(&resources_dir).expect("Failed to clean resources/runtime directory");
-    }
+    // Ensure resources directory exists (do NOT remove_dir_all — that triggers
+    // Tauri's dev file-watcher into an infinite rebuild loop).
     fs::create_dir_all(&resources_dir).expect("Failed to create resources/runtime directory");
 
-    // Copy individual files
+    // Copy individual files (only when content differs to avoid touching timestamps unnecessarily)
     let files_to_copy = ["run.sh", "program.md"];
     for file in &files_to_copy {
         let src = workspace_root.join(file);
         let dst = resources_dir.join(file);
         if src.exists() {
-            fs::copy(&src, &dst).unwrap_or_else(|e| {
-                panic!("Failed to copy {}: {}", src.display(), e)
-            });
+            copy_if_different(&src, &dst);
             println!("cargo:rerun-if-changed={}", src.display());
         } else {
             println!(
@@ -43,9 +39,7 @@ fn main() {
         let src = workspace_root.join(dir);
         let dst = resources_dir.join(dir);
         if src.is_dir() {
-            copy_dir_recursive(&src, &dst).unwrap_or_else(|e| {
-                panic!("Failed to copy directory {}: {}", src.display(), e)
-            });
+            copy_dir_if_different(&src, &dst);
             println!("cargo:rerun-if-changed={}", src.display());
         } else {
             println!(
@@ -64,8 +58,11 @@ fn main() {
     } else {
         "0.0.0".to_string()
     };
-    fs::write(resources_dir.join("version.txt"), &version)
-        .expect("Failed to write version.txt");
+    let version_path = resources_dir.join("version.txt");
+    let version_changed = fs::read_to_string(&version_path).ok().as_deref() != Some(&version);
+    if version_changed {
+        fs::write(&version_path, &version).expect("Failed to write version.txt");
+    }
     println!("cargo:rerun-if-changed={}", tauri_conf_path.display());
 
     println!("cargo:warning=Runtime resources prepared (version {version})");
@@ -73,20 +70,40 @@ fn main() {
     tauri_build::build()
 }
 
-/// Recursively copy a directory and all its contents.
-fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
+/// Copy a file only if the destination content differs.
+fn copy_if_different(src: &Path, dst: &Path) {
+    let src_content = fs::read(src).unwrap_or_else(|e| {
+        panic!("Failed to read {}: {}", src.display(), e)
+    });
+    if let Ok(dst_content) = fs::read(dst) {
+        if dst_content == src_content {
+            return; // identical — skip to avoid touching mtime
+        }
+    }
+    fs::write(dst, &src_content).unwrap_or_else(|e| {
+        panic!("Failed to write {}: {}", dst.display(), e)
+    });
+}
+
+/// Recursively copy a directory, only overwriting files whose content changed.
+fn copy_dir_if_different(src: &Path, dst: &Path) {
+    fs::create_dir_all(dst).unwrap_or_else(|e| {
+        panic!("Failed to create dir {}: {}", dst.display(), e)
+    });
+    for entry in fs::read_dir(src).unwrap_or_else(|e| {
+        panic!("Failed to read dir {}: {}", src.display(), e)
+    }) {
+        let entry = entry.unwrap_or_else(|e| {
+            panic!("Failed to read entry in {}: {}", src.display(), e)
+        });
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
         if src_path.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
+            copy_dir_if_different(&src_path, &dst_path);
         } else {
-            fs::copy(&src_path, &dst_path)?;
+            copy_if_different(&src_path, &dst_path);
         }
     }
-    Ok(())
 }
 
 /// Extract the "version" field value from tauri.conf.json JSON content.

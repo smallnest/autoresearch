@@ -2799,7 +2799,7 @@ async fn ensure_runtime(app: tauri::AppHandle) -> Result<EnsureRuntimeResult, St
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to resolve resource directory: {e}"))?;
-    let src_dir = resource_dir.join("runtime");
+    let src_dir = resource_dir.join("resources").join("runtime");
 
     if !src_dir.is_dir() {
         return Err(format!(
