@@ -1,0 +1,32 @@
+所有任务完成。以下是改动总结：
+
+## 改动摘要
+
+**修改文件**: `desktop_app/src-tauri/src/lib.rs`
+
+### 1. 新增 `get_runtime_dir()` 辅助函数 (line 2841-2845)
+返回 `~/.autoresearch/runtime/` 路径，供 `start_run` 和未来其他命令复用。
+
+### 2. 修改 `start_run` 路径解析 (line 1918-1926)
+- **之前**: 通过 `project_path.parent()` 推导 autoresearch 根目录定位 `run.sh`
+- **之后**: 使用 `get_runtime_dir()` 获取 `~/.autoresearch/runtime/run.sh`
+- **错误消息**: runtime 不存在时提示用户重启应用初始化
+
+### 3. 修改 `current_dir` (line 1935)
+- **之前**: `current_dir(autoresearch_root)` — autoresearch 仓库根目录
+- **之后**: `current_dir(&runtime_dir)` — `~/.autoresearch/runtime/`
+
+### 4. 新增 2 个单元测试
+- `get_runtime_dir_returns_home_based_path` — 验证路径正确
+- `get_runtime_dir_path_has_expected_components` — 验证路径组件
+
+### 验证结果
+- 编译通过 (0 error, 0 warning except build.rs info)
+- 全部 122 个测试通过
+- `stop_run` 和 `get_run_status` 仅依赖 PID，不受影响
+
+## Learnings
+
+- **模式**: `get_runtime_dir()` 辅助函数封装了 `~/.autoresearch/runtime/` 路径约定，`start_run` 和 `ensure_runtime` 共享同一路径逻辑，避免硬编码散落在多处
+- **经验**: `run.sh` 的 `SCRIPT_DIR` 通过 `dirname "${BASH_SOURCE[0]}"` 自动解析，不受 `current_dir` 影响。但设置 `current_dir` 为 `runtime_dir` 保持语义一致性是合理的
+- **踩坑**: 移除 `autoresearch_root` 后需全局确认无其他引用 — `stop_run`/`get_run_status` 只依赖 PID，与路径无关

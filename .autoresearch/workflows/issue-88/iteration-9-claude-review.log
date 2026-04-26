@@ -1,0 +1,114 @@
+代码可以编译通过。现在我已掌握撰写审核报告所需的所有信息。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #88
+- 标题: [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+- 子任务: T-003 - 修改 start_run 使用已安装的 run.sh 路径执行任务
+- 迭代次数: 9
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+**T-003 子任务完全未实现。** `start_run` 函数（`lib.rs:1917-1926`）仍然使用旧的 `project_path.parent()` 模式定位 `run.sh`，未做任何修改。`current_dir` 仍设置为 `autoresearch_root` 而非 `~/.autoresearch/runtime/`。当前未提交的代码变更仅包含 T-002 的 `ensure_runtime` 实现，T-003 的 6 项验收条件无一满足。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: start_run 未使用 ~/.autoresearch/runtime/run.sh
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:1918-1926`
+
+**问题描述**:
+`start_run` 仍通过 `project_path.parent()` 推导 autoresearch 根目录来定位 `run.sh`，这正是 T-003 要求修改的核心逻辑。
+
+**当前代码**:
+```rust
+let autoresearch_root = project_path
+    .parent()
+    .ok_or("Cannot determine autoresearch root directory")?;
+let run_sh_path = autoresearch_root.join("run.sh");
+if !run_sh_path.is_file() {
+    return Err(format!("run.sh not found at: {}", run_sh_path.display()));
+}
+```
+
+**建议修复**:
+```rust
+let home = dirs::home_dir()
+    .ok_or_else(|| "Cannot determine home directory".to_string())?;
+let runtime_dir = home.join(".autoresearch").join("runtime");
+let run_sh_path = runtime_dir.join("run.sh");
+if !run_sh_path.is_file() {
+    return Err(
+        "Runtime not installed. Please restart the app to initialize the runtime.".to_string()
+    );
+}
+```
+
+**原因**: T-003 的核心目标是让 `start_run` 使用 `ensure_runtime` 安装的运行时，脱离对 autoresearch 仓库目录结构的依赖。
+
+---
+
+#### 问题 2: current_dir 未设置为 ~/.autoresearch/runtime/
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:1935`
+
+**问题描述**:
+`current_dir` 仍为 `autoresearch_root`，导致 `run.sh` 的 `SCRIPT_DIR`（`run.sh:61`）解析为 autoresearch 仓库根目录而非 `~/.autoresearch/runtime/`。`run.sh` 随后会通过 `SCRIPT_DIR` 查找 `lib/agent_logic.sh`、`lib/git_push.sh` 等依赖文件（`run.sh:64-86`），路径不匹配将导致运行时错误。
+
+**当前代码**:
+```rust
+cmd.args(&args)
+    .current_dir(autoresearch_root)
+```
+
+**建议修复**:
+```rust
+cmd.args(&args)
+    .current_dir(&runtime_dir)
+```
+
+**原因**: `run.sh` 使用 `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` 定位依赖。当 `run.sh` 位于 `~/.autoresearch/runtime/run.sh` 时，`SCRIPT_DIR` 解析为 `~/.autoresearch/runtime/`，`lib/`、`agents/` 等依赖目录也在该目录下。`current_dir` 必须与之一致。
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 | 说明 |
+|---|---|---|
+| start_run 使用 ~/.autoresearch/runtime/run.sh | 未通过 | 仍使用 `project_path.parent()` |
+| run.sh 的 SCRIPT_DIR 能正确解析依赖 | 未通过 | `current_dir` 未修改 |
+| current_dir 设置为 ~/.autoresearch/runtime/ | 未通过 | 仍为 `autoresearch_root` |
+| runtime 不存在时返回明确错误 | 未通过 | 错误消息指向旧路径 |
+| start/stop/status 仍然正常工作 | 未验证 | 无变更，现有逻辑未受影响 |
+| 相关单元测试通过 | 未通过 | 无任何测试 |
+
+---
+
+### 审核结论
+
+- [ ] 阻塞 - T-003 完全未实现，需要从零开始
+
+**下一步行动**:
+实现者需要：
+1. 修改 `start_run` 函数，将 `run.sh` 路径解析从 `project_path.parent()` 改为 `dirs::home_dir().join(".autoresearch/runtime/run.sh")`
+2. 将 `current_dir` 从 `autoresearch_root` 改为 `runtime_dir`（即 `~/.autoresearch/runtime/`）
+3. 当 `run.sh` 不存在时返回提示用户重启应用初始化运行时的错误消息
+4. 添加获取 `runtime_dir` 的辅助函数及对应单元测试
+5. 验证 `get_run_status` 和 `stop_run` 不受影响（它们只依赖 PID，不需要修改）
+
+---
+
+## Learnings
+
+- **踩坑**: T-003 是 T-002 的直接消费者——`ensure_runtime` 安装运行时到 `~/.autoresearch/runtime/`，`start_run` 必须切换到使用该路径。两个子任务虽然依赖关系清晰，但实现完全独立，`start_run` 的修改不依赖 `ensure_runtime` 的具体实现细节，只依赖其安装路径约定
+- **模式**: `run.sh` 的 `SCRIPT_DIR` 通过 `dirname "${BASH_SOURCE[0]}"` 解析，当 `run.sh` 位于 `~/.autoresearch/runtime/` 时，所有依赖（`lib/`、`agents/`、`program.md`）也必须在该目录下，`current_dir` 无需强制匹配 `SCRIPT_DIR`——`SCRIPT_DIR` 由 `BASH_SOURCE[0]` 决定，不受 `current_dir` 影响。但为了语义清晰，`current_dir` 设为 `runtime_dir` 是合理的
+- **经验**: 抽取 `get_runtime_dir() -> Result<PathBuf, String>` 辅助函数可在 `start_run` 和未来的其他命令中复用，避免硬编码 `home/.autoresearch/runtime` 路径

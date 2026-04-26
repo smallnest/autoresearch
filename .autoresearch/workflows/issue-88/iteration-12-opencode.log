@@ -1,0 +1,111 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m# [0mTodos
+[ ] 分析审核反馈，理解问题根源
+[ ] 阅读相关代码文件，确认当前实现
+[ ] 制定修复计划
+[0m
+[0m→ [0mRead desktop_app/src/stores/runtimeStore.ts
+[0m✱ [0mGlob "desktop_app/src/components/*Runtime*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/components/*runtime*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*"[90m 13 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+Let me read more files to understand the existing patterns.
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/tests/iterationProgressPanel.test.mjs
+[0m
+[0m# [0mTodos
+[x] 分析审核反馈，理解问题根源
+[x] 阅读相关代码文件，确认当前实现
+[ ] 制定修复计划并呈现给用户
+[0m
+## 审核反馈分析
+
+**当前评分: 80/100** (未达标，需要 ≥ 85)
+
+审核给出的扣分集中在"测试质量"维度 (25%权重，当前仅 40 分)。修复测试差距即可达标。
+
+| 修复项 | 对总分的影响 |
+|--------|-------------|
+| 测试质量 40→80 分 | +10 分 → **总分 90** ✅ 达标 |
+
+---
+
+## 修复计划
+
+### 任务 1: 重构 `runtimeStore.ts` 为工厂模式
+
+**操作**: 仿照 `runStore.ts` 的 `createRunStore(overrides)` 模式重构 `runtimeStore.ts`
+
+- 提取 `RuntimeStoreDeps` 接口 (`isTauri`, `invoke`)
+- 新增 `createRuntimeStoreDeps(overrides)` 和 `createRuntimeStore(overrides)` 工厂函数
+- 导出 `useRuntimeStore = createRuntimeStore()`
+- 保持所有现有行为不变，只增加可测试性
+
+**涉及文件**: `desktop_app/src/stores/runtimeStore.ts`
+
+---
+
+### 任务 2: 创建 `runtimeStore.test.mjs`
+
+**操作**: 按项目已有测试模式，用 `node --test --experimental-strip-types` 覆盖以下场景：
+
+| 测试场景 | 说明 |
+|---------|------|
+| 初始状态为 `idle` | 默认状态正确 |
+| 调用 `initializeRuntime()` → `initializing` → `installed` | 正常安装流程 |
+| 调用 `initializeRuntime()` → `initializing` → `already_exists` | 已存在流程 |
+| 调用 `initializeRuntime()` → `initializing` → `updated` | 更新流程 |
+| invoke 失败 → `error` | 错误处理 |
+| 错误消息通过 `normalizeUserFacingError` 归一化 | 中文消息 |
+| 非 Tauri 环境 → `already_exists` | 浏览器 fallback |
+| 已初始化状态不再重复调用 invoke | 双重初始化保护 |
+| 正在初始化时不再重复调用 invoke | 并发保护 |
+
+**涉及文件**: `desktop_app/tests/runtimeStore.test.mjs` (新建)
+
+---
+
+### 任务 3: 提取 `RuntimeInitBanner` 并创建渲染测试
+
+**操作**:
+- 从 `DashboardPage.tsx` 中提取 `RuntimeInitBanner` 到独立文件 `desktop_app/src/components/RuntimeInitBanner.tsx`
+- 导出该组件，并在 `DashboardPage.tsx` 中 import 回来（保持现有引用不变）
+- 创建渲染测试 `desktop_app/tests/runtimeBanner.test.mjs`
+
+| 测试场景 | 说明 |
+|---------|------|
+| `initializing` 状态 → 旋转动画 + "正在初始化运行时..." 中文 | loading |
+| `installed`/`updated` → 绿色成功卡片 + "运行时安装成功" | 成功 |
+| `error` 状态 → 红色错误卡片 + 重试/关闭按钮 | 错误 |
+| `already_exists` 状态 → 不渲染 | 无 UI |
+| `dismissed` → 不渲染 | 关闭后隐藏 |
+| 点击"关闭"按钮 → dismissed | 交互验证(通过 renderToStaticMarkup 验证 dismiss 前内容) |
+
+**涉及文件**: 
+- `desktop_app/src/components/RuntimeInitBanner.tsx` (新建)
+- `desktop_app/src/pages/DashboardPage.tsx` (修改 import)
+- `desktop_app/tests/runtimeBanner.test.mjs` (新建)
+
+---
+
+### 无需处理的问题
+
+| 审核建议 | 理由 |
+|---------|------|
+| 暴露 `version` 字段 | 需要 Rust 后端配合修改，非当前子任务核心要求 |
+| 将 `initializeRuntime` 移至 `App.tsx` | Dashboard 是默认路由，不会被延迟加载；当前够用 |
+
+---
+
+## 评估
+
+- **影响范围**: 3 个测试文件 (2 新建) + 2 个源码文件 (重构)
+- **风险**: 低 — 重构有完整测试覆盖保障，且不改变行为
+- **验收**: 修复后预期评分 ≥ 90/100，可通过审核
+
+是否按此计划执行？

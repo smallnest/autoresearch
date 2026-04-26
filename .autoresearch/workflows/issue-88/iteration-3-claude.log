@@ -1,0 +1,32 @@
+所有任务已完成。以下是已实现内容的总结：
+
+## T-001 实现总结
+
+**修改了 3 个文件：**
+
+### 1. `desktop_app/src-tauri/build.rs` — 构建时复制运行时文件
+- 使用 `CARGO_MANIFEST_DIR` 向上导航 2 级以定位 `autoresearch` 根目录
+- 将 `run.sh` 和 `program.md` 复制到 `src-tauri/resources/runtime/`
+- 递归地将 `lib/` 和 `agents/` 目录复制到 `resources/runtime/`
+- 通过从 `tauri.conf.json` 中解析版本来生成 `version.txt` (当前为 `0.1.0`)
+- 为所有源文件发出 `cargo:rerun-if-changed`，以便在输入更改时触发重新构建
+- 通过 `cargo:warning` 优雅地处理缺失的源文件，而不是出现 `panic`
+
+### 2. `desktop_app/src-tauri/tauri.conf.json` — Bundle 配置
+- 向 `bundle` 部分添加了 `"resources": ["resources/runtime/*"]`，以便 `Tauri` 将运行时文件包含在打包的应用程序中
+
+### 3. `desktop_app/.gitignore` — 排除生成文件
+- 添加了 `src-tauri/resources/runtime/`，这样生成的资源就不会被提交
+
+### 验证结果
+- `cargo build` 成功编译，并显示警告：`Runtime resources prepared (version 0.1.0)`
+- `resources/runtime/` 目录包含所有 16 个预期文件：
+  - `run.sh` (94K), `program.md` (13K), `version.txt` (5B)
+  - `lib/` 包含 10 个 shell 脚本 + CLAUDE.md
+  - `agents/` 包含 3 个代理 `.md` 文件
+  - `version.txt` 读取 `0.1.0`
+
+## 经验总结
+- **模式**: Tauri 的 `build.rs` 可以通过 `CARGO_MANIFEST_DIR` 相对于 `crate` 位置预构建资源；使用 `.parent().parent()` 导航到 `workspace root`
+- **坑点**: `serde_json` 在 `[dependencies]` 中但不在 `[build-dependencies]` 中，因此版本解析使用了一个简单的行扫描器而不是 `JSON` 解析
+- **见解**: 为复制的源添加 `cargo:rerun-if-changed` 可确保更改后的运行时文件在重新构建时被识别

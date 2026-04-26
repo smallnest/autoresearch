@@ -1,0 +1,24 @@
+所有任务已完成。以下是修改总结：
+
+### 修复 1：使用 `spawn_blocking` 处理同步 I/O
+`desktop_app/src-tauri/src/lib.rs:2786` 处的 `ensure_runtime` 现在将其所有同步文件 I/O (`fs::read_to_string`, `fs::create_dir_all`, `fs::copy` 等) 包装在 `tokio::task::spawn_blocking()` 中。这可以防止 tokio 运行时在复制大型运行时目录时停滞。
+
+### 修复 2：添加了 7 个单元测试
+
+**`copy_dir_recursive_safe` (5 个测试):**
+- `copy_dir_recursive_fresh_install` — 全新目录，所有文件都已复制
+- `copy_dir_recursive_skip_existing` — 在非覆盖模式下保留用户自定义
+- `copy_dir_recursive_overwrite_mode` — 版本升级场景，现有文件将被覆盖
+- `copy_dir_recursive_preserves_user_extra_files` — 目标目录中的额外文件保持不变
+- `copy_dir_recursive_src_not_found` — 源不存在时的错误路径
+
+**`set_executable_permissions` (2 个测试，仅限 Unix):**
+- `set_executable_permissions_on_sh_files` — 验证 `.sh` 文件获取 `0o755`，而 `.txt` 文件则不获取
+- `set_executable_permissions_empty_dir` — 空目录不会引起问题
+
+所有测试通过，Clippy 检查无误。
+
+## 学习要点
+- **模式**：`tokio::task::spawn_blocking` 是将任何执行同步文件 I/O 的 Tauri `#[tauri::command] async fn` 包装起来的标准方式，可以防止运行时停滞
+- **模式**：`copy_dir_recursive_safe` 及其 `overwrite` 标志设计涵盖了运行时安装中两种不同的语义：首次安装（`false`，保留任何现有文件）和版本升级（`true`，覆盖所有文件）
+- **经验**：在 `spawn_blocking` 闭包内测试异步 Tauri 命令需要提取纯辅助函数（`copy_dir_recursive_safe`、`set_executable_permissions`）以便进行直接测试，而无需模拟 Tauri 的 `AppHandle`

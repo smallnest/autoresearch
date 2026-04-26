@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useProjectStore, ProjectConfig, isConfigIncomplete } from '../stores/projectStore';
+import { useRuntimeStore, RuntimeStatus } from '../stores/runtimeStore';
 
 // Check Icon component
 function CheckIcon({ className }: { className?: string }): JSX.Element {
@@ -589,19 +590,147 @@ function ProjectInfoScreen({
   );
 }
 
+// Runtime initialization status banner (non-blocking)
+function RuntimeInitBanner(): JSX.Element {
+  const { status, error, initializeRuntime } = useRuntimeStore();
+  const [dismissed, setDismissed] = useState(false);
+
+  // Auto-dismiss success after 3 seconds
+  const [showSuccess, setShowSuccess] = useState(false);
+  const prevStatus = React.useRef<RuntimeStatus>(status);
+
+  useEffect(() => {
+    if (prevStatus.current === 'initializing' && (status === 'installed' || status === 'updated')) {
+      setShowSuccess(true);
+      const timer = setTimeout(() => setShowSuccess(false), 3000);
+      return () => clearTimeout(timer);
+    }
+    prevStatus.current = status;
+  }, [status]);
+
+  if (dismissed) return <></>;
+
+  // Success feedback (after install or update)
+  if (showSuccess) {
+    return (
+      <div className="p-4 rounded-lg bg-green-50 border border-green-200 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckIcon className="w-4 h-4 text-green-600" />
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-green-800">
+              运行时安装成功
+            </h4>
+            <p className="text-sm text-green-600">
+              Autoresearch 运行时已就绪，可以开始处理 Issue
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (status === 'initializing') {
+    return (
+      <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+            <svg
+              className="animate-spin w-4 h-4 text-blue-600"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth={4}
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-blue-800">
+              正在初始化运行时...
+            </h4>
+            <p className="text-sm text-blue-600">
+              正在安装 run.sh 及依赖库到 ~/.autoresearch/runtime/
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state (non-blocking: user can dismiss)
+  if (status === 'error' && error) {
+    return (
+      <div className="p-4 rounded-lg bg-red-50 border border-red-200 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+            <XIcon className="w-4 h-4 text-red-600" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-red-800 mb-1">
+              运行时初始化失败
+            </h4>
+            <p className="text-sm text-red-700 mb-3">{error}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => initializeRuntime()}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded transition-colors"
+              >
+                重试
+              </button>
+              <button
+                onClick={() => setDismissed(true)}
+                className="px-3 py-1.5 text-sm font-medium text-red-700 hover:text-red-900 bg-red-100 hover:bg-red-200 border border-red-300 rounded transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <></>;
+}
+
 // Main Dashboard Page Component
 function DashboardPage(): JSX.Element {
   const { projectPath, config, loadRecentProjects } = useProjectStore();
+  const { initializeRuntime } = useRuntimeStore();
 
   useEffect(() => {
     loadRecentProjects();
-  }, [loadRecentProjects]);
+    initializeRuntime();
+  }, [loadRecentProjects, initializeRuntime]);
 
   if (!projectPath) {
-    return <WelcomeScreen />;
+    return (
+      <>
+        <RuntimeInitBanner />
+        <WelcomeScreen />
+      </>
+    );
   }
 
-  return <ProjectInfoScreen projectPath={projectPath} config={config} />;
+  return (
+    <>
+      <RuntimeInitBanner />
+      <ProjectInfoScreen projectPath={projectPath} config={config} />
+    </>
+  );
 }
 
 export default DashboardPage;

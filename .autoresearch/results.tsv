@@ -44,3 +44,4 @@
 2026-04-26T08:33:01+08:00	85	[desktop-app] 启动任务失败时无有效错误信息，无法排查原因	completed	3	false	88	88	feature/issue-85	
 2026-04-26T11:27:22+08:00	84	[desktop-app] 选择新项目时未自动初始化 .autoresearch 配置文件	blocked	42	false	20	20	feature/issue-84	
 2026-04-26T11:36:27+08:00	84	[desktop-app] 选择新项目时未自动初始化 .autoresearch 配置文件	completed	44	false	85	85	feature/issue-84	
+2026-04-26T12:37:35+08:00	88	[desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装	completed	13	false	86	86	feature/issue-88	

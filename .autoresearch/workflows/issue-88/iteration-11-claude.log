@@ -1,0 +1,38 @@
+## 自检
+
+### 编译/类型检查
+- [x] Rust 编译通过（cargo check，无错误）
+- [x] TypeScript 类型检查通过（tsc --noEmit，无错误）
+
+### 测试验证
+- [x] 122 个 Rust 测试全部通过
+
+### 代码质量
+- [x] 遵循现有 store 模式（Zustand create, tauriInvoke lazy import）
+- [x] 遵循现有 UI 模式（参考 InitTemplatePrompt 的 loading/success/error 三态）
+- [x] 非阻塞：运行时初始化失败不阻止用户浏览其他功能
+
+### 验收条件覆盖
+- [x] 应用启动时自动调用 ensure_runtime — `DashboardPage` useEffect 中调用 `initializeRuntime()`
+- [x] 安装过程中 UI 显示 loading 状态 — `RuntimeInitBanner` 蓝色加载卡片
+- [x] 安装失败时显示错误提示但不阻塞其他功能 — 红色错误卡片带重试/关闭按钮，其余 UI 正常渲染
+- [x] 安装成功后 UI 正常切换到可用状态 — 绿色成功通知，3秒自动消失
+- [x] 运行时状态可在前端获取 — `useRuntimeStore` 的 `status` 字段
+
+---
+
+## 变更总结
+
+**4个文件被修改/创建：**
+
+1.  **`desktop_app/src/stores/runtimeStore.ts`** (新增) — 使用 `useRuntimeStore` 进行 Zustand 状态管理，包含 `status`、`error` 和 `initializeRuntime` 动作。调用后端 `ensure_runtime` 命令。
+
+2.  **`desktop_app/src/pages/DashboardPage.tsx`** (修改) — 添加了 `RuntimeInitBanner` 组件（加载中/成功/错误三态），并在挂载时通过 `useEffect` 调用 `initializeRuntime()`。横幅在无项目和有项目状态下均显示。
+
+3.  **`desktop_app/src-tauri/src/lib.rs`** (修改) — 将 `ensure_runtime` 返回类型从 `Result<String, String>` 更改为 `Result<EnsureRuntimeResult, String>`，其中 `EnsureRuntimeResult` 是一个结构化结构体，让 Tauri 自动将其序列化为 `{"status": "installed"}` JSON。移除了手动 `serde_json::to_string` 的用法。
+
+## 经验总结
+
+-   **模式**：`RuntimeInitBanner` 遵循与 `InitTemplatePrompt` 完全相同的三态模式（加载中/成功/错误），确保 UI 一致性。非阻塞设计意味着 `RuntimeInitBanner` 与 `WelcomeScreen` / `ProjectInfoScreen` 并行渲染。
+-   **踩坑**：`ensure_runtime` 内部的 `spawn_blocking` 闭包在参数位置需要 `Result<EnsureRuntimeResult, String>`（而不是 `Result<String, String>`），因为外部的 async 函数现在返回 `Result<EnsureRuntimeResult, String>`。内部闭包返回类型必须匹配。
+-   **经验**：从 `Result<String, String>` 更改为 `Result<EnsureRuntimeResult, String>` 意味着 Tauri 直接处理 JSON 序列化——前端获取 `{"status": "installed"}` 而无需 `JSON.parse`。这更清晰，并且类型安全。

@@ -1,0 +1,73 @@
+我现在对问题有了全面的了解。让我来分析一下这个问题：
+
+**当前状态**：`start_run` 通过 `project_path.parent()`（第1919-1924行）解析 `run.sh`，假设 autoresearch 仓库是项目路径的兄弟目录。它使用 `SCRIPT_DIR`（`run.sh` 的第61行）来定位 `lib/`、`agents/` 和 `program.md`。
+
+**需要做的**：将运行时文件打包到 Tauri 应用中，在 `~/.autoresearch/runtime/` 安装它们，并从那里使用 `run.sh`。
+
+以下是子任务分解：
+
+```json
+{
+  "issueNumber": 88,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "构建时打包：将 run.sh 及依赖文件复制到 Tauri resources 目录",
+      "description": "修改 Tauri 构建流程（build.rs），在编译前将 autoresearch 运行时文件（run.sh、lib/*.sh、agents/*.md、program.md）复制到 src-tauri/resources/ 目录，并配置 tauri.conf.json 的 bundle.resources 以包含这些文件。同时生成一个 version.txt 文件记录当前版本号用于运行时版本检查。",
+      "acceptanceCriteria": [
+        "build.rs 在构建前将 run.sh、lib/、agents/、program.md 复制到 src-tauri/resources/runtime/",
+        "tauri.conf.json 中配置 bundle.resources 包含 runtime 目录",
+        "生成的 resources 中包含 version.txt 记录应用版本号",
+        "运行 cargo build 后 src-tauri/resources/runtime/ 目录存在且文件完整"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "运行时安装：实现 ensure_runtime Rust 命令安装运行时到 ~/.autoresearch/runtime/",
+      "description": "在 Rust 后端新增 ensure_runtime Tauri 命令，从应用资源目录读取打包的运行时文件并安装到 ~/.autoresearch/runtime/。逻辑：1) 如果目标文件已存在则跳过（不覆盖用户自定义）；2) 检查 version.txt 判断是否需要更新；3) 设置 run.sh 的可执行权限；4) 安装过程需兼容 macOS 和 Linux 路径。返回安装状态（首次安装/已存在/已更新）。",
+      "acceptanceCriteria": [
+        "ensure_runtime 命令将资源文件安装到 ~/.autoresearch/runtime/ 目录",
+        "已存在的文件不被覆盖（保留用户自定义）",
+        "通过 version.txt 进行版本比对，版本不一致时更新文件",
+        "run.sh 被正确设置可执行权限",
+        "安装失败时返回明确的错误信息而非 panic",
+        "macOS 和 Linux 路径均兼容"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "修改 start_run 使用已安装的 run.sh 路径执行任务",
+      "description": "修改 start_run 命令，将 run.sh 路径解析逻辑从当前的 project_path.parent() 改为优先使用 ~/.autoresearch/runtime/run.sh。修改 current_dir 为 runtime 目录而非 autoresearch 仓库根目录，确保 run.sh 的 SCRIPT_DIR 能正确解析 lib/ 等依赖。同时更新 get_run_status 等相关命令。",
+      "acceptanceCriteria": [
+        "start_run 使用 ~/.autoresearch/runtime/run.sh 作为执行路径",
+        "run.sh 的 SCRIPT_DIR 能正确解析到 ~/.autoresearch/runtime/lib/ 等依赖",
+        "执行 run.sh 时 current_dir 设置为 ~/.autoresearch/runtime/",
+        "如果 ~/.autoresearch/runtime/run.sh 不存在，返回明确的错误提示",
+        "所有现有的 run.sh 进程管理功能（start/stop/status）仍然正常工作",
+        "相关的单元测试通过"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "T-004",
+      "title": "前端集成：应用启动时自动初始化运行时并显示进度",
+      "description": "在前端应用启动或用户选择项目时调用 ensure_runtime 命令。在 projectStore 或新的 runtimeStore 中管理运行时安装状态。安装过程中显示 loading 状态提示。安装失败时显示错误信息但不阻塞应用其他功能（如浏览历史、查看 Issue 列表等）。",
+      "acceptanceCriteria": [
+        "应用启动时自动调用 ensure_runtime 检查/安装运行时",
+        "安装过程中 UI 显示 loading 状态",
+        "安装失败时显示错误提示但不阻塞其他功能",
+        "安装成功后 UI 正常切换到可用状态",
+        "运行时状态（已安装/未安装/版本）可在前端获取"
+      ],
+      "priority": 4,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

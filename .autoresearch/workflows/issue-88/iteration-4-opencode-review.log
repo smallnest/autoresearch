@@ -1,0 +1,437 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app
+[0m✱ [0mGlob "desktop_app/src-tauri/**/*"[90m in . · 100 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/build.rs
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime/version.txt
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime
+[0m✱ [0mGlob ".autoresearch/workflows/issue-88/**/*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime/lib
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime/agents
+[0m→ [0mRead .autoresearch/workflows/issue-88/terminal.log
+[0m→ [0mRead .autoresearch/workflows/issue-88/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-88/iteration-4-opencode-review.log
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime/run.sh[90m [limit=5][0m
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime/program.md[90m [limit=5][0m
+[0m
+[0m$ [0mls -la /Users/chaoyuepan/ai/autoresearch/run.sh /Users/chaoyuepan/ai/autoresearch/program.md 2>&1; echo "---"; ls /Users/chaoyuepan/ai/autoresearch/lib/ 2>&1; echo "---"; ls /Users/chaoyuepan/ai/autoresearch/agents/ 2>&1
+-rw-r--r--@ 1 chaoyuepan  staff  12807 Apr 23 09:58 /Users/chaoyuepan/ai/autoresearch/program.md
+-rwxr-xr-x@ 1 chaoyuepan  staff  96556 Apr 26 07:28 /Users/chaoyuepan/ai/autoresearch/run.sh
+---
+CLAUDE.md
+agent_logic.sh
+branch_cleanup.sh
+context.sh
+git_push.sh
+progress.sh
+prompt.sh
+scoring.sh
+subtask.sh
+ui_verify.sh
+---
+claude.md
+codex.md
+opencode.md
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-88/tasks.json
+[0m
+[0m$ [0mls -la /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/target/debug/resources/runtime/ 2>&1
+total 232
+drwxr-xr-x@ 5 chaoyuepan  staff    160 Apr 26 11:47 .
+drwxr-xr-x@ 3 chaoyuepan  staff     96 Apr 26 11:47 ..
+-rw-r--r--@ 1 chaoyuepan  staff  12807 Apr 23 09:58 program.md
+-rwxr-xr-x@ 1 chaoyuepan  staff  96556 Apr 26 07:28 run.sh
+-rw-r--r--@ 1 chaoyuepan  staff      5 Apr 26 11:47 version.txt
+[0m
+[0m$ [0mgit diff HEAD -- desktop_app/src-tauri/build.rs desktop_app/src-tauri/tauri.conf.json 2>&1 | head -100
+diff --git a/desktop_app/src-tauri/build.rs b/desktop_app/src-tauri/build.rs
+index d860e1e..3b5afea 100644
+--- a/desktop_app/src-tauri/build.rs
++++ b/desktop_app/src-tauri/build.rs
+@@ -1,3 +1,107 @@
++use std::fs;
++use std::path::Path;
++
+ fn main() {
++    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
++    let manifest = Path::new(&manifest_dir);
++
++    // Workspace root: src-tauri/ -> desktop_app/ -> autoresearch root
++    let workspace_root = manifest
++        .parent() // desktop_app/
++        .and_then(|p| p.parent()) // autoresearch root
++        .expect("Cannot determine workspace root from CARGO_MANIFEST_DIR");
++
++    let resources_dir = manifest.join("resources").join("runtime");
++
++    // Clean and recreate resources directory
++    if resources_dir.exists() {
++        fs::remove_dir_all(&resources_dir).expect("Failed to clean resources/runtime directory");
++    }
++    fs::create_dir_all(&resources_dir).expect("Failed to create resources/runtime directory");
++
++    // Copy individual files
++    let files_to_copy = ["run.sh", "program.md"];
++    for file in &files_to_copy {
++        let src = workspace_root.join(file);
++        let dst = resources_dir.join(file);
++        if src.exists() {
++            fs::copy(&src, &dst).unwrap_or_else(|e| {
++                panic!("Failed to copy {}: {}", src.display(), e)
++            });
++            println!("cargo:rerun-if-changed={}", src.display());
++        } else {
++            println!(
++                "cargo:warning=Source file not found, skipping: {}",
++                src.display()
++            );
++        }
++    }
++
++    // Copy directories recursively
++    let dirs_to_copy = ["lib", "agents"];
++    for dir in &dirs_to_copy {
++        let src = workspace_root.join(dir);
++        let dst = resources_dir.join(dir);
++        if src.is_dir() {
++            copy_dir_recursive(&src, &dst).unwrap_or_else(|e| {
++                panic!("Failed to copy directory {}: {}", src.display(), e)
++            });
++            println!("cargo:rerun-if-changed={}", src.display());
++        } else {
++            println!(
++                "cargo:warning=Source directory not found, skipping: {}",
++                src.display()
++            );
++        }
++    }
++
++    // Generate version.txt by parsing version from tauri.conf.json
++    let tauri_conf_path = manifest.join("tauri.conf.json");
++    let version = if tauri_conf_path.exists() {
++        let content =
++            fs::read_to_string(&tauri_conf_path).expect("Failed to read tauri.conf.json");
++        extract_version(&content).unwrap_or_else(|| "0.0.0".to_string())
++    } else {
++        "0.0.0".to_string()
++    };
++    fs::write(resources_dir.join("version.txt"), &version)
++        .expect("Failed to write version.txt");
++    println!("cargo:rerun-if-changed={}", tauri_conf_path.display());
++
++    println!("cargo:warning=Runtime resources prepared (version {})", version);
++
+     tauri_build::build()
+ }
++
++/// Recursively copy a directory and all its contents.
++fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
++    fs::create_dir_all(dst)?;
++    for entry in fs::read_dir(src)? {
++        let entry = entry?;
++        let src_path = entry.path();
++        let dst_path = dst.join(entry.file_name());
++        if src_path.is_dir() {
++            copy_dir_recursive(&src_path, &dst_path)?;
++        } else {
++            fs::copy(&src_path, &dst_path)?;
++        }
++    }
++    Ok(())
++}
++
++/// Extract the "version" field value from tauri.conf.json JSON content.
++fn extract_version(json_content: &str) -> Option<String> {
++    // Simple parse: look for "version": "X.Y.Z" pattern
++    for line in json_content.lines() {
+[0m
+[0m$ [0mls -la /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/ 2>&1
+total 232
+drwxr-xr-x@  7 chaoyuepan  staff    224 Apr 26 11:47 .
+drwxr-xr-x@  3 chaoyuepan  staff     96 Apr 26 11:47 ..
+drwxr-xr-x@  5 chaoyuepan  staff    160 Apr 26 11:47 agents
+drwxr-xr-x@ 12 chaoyuepan  staff    384 Apr 26 11:47 lib
+-rw-r--r--@  1 chaoyuepan  staff  12807 Apr 23 09:58 program.md
+-rwxr-xr-x@  1 chaoyuepan  staff  96556 Apr 26 07:28 run.sh
+-rw-r--r--@  1 chaoyuepan  staff      5 Apr 26 11:47 version.txt
+[0m
+[0m$ [0mfind /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/target/debug/resources/runtime -type f 2>&1
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/target/debug/resources/runtime/program.md
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/target/debug/resources/runtime/run.sh
+/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/target/debug/resources/runtime/version.txt
+[0m
+[0m$ [0mgit diff HEAD -- desktop_app/src-tauri/tauri.conf.json 2>&1
+diff --git a/desktop_app/src-tauri/tauri.conf.json b/desktop_app/src-tauri/tauri.conf.json
+index 1e09a2b..70ac851 100644
+--- a/desktop_app/src-tauri/tauri.conf.json
++++ b/desktop_app/src-tauri/tauri.conf.json
+@@ -25,6 +25,9 @@
+   "bundle": {
+     "active": true,
+     "targets": "all",
++    "resources": [
++      "resources/runtime/*"
++    ],
+     "icon": [
+       "icons/32x32.png",
+       "icons/128x128.png",
+[0m
+[0m$ [0mgit status -- desktop_app/src-tauri/ 2>&1
+On branch feature/issue-88
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   desktop_app/src-tauri/build.rs
+	modified:   desktop_app/src-tauri/tauri.conf.json
+
+no changes added to commit (use "git add" and/or "git commit -a")
+[0m
+[0m$ [0mcat /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/.gitignore
+# Generated by Cargo
+# will have compiled files and executables
+/target/
+
+# Generated by Tauri
+# will have schema files for capabilities auto-completion
+/gen/schemas
+[0m
+[0m$ [0mgit status -u 2>&1 | head -30
+On branch feature/issue-88
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   desktop_app/.gitignore
+	modified:   desktop_app/src-tauri/build.rs
+	modified:   desktop_app/src-tauri/tauri.conf.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.autoresearch/workflows/issue-88/.last_score
+	.autoresearch/workflows/issue-88/hard-gate-3.log
+	.autoresearch/workflows/issue-88/iteration-1-claude.log
+	.autoresearch/workflows/issue-88/iteration-2-opencode-review.log
+	.autoresearch/workflows/issue-88/iteration-3-claude-review.log
+	.autoresearch/workflows/issue-88/iteration-3-claude.log
+	.autoresearch/workflows/issue-88/iteration-4-opencode-review.log
+	.autoresearch/workflows/issue-88/log.md
+	.autoresearch/workflows/issue-88/planning.log
+	.autoresearch/workflows/issue-88/progress.md
+	.autoresearch/workflows/issue-88/tasks.json
+
+no changes added to commit (use "git add" and/or "git commit -a")
+[0m
+[0m$ [0mgit diff HEAD -- desktop_app/.gitignore 2>&1
+diff --git a/desktop_app/.gitignore b/desktop_app/.gitignore
+index a547bf3..c64aec7 100644
+--- a/desktop_app/.gitignore
++++ b/desktop_app/.gitignore
+@@ -22,3 +22,6 @@ dist-ssr
+ *.njsproj
+ *.sln
+ *.sw?
++
++# Generated runtime resources (created by build.rs at build time)
++src-tauri/resources/runtime/
+[0m
+[0m→ [0mRead desktop_app/.gitignore
+[0m
+[0m$ [0mgit log --oneline -5 -- desktop_app/src-tauri/build.rs desktop_app/src-tauri/tauri.conf.json desktop_app/.gitignore 2>&1
+9a96879 feat: implement issue #22 - [desktop-app] 项目脚手架搭建
+[0m
+[0m$ [0mgit show HEAD:desktop_app/src-tauri/build.rs
+fn main() {
+    tauri_build::build()
+}
+[0m
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m
+[0m$ [0mgit show HEAD:desktop_app/src-tauri/tauri.conf.json
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Autoresearch Desktop",
+  "version": "0.1.0",
+  "identifier": "com.chaoyuepan.autoresearch",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Autoresearch Desktop",
+        "width": 1200,
+        "height": 800,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
+[0m
+[0m$ [0mgit show HEAD:desktop_app/.gitignore
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+[0m
+[0m$ [0mdiff /Users/chaoyuepan/ai/autoresearch/run.sh /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/run.sh 2>&1 | head -5
+(no output)
+[0m
+[0m$ [0mdiff /Users/chaoyuepan/ai/autoresearch/program.md /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/program.md 2>&1 | head -5
+(no output)
+[0m
+[0m$ [0mfor f in /Users/chaoyuepan/ai/autoresearch/lib/*.sh; do
+  basename=$(basename "$f")
+  target="/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/lib/$basename"
+  if [ -f "$target" ]; then
+    diff -q "$f" "$target" && echo "$basename: same" || echo "$basename: DIFFERENT"
+  else
+    echo "$basename: MISSING"
+  fi
+done
+agent_logic.sh: same
+branch_cleanup.sh: same
+context.sh: same
+git_push.sh: same
+progress.sh: same
+prompt.sh: same
+scoring.sh: same
+subtask.sh: same
+ui_verify.sh: same
+[0m
+[0m$ [0mfor f in /Users/chaoyuepan/ai/autoresearch/agents/*.md; do
+  basename=$(basename "$f")
+  target="/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/agents/$basename"
+  if [ -f "$target" ]; then
+    diff -q "$f" "$target" && echo "$basename: same" || echo "$basename: DIFFERENT"
+  else
+    echo "$basename: MISSING"
+  fi
+done
+claude.md: same
+codex.md: same
+opencode.md: same
+[0m
+[0m$ [0mls /Users/chaoyuepan/ai/autoresearch/lib/ 2>&1; echo "---"; ls /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/lib/ 2>&1
+CLAUDE.md
+agent_logic.sh
+branch_cleanup.sh
+context.sh
+git_push.sh
+progress.sh
+prompt.sh
+scoring.sh
+subtask.sh
+ui_verify.sh
+---
+CLAUDE.md
+agent_logic.sh
+branch_cleanup.sh
+context.sh
+git_push.sh
+progress.sh
+prompt.sh
+scoring.sh
+subtask.sh
+ui_verify.sh
+[0m
+[0m$ [0mdiff -rq /Users/chaoyuepan/ai/autoresearch/lib/ /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/lib/ 2>&1
+(no output)
+[0m
+[0m$ [0mdiff -rq /Users/chaoyuepan/ai/autoresearch/agents/ /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/resources/runtime/agents/ 2>&1
+(no output)
+[0m
+[0m$ [0mgit diff HEAD --stat 2>&1
+desktop_app/.gitignore                |   3 +
+ desktop_app/src-tauri/build.rs        | 104 ++++++++++++++++++++++++++++++++++
+ desktop_app/src-tauri/tauri.conf.json |   3 +
+ 3 files changed, 110 insertions(+)
+[0m
+## 审核报告
+
+### Issue
+- 编号: #88
+- 标题: [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+- 子任务: T-001 - 构建时打包：将 run.sh 及依赖文件复制到 Tauri resources 目录
+- 迭代次数: 4 (前 3 次被 INT 中断, 第 3 次 Claude 已进行实现及修复)
+
+### 总体评价
+
+**评分: 87/100**
+
+T-001 的核心实现已完成。`build.rs` 在构建时正确地将 `run.sh`、`program.md`、`lib/`、`agents/` 文件从仓库根目录复制到 `src-tauri/resources/runtime/`，所有文件经 `diff` 验证均为字节一致。`version.txt` 从 `tauri.conf.json` 中正确提取了 `0.1.0`。`.gitignore` 已正确忽略生成的 runtime 目录。
+
+### 严重问题 (必须修复)
+
+#### 全局匹配模式 `resources/runtime/*` 未递归包含子目录文件
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json:29`
+
+**问题描述**: `bundle.resources` 配置为 `"resources/runtime/*"`。该 glob 模式只匹配 `runtime/` 目录的直接子文件，不递归包含 `lib/` 和 `agents/` 子目录中的文件。
+
+**证据**: `target/debug/resources/runtime/` 中仅包含 `run.sh`、`program.md`、`version.txt` 三个文件，缺少 `lib/` 和 `agents/` 目录。这意味着生产构建（`.dmg`/`.AppImage`）的 bundle 中将缺少嵌套的运行时文件，导致应用在 release 模式下无法运行。
+
+**修复建议**: 将 `"resources/runtime/*"` 改为 `"resources/runtime/**"` 以递归匹配所有层级文件。
+
+### 一般问题 (建议修复)
+
+#### `extract_version` 使用字符串解析而非 JSON 解析
+
+**位置**: `desktop_app/src-tauri/build.rs:93-107`
+
+**问题描述**: `extract_version` 通过逐行扫描 JSON 文本匹配 `"version"` 前缀。这种方式可能误匹配含有 `version` 前缀的其他字段（如 `version_code`）。虽然当前 `tauri.conf.json` 结构简单不存在此问题，但 JSON 格式变更时易出错。
+
+**修复建议**: 将 `serde_json` 添加到 `[build-dependencies]` 并使用 `serde_json::Value` 解析。或增加更严格的模式匹配（例如确认 `"version"` 后跟 `:` 且在顶层作用域）。
+
+### 审核结论
+- [ ] 需修复 glob 模式后通过
+
+### 实现者自检确认
+
+由于本次是审核迭代，未运行构建验证。但手动验证了：
+- `src-tauri/resources/runtime/` 目录包含完整的文件结构 ✓
+- 所有复制文件与源文件字节一致（`diff` 无差异）✓
+- `version.txt` 内容与 `tauri.conf.json` 中 `"0.1.0"` 一致 ✓
+
+## Learnings
+
+- **模式**: Tauri v2 的 `bundle.resources` 使用标准 glob 匹配，`*` 不匹配路径分隔符，递归包含需使用 `**`
+- **踩坑**: `target/debug/resources/runtime/` 仅包含顶层文件，证明 `resources/runtime/*` 不递归包含子目录——这是一个静默失败，debug 模式因直接读取 `resources/` 源目录而正常工作，但 release bundle 会遗漏子目录文件
+- **经验**: `build.rs` 中路径定位使用 `CARGO_MANIFEST_DIR.parent().parent()` 依赖于 `desktop_app/src-tauri/` → `desktop_app/` → 仓库根目录 的结构，若目录结构调整需同步更新

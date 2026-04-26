@@ -1,0 +1,152 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/src-tauri/build.rs
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+[0m✱ [0mGrep "ensure_runtime"[90m in desktop_app · 3 matches[0m
+[0m✱ [0mGrep "ensure_runtime"[90m in . · 3 matches[0m
+[0m✱ [0mGrep "ensure_runtime"[90m in . · 9 matches[0m
+Let me search for the `ensure_runtime` implementation and examine other relevant files.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2760, limit=200][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1589, limit=200][0m
+Good, the `ensure_runtime` command now exists. Let me read its implementation and related code.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2948, limit=200][0m
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m→ [0mRead .autoresearch/workflows/issue-88/terminal.log[90m [limit=80][0m
+Now let me check for tests and the rest of the capabilities file.
+[0m✱ [0mGrep "ensure_runtime|copy_dir_recursive_safe|set_executable_permissions|EnsureRuntimeStatus"[90m in desktop_app/src-tauri/src/lib.rs · 18 matches[0m
+[0m✱ [0mGrep "fn ensure_runtime|fn copy_dir_recursive|fn set_executable"[90m in desktop_app · 5 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-88/terminal.log[90m [offset=81][0m
+[0m✱ [0mGrep "ensure_runtime|copy_dir_recursive_safe|set_executable_permission"[90m in desktop_app/src-tauri/src · 14 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3148, limit=200][0m
+[0m✱ [0mGrep "fn.*(ensure_runtime|copy_dir|set_executable)"[90m in desktop_app/src-tauri/src · 4 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3348, limit=200][0m
+[0m✱ [0mGrep "fn test_"[90m in desktop_app/src-tauri/src/lib.rs · 0 matches[0m
+[0m
+[0m$ [0mgrep -c "fn " /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs
+234
+[0m
+[0m$ [0mgrep -n '#\[test\]' /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs | tail -50
+4159:    #[test]
+4171:    #[test]
+4185:    #[test]
+4195:    #[test]
+4202:    #[test]
+4211:    #[test]
+4226:    #[test]
+4257:    #[test]
+4282:    #[test]
+4308:    #[test]
+4322:    #[test]
+4347:    #[test]
+4378:    #[test]
+4385:    #[test]
+4391:    #[test]
+4402:    #[test]
+4410:    #[test]
+4417:    #[test]
+4424:    #[test]
+4431:    #[test]
+4437:    #[test]
+4443:    #[test]
+4454:    #[test]
+4465:    #[test]
+4473:    #[test]
+4484:    #[test]
+4492:    #[test]
+4507:    #[test]
+4529:    #[test]
+4538:    #[test]
+4577:    #[test]
+4610:    #[test]
+4635:    #[test]
+4668:    #[test]
+4685:    #[test]
+4705:    #[test]
+4731:    #[test]
+4752:    #[test]
+4802:    #[test]
+4810:    #[test]
+4852:    #[test]
+4912:    #[test]
+4920:    #[test]
+4942:    #[test]
+4960:    #[test]
+4972:    #[test]
+4998:    #[test]
+5010:    #[test]
+5018:    #[test]
+5075:    #[test]
+[0m
+[0m$ [0mgrep -A1 '#\[test\]' /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/src/lib.rs | grep -i 'ensure_runtime\|runtime\|dir_recursive\|executable' | head -20
+(no output)
+[0m
+[0m→ [0mRead desktop_app/src-tauri/resources/runtime
+[0m→ [0mRead .autoresearch/workflows/issue-88/progress.md[90m [limit=50][0m
+Let me check a few more things to complete my analysis.
+[0m→ [0mRead .autoresearch/workflows/issue-88/progress.md[90m [offset=100][0m
+[0m✱ [0mGrep "fn start_run"[90m in desktop_app/src-tauri/src · 2 matches[0m
+[0m✱ [0mGrep "spawn_blocking"[90m in desktop_app/src-tauri/src/lib.rs · 22 matches[0m
+[0m✱ [0mGlob ".autoresearch/workflows/issue-88/iteration-5-*.log"[90m 2 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-88/iteration-5-claude.log[90m [limit=50][0m
+[0m→ [0mRead .autoresearch/workflows/issue-88/iteration-5-claude-review.log[90m [limit=50][0m
+[0m✱ [0mGrep "use tauri::Manager"[90m in desktop_app/src-tauri/src · 1 match[0m
+[0m✱ [0mGrep "^use"[90m in desktop_app/src-tauri/src/lib.rs · 14 matches[0m
+[0m✱ [0mGrep "dirs"[90m in desktop_app/src-tauri · 1 match[0m
+现在我有了完整的图景。这是审核报告：
+
+## 审核报告
+
+### Issue
+- 编号: #88
+- 子任务: T-002 - 运行时安装：实现 ensure_runtime Rust 命令
+- 迭代次数: 6
+
+### 总体评价
+**评分: 66/100**
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 无单元测试覆盖新代码
+
+`ensure_runtime`、`copy_dir_recursive_safe`、`set_executable_permissions` 和 `EnsureRuntimeStatus` 均无任何单元测试。该文件已包含 50+ 个测试用例（config文件、PR操作、进度解析等），但 T-002 新增的 ~140 行代码零测试覆盖。缺少对以下核心路径的验证：
+- 首次安装（dest 不存在）
+- 版本相同 → AlreadyExists
+- 版本不同 → Updated  
+- 已存在文件不被覆盖（overwrite=false 路径）
+- 升级时文件被覆盖（overwrite=true 路径）
+- `.sh` 可执行权限正确设置
+- src_dir 不存在时的错误处理
+
+#### 问题 2: 阻塞 I/O 在 async 命令中未使用 spawn_blocking
+
+`ensure_runtime` 是 `async fn`，但直接调用同步 `std::fs` 操作（`read_dir`、`copy`、`read_to_string`、`create_dir_all`、`set_permissions`），未通过 `tokio::task::spawn_blocking` 包装。该文件中所有其他 IO 密集型 async Tauri 命令（`init_project_config`、`read_config_file`、`write_config_file` 等）均使用 `spawn_blocking`。此不一致性可能导致 Tauri 异步运行时线程池阻塞，影响 UI 响应性。
+
+**修复建议**：将主体逻辑提取到同步函数，在 async 命令中用 `spawn_blocking` 包装：
+```rust
+#[tauri::command]
+async fn ensure_runtime(app: tauri::AppHandle) -> Result<String, String> {
+    let resource_dir = app.path().resource_dir().map_err(...)?;
+    tokio::task::spawn_blocking(move || ensure_runtime_sync(&resource_dir))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+```
+
+### 一般问题 (建议修复)
+
+#### 问题 3: 返回类型为 JSON 编码字符串而非结构化类型
+
+`ensure_runtime` 返回 `Result<String, String>`，将 `EnsureRuntimeStatus` 序列化为 JSON 字符串。该代码库中其他命令均直接返回 typed struct（`ProjectConfig`、`IssueDetail`、`PrDetail` 等），由 Tauri 自动序列化。前端调用 `invoke('ensure_runtime')` 后需手动 `JSON.parse()` 结果，不一致。
+
+### 审核结论
+- [ ] 需要修改
+
+代码逻辑正确，覆盖了所有 6 项验收条件，但缺少测试和 async 最佳实践未遵循导致不达标。
+
+## Learnings
+
+- **模式**: Tauri v2 的 `bundle.resources` 用 `"dir/"`（尾部斜杠）递归包含所有文件，`"dir/*"` 仅匹配顶层文件，而 `"dir/**"` 会报 "not found"
+- **模式**: 所有 IO 密集型 async Tauri 命令应使用 `spawn_blocking` 包装同步操作，避免阻塞异步运行时
+- **踩坑**: 新增 `ensure_runtime` 需引入 `use tauri::Manager` trait 才能调用 `app.path().resource_dir()`

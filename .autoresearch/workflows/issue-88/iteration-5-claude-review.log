@@ -1,0 +1,81 @@
+## 审核报告
+
+### Issue
+- 编号: #88
+- 标题: [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+- 子任务: T-002 - 运行时安装：实现 ensure_runtime Rust 命令安装运行时到 ~/.autoresearch/runtime/
+- 迭代次数: 5
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+**T-002 子任务完全未实现。** 在 `lib.rs` 中搜索 `ensure_runtime` 返回零匹配，没有任何新增的 Rust 代码来实现该 Tauri 命令。当前代码变更仅包含 T-001 的产物（`build.rs`、`tauri.conf.json`、`.gitignore`），T-002 的所有 6 项验收条件均未满足。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: ensure_runtime 命令不存在
+
+**位置**: `desktop_app/src-tauri/src/lib.rs`
+
+**问题描述**:
+在整个 `desktop_app/` 目录中搜索 `ensure_runtime` 返回零结果。T-002 要求在 Rust 后端新增 `ensure_runtime` Tauri 命令，但该命令完全没有被实现。这意味着以下所有验收条件均未满足：
+
+1. **资源安装到 ~/.autoresearch/runtime/** — 无代码
+2. **已存在文件不覆盖** — 无代码
+3. **version.txt 版本比对** — 无代码
+4. **run.sh 可执行权限设置** — 无代码
+5. **安装失败返回错误而非 panic** — 无代码
+6. **macOS/Linux 路径兼容** — 无代码
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 2: T-001 遗留的 glob 模式问题未修复
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json:29`
+
+**问题描述**:
+迭代 4 的审核已指出 `bundle.resources` 中的 `"resources/runtime/*"` 不递归包含子目录（`lib/`、`agents/`），但至今未修复为 `"resources/runtime/**"`。`target/debug/resources/runtime/` 中仅包含 3 个顶层文件（`run.sh`、`program.md`、`version.txt`），缺少 `lib/` 和 `agents/` 子目录。debug 模式因直接读取源目录而正常工作，但 release bundle 将静默缺少运行时依赖文件。
+
+**修复建议**:
+```json
+"resources": [
+  "resources/runtime/**"
+]
+```
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - 无任何实现，需要从头开始
+
+**下一步行动**:
+实现 `ensure_runtime` Tauri 命令，核心逻辑：
+1. 在 `lib.rs` 中新增 `#[tauri::command] fn ensure_runtime(app: AppHandle) -> Result<String, String>`
+2. 使用 `app.path().resource_dir()` 获取打包资源路径
+3. 使用 `dirs::home_dir() / ".autoresearch/runtime/"` 作为目标路径
+4. 读取源和目标的 `version.txt` 进行版本比对
+5. 版本一致时返回 "already_exists"，不一致时更新文件
+6. 首次安装时复制所有文件
+7. 设置 `run.sh` 的可执行权限 (`fs::set_permissions` + `PermissionsExt::mode(0o755)`)
+8. 将命令注册到 `tauri::Builder` 的 `invoke_handler`
+9. 同时修复 `tauri.conf.json` 中 `resources/runtime/*` → `resources/runtime/**`
+
+---
+
+### 实现者自检确认
+
+由于无实现代码，自检不适用。
+
+## Learnings
+
+- **模式**: Tauri v2 中获取打包资源路径使用 `app.path().resource_dir()`，而非文件系统相对路径
+- **踩坑**: T-001 的 `bundle.resources` glob 模式问题（`*` vs `**`）在迭代 4 已发现但仍未修复，需要在 T-002 实现时一并解决，否则 `ensure_runtime` 在 release 构建中会找不到 `lib/` 和 `agents/` 子目录
+- **经验**: 子任务切换后首个迭代应为实现迭代（而非审核），当前迭代 5 作为审核迭代发现无代码可审，建议直接进入实现阶段
