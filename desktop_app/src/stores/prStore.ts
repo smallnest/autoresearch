@@ -36,6 +36,11 @@ export interface PrDiff {
   diff: string;
 }
 
+export interface PrActionResponse {
+  success: boolean;
+  message: string;
+}
+
 interface PrState {
   prs: GhPullRequest[];
   selectedPrNumber: number | null;
@@ -44,12 +49,15 @@ interface PrState {
   isLoading: boolean;
   detailLoading: boolean;
   diffLoading: boolean;
+  actionLoading: boolean;
   detailRequestKey: number;
   error: string | null;
   detailError: string | null;
   loadPrs: (_projectPath: string) => Promise<void>;
   loadPrDetail: (_projectPath: string, _prNumber: number) => Promise<void>;
   loadPrDiff: (_projectPath: string, _prNumber: number) => Promise<void>;
+  mergePr: (_projectPath: string, _prNumber: number) => Promise<PrActionResponse>;
+  closePr: (_projectPath: string, _prNumber: number) => Promise<PrActionResponse>;
   selectPr: (_number: number | null) => void;
   clearPrDetail: () => void;
   clearError: () => void;
@@ -66,6 +74,10 @@ export function normalizePrDetailError(error: unknown): string {
   return normalizeUserFacingError(error, '加载 PR 详情失败，请重试。');
 }
 
+export function normalizePrActionError(error: unknown): string {
+  return normalizeUserFacingError(error, 'PR 操作失败，请重试。');
+}
+
 export const usePrStore = create<PrState>((set, get) => ({
   prs: [],
   selectedPrNumber: null,
@@ -74,6 +86,7 @@ export const usePrStore = create<PrState>((set, get) => ({
   isLoading: false,
   detailLoading: false,
   diffLoading: false,
+  actionLoading: false,
   detailRequestKey: 0,
   error: null,
   detailError: null,
@@ -211,6 +224,40 @@ export const usePrStore = create<PrState>((set, get) => ({
       diffLoading: false,
       detailRequestKey: 0,
     });
+  },
+
+  mergePr: async (_projectPath: string, _prNumber: number) => {
+    set({ actionLoading: true });
+    try {
+      const result = isTauri
+        ? await tauriInvoke<PrActionResponse>('merge_pr', {
+            projectPath: _projectPath,
+            prNumber: _prNumber,
+          })
+        : { success: false, message: '浏览器模式不支持合并 PR' };
+      return result;
+    } catch (e) {
+      return { success: false, message: normalizePrActionError(e) };
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  closePr: async (_projectPath: string, _prNumber: number) => {
+    set({ actionLoading: true });
+    try {
+      const result = isTauri
+        ? await tauriInvoke<PrActionResponse>('close_pr', {
+            projectPath: _projectPath,
+            prNumber: _prNumber,
+          })
+        : { success: false, message: '浏览器模式不支持关闭 PR' };
+      return result;
+    } catch (e) {
+      return { success: false, message: normalizePrActionError(e) };
+    } finally {
+      set({ actionLoading: false });
+    }
   },
 
   clearError: () => set({ error: null }),

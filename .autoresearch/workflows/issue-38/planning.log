@@ -1,0 +1,75 @@
+基于分析，我现在对情况有了清晰的了解。Issue #38 要求在 Issue #37（PR 查看）已完成的基础上，在 Rust 和 React 两个方面实现 PR 合并/关闭操作。该代码库已具备以下成熟模式：
+- 用于 `gh` CLI 封装的 Tauri 命令
+- 使用 Zustand 的状态管理
+- 基于Tailwind的 UI，并带有加载/错误状态
+
+这是一个中等复杂度的功能。以下是我的子任务拆分：
+
+**子任务分析：**
+
+1.  **Rust 后端** (`merge_pr` + `close_pr` 命令) — 遵循 Issue #37 中完全相同的模式（`async wrapper → sync helper → gh CLI`）。预计改动约 40 行。可以合并为一个子任务。
+
+2.  **前端 UI**（按钮、确认对话框、加载状态、toast 提示、刷新）— 所有这些都密切相关。确认对话框、加载指示器和 toast 提示是操作按钮工作流的一部分。将它们拆分会创建人工依赖。一个子任务即可。
+
+3.  **类型检查/lint 修正 + 浏览器验证** — 最终的质量关卡。一个子任务。
+
+```json
+{
+  "issueNumber": 38,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Rust 后端实现 merge_pr 和 close_pr Tauri commands",
+      "description": "在 lib.rs 中新增两个 Tauri commands：merge_pr(project_path, number) 调用 gh pr merge N --merge，close_pr(project_path, number) 调用 gh pr close N。遵循现有 list_prs/get_pr_detail 的模式：async wrapper + sync helper + gh CLI 执行。需要将两个命令注册到 invoke_handler。返回操作结果的 JSON（成功/失败信息）。",
+      "acceptanceCriteria": [
+        "merge_pr 命令调用 gh pr merge N --merge 并返回结果",
+        "close_pr 命令调用 gh pr close N 并返回结果",
+        "两个命令均注册到 invoke_handler",
+        "错误处理覆盖 gh CLI 失败、路径无效等情况",
+        "cargo clippy 无警告",
+        "cargo test 通过"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "前端 PR 操作 UI：按钮、确认弹窗、loading 状态和 toast 提示",
+      "description": "在 PRsPage.tsx 中为已选中的 PR 添加「合并」和「关闭」操作按钮。点击后弹出自定义 React 确认对话框（显示 PR 编号和标题）。确认后调用对应的 Tauri command，按钮显示 loading 状态。操作成功/失败后显示 toast 提示，成功后自动刷新 PR 列表状态。在 prStore 中新增 mergePr 和 closePr action。",
+      "acceptanceCriteria": [
+        "PR 详情区域显示「合并」和「关闭」按钮",
+        "点击按钮弹出确认对话框，显示 PR 编号和标题",
+        "操作中按钮显示 loading spinner 并禁用",
+        "操作成功显示绿色 toast 提示",
+        "操作失败显示红色 toast 提示",
+        "操作成功后自动刷新 PR 列表",
+        "确认弹窗使用自定义 React modal（非 Tauri dialog）",
+        "npx tsc --noEmit 类型检查通过",
+        "npx eslint 无新增错误"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "全流程集成测试与浏览器验证",
+      "description": "确保整个 PR 操作流程端到端可用：类型检查通过、lint 通过、Rust 编译通过。在浏览器中验证 UI 交互：按钮渲染正确、确认弹窗正常弹出/关闭、loading 状态正确显示、toast 提示正确弹出和自动消失、操作后 PR 列表正确刷新。",
+      "acceptanceCriteria": [
+        "cargo clippy -- -D warnings 无警告",
+        "cargo test 全部通过",
+        "npx tsc --noEmit 类型检查通过",
+        "npx eslint 无新增错误",
+        "浏览器中按钮可正常点击",
+        "确认弹窗正确显示 PR 编号和标题",
+        "loading 状态正确显示",
+        "toast 提示正确展示"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

@@ -1,0 +1,70 @@
+现在我有完整的审核上下文。以下是审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #38
+- 标题: [desktop-app] PR 操作（合并/关闭）
+- 子任务: T-002 — 前端 PR 操作 UI：按钮、确认弹窗、loading 状态和 toast 提示
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-002 的前端实现**完全未开始**。`PRsPage.tsx` 和 `prStore.ts` 无任何改动，`git diff HEAD -- desktop_app/src/` 输出为空。所有 9 条验收条件均未满足。
+
+---
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 |
+|---|---------|------|
+| 1 | PR 详情区域显示「合并」和「关闭」按钮 | **未实现** |
+| 2 | 点击按钮弹出确认对话框，显示 PR 编号和标题 | **未实现** |
+| 3 | 操作中按钮显示 loading spinner 并禁用 | **未实现** |
+| 4 | 操作成功显示绿色 toast 提示 | **未实现** |
+| 5 | 操作失败显示红色 toast 提示 | **未实现** |
+| 6 | 操作成功后自动刷新 PR 列表 | **未实现** |
+| 7 | 确认弹窗使用自定义 React modal（非 Tauri dialog） | **未实现** |
+| 8 | npx tsc --noEmit 类型检查通过 | N/A（无改动） |
+| 9 | npx eslint 无新增错误 | N/A（无改动） |
+
+### 具体缺失项
+
+1. **prStore.ts** — 缺少 `mergePr` 和 `closePr` action，缺少 `PrActionResponse` 类型定义，缺少操作中的 loading state 管理
+2. **PRsPage.tsx** — 缺少「合并」/「关闭」按钮、确认弹窗、toast 通知组件
+3. **无确认弹窗组件** — 项目中不存在自定义 React modal 组件
+4. **无 toast 组件** — 项目中无 toast 通知系统（package.json 无 toast 依赖）
+5. **前端代码零改动** — `git diff` 确认 `desktop_app/src/` 下无任何文件变更
+
+### 后端状态
+
+T-001（后端）已由迭代 1 实现并通过审核（93/100）。`merge_pr` 和 `close_pr` Tauri commands 已就绪，返回 `PrActionResponse { success, message }`，前端可直接调用。
+
+---
+
+### 审核结论
+
+- [ ] 阻塞 - 前端实现完全缺失，需要完整实现 T-002
+
+**下一步行动**:
+需要实现者完成以下工作：
+
+1. **prStore.ts** — 新增 `mergePr`/`closePr` action，调用 `invoke('merge_pr')` / `invoke('close_pr')`，处理 loading/success/error 状态
+2. **ConfirmModal 组件** — 自定义 React modal，显示 PR 编号和标题，确认/取消按钮
+3. **Toast 通知组件** — 绿色成功/红色失败 toast，自动消失
+4. **PRsPage.tsx** — 在 PR 详情展开区添加操作按钮，串联确认弹窗 → 调用 action → toast → 刷新列表
+5. 类型检查和 lint 验证
+
+---
+
+## Learnings
+
+- **模式**: 后端 `PrActionResponse { success: bool, message: String }` 的设计让前端可以统一处理：`success: true` 显示绿色 toast + 刷新列表，`success: false` 显示红色 toast 展示 `message`，`Err(String)` 为系统级异常
+- **踩坑**: 迭代 1 只完成了 T-001（后端），T-002（前端）被跳过。审核时应区分"哪个子任务实际被实现"而非假设全量完成
+- **经验**: 后端 command 参数名为 `pr_number: i64`，前端 invoke 时需要用 `prNumber`（Tauri 自动 camelCase 转换）

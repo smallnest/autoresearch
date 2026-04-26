@@ -1680,6 +1680,119 @@ fn map_pr_diff_error(pr_number: i64, stderr: &str) -> String {
     format!("gh pr diff failed: {}", stderr.trim())
 }
 
+/// Result of a PR action (merge or close).
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq)]
+struct PrActionResponse {
+    success: bool,
+    message: String,
+}
+
+/// Merges a GitHub Pull Request using `gh pr merge --merge`.
+#[tauri::command]
+async fn merge_pr(project_path: String, pr_number: i64) -> Result<PrActionResponse, String> {
+    tokio::task::spawn_blocking(move || merge_pr_sync(&project_path, pr_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn merge_pr_sync(project_path: &str, pr_number: i64) -> Result<PrActionResponse, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let output = Command::new("gh")
+        .args(["pr", "merge", &pr_number.to_string(), "--merge"])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    if output.status.success() {
+        Ok(PrActionResponse {
+            success: true,
+            message: if stdout.is_empty() {
+                format!("Pull request #{pr_number} merged successfully")
+            } else {
+                stdout
+            },
+        })
+    } else {
+        Ok(PrActionResponse {
+            success: false,
+            message: map_pr_merge_error(pr_number, &stderr),
+        })
+    }
+}
+
+fn map_pr_merge_error(pr_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Pull request #{pr_number} not found");
+    }
+    if stderr.contains("already merged") || stderr.contains("No commits to merge") {
+        return format!("Pull request #{pr_number} is already merged");
+    }
+    if stderr.contains("not mergeable") || stderr.contains("merge conflict") {
+        return format!("Pull request #{pr_number} has merge conflicts and cannot be merged");
+    }
+    if stderr.contains("not authorized") || stderr.contains("permission denied") {
+        return format!("You do not have permission to merge pull request #{pr_number}");
+    }
+    format!("gh pr merge failed: {stderr}")
+}
+
+/// Closes a GitHub Pull Request using `gh pr close`.
+#[tauri::command]
+async fn close_pr(project_path: String, pr_number: i64) -> Result<PrActionResponse, String> {
+    tokio::task::spawn_blocking(move || close_pr_sync(&project_path, pr_number))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+fn close_pr_sync(project_path: &str, pr_number: i64) -> Result<PrActionResponse, String> {
+    let base = Path::new(project_path);
+    if !base.is_dir() {
+        return Err(format!("Path is not a directory: {project_path}"));
+    }
+
+    let output = Command::new("gh")
+        .args(["pr", "close", &pr_number.to_string()])
+        .current_dir(base)
+        .output()
+        .map_err(|e| format!("Failed to execute gh: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    if output.status.success() {
+        Ok(PrActionResponse {
+            success: true,
+            message: if stdout.is_empty() {
+                format!("Pull request #{pr_number} closed successfully")
+            } else {
+                stdout
+            },
+        })
+    } else {
+        Ok(PrActionResponse {
+            success: false,
+            message: map_pr_close_error(pr_number, &stderr),
+        })
+    }
+}
+
+fn map_pr_close_error(pr_number: i64, stderr: &str) -> String {
+    if stderr.contains("not found") || stderr.contains("Could not resolve") {
+        return format!("Pull request #{pr_number} not found");
+    }
+    if stderr.contains("already closed") {
+        return format!("Pull request #{pr_number} is already closed");
+    }
+    format!("gh pr close failed: {stderr}")
+}
+
 /// Lists available workflow log sources for a processed Issue.
 #[tauri::command]
 async fn list_issue_log_sources(
@@ -2686,6 +2799,8 @@ pub fn run() {
             list_prs,
             get_pr_detail,
             get_pr_diff,
+            merge_pr,
+            close_pr,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -2716,8 +2831,9 @@ mod tests {
     };
     use super::{extract_review_summary, extract_score};
     use super::{
-        get_pr_detail_sync, get_pr_diff_sync, list_prs_sync, map_pr_command_error,
-        map_pr_diff_error, parse_pr_detail, parse_pr_list, GhPullRequest, PrDetail, PrFileChange,
+        close_pr_sync, get_pr_detail_sync, get_pr_diff_sync, list_prs_sync, map_pr_close_error,
+        map_pr_command_error, map_pr_diff_error, map_pr_merge_error, merge_pr_sync,
+        parse_pr_detail, parse_pr_list, GhPullRequest, PrDetail, PrFileChange,
     };
     use std::fs;
     #[cfg(unix)]
@@ -3506,6 +3622,60 @@ mod tests {
         let error = get_pr_diff_sync("/path/that/does/not/exist", 42)
             .expect_err("invalid path should fail");
         assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn merge_pr_rejects_non_directory_path() {
+        let error = merge_pr_sync("/path/that/does/not/exist", 42)
+            .expect_err("invalid path should fail");
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn close_pr_rejects_non_directory_path() {
+        let error = close_pr_sync("/path/that/does/not/exist", 42)
+            .expect_err("invalid path should fail");
+        assert_eq!(error, "Path is not a directory: /path/that/does/not/exist");
+    }
+
+    #[test]
+    fn map_pr_merge_error_handles_known_patterns() {
+        assert_eq!(
+            map_pr_merge_error(42, "not found in repo"),
+            "Pull request #42 not found"
+        );
+        assert_eq!(
+            map_pr_merge_error(42, "already merged"),
+            "Pull request #42 is already merged"
+        );
+        assert_eq!(
+            map_pr_merge_error(42, "merge conflict detected"),
+            "Pull request #42 has merge conflicts and cannot be merged"
+        );
+        assert_eq!(
+            map_pr_merge_error(42, "permission denied"),
+            "You do not have permission to merge pull request #42"
+        );
+        assert_eq!(
+            map_pr_merge_error(42, "some unknown error"),
+            "gh pr merge failed: some unknown error"
+        );
+    }
+
+    #[test]
+    fn map_pr_close_error_handles_known_patterns() {
+        assert_eq!(
+            map_pr_close_error(42, "not found in repo"),
+            "Pull request #42 not found"
+        );
+        assert_eq!(
+            map_pr_close_error(42, "already closed"),
+            "Pull request #42 is already closed"
+        );
+        assert_eq!(
+            map_pr_close_error(42, "some unknown error"),
+            "gh pr close failed: some unknown error"
+        );
     }
 
     #[test]
