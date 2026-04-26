@@ -1,0 +1,72 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests/uiLocalization.test.mjs
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=937, limit=200][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/tests/configEditor.test.mjs
+Let me also check the Rust backend and look at how the tests are structured:
+[0m✱ [0mGlob "desktop_app/tests/**/*store*"[90m 1 match[0m
+[0m✱ [0mGrep "isInitializing|ensureConfigInitialized|isConfigIncomplete"[90m in desktop_app/src · 9 matches[0m
+Let me also check the store test and look at the recent iteration log for more context:
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+Now I have all the context needed. Here's the remediation plan:
+
+---
+
+## 修复计划
+
+### 根因分析
+
+`ProjectInfoScreen` 只从 store 解构了 `{ selectProject }`，导致 `isInitializing`、`error`、`refreshConfig`、`clearError` 等状态和方法未被 UI 使用。`InitTemplatePrompt` 保留了旧的"了解"按钮和 `alert()`。
+
+### 待修改文件
+
+| 文件 | 改动类型 |
+|------|----------|
+| `desktop_app/src/stores/projectStore.ts` | 新增 `reinitializeConfig` action |
+| `desktop_app/src/pages/DashboardPage.tsx` | 重写 `InitTemplatePrompt` + 更新 `ProjectInfoScreen` |
+| `desktop_app/tests/uiLocalization.test.mjs` | 更新字符串断言 |
+
+### Step-by-step 任务
+
+**任务 1: 向 `projectStore` 新增 `reinitializeConfig` action**
+
+- 在 `ProjectState` 接口中新增 `reinitializeConfig: () => Promise<void>`
+- 实现：检查 `projectPath` → `set({ isInitializing: true, error: null })` → `invoke('init_project_config')` → `set({ config: newConfig })` → catch 设置 error → finally 复位 `isInitializing`
+- Tauri 模式下调用真实 invoke；浏览器 fallback 下返回提示性错误
+
+**任务 2: 重写 `InitTemplatePrompt` 组件**
+
+- props 从 `{ onLater, onLearnMore }` 改为 `{ isInitializing, error, onRetry, onDismiss }`
+- 移除 `onLearnMore` prop，移除"了解"按钮，移除 `alert()` 调用
+- 三态渲染：
+  - **loading**（`isInitializing === true`）：显示 spinner + "正在初始化项目配置..."
+  - **error**（`error !== null`）：红色错误卡片 + 错误消息 + "重试"按钮
+  - **default**：原琥珀色提示 + "稍后" + "初始化"按钮
+
+**任务 3: 更新 `ProjectInfoScreen`**
+
+- 从 store 额外解构 `{ isInitializing, error, refreshConfig, clearError, reinitializeConfig }`
+- 新增 local state `initJustCompleted`（boolean，3s 后自动归位）
+- `handleRetry`：`clearError()` → `reinitializeConfig()`
+- `handleInit`：`reinitializeConfig()` + 成功后 `setInitJustCompleted(true)` + 3s auto-dismiss
+- 条件渲染逻辑：
+  - 如果 `initJustCompleted`：显示绿色"初始化成功"通知（带 CheckIcon 和"项目配置已初始化完成"文案）
+  - 如果 `isConfigComplete && !initJustCompleted`：显示原 `ConfigCompleteNotification`
+  - 如果 `hasMissingConfig`：显示 `InitTemplatePrompt`（传递 `isInitializing` / `error` / `handleRetry` / `handleDismiss`）
+
+**任务 4: 更新测试**
+
+- 在 `uiLocalization.test.mjs` 的 dashboard 区块补充：
+  - 断言 `doesNotMatch` `了解更多` 或 `alert`
+  - 断言 `match` `初始化`、`重试`、`正在初始化`、`配置不完整` 等新字符串
+  - 保留已有断言（欢迎使用 Autoresearch、查看议题等）
+
+### 无需改动的部分
+
+- **Rust 后端**：`init_project_config` 命令已完整实现，无需修改
+- **`ensureConfigInitialized` 私有函数**：保持不动，`reinitializeConfig` 是新的公共 action
+- **`ConfigCompleteNotification`**：保留（用于"配置完整但非刚刚初始化"的场景）

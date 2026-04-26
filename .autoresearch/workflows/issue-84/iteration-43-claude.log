@@ -1,0 +1,26 @@
+所有任务已完成。以下是已完成工作的总结：
+
+## 变更总结
+
+### 1. `desktop_app/src/stores/projectStore.ts`
+- 添加了 `retryInitialize` 操作到 store 接口和实现中
+- `retryInitialize`：直接调用 `init_project_config`（不仅仅是 `detect`），以便重试按钮实际上可以重新初始化配置
+
+### 2. `desktop_app/src/pages/DashboardPage.tsx`  
+- **移除了**：`handleLearnMore` 及其 `alert()` 调用，以及 `handleLater` 回调
+- **重写了** `InitTemplatePrompt` 作为连接到 store 的独立组件：
+  - 从 store 读取 `isInitializing`、`error`、`config`
+  - **加载中**：蓝色卡片，带 spinner，显示“正在初始化配置...”
+  - **成功**：绿色卡片，3 秒后自动消失
+  - **错误**：红色卡片，显示错误消息 + “重试”按钮（调用 `retryInitialize`）+ “关闭”按钮
+  - **默认**（未完成配置）：琥珀色卡片，带“初始化”按钮 + “稍后”按钮（替换了无用的“了解”按钮）
+
+### 验证结果
+- TypeScript 编译：通过（无错误）
+- `git diff HEAD --name-only`：显示 `DashboardPage.tsx` 和 `projectStore.ts` 都已修改
+
+## 经验总结
+
+- **模式**：在实现 UI 子任务时，**始终**先运行 `git diff HEAD --name-only`，以确认目标 UI 文件实际在 diff 中。40 多次迭代只修改了 store 而未修改 DashboardPage.tsx，因为从未验证过这个前提条件。
+- **陷阱**：审核反馈中明确提到了 store 缺少 `retryInitialize`。当 store action 需要供 UI 调用时，它必须是公共的 store action，而不是模块级的私有函数。
+- **经验**：对于像 T-002 这样针对 UI 的子任务，首先实现最简单的版本：读取 store 状态，根据状态分支 UI，连接 action 按钮。这里的“先让它工作，再让它完美”方法可以避免在复杂逻辑下仍然无法渲染正确文件的情况。

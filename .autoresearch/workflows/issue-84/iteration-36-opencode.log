@@ -1,0 +1,68 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m 12 matches[0m
+[0m✱ [0mGlob "desktop_app/src/stores/*.test.*"[90m 0 matches[0m
+Let me also check existing tests for patterns and the `uiError.ts` file:
+[0m✱ [0mGrep "init_project_config"[90m in . · 778 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+[0m→ [0mRead desktop_app/package.json
+现在我有了完整的理解。以下是修复计划：
+
+---
+
+## 修复计划
+
+### 严重问题（必须修复）
+
+#### 1. 重构 store — 添加 `retryInitialize` action，消除 `set` 参数模式
+
+**文件**: `desktop_app/src/stores/projectStore.ts`
+
+- **将 `ensureConfigInitialized` 改为 store 的内部方法**：不再作为接受 `set` 参数的独立函数。使用 zustand 的闭包 `get()`/`set()` 替代。
+- **添加 `retryInitialize` action**：组合调用 `refreshConfig()` → 若仍不完整则调用 `init_project_config` → 更新 config。设置 `isInitializing`/`error` 状态。
+- **Browser fallback 路径也调用初始化逻辑**：在 `selectProject` 和 `loadProject` 的浏览器分支中，如果配置不完整，也应设置 `isInitializing`（虽然无法真正调用 `init_project_config`，但应保持一致）。
+- 更新 `ProjectState` 接口暴露 `retryInitialize: () => Promise<void>`。
+
+#### 2. 更新 DashboardPage.tsx 的 InitTemplatePrompt 组件
+
+**文件**: `desktop_app/src/pages/DashboardPage.tsx`
+
+- **移除 "了解" 按钮** 和其中的 `alert()` 调用
+- **移除 "稍后" 按钮** — 自动初始化已在 store 的 `selectProject`/`loadProject` 中完成，不需要手动 dismiss
+- **从 store 读取状态**：`isInitializing`、`error`、`config`（通过 `useProjectStore`）
+- **初始化进行中**：显示 spinner + "正在初始化项目配置..." 状态
+- **初始化成功**：显示绿色成功反馈 "项目配置已初始化"（配置完整后自动隐藏）
+- **初始化失败**：显示红色错误信息和重试按钮，重试按钮调用 `retryInitialize`
+- **无需手动管理 `showInitPrompt` 状态** — 组件应响应式地根据 store 状态自行显示/隐藏
+
+### 一般问题（建议修复）
+
+#### 3. 添加测试覆盖新 store 逻辑
+
+**文件**: `desktop_app/tests/projectStoreInit.test.mjs`
+
+遵循现有测试模式（`node --test --experimental-strip-types`）：
+- **`isConfigIncomplete` 测试**：null 输入 → true; 完整配置 → false; 各字段缺失 → true
+- **`ensureConfigInitialized` 测试**：mock tauriInvoke 验证成功/失败分支
+- **`retryInitialize` 测试**：验证调用链 — `refreshConfig` → `init_project_config` → config 更新
+- **错误处理测试**：验证失败时 error 状态被正确设置
+
+#### 4. 运行类型检查和测试验证
+
+- `npm --prefix desktop_app run typecheck`
+- `npm --prefix desktop_app run test`
+
+---
+
+### 关键设计决策
+
+1. **InitTemplatePrompt 改为纯响应式组件**：不再依赖 `showInitPrompt` 本地状态，而是从 store 读取 `isInitializing`、`error`、`config`，响应式地展示加载/成功/失败状态。当配置完整且无错误时自动隐藏。
+2. **`retryInitialize` 链路**：`refreshConfig()` 获取最新状态 → 若仍不完整则 `init_project_config` → 更新 config。这确保用户点击重试时读取的是文件系统最新状态。
+3. **Browser fallback 简化**：浏览器模式下 `init_project_config` 不存在，`retryInitialize` 应表现为 no-op 或显示"浏览器模式不支持初始化"。
+
+要我开始执行这个计划吗？

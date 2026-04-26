@@ -1,0 +1,93 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores
+[0m✱ [0mGlob "desktop_app/tests/**/projectStore*"[90m in . · 0 matches[0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyDetailStore.ts
+[0m✱ [0mGrep "projectStore"[90m in desktop_app/tests · 4 matches[0m
+Now let me look at an existing factory-pattern store for reference, and check existing test files.
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/tests
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+Let me look at the existing tests and the loadRecentProjects issue more closely.
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+Let me look at an existing store test and another factory-pattern store for reference.
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri/src · 13 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=60][0m
+Now I have a thorough understanding of the codebase. Let me also check the backend `init_project_config` command to understand what it does.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=60][0m
+[0m
+[0m# [0mTodos
+[ ] 重构 projectStore.ts 为工厂模式 (createProjectStore)
+[ ] 修复 loadRecentProjects 自动初始化
+[ ] 创建 tests/projectStore.test.mjs
+[ ] 运行测试和类型检查验证
+[0m
+---
+
+## 修复计划
+
+基于审核反馈和代码分析，确定以下修复方案：
+
+### 核心问题
+
+1. **缺失工厂模式** — `projectStore.ts` 是唯一没有 `createProjectStore(overrides)` 工厂函数的主 store，导致无法注入依赖进行测试
+2. **`loadRecentProjects` 不自动初始化** — 自动加载最近项目时不调用 `ensureConfigInitialized`，`detect_project_config` 返回的原始 config 直接写入 state，遗漏了初始化缺失配置文件的机会
+3. **无测试覆盖** — 没有对应的 `tests/projectStore.test.mjs`
+
+### 任务清单
+
+#### Task 1: 重构 `projectStore.ts` 为工厂模式
+
+- 新增 `ProjectStoreDeps` 接口（`isTauri`、`invoke`）
+- 新增 `createProjectStoreDeps(overrides)` 函数
+- 新增 `createProjectStore(overrides)` 工厂函数，将 `ensureConfigInitialized` 移入闭包以使用 `deps.isTauri`/`deps.invoke`
+- 将 `ensureConfigInitialized` 中添加 `!deps.isTauri` 短路守卫，避免浏览器模式下调用 `tauriInvoke` 失败
+- 导出默认实例：`export const useProjectStore = createProjectStore()`
+- 保留所有已有的独立导出函数（`isConfigIncomplete`、`normalizeProjectError`）
+
+#### Task 2: 修复 `loadRecentProjects` 自动初始化
+
+- Tauri 模式：将裸 `detect_project_config` 调用替换为 `ensureConfigInitialized`
+- 更新 `set` 以使用初始化后的 config，而非原始 detected config
+
+#### Task 3: 创建 `tests/projectStore.test.mjs`
+
+- 工厂模式注入测试：用 mock `invoke` 创建 store 实例
+- `selectProject` 自动初始化测试：配置不完整 → 调用 `init_project_config` → `isInitializing` 状态正确 → config 更新
+- `loadProject` 自动初始化测试：同上
+- `loadRecentProjects` 自动初始化测试：Tauri 模式启动时自动初始化
+- `isInitializing` 状态测试：初始化期间为 `true`，完成后为 `false`
+- `isConfigIncomplete` helper 测试（含 null/部分/完整边界）
+- 浏览器模式降级测试：`isTauri: false` 时不调用 `init_project_config`
+- 初始化失败测试：错误写入 `error` 状态，不阻塞用户
+- `normalizeProjectError` 测试（已有集成测试，验证不破坏）
+
+#### Task 4: 验证
+
+- 运行 `npm --prefix desktop_app test`
+- 确认现有 `storeErrorLocalization.test.mjs` 不受影响
+- 确认 TypeScript 类型检查通过
+
+### 预计修改的文件
+
+| 文件 | 改动 |
+|------|------|
+| `desktop_app/src/stores/projectStore.ts` | 工厂模式重构 + `loadRecentProjects` 修复 |
+| `desktop_app/tests/projectStore.test.mjs` | 新建，全面测试 |
+
+### 不受影响的文件
+
+- `storeErrorLocalization.test.mjs` — `normalizeProjectError` 导出保持不变
+- 其他 store — 不依赖 `projectStore`
+- `DashboardPage.tsx` — 通过 `useProjectStore` 导入，无需修改
+以上是完整的修复计划。核心思路：
+
+1. **工厂模式**：完全遵循其他 5 个主 store 的 `createXxxStore(overrides)` 模式，`ensureConfigInitialized` 移入闭包使用 `deps.isTauri` 和 `deps.invoke`，不再依赖全局 `tauriInvoke`
+2. **`loadRecentProjects` bug**：自动加载最近项目时 Tauri 路径缺少 `ensureConfigInitialized` 调用，补上后与 `loadProject`/`selectProject` 保持一致
+3. **测试**：覆盖工厂注入、自动初始化、状态守卫、错误处理、浏览器降级等完整路径
+
+是否确认按此计划执行？

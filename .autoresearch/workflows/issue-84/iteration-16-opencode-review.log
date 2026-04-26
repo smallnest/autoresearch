@@ -1,0 +1,109 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue 84 codebase[90m Explore Agent[0m
+[0m✓ [0mExplore Issue 84 codebase[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m→ [0mRead desktop_app/src-tauri/CLAUDE.md
+The explore task returned partial content. Let me read the full projectStore and related files to get the complete picture.
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app/src · 4 matches[0m
+[0m✱ [0mGlob "**/projectStore*test*"[90m in desktop_app · 0 matches[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=490, limit=20][0m
+Now let me verify the DashboardPage usage of `isInitializing` and check for any `projectStore.test`:
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [limit=80][0m
+以下是 Issue #84 子任务 T-001 实现的审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代次数: 待定
+- 子任务: T-001 — 在 projectStore 中添加自动初始化逻辑
+
+### 总体评价
+**评分: 69/100**
+
+核心路径（`selectProject`、`loadProject`）正确调用了 `ensureConfigInitialized`，但 `loadRecentProjects` — 已经连续 3+ 次迭代被标记为"持久回归点"的关键第三条初始化路径 — 仍未修复。同时前端 store 没有任何单元测试覆盖。
+
+### 验收条件逐条检查
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | selectProject 检测到配置缺失时自动调用 init_project_config | ✅ | `projectStore.ts:111` |
+| 2 | init_project_config 返回的 ProjectConfig 正确更新到 store.config | ✅ | `projectStore.ts:113-117` (selectProject), `:165-169` (loadProject) |
+| 3 | 新增 isInitializing 状态字段 | ✅ | 字段已添加 (`:24, 77, 86, 99`)，但未被任何 UI 组件消费（AC 要求"用于 UI 显示初始化进度"） |
+| 4 | loadProject 方法同样支持自动初始化 | ⚠️ | **部分通过**。`loadProject(path)` 正确 (`:163`)，但 `loadRecentProjects` (`:186-214`) 未调用 `ensureConfigInitialized`。这是第三条关键初始化路径（应用启动时由 DashboardPage `useEffect` 触发） |
+| 5 | 初始化失败时 error 状态被正确设置 | ✅ | `ensureConfigInitialized` 捕获异常，设置 error 状态，返回原始 config，不阻塞后续流程 (`:80-84`) |
+| 6 | TypeScript 类型检查通过 | 待验证 | 代码层面无类型错误 |
+
+### 严重问题 (必须修复)
+
+**1. `loadRecentProjects` 仍未调用 `ensureConfigInitialized`**
+
+- 位置: `desktop_app/src/stores/projectStore.ts:186-214`
+- 问题: `loadRecentProjects` 在 Tauri 路径下直接调用 `detect_project_config`（第 193 行）并设置 config（第 196 行），跳过 `ensureConfigInitialized`。
+- 影响: 应用启动时，如果最近项目没有 `.autoresearch/` 配置文件，自动初始化不会触发。用户必须手动重新选择项目才能触发初始化。
+- 上下文: 此问题已在迭代 15 的审核中（评分 74/100）明确标记，迭代记录中的 learnings 也反复强调。这是超过 3 次迭代未修复的已知回归点。
+- 修复方案: 在 `loadRecentProjects` 的 Tauri 路径中（第 192-197 行）将：
+  ```typescript
+  const config = await tauriInvoke<ProjectConfig>('detect_project_config', { projectPath: path });
+  set({ projectPath: path, config });
+  ```
+  改为：
+  ```typescript
+  const detected = await tauriInvoke<ProjectConfig>('detect_project_config', { projectPath: path });
+  const config = await ensureConfigInitialized(path, detected, set);
+  set({ projectPath: path, config });
+  ```
+
+**2. 缺少对 projectStore 的单元测试**
+
+- 问题: `projectStore` 是整个系统唯一没有专用测试的 store。它不遵循工厂模式（`createProjectStore(overrides)`），因此无法在 Node.js 中注入 mock 依赖进行测试。
+- 影响: `ensureConfigInitialized`、`isConfigIncomplete`、`selectProject`、`loadProject`、`loadRecentProjects` 这些核心逻辑均无测试覆盖。唯一的测试是 `storeErrorLocalization.test.mjs` 中针对纯函数 `normalizeProjectError` 的断言。
+- 所有其他可测试 store（`runStore`、`historyStore`、`iterationStore`、`logViewerStore`、`runConfigStore`）都使用工厂模式，这是仓库公认的最佳实践（记录在 `desktop_app/src/CLAUDE.md:26-31`）。
+- 修复方案: 将 `projectStore` 重构为工厂模式 `createProjectStore(overrides)`（注入 `isTauri`、`invoke`），然后创建 `tests/projectStore.test.mjs`，至少覆盖：
+  - `isConfigIncomplete` 的 true/false/null 分支
+  - `selectProject` 完整路径：select → detect → init → save → update state
+  - `loadProject` 完整路径
+  - `loadRecentProjects` 初始化路径（这是当前的回归缺口）
+  - `ensureConfigInitialized` 错误处理（catch 后不阻塞、error 状态被设置）
+
+### 一般问题 (建议修复)
+
+**3. `isInitializing` 未被任何 UI 组件消费**
+
+- 验收条件描述为"用于 UI 显示初始化进度"，但 DashboardPage（`:496`）和任何其他组件都没有解构或使用 `isInitializing`。这导致该状态字段实际上是死代码。
+- 建议: 在 DashboardPage 或 ProjectInfoScreen 中，当 `isInitializing` 为 true 时显示一个加载指示器（如骨架屏或"正在初始化配置..."提示）。
+
+**4. `refreshConfig` 语义可能需澄清**
+
+- `refreshConfig`（`:216-240`）不调用 `ensureConfigInitialized`，只重新检测当前配置。如果 Issue #84 的范围包括"任意路径下的配置重新检测都应自动初始化"，则需要修复。当前范围可能不包括 `refreshConfig`，建议在 `progress.md` 或 Issue 描述中明确。
+
+### 评分计算
+
+| 维度 | 权重 | 得分 | 加权分 | 理由 |
+|------|------|------|--------|------|
+| 正确性 | 35% | 70 | 24.5 | 核心路径正确，但 `loadRecentProjects` 是已知的持久回归点 |
+| 测试质量 | 25% | 30 | 7.5 | 无 store 测试，无工厂模式；仅 normalizeProjectError 纯函数有测试 |
+| 代码质量 | 20% | 85 | 17.0 | 命名清晰，结构合理，但缺乏工厂模式 |
+| 安全性 | 10% | 100 | 10.0 | 无注入风险 |
+| 性能 | 10% | 100 | 10.0 | 无性能问题 |
+| **总分** | **100%** | | **69.0** | **及格** |
+
+### 审核结论
+- ❌ **需要修改** — 评分 69/100，低于达标线 85。必须修复 `loadRecentProjects` 的 `ensureConfigInitialized` 遗漏。
+
+### 实现者自检确认
+- [ ] 实现者是否已知悉迭代 15 的 learnings（`loadRecentProjects` 是已知持久回归点）？
+- [ ] 实现者是否确认所有三条初始化路径（selectProject、loadProject、loadRecentProjects）一致性？
+- [ ] 实现者是否考虑过工厂模式重构以支持测试？
+- [ ] 实现者是否已运行 `npm --prefix desktop_app test` 确认现有测试仍通过？
+
+## Learnings
+
+- **踩坑**: `loadRecentProjects` 已经连续 4 次迭代被标记为 `ensureConfigInitialized` 的遗漏点（从迭代 12 到当前），但每次修复都只覆盖 `selectProject` 和 `loadProject` 两条路径，第三路径持续被遗漏。这不是 Agent 能力问题，而是审核和实现流程的系统性缺陷。建议在 `progress.md` 或 `CLAUDE.md` 中添加显式的 checklist：**凡是涉及 projectStore 的改动，必须逐一检查 selectProject、loadProject、loadRecentProjects 三个初始化入口的一致性**。
+- **经验**: projectStore 的不可测试性直接导致回归无法被自动化捕获。如果实现者在实现时完成了工厂模式重构并添加了测试，`loadRecentProjects` 的遗漏会在第一次测试运行时就暴露。测试覆盖与功能实现应当同步完成。

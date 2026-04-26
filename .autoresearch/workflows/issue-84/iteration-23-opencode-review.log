@@ -1,0 +1,77 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue #84 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue #84 implementation[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me read the actual files directly to verify details for the audit.
+[0m→ [0mRead desktop_app/tests/uiLocalization.test.mjs
+[0m→ [0mRead desktop_app/tests/configEditor.test.mjs
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=937, limit=100][0m
+Let me also check the test files and the Rust backend for `init_project_config`.
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代: 22
+- 当前子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+
+### 总体评价
+**评分: 40/100** — 未达标
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 20 | 7.0 |
+| 测试质量 | 25% | 20 | 5.0 |
+| 代码质量 | 20% | 40 | 8.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | 100% | | **40.0** |
+
+### 严重问题 (必须修复)
+
+**1. InitTemplatePrompt 未被修改，仍为原始占位 UI**
+
+`DashboardPage.tsx:243-293` 中的 `InitTemplatePrompt` 组件完全没有按验收条件进行更新：
+
+- **验收条件 1 & 5**: "了解"按钮（第 283-287 行）和 `alert('了解更多功能将在后续版本中实现')`（第 347 行）依然存在，应该移除。
+- **验收条件 2**: 未显示初始化加载状态。`ProjectInfoScreen`（第 317 行）未从 store 解构 `isInitializing`，组件中没有任何 `isInitializing` 为 true 时的加载/进度 UI。
+- **验收条件 3**: 初始化成功后的反馈只是已有的通用 `ConfigCompleteNotification`（配置完整），没有特意区分"刚刚初始化成功"的场景。
+- **验收条件 4**: 无初始化失败的错误展示，无重试按钮。Store 的 `ensureConfigInitialized` 在失败时会设置 `error`，但 `ProjectInfoScreen` 没有展示这个 `error`，也没有调用 `refreshConfig` + 重试 `init_project_config` 的重试按钮。
+
+**2. 无新增测试覆盖**
+
+`uiLocalization.test.mjs` 只是对旧 UI 做字符串断言（"欢迎使用 Autoresearch"、"查看议题"等），没有任何测试覆盖新的初始化 loading/error/retry 行为。`configEditor.test.mjs` 只覆盖 SettingsPage 的配置编辑器，与 Dashboard 无关。没有新增的测试文件或测试用例。
+
+### 一般问题 (建议修复)
+
+**3. `ProjectInfoScreen` 未使用 store 的 `isInitializing` 和 `error` 状态**
+
+第 324 行只解构了 `selectProject`：
+```typescript
+const { selectProject } = useProjectStore();
+```
+需要额外解构 `isInitializing`、`error`、`refreshConfig` 等状态和方法来驱动 InitTemplatePrompt 的 loading/error/retry 行为。
+
+### 建议改进 (可选)
+
+**4. 与 store 层能力的对齐**
+
+Store 层（`projectStore.ts`）已完整实现了 `isInitializing` 状态管理、`ensureConfigInitialized` 的 try/catch/finally、以及 `refreshConfig` 方法。Rust 后端 `init_project_config_sync` 也已正确实现。Dashboard UI 层只需消费这些能力即可达成验收条件：
+
+- 从 store 读取 `isInitializing` → 显示加载 spinner
+- 从 store 读取 `error` → 显示错误信息和重试按钮
+- 重试回调：调用 `refreshConfig()` 后再次 `invoke('init_project_config')` 或调用 store 的 `selectProject` / `loadProject`
+- 移除 `onLearnMore` prop 和"了解"按钮
+
+### 审核结论
+- [ ] 不通过 — 实现严重不完整
+
+**分析**: 该子任务（T-002）的 Dashboard UI 改动未完成。Store 层的基础设施（`isInitializing`、`ensureConfigInitialized`、`refreshConfig`）已就位，但 `InitTemplatePrompt` 组件仍是原来的占位 UI，包含已明确要求移除的"了解"按钮和 alert。五个验收条件中只有第 3 条（初始化成功反馈）可视为部分满足（通过已有 `ConfigCompleteNotification` 覆盖通用"配置完整"场景），其余 4 条均未实现。
+
+### 实现者自检确认
+- [ ] 实现者未执行所需修改 — DashboardPage.tsx 未被更新

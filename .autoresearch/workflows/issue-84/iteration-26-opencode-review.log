@@ -1,0 +1,255 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/hard-gate-23.log
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+Let me also check what tests exist and the latest iteration log for context.
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline -10
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD --name-only && echo "---UNTRACKED---" && git ls-files --others --exclude-standard
+desktop_app/src/stores/projectStore.ts
+---UNTRACKED---
+.autoresearch/workflows/issue-84/.last_score
+.autoresearch/workflows/issue-84/hard-gate-1.log
+.autoresearch/workflows/issue-84/hard-gate-10.log
+.autoresearch/workflows/issue-84/hard-gate-11.log
+.autoresearch/workflows/issue-84/hard-gate-12.log
+.autoresearch/workflows/issue-84/hard-gate-13.log
+.autoresearch/workflows/issue-84/hard-gate-14.log
+.autoresearch/workflows/issue-84/hard-gate-15.log
+.autoresearch/workflows/issue-84/hard-gate-16.log
+.autoresearch/workflows/issue-84/hard-gate-17.log
+.autoresearch/workflows/issue-84/hard-gate-18.log
+.autoresearch/workflows/issue-84/hard-gate-19.log
+.autoresearch/workflows/issue-84/hard-gate-2.log
+.autoresearch/workflows/issue-84/hard-gate-20.log
+.autoresearch/workflows/issue-84/hard-gate-21.log
+.autoresearch/workflows/issue-84/hard-gate-23.log
+.autoresearch/workflows/issue-84/hard-gate-24.log
+.autoresearch/workflows/issue-84/hard-gate-25.log
+.autoresearch/workflows/issue-84/hard-gate-4.log
+.autoresearch/workflows/issue-84/hard-gate-6.log
+.autoresearch/workflows/issue-84/hard-gate-7.log
+.autoresearch/workflows/issue-84/hard-gate-8.log
+.autoresearch/workflows/issue-84/hard-gate-9.log
+.autoresearch/workflows/issue-84/iteration-1-claude.log
+.autoresearch/workflows/issue-84/iteration-10-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-10-opencode.log
+.autoresearch/workflows/issue-84/iteration-11-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-11-opencode.log
+.autoresearch/workflows/issue-84/iteration-12-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-12-opencode.log
+.autoresearch/workflows/issue-84/iteration-13-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-13-opencode.log
+.autoresearch/workflows/issue-84/iteration-14-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-14-opencode.log
+.autoresearch/workflows/issue-84/iteration-15-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-15-opencode.log
+.autoresearch/workflows/issue-84/iteration-16-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-16-opencode.log
+.autoresearch/workflows/issue-84/iteration-17-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-17-opencode.log
+.autoresearch/workflows/issue-84/iteration-18-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-18-opencode.log
+.autoresearch/workflows/issue-84/iteration-19-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-19-opencode.log
+.autoresearch/workflows/issue-84/iteration-2-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-2-opencode.log
+.autoresearch/workflows/issue-84/iteration-20-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-20-opencode.log
+.autoresearch/workflows/issue-84/iteration-21-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-21-opencode.log
+.autoresearch/workflows/issue-84/iteration-22-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-23-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-23-opencode.log
+.autoresearch/workflows/issue-84/iteration-24-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-24-opencode.log
+.autoresearch/workflows/issue-84/iteration-25-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-25-opencode.log
+.autoresearch/workflows/issue-84/iteration-26-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-3-claude-review.log
+.autoresearch/workflows/issue-84/iteration-3-claude.log
+.autoresearch/workflows/issue-84/iteration-4-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-4-opencode.log
+.autoresearch/workflows/issue-84/iteration-5-claude-review.log
+.autoresearch/workflows/issue-84/iteration-6-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-6-opencode.log
+.autoresearch/workflows/issue-84/iteration-7-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-7-opencode.log
+.autoresearch/workflows/issue-84/iteration-8-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-8-opencode.log
+.autoresearch/workflows/issue-84/iteration-9-opencode-review.log
+.autoresearch/workflows/issue-84/iteration-9-opencode.log
+.autoresearch/workflows/issue-84/log.md
+.autoresearch/workflows/issue-84/planning.log
+.autoresearch/workflows/issue-84/progress.md
+.autoresearch/workflows/issue-84/tasks.json
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff --staged --name-only
+(no output)
+[0m
+[0m✗ [0mread failed
+[91m[1mError: [0mFile not found: /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-84/iteration-26-opencode.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-26-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-25-opencode.log
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+- 迭代次数: 25
+
+### 总体评价
+**评分: 36/100** — 未达标
+
+### 各维度评分
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 15 | 5.25 |
+| 测试质量 | 25% | 10 | 2.50 |
+| 代码质量 | 20% | 40 | 8.00 |
+| 安全性 | 10% | 100 | 10.00 |
+| 性能 | 10% | 100 | 10.00 |
+| **总分** | 100% | | **36.0** |
+
+### 严重问题 (必须修复)
+
+**1. `DashboardPage.tsx` 零改动 — T-002 未实现**
+
+`git diff HEAD` 确认 `DashboardPage.tsx` 没有任何变更。`InitTemplatePrompt` 组件仍然是原始的纯提示 UI：
+- 仍然使用 `{ onLater, onLearnMore }` 旧 props 接口
+- "了解"按钮仍然存在，点击触发 `alert('了解更多功能将在后续版本中实现')`（违反 AC1）
+- `isInitializing` 加载状态完全未接入（违反 AC2）
+- 初始化成功后无成功反馈（违反 AC3）
+- 初始化失败时无错误信息和重试按钮（违反 AC4）
+
+问题定位：`DashboardPage.tsx:243-293`（InitTemplatePrompt 组件），`DashboardPage.tsx:317-492`（ProjectInfoScreen）。
+
+**2. 缺少 `retryInitialize` store action**
+
+Store 中没有暴露供 UI 重试按钮调用的 action。当前 `ensureConfigInitialized` 是模块私有函数，UI 层无法触发重试。验收条件要求"初始化失败时显示错误信息和重试按钮（手动调用 refreshConfig + init_project_config）"，但无 action 可调用。需要在 `projectStore.ts` 的 `ProjectState` 接口和 `create()` 调用中添加 `retryInitialize` action。
+
+**3. `loadRecentProjects` 未调用 `ensureConfigInitialized`**
+
+该问题从迭代 8 到迭代 21 连续被标记但从未修复。应用启动时 `DashboardPage` 的 `useEffect` 调用 `loadRecentProjects`，如果自动加载的最近项目配置不完整，不会触发初始化。这意味着用户可能看到 `InitTemplatePrompt` 提示但初始化从未自动执行。解决后可以大幅简化 T-002 的 UI 逻辑（无需显示加载态，只需处理 failure 重试）。
+
+**4. 无对应测试**
+
+- 无 `projectStore.test.*` 测试文件
+- 无 `DashboardPage.test.*` 测试文件（可使用 `react-dom/server` 静态渲染测试 `InitTemplatePrompt` 的三个状态分支）
+- 项目 CLAUDE.md 明确要求使用静态渲染测试覆盖 UI 组件逻辑
+
+### 一般问题 (建议修复)
+
+**5. iteration-25 制定了详细计划但未执行**
+
+iteration-25 的 `opencode.log` 包含完整且正确的修复计划（6 个 Task），但没有任何代码变更落地。审核发现计划内容本身是正确的，但如果计划不执行，审核迭代将无限循环。建议在实现迭代中直接编码而非仅输出计划。
+
+**6. `ConfigCompleteNotification` 缺少自动隐藏**
+
+即使 T-002 最终实现，`ConfigCompleteNotification` 组件目前永久显示，缺少自动隐藏（`setTimeout` 3-5s）机制，验收条件要求"初始化成功后显示成功反馈并自动隐藏"。
+
+### 审核结论
+- [ ] 阻塞 (评分 36/100 < 85，必须大幅修改后重新审核)
+
+### 修复建议
+
+根据 iteration-25 已有计划，按顺序执行：
+
+1. **`projectStore.ts`**：添加 `retryInitialize` action；修复 `loadRecentProjects` 串联 `ensureConfigInitialized`
+2. **`DashboardPage.tsx`**：重构 `InitTemplatePrompt` props 接口 → `{ isInitializing, error, onRetry, onDismiss }`；移除 "了解" 按钮和 `alert`；实现加载态/错误态/成功态三个分支；`ProjectInfoScreen` 从 store 解构 `isInitializing`, `error`, `retryInitialize`, `clearError`
+3. **`desktop_app/tests/projectStore.test.mjs`**：覆盖 `isConfigIncomplete()` 边界、`normalizeProjectError()`、`InitTemplatePrompt` 静态渲染三态

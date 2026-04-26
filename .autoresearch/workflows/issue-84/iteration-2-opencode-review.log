@@ -1,0 +1,111 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead .
+[0m✱ [0mGrep "projectStore"[90m in . · 0 matches[0m
+I'll start by reading the relevant source files to understand the implementation.
+[0m✱ [0mGlob "**/projectStore*"[90m 1 match[0m
+[0m✱ [0mGrep "selectProject"[90m in . · 136 matches[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m✱ [0mGlob "**/InitTemplatePrompt*"[90m 0 matches[0m
+[0m✱ [0mGlob "**/*test*"[90m in desktop_app · 12 matches[0m
+[0m✱ [0mGrep "projectStore|project_store"[90m in desktop_app · 4 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-1-claude.log
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 13 matches[0m
+Let me read additional files for context.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=940, limit=60][0m
+[0m✱ [0mGrep "InitTemplatePrompt"[90m in desktop_app/src · 2 matches[0m
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app/src · 6 matches[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=230, limit=80][0m
+[0m✱ [0mGrep "projectStore|selectProject|loadProject|isInitializing|isConfigIncomplete"[90m in desktop_app · 4 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-2-opencode-review.log
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=310, limit=80][0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=390, limit=120][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Based on my thorough review of the implementation, here is the audit report:
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001
+- 迭代次数: 1
+
+### 总体评价
+**评分: 66/100**
+
+未达到 85 分达标线，需要修改后重新审核。
+
+### 严重问题 (必须修复)
+
+**1. 验收条件 #5 未满足：初始化失败时 error 状态未被正确设置**
+
+文件: `desktop_app/src/stores/projectStore.ts:98-101`
+
+```typescript
+} catch (initError) {
+  console.warn('Auto-init project config failed:', initError);
+}
+```
+
+验收条件明确要求"初始化失败时 error 状态被正确设置，不会阻塞用户操作"。当前实现把 `init_project_config` 的异常完全吞掉（仅 `console.warn`），**没有设置 `error` 状态**。用户完全不知道初始化失败，只能看到检测到的旧配置。虽然 `selectProject` 和 `loadProject` 的外层 try/catch (line 142-143 / 183-184) 能捕获部分错误，但 init 的异常被内层 catch 捕获后不会传播出去，外层 catch 接收不到。
+
+建议修复：在 catch 块中同时设置 `error` 状态，例如：
+```typescript
+} catch (initError) {
+  console.warn('Auto-init project config failed:', initError);
+  set({ error: normalizeProjectError(initError) });
+} finally {
+  set({ isInitializing: false });
+}
+```
+
+**2. 新增功能没有对应的测试覆盖**
+
+本次实现的核心逻辑（`isConfigIncomplete`、`selectProject` 自动初始化路径、`loadProject` 自动初始化路径、`isInitializing` 状态变化、异常路径）完全没有测试覆盖。项目已有 `node --test --experimental-strip-types` 的测试基础设施，并且其他 store 有相应的测试模式可参考。
+
+需要至少覆盖：
+- `isConfigIncomplete` 函数（null 输入、部分缺失、完整三种情况）
+- `isInitializing` 在初始化期间的 true/false 转换
+- 初始化失败时 error 状态的设置
+- 浏览器 fallback 路径不变
+
+### 一般问题 (建议修复)
+
+**1. `loadRecentProjects` 未被更新**
+
+`loadRecentProjects` (第 190-218 行) 同样调用了 `detect_project_config`，但未执行自动初始化。应用启动时如果最近项目配置缺失，不会自动补齐，用户需要手动切换到其他项目再切回来才能触发初始化。虽然 Issue 范围限定在 `selectProject` 和 `loadProject`，但从用户体验角度看这是一个缺口。
+
+### 建议改进 (可选)
+
+- `isConfigIncomplete` (第 66-69 行) 是纯函数，建议添加单元测试示例，证明测试模式可行
+- 当前 `isInitializing` 字段已添加但未被任何 UI 组件消费（T-002 将处理），可以确认 T-002 的 InitTemplatePrompt 组件已为此做好准备
+
+### 审核结论
+
+- [ ] 需要修改 — 评分 66/100，未达到 85 达标线
+
+主要失分点：验收条件 #5 未完全满足（init 失败未设置 error 状态），且没有测试覆盖。代码结构和质量整体良好，但这两点使得评分无法达标。
+
+### 实现者自检确认
+
+- [ ] 实现者已执行编译/类型检查 — 未提供证据
+- [ ] 实现者已执行 Lint 检查 — 未提供证据
+- [ ] 实现者已运行相关测试 — 未提供证据
+- [ ] 实现者已确认测试覆盖 — 无测试
+
+> 实现者自检未完成。项目没有提供类型检查/lint/测试的 CI 命令信息，但至少应确认 TypeScript 编译无错误。
+
+---
+
+## Learnings
+
+- **模式**: `projectStore` 使用硬编码的 `isTauri` 检查和直接 `import('@tauri-apps/api/core')`，不同于项目中其他 store 使用的工厂模式（`createRunStore(overrides)`），这使得单元测试难以注入 mock 依赖。
+- **模式**: 从 `selectProject` 内层 catch 吞掉 `init_project_config` 异常但不设置 `error` 状态，会导致验收条件"error 状态被正确设置"无法通过。
+- **模式**: 验收条件中的 "error 状态被正确设置" 应被理解为**无论错误来源**，error 状态都要在有意义的地方被设置。内层 catch 吞异常 + 不作为 = 验收不通过。

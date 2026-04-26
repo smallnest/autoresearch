@@ -1,0 +1,177 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mgit diff HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts 2>/dev/null || echo "no diff"
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m$ [0mgit diff HEAD --name-only 2>/dev/null || echo "no diff"
+desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mgit diff HEAD --name-only --diff-filter=A 2>/dev/null; echo "---"; git log --oneline -5 -- desktop_app/src/pages/DashboardPage.tsx 2>/dev/null || true
+---
+53e0316 feat: implement issue #74 - [desktop-app] UI 全面中文化
+c01ac7a feat: [desktop-app] switch to light theme inspired by Codex app style
+6382a0d feat: implement issue #24 - [desktop-app] 项目目录选择与配置检测
+60bb916 feat: implement issue #23 - [desktop-app] App 壳布局与导航
+[0m
+[0m$ [0mgit diff HEAD~1 --name-only 2>/dev/null || true
+.autoresearch/results.tsv
+.autoresearch/workflows/issue-85/.last_score
+.autoresearch/workflows/issue-85/hard-gate-1.log
+.autoresearch/workflows/issue-85/iteration-1-claude.log
+.autoresearch/workflows/issue-85/iteration-2-opencode-review.log
+.autoresearch/workflows/issue-85/iteration-3-claude-review.log
+.autoresearch/workflows/issue-85/log.md
+.autoresearch/workflows/issue-85/planning.log
+.autoresearch/workflows/issue-85/progress.md
+.autoresearch/workflows/issue-85/tasks.json
+desktop_app/src/stores/projectStore.ts
+desktop_app/src/stores/uiError.ts
+desktop_app/tests/storeErrorLocalization.test.mjs
+lib/ui_verify.sh
+[0m
+[0m✱ [0mGlob "desktop_app/src/**/*.test.*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/stores/*.test.*"[90m in . · 0 matches[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m
+[0m$ [0mgit diff HEAD~1 -- desktop_app/src/stores/uiError.ts 2>/dev/null || true
+diff --git a/desktop_app/src/stores/uiError.ts b/desktop_app/src/stores/uiError.ts
+index cfeb6bf..3b85c73 100644
+--- a/desktop_app/src/stores/uiError.ts
++++ b/desktop_app/src/stores/uiError.ts
+@@ -15,5 +15,7 @@ export function normalizeUserFacingError(
+   if (!message) {
+     return fallbackMessage;
+   }
+-  return CHINESE_CHAR_PATTERN.test(message) ? message : fallbackMessage;
++  return CHINESE_CHAR_PATTERN.test(message)
++    ? message
++    : `${fallbackMessage}：${message}`;
+ }
+[0m
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代次数: 35 (当前)
+- 当前子任务: T-002
+
+### 总体评价
+**评分: 60/100**
+
+### 严重问题 (必须修复)
+
+1. **目标文件 `DashboardPage.tsx` 未被修改** — `git diff HEAD --name-only` 显示本次迭代只修改了 `projectStore.ts`，T-002 指定的目标文件 `DashboardPage.tsx` 完全未被触及。`InitTemplatePrompt` 组件仍为旧版纯提示 UI，包含已废弃的"了解"按钮（`alert()`）和"稍后"按钮，验收条件中 5 项全部未实现：
+   - ❌ 未移除"了解"按钮和 alert
+   - ❌ 未在初始化进行时显示加载状态
+   - ❌ 未在初始化成功后显示成功反馈
+   - ❌ 未在初始化失败时显示错误信息和重试按钮
+   - ❌ store 未暴露 `retryInitialize` action 供 UI 消费
+
+2. **无测试覆盖新 store 逻辑** — `isConfigIncomplete` 和 `ensureConfigInitialized` 是新增的核心逻辑，但无任何测试覆盖（`tests/` 目录下无相关 `.test.mjs` 文件）。
+
+### 一般问题 (建议修复)
+
+1. `ensureConfigInitialized` 将 `set` 作为参数传入，而非使用 zustand 的 `get`/`set` 闭包——虽然可行，但设计上不如 `retryInitialize` action 方式清晰。
+2. 浏览器 fallback 路径（`selectProject` 和 `loadProject`）没有调用 `ensureConfigInitialized`，导致 `isInitializing` 在浏览器模式下永远不会为 `true`，行为不一致。
+
+### 建议改进 (可选)
+
+1. 建议在 store 中暴露 `retryInitialize` action 供 UI 调用，遵循 `refreshConfig` + `ensureConfigInitialized` 的链路。
+2. 建议将 `ensureConfigInitialized` 改为 store 的 action 方法而非独立函数，避免传递 `set`。
+
+### 审核结论
+- 需要修改
+
+### 自检验证
+
+```markdown
+### 实现者自检确认
+- ❌ 实现者未执行编译/类型检查（无证据）
+- ❌ 实现者未执行 Lint 检查
+- ❌ 实现者未运行相关测试
+- ❌ 实现者未确认测试覆盖
+```
+
+## Learnings
+
+- **踩坑**: 本次迭代再次出现完全相同的"只改 store 不改 UI"问题。`DashboardPage.tsx` 作为 T-002 唯一定义的目标文件，`git diff HEAD --name-only` 即可在 3 秒内发现其未被修改。
+- **模式**: UI 类型子任务的审核确认必须在第一步执行 `git diff HEAD -- <target_file>`，确认目标文件已被修改后再深入审查代码质量。当前模式已重复出现至少 9 次以上（迭代 #24-#35），提示当前 prompts 对 UI 目标的约束力严重不足。
+- **经验**: 对于持续重复失败的实现模式（连续 ≥3 次相同方向错误），应考虑大幅调整 prompts、增加强制检查规则（例如在 agents/*.md 中添加类似"修改前先用 `git diff HEAD --name-only` 确认目标文件已被修改"的自检规则），而非每次仅给出逐次修复反馈。

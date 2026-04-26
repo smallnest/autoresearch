@@ -1,0 +1,36 @@
+{
+  "issueNumber": 84,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "在 projectStore 中添加自动初始化逻辑",
+      "description": "修改 `selectProject` 方法：在调用 `detect_project_config` 后，检测到配置不完整时（has_autoresearch_dir/has_program_md/has_agents_dir 任一为 false），自动调用 Tauri 的 `init_project_config` 命令创建缺失文件，并用返回的 ProjectConfig 更新 store 状态。同时在 store 中增加 `isInitializing` 状态字段，用于 UI 显示初始化进度。同样处理 `loadProject` 方法，确保从最近项目加载时也能自动初始化。",
+      "acceptanceCriteria": [
+        "selectProject 检测到配置缺失时自动调用 init_project_config",
+        "init_project_config 返回的 ProjectConfig 正确更新到 store.config",
+        "新增 isInitializing 状态字段，初始化期间为 true，完成后为 false",
+        "loadProject 方法同样支持自动初始化",
+        "初始化失败时 error 状态被正确设置，不会阻塞用户操作",
+        "TypeScript 类型检查通过"
+      ],
+      "priority": 1,
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "更新 Dashboard 页面 InitTemplatePrompt 组件",
+      "description": "将 Dashboard 页面的 `InitTemplatePrompt` 组件从纯提示 UI 改为显示初始化状态反馈：1) 当 store 中 isInitializing 为 true 时显示初始化进度提示；2) 初始化成功后显示成功反馈并自动隐藏；3) 初始化失败时显示错误信息和重试按钮（手动调用 refreshConfig + init_project_config）；4) 移除原来无功能的\"了解\"按钮和 alert。如果自动初始化已在 selectProject 中完成，InitTemplatePrompt 可能只需处理失败重试场景。",
+      "acceptanceCriteria": [
+        "InitTemplatePrompt 不再显示无操作按钮（如原来的\"了解\"按钮 alert）",
+        "初始化进行中时显示加载/进度状态",
+        "初始化成功后显示成功反馈",
+        "初始化失败时显示错误信息和重试按钮",
+        "页面无 console 错误",
+        "UI 交互流畅，无白屏或闪烁"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": true
+    }
+  ]
+}

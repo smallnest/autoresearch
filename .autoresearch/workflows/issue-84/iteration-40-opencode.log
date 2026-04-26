@@ -1,0 +1,46 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+好的，我已经审阅了审核反馈和相关文件。以下是修复计划：
+
+## 修复计划
+
+### 改动文件（2 个）
+
+#### 1. `desktop_app/src/stores/projectStore.ts`
+
+**在 `ProjectState` 接口中新增 action：**
+- `retryInitialize: () => Promise<void>`
+
+**实现 `retryInitialize`：**
+- 获取当前 `projectPath`
+- `set({ error: null, isInitializing: true })`
+- 调用 `detect_project_config` 重新检测
+- 如果仍不完整，调用 `init_project_config`
+- 更新 `config` 状态
+- `finally { set({ isInitializing: false }) }`
+
+#### 2. `desktop_app/src/pages/DashboardPage.tsx`
+
+**重写 `InitTemplatePrompt` 组件：**
+- 删除 `onLearnMore` prop（只保留 `onLater`）
+- 接入 store 的三个状态：
+  1. **初始化中**（`isInitializing`）：蓝色背景 + spinner + "正在初始化项目配置..."
+  2. **初始化失败**（`error`）：红色背景 + 错误信息 +「重试」按钮（调用 `retryInitialize`）+「稍后」按钮（`clearError` + `onLater`）
+  3. **默认**：琥珀色提示 + 仅保留「稍后」按钮，删除「了解」按钮
+
+**更新 `ProjectInfoScreen`：**
+- 删除 `handleLearnMore` 函数
+- 删除 `onLearnMore` prop 传递
+- 调用 `InitTemplatePrompt` 时只传 `onLater`
+
+### 自检清单
+- [ ] `git diff HEAD --name-only` 确认两个文件都被修改
+- [ ] 类型检查无错误
+- [ ] Tailwind 样式与现有主题一致
+
+---
+
+开始实现？

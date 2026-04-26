@@ -1,0 +1,92 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore projectStore codebase[90m Explore Agent[0m
+[0m✓ [0mExplore projectStore codebase[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+Now let me read the actual files to confirm current state.
+[0m
+[0m# [0mTodos
+[ ] Fix `loadRecentProjects` to call `ensureConfigInitialized` in projectStore.ts
+[ ] Refactor projectStore to factory pattern (ProjectStoreDeps, createProjectStore)
+[ ] Add `isInitializing` consumption in DashboardPage ProjectInfoScreen
+[ ] Create tests/projectStore.test.mjs with factory pattern tests
+[ ] Run tests to verify all changes pass
+[ ] Update tests/CLAUDE.md with projectStore test patterns
+[0m
+现在我有了全面的了解。以下是详细计划。
+
+---
+
+## 修复计划
+
+### 问题 1（严重）：`loadRecentProjects` 未调用 `ensureConfigInitialized`
+
+**文件**：`desktop_app/src/stores/projectStore.ts:186-214`
+
+将 Tauri 检测路径中直接的 `detect_project_config` → `set({ projectPath, config })` 替换为路由通过 `ensureConfigInitialized`，与 `selectProject` 和 `loadProject` 保持一致。
+
+### 问题 2（严重）：缺少 projectStore 单元测试
+
+**文件**：`desktop_app/src/stores/projectStore.ts`、`desktop_app/tests/projectStore.test.mjs`
+
+将 `projectStore` 重构为工厂模式（遵循 `runStore` 的规范模式），然后创建测试。具体为：
+
+1.  定义 `ProjectStoreDeps` 接口（`isTauri`、`invoke`）
+2.  添加 `createProjectStoreDeps(overrides)` 辅助函数
+3.  添加 `createProjectStore(overrides)` 工厂函数
+4.  将内部辅助函数（`ensureConfigInitialized`、`detectConfigBrowser` 等）移入工厂以捕获 `deps`
+5.  保留 `useProjectStore = createProjectStore()` 以保证向后兼容
+6.  保留模块层导出的 `isConfigIncomplete`、`normalizeProjectError`、`ProjectConfig`
+7.  创建 `tests/projectStore.test.mjs`，包含：
+    -   `isConfigIncomplete` 分支（null、全部为 true、一个为 false）
+    -   `selectProject` 的完整路径（select → detect → init → save → 状态更新）
+    -   `loadProject` 的完整路径（带和不带 init）
+    -   `loadRecentProjects` 初始化路径（回归防护）
+    -   `ensureConfigInitialized` 错误处理（catch 不阻塞、设置 error 状态）
+
+### 问题 3（一般性）：`isInitializing` 未被 UI 消费
+
+**文件**：`desktop_app/src/pages/DashboardPage.tsx`
+
+-   从 store 中解构 `isInitializing`
+-   将其作为 prop 传递给 `ProjectInfoScreen`
+-   在初始化过程中显示加载指示器
+
+### 问题的根本原因
+
+factory + test 重构解决了**结构性问题**：没有工厂模式，测试就无法注入 Tauri mock 依赖，这就是为什么 `loadRecentProjects` 回归在 4 次迭代中反复出现——每次修复都覆盖了 selectProject 和 loadProject，但由于缺乏自动化测试防护，第三条路径持续被遗漏。
+
+---
+## 审核反馈修复计划
+
+对审核中标记的问题进行了根源分析。以下是修复策略：
+
+### 问题 1：`loadRecentProjects` 忽略 `ensureConfigInitialized`（严重 · 评分 69 → 扣分最多项）
+
+**根本原因**：三条初始化路径（`selectProject`、`loadProject`、`loadRecentProjects`）每次只修了前两条。工厂模式缺失导致无法写测试，回归无法被自动化捕获。
+
+**修复**：将第 192-196 行的直接 `detect_project_config` → `set` 改为路由通过 `ensureConfigInitialized`。
+
+### 问题 2：缺少测试（严重 · 工厂模式缺失）
+
+**修复**：将 `projectStore` 重构为工厂模式，遵循 `runStore` 的规范模式：
+
+```
+ProjectStoreDeps 接口 → createProjectStoreDeps(overrides) → createProjectStore(overrides) → useProjectStore
+```
+
+- 将 `ensureConfigInitialized`、`detectConfigBrowser` 等内部函数移入工厂闭包
+- 保留 `isConfigIncomplete`、`normalizeProjectError`、`ProjectConfig` 为模块级导出
+- 创建 `tests/projectStore.test.mjs`，至少包含 5 个测试用例（isConfigIncomplete 分支、selectProject、loadProject、loadRecentProjects 初始化、错误处理）
+
+### 问题 3：`isInitializing` 未被 UI 消费（一般性）
+
+**修复**：将 `isInitializing` 作为 prop 传递给 `DashboardPage` 中的 `ProjectInfoScreen`，并在初始化过程中显示加载指示器。
+
+---
+
+**总结**：评分 69/100 → 修复后目标 **90/100**。`loadRecentProjects` 修复可以立刻解决问题，但工厂模式测试才是防止第四次回归的关键。开始实现吗？

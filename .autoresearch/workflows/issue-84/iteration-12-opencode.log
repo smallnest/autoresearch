@@ -1,0 +1,61 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m• [0mExplore projectStore test patterns[90m Explore Agent[0m
+Let me examine the DashboardPage and understand the existing patterns better.
+[0m✓ [0mExplore projectStore test patterns[90m Explore Agent[0m
+Now I have a full picture. Let me present the plan.
+
+---
+
+## 修复计划
+
+### 诊断
+
+审核反馈指出 3 个严重问题 + 3 个建议问题：
+
+| # | 严重程度 | 问题 | 涉及文件 |
+|---|---------|------|---------|
+| 1 | 🔴 严重 | `loadRecentProjects` 未调用 `ensureConfigInitialized` | `projectStore.ts:193-196` |
+| 2 | 🔴 严重 | `isInitializing` 未在 `DashboardPage` 中使用 | `DashboardPage.tsx` (两处消费点) |
+| 3 | 🔴 严重 | 前端 store 零测试覆盖 | `projectStore.test.mjs` 不存在 |
+| 4 | 🟡 建议 | 缺少 factory 模式（阻碍测试） | `projectStore.ts:94` |
+| 5 | 🟡 建议 | `selectProject` 冗余 `detect_project_config` 调用导致两次 IPC | `projectStore.ts:108-111` |
+| 6 | 🟡 建议 | 初始化失败后的 stale error 未自动清除 | `projectStore.ts:83` |
+
+### 实施步骤
+
+**Step 1: 重构为 factory 模式** (`projectStore.ts`)
+
+在 `selectProject`/`loadProject`/`loadRecentProjects` 中使用的 `ensureConfigInitialized` 引用闭包捕获的 `deps.invoke`。
+
+**Step 2: 修复 `loadRecentProjects`** (`projectStore.ts`)
+
+Tauri 分支中将直接 `detect_project_config` 替换为 `ensureConfigInitialized(path, detected, set)` 模式，确保启动时自动加载最近项目也能触发配置初始化。
+
+**Step 3: 消费 `isInitializing`** (`DashboardPage.tsx`)
+
+- `WelcomeScreen` 读取 `isInitializing`，在 `selectProject` 的初始化阶段显示 spinner
+- `ProjectInfoScreen` 读取 `isInitializing`，在 `loadProject`/`loadRecentProjects` 的初始化阶段显示 overlay indicator
+
+**Step 4: 创建 `projectStore.test.mjs`** (`desktop_app/tests/`)
+
+覆盖：
+- `isConfigIncomplete` 的各种输入组合（null、全部缺失、部分缺失、全部就绪）
+- `selectProject` 的初始化路径（`ensureConfigInitialized` 被调用、`isInitializing` 状态转换、config 正确更新）
+- `loadProject` 的初始化路径（同上）
+- `loadRecentProjects` 的初始化路径（同上——这也是本 Issue 的核心修复验证）
+- 初始化失败路径（error 被设置、不阻塞操作）
+- 浏览器 fallback 路径（`isTauri: false` 时正确降级）
+- 请求竞态保护（迟到响应不覆盖最新状态）
+
+**Step 5（可选）: 优化冗余 `detect_project_config` 调用并修复 stale error**
+
+评估是否可做——`selectProject` 中 `detect_project_config` + `init_project_config` 导致两次后端往返。可以在配置很可能缺失时跳过第一次 `detect_project_config`，直接调 `init_project_config`。
+
+---
+
+要我开始实现吗？

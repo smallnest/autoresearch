@@ -1,0 +1,80 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+Let me analyze the current codebase to understand the state and formulate a plan.
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m 12 matches[0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+Let me check the existing tests and the uiError helper:
+[0m→ [0mRead desktop_app/tests/iterationProgressPanel.test.mjs
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs[90m [limit=80][0m
+Let me check a few test files to understand patterns:
+Now I have a thorough understanding of the situation. Let me present the plan.
+
+---
+
+## 修复计划: Issue #84 T-002
+
+### 现状分析
+
+- **T-001 ✅** (store 层) 已完成：`projectStore.ts` 已经 unstaged 的改动包含了 `isInitializing`、`ensureConfigInitialized`、`isConfigIncomplete`、以及 `selectProject`/`loadProject` 中的串联调用
+- **T-002 ❌** (UI 层) 零改动：`DashboardPage.tsx` 还是原始代码
+- 审核评分 36/100，主要扣分点：DashboardPage 未改、无 `retryInitialize` action、`loadRecentProjects` 未串联初始化、无测试
+
+### 任务分解
+
+**Task 1: `projectStore.ts` — 添加 `retryInitialize` action**
+- 在 `ProjectState` 接口中添加 `retryInitialize: () => Promise<void>`
+- 在 `create()` 中实现：先调用 `refreshConfig()`，如果配置仍不完整则调用 `ensureConfigInitialized`（通过调用已存在的 `ensureConfigInitialized` 逻辑）
+- 将 `set` 传递方式改为支持从 `get()` 内部调用
+
+**Task 2: `projectStore.ts` — 修复 `loadRecentProjects` 不调用自动初始化**
+- 在 Tauri 分支的 `loadRecentProjects` 中，当自动检测配置后，若检测到配置不完整，调用 `ensureConfigInitialized` 进行初始化（复用已有逻辑）
+- 浏览器 fallback 路径保持不变
+
+**Task 3: `DashboardPage.tsx` — 重构 `InitTemplatePrompt` 组件**
+- 修改 props 接口为 `{ isInitializing, error, onRetry, onDismiss }`
+- 实现三个状态分支：
+  - **初始化中**: 显示 spinner + "正在初始化配置..." 文案
+  - **初始化失败 (error 存在)**: 显示错误信息和重试按钮（调用 `retryInitialize`）
+  - **默认/闲置态**: 仅保留 "稍后" 按钮（删除 "了解" 按钮和 alert）
+- 移除原来无功能的 "了解" 按钮和 `alert()`
+
+**Task 4: `DashboardPage.tsx` — 更新 `ProjectInfoScreen` 和 `DashboardPage`**
+- `ProjectInfoScreen` 从 store 解构 `isInitializing`, `error`, `retryInitialize`, `clearError`
+- 传递新 props 给 `InitTemplatePrompt`
+- 接入加载状态后，如果初始化成功自动将 `showInitPrompt` 设为 false（成功反馈由 `ConfigCompleteNotification` 接管）
+- 初始化失败时保持 prompt 显示，用户可重试
+
+**Task 5: `DashboardPage.tsx` — `ConfigCompleteNotification` 自动隐藏**
+- 使用 `useEffect` + `setTimeout` (4s) 实现自动隐藏
+- 添加 `visible` 状态控制显隐
+
+**Task 6: `desktop_app/tests/projectStore.test.mjs` — 新增 store 测试**
+- 测试 `isConfigIncomplete()`: 各种边界（null、全缺失、部分缺失、全存在）
+- 测试 `normalizeProjectError()`: 含中文/不含中文/空 error
+
+**Task 7: `desktop_app/tests/dashboardInit.test.mjs` — 新增 UI 静态渲染测试**
+- 使用 `react-dom/server` 的 `renderToStaticMarkup` 测试 `InitTemplatePrompt` 三态：
+  - 初始状态：显示 "稍后" 按钮，无错误信息
+  - 加载状态：显示 "正在初始化" spinner
+  - 错误状态：显示错误信息和重试按钮
+- 测试 `ConfigCompleteNotification` 渲染
+
+### 关键设计决策
+
+1. `retryInitialize` 的实现：先调用 `refreshConfig()` 重新检测，如果仍不完整则调 `ensureConfigInitialized`。失败时设置 error（已有 `normalizeProjectError`）
+2. `loadRecentProjects` 初始化：在 Tauri 分支的 auto-load 路径中，检测 + 初始化，失败时静默（避免启动时报错吓到用户），log warning
+3. 初始化成功后 `InitTemplatePrompt` 自动消失：初始化完成后 `isInitializing` 变为 false + error 为 null => 组件不展示（由 `ConfigCompleteNotification` 接管显隐）
+4. `ConfigCompleteNotification` 自动隐藏：4 秒后 fade out
+
+### 需要确认
+
+- **store 加载隔离**：`ensureConfigInitialized` 不支持 request key/isolation，如果快速切换项目可能会有竞态。但 T-002 场景中用户手动选择项目时 UI 会阻塞在 loading 状态，不需要额外隔离。是否同意？
+
+---
+
+请确认计划，我开始实施后会按以上顺序逐步执行。

@@ -1,0 +1,69 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m
+[0m# [0mTodos
+[ ] projectStore.ts: 添加 initProjectConfig public action 供 UI 重试调用
+[ ] projectStore.ts: loadRecentProjects 自动加载路径串联 ensureConfigInitialized
+[ ] DashboardPage.tsx: 重写 InitTemplatePrompt — 消费 store isInitializing/error，显示加载态/错误+重试/移除了解按钮
+[ ] DashboardPage.tsx: 更新 ProjectInfoScreen — 移除 handleLearnMore，适配新的 InitTemplatePrompt 接口
+[ ] 自检: TypeScript 编译 + 无 console 错误
+[0m
+根据审核反馈，当前状态如下：
+
+**projectStore.ts** — 已有 `isInitializing` 和 `ensureConfigInitialized`，但缺 `initProjectConfig` action（重试用），且 `loadRecentProjects` 未串联初始化。
+
+**DashboardPage.tsx** — `InitTemplatePrompt` 完全未修改，仍保留 "了解" 按钮 + `alert()`，没有消费 store 的 `isInitializing`/`error`。
+
+以下是修复计划：
+### 修复计划
+
+**1. `projectStore.ts` — 添加 `initProjectConfig` action**
+
+新增 public action，UI 重试按钮可直接调用：
+```typescript
+initProjectConfig: async (targetProjectPath?: string) => {
+  const path = targetProjectPath ?? get().projectPath;
+  if (!path) return;
+  set({ isInitializing: true, error: null });
+  try {
+    const updated = await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
+    set({ config: updated, error: null });
+  } catch (e) {
+    set({ error: normalizeProjectError(e) });
+  } finally {
+    set({ isInitializing: false });
+  }
+}
+```
+同时在 `ProjectState` 接口中声明。
+
+**2. `projectStore.ts` — 修复 `loadRecentProjects`**
+
+`loadRecentProjects` 中 auto-load 的分支（`:192-196`）当前只调 `detect_project_config`，需改为调用 `ensureConfigInitialized`（与 `selectProject`/`loadProject` 一致）。
+
+**3. `DashboardPage.tsx` — 重写 `InitTemplatePrompt`**
+
+从纯 props 驱动改为消费 store 状态，处理三种场景：
+- **`isInitializing = true`** → 蓝色加载卡片 + 旋转 spinner（"正在初始化项目配置..."）
+- **`isInitializing = false` + `error` + config 不完整** → 红色错误卡片 + 错误消息 + "重试"按钮（调 `initProjectConfig`）+ "稍后"按钮
+- **其他情况** → 返回 `null`（不显示）
+
+移除 `onLearnMore` prop 和 "了解" 按钮。
+
+**4. `DashboardPage.tsx` — 更新 `ProjectInfoScreen`**
+
+- 移除 `handleLearnMore` 和 `alert()`
+- `InitTemplatePrompt` 调用改为只传 `onLater`
+- 保留 `showInitPrompt` 本地状态（"稍后" dismiss 功能）
+
+**5. 自检**
+
+用 `npx tsc --noEmit` 检查类型，确认无错误。
+
+关键设计原则：`InitTemplatePrompt` 聚焦于"初始化尚未完成或失败"时的反馈；初始化成功后的绿色"配置完整"通知已经由 `ConfigCompleteNotification` 组件（`:296-313`）处理，无需重复。
+
+是否按此计划执行？

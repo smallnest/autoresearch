@@ -1,0 +1,71 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores
+I'll start by exploring the current state of the codebase to understand what needs to be changed.
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/tests
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m in . · 13 matches[0m
+Let me look at a few more reference files to understand the patterns.
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyDetailStore.ts
+Let me examine an existing store test for pattern reference and the `historyStore` factory pattern too.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+Let me also check the Rust commands and the existing test for error localization.
+Now I have a thorough understanding of the codebase. Let me present my plan.
+
+---
+
+## Plan: Fix Issue #84 - projectStore factory pattern + tests + optimization
+
+### Analysis Summary
+
+The review identifies 4 issues (ordered by severity):
+
+1. **Severe: Missing factory pattern** — `projectStore.ts` is the only main store without `createProjectStore(overrides)`. This blocks testing.
+2. **Severe: No tests** — 0 tests cover the store's core logic (`selectProject`, `loadProject`, `loadRecentProjects`, `ensureConfigInitialized`).
+3. **General: `loadRecentProjects` skips auto-init** — calls `detect_project_config` but never `ensureConfigInitialized`.
+4. **Performance: Double IPC in `selectProject`** — `detect_project_config` + `init_project_config` (which internally re-detects) = 2 IPC round trips.
+
+### Task Breakdown
+
+**T-001: Refactor `projectStore.ts` to factory pattern**
+
+- Add `ProjectStoreDeps` interface (`isTauri`, `invoke`)
+- Add `createProjectStoreDeps(overrides)` function
+- Define `createProjectStore(overrides)` capturing deps in closure
+- Export `useProjectStore = createProjectStore()` as default
+- Move `ensureConfigInitialized` to accept `invoke` parameter
+- Keep exported pure helpers (`isConfigIncomplete`, `normalizeProjectError`) unchanged
+
+**T-002: Optimize Tauri paths (fix double IPC + loadRecentProjects)**
+
+- `selectProject` Tauri path: call `init_project_config` directly instead of `detect_project_config` + `ensureConfigInitialized`
+- `loadProject` Tauri path: same direct `init_project_config` call
+- `loadRecentProjects` Tauri path: call `init_project_config` when no project is loaded yet (fixes issue 3)
+- Keep `refreshConfig` unchanged (uses lighter `detect_project_config` for UI refresh only)
+
+Rationale for always calling `init_project_config`: Rust's `init_project_config_sync` does detection internally + only creates missing files (never overwrites existing). The cost is identical to `detect_project_config` when files exist, and strictly better when files are missing (1 IPC instead of 2).
+
+**T-003: Write tests (create `tests/projectStore.test.mjs`)**
+
+Coverage:
+- `isConfigIncomplete` pure function (null config, complete config, incomplete config)
+- `selectProject` Tauri mode: calls `init_project_config`, state updated correctly
+- `selectProject` Tauri mode: init failure → error set, `isInitializing` false, loading false
+- `isInitializing` transitions correctly (use deferred promise to verify intermediate state)
+- `loadProject` Tauri mode: calls `init_project_config`
+- `loadProject` non-Tauri mode: browser fallback, no init
+- `loadRecentProjects` Tauri mode: auto-initializes config when no project loaded
+- `clearError` resets error state
+
+All tests use the factory pattern with injected mocks, following the same pattern as `tests/runStore.test.mjs`.
+
+**T-004: Self-check**
+
+- Verify `node --test --experimental-strip-types desktop_app/tests/projectStore.test.mjs` passes
+- If `npm test` or `npm run typecheck` exists, run those too

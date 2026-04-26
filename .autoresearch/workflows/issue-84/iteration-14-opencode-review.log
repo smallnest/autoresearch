@@ -1,0 +1,139 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=80][0m
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m in . · 12 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*project*"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "projectStore|ensureConfigInitialized|isConfigIncomplete|normalizeProjectError"[90m in desktop_app/tests · 6 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me explore the test patterns used in other stores and check the existing project-related test files.
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/tests · 0 matches[0m
+[0m✱ [0mGrep "createProjectStore|create.*Store"[90m in desktop_app/src/stores · 20 matches[0m
+[0m✱ [0mGlob "desktop_app/.autoresearch/workflows/issue-84/**"[90m in . · 0 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && ls tests/ | grep -i project
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && npm run typecheck 2>&1 | tail -20
+> desktop_app@0.1.0 typecheck
+> tsc --noEmit
+[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 - 在 projectStore 中添加自动初始化逻辑
+- 迭代次数: 10
+- 审核日期: 2026-04-26
+
+### 总体评价
+**评分: 68/100**
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 70 | 24.5 |
+| 测试质量 | 25% | 40 | 10.0 |
+| 代码质量 | 20% | 70 | 14.0 |
+| 安全性 | 10% | 90 | 9.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | **100%** | | **67.5** |
+
+**未达标（需 ≥ 85）**
+
+---
+
+### 对照验收条件逐条审核
+
+| # | 验收条件 | 状态 | 说明 |
+|---|----------|------|------|
+| 1 | selectProject 检测到配置缺失时自动调用 init_project_config | ✅ | 通过 `ensureConfigInitialized` 实现 (line 111) |
+| 2 | init_project_config 返回的 ProjectConfig 正确更新到 store.config | ✅ | line 115: `set({ ... config })` |
+| 3 | 新增 isInitializing 状态字段，初始化期间为 true，完成后为 false | ✅ | 字段定义 (line 24), `true` (line 77), `false` (line 86 finally) |
+| 4 | loadProject 方法同样支持自动初始化 | ✅ | line 163: 调用了 `ensureConfigInitialized` |
+| 5 | 初始化失败时 error 状态被正确设置，不会阻塞用户操作 | ✅ | line 82-84: catch 内 set error, 返回原 config |
+| 6 | TypeScript 类型检查通过 | ✅ | `tsc --noEmit` 无错误 |
+
+### 严重问题（必须修复）
+
+**1. `loadRecentProjects` 未调用 `ensureConfigInitialized`（正确性）**
+
+`loadRecentProjects`（line 186-213）在 Tauri 分支中调用了 `detect_project_config`（line 193）但未调用 `ensureConfigInitialized`。这意味着应用启动时通过"最近项目"自动加载的项目**不会触发自动初始化**。
+
+该问题已在之前的跨迭代审核中反复标记：
+> *"`loadRecentProjects`（在应用启动时通过 `DashboardPage` 调用）是第三条关键初始化路径，与 `selectProject` 和 `loadProject` 并列。它必须包含 `ensureConfigInitialized`，但已连续三次迭代未修复，成为持久回归点。"*
+
+**建议修复**：在 line 196-197 之间插入 `ensureConfigInitialized`：
+
+```typescript
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath: path,
+});
+const initializedConfig = await ensureConfigInitialized(path, config, set);
+set({ projectPath: path, config: initializedConfig });
+```
+
+---
+
+### 一般问题（建议修复）
+
+**2. 缺少单元测试覆盖（测试质量）**
+
+所有其他 store（`runStore`、`iterationStore`、`historyStore`、`logViewerStore`、`runConfigStore`、`historyDetailStore`）均遵循 `createXStore(overrides)` 工厂模式，支持依赖注入用于测试。`projectStore` 直接使用 `create<ProjectState>()` 硬编码 `tauriInvoke`，导致：
+- `selectProject`、`loadProject`、`loadRecentProjects` 的核心逻辑**不可单元测试**
+- `ensureConfigInitialized` 虽然是可导出的纯函数，但[无对应测试文件](tests/)
+- `isConfigIncomplete` 已导出（line 66），但[无对应测试](tests/)
+
+**建议修复**：
+1. 将 `projectStore` 改造为 `createProjectStore(overrides?)` 工厂模式（注入 `isTauri` 和 `invoke` 依赖）
+2. 添加 `tests/projectStore.test.mjs` 覆盖：
+   - `isConfigIncomplete`：null 输入、全 false、部分 false、全 true
+   - `ensureConfigInitialized`：初始化成功路径、失败后返回原 config、失败后 error 状态设置、`isInitializing` 生命周期
+   - `loadProject` / `selectProject` / `loadRecentProjects`：mock invoke 验证调用链
+
+**3. `refreshConfig` 不触发 `ensureConfigInitialized`（行为完整性）**
+
+`refreshConfig`（line 216-240）调用 `detect_project_config` 后直接 `set({ config })`，未检查是否需要初始化。虽然描述未明确要求 `refreshConfig` 也做初始化，但逻辑上这是一个不一致：用户手动刷新配置时，预期也应能触发自动初始化完成配置。
+
+**建议修复**：在 `refreshConfig` 的 Tauri 分支中增加 `ensureConfigInitialized` 调用，与 `selectProject` 和 `loadProject` 保持一致。
+
+---
+
+### 建议改进（可选）
+
+**4. `console.warn` 应改为更结构化的错误处理**
+
+`ensureConfigInitialized`（line 82）使用了 `console.warn`，而项目中其他 store 倾向于将错误上报到 store 的 error 字段或使用 `normalizeUserFacingError` 统一处理。建议移除或保留但补充日志存储层。
+
+**5. Browser fallback 中 `loadRecentProjects` 的配置检测行为**
+
+Browser 分支（line 202-203）在 loadFromStorage 后使用 `detectConfigBrowser` 做最佳猜测，但没有 `ensureConfigInitialized` 调用。由于浏览器模式没有 Tauri 后端，`init_project_config` 无法工作，保持现状是合理的。建议添加注释说明有意为之。
+
+---
+
+### 审核结论
+
+- [ ] **阻塞** — 必须修复 `loadRecentProjects` 缺失的 `ensureConfigInitialized` 调用后再提交人工审核
+
+---
+
+### 实现者自检确认
+
+| 检查项 | 结果 |
+|--------|------|
+| 编译/类型检查 | ✅ 通过 (`tsc --noEmit`) |
+| Lint 检查 | 未运行 |
+| 相关测试运行 | ❌ 未运行（无 projectStore 测试） |
+| 测试覆盖确认 | ❌ 无测试覆盖新增逻辑 |
+
+> 注意：`loadRecentProjects` 缺失自动初始化的问题已连续多次迭代被标记但未被修复，建议在本次修复中彻底解决。
+
+---
+
+## Learnings
+
+- **模式**: 所有可测试的 store 必须导出 `createXStore(overrides?)` 工厂函数以支持依赖注入。`projectStore` 是唯一的例外，这也使其成为唯一一个没有测试的 store。
+- **踩坑**: `loadRecentProjects`（在应用启动时通过 `DashboardPage` 调用）是第三条关键初始化路径，与 `selectProject` 和 `loadProject` 并列。它必须包含 `ensureConfigInitialized`，但已连续三次迭代未修复，成为持久回归点。
+- **经验**: 单次迭代审核往往会重新发现之前标记但未解决的问题。应更加系统地审计跨迭代工单，确保问题一旦标记就能得到修复，而不是被同一或不同的 Agent 重新发现。

@@ -1,0 +1,199 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/package.json
+Let me look at an existing test factory pattern and the `uiError.ts` file to understand the conventions:
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=61, limit=80][0m
+[0m→ [0mRead desktop_app/tests/runConfigStore.test.mjs
+Let me also check the `createRunStore` factory pattern to understand how to set it up for `projectStore`:
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=141, limit=170][0m
+现在我已经对代码库有了全面的了解。以下是我的分析与计划：
+
+---
+
+## 修复计划
+
+### 当前状态分析
+
+`projectStore.ts` 已有的工作：
+- `isConfigIncomplete` — ✅ 已实现为导出纯函数
+- `ensureConfigInitialized` — ✅ 已在 `selectProject` 和 `loadProject` 中使用
+- `isInitializing` — ✅ 状态字段已存在于 store 中
+
+但与审核反馈仍不符合：
+
+| # | 问题 | 状态 |
+|---|------|------|
+| 1 | 零测试覆盖 | ❌ 无 `projectStore.test.mjs` |
+| 2 | `loadRecentProjects` 未接入 `ensureConfigInitialized` | ❌ line 186-214 调用了 `detect_project_config` 后直接 `set({ projectPath, config })`，未走自动初始化 |
+| 3 | 无可注入工厂模式 | ❌ store 是用裸 `create<ProjectState>(...)` 创建的，没有 `createProjectStore` |
+| 4 | `isInitializing` 未接入 UI | ❌ DashboardPage 未读取 `isInitializing` |
+| 5 | 初始化失败后重试路径不清晰 | ⚠️ 建议改进项 |
+
+---
+
+### 任务清单
+
+#### Task 1: 添加工厂模式 `createProjectStore` (修复 #3)
+
+将现有 `useProjectStore` 重构为与 `createRunStore` 一致的工厂模式：
+
+- 定义 `ProjectStoreDeps` 接口：`{ isTauri, invoke }`
+- 从 `create<ProjectState>((set, get) => ({...}))` 改为 `export function createProjectStore(overrides)`
+- 导出 `createProjectStoreDeps(overrides)` 以注入默认值
+- 将 `useProjectStore` 改为 `createProjectStore()` 的一次性调用结果
+
+#### Task 2: 修复 `loadRecentProjects` 接入 `ensureConfigInitialized` (修复 #2)
+
+`loadRecentProjects` line 186-214 中 Tauri 分支在 `detect_project_config` 之后改用：
+
+```typescript
+const config = await ensureConfigInitialized(path, detected, set);
+set({ projectPath: path, config });
+```
+
+替代当前的：
+
+```typescript
+set({ projectPath: path, config });
+```
+
+#### Task 3: 将 `isInitializing` 接入 DashboardPage UI (修复 #4)
+
+在 `DashboardPage` 的 `ProjectInfoScreen` 中增加初始化进度指示：
+
+- 当 `isInitializing` 为 `true` 时，在配置卡片区域显示一个旋转加载指示器和 "正在初始化项目配置..."
+- 这可以是 `InitTemplatePrompt` 区域的替代视图，或额外的加载覆盖层
+
+#### Task 4: 添加 `projectStore.test.mjs` (修复 #1)
+
+按现有测试模式（`iterateStore.test.mjs`、`runConfigStore.test.mjs`），覆盖：
+
+- `isConfigIncomplete(null)` → `true`
+- `isConfigIncomplete({ has_autoresearch_dir: false, ... })` → `true`
+- `isConfigIncomplete({ has_autoresearch_dir: true, has_program_md: true, has_agents_dir: true })` → `false`
+- `normalizeProjectError` 错误格式化
+- `createProjectStore` 注入 `invoke` mock 后调用 `selectProject`/`loadProject`/`loadRecentProjects`：
+
+  ```javascript
+  // createInvokeMock 模式与 iterationStore 一致
+  const store = createProjectStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      select_project_dir: () => '/tmp/project',
+      detect_project_config: () => FULL_CONFIG,
+      init_project_config: () => FULL_CONFIG,
+      save_recent_project: () => {},
+      get_recent_project: () => '/tmp/project',
+    }),
+  });
+  ```
+
+- `ensureConfigInitialized` 在 `invoke` 失败时设置 `error` 且不抛出异常
+- `isInitializing` 在初始化期间为 `true`，完成后为 `false`
+- `loadRecentProjects` 在检测到配置不完整时调用 `init_project_config`
+
+#### Task 5 (可选): 在 `refreshConfig` 中增加手动初始化重试
+
+审核反馈的"建议改进#5"。可在 `refreshConfig` 中增加参数，允许在 `detect_project_config` 后检测配置不完整时再次调用 `init_project_config`。这步是可选的，可以在完成前 4 个任务后再评估。
+
+---
+
+### 涉及的文件
+
+| 操作 | 文件 |
+|------|------|
+| 修改 | `desktop_app/src/stores/projectStore.ts` |
+| 修改 | `desktop_app/src/pages/DashboardPage.tsx` |
+| 新建 | `desktop_app/tests/projectStore.test.mjs` |
+| 可选 | `desktop_app/src/stores/CLAUDE.md`（如果目录级有 CLAUDE.md 则更新） |
+
+---
+我已对整个代码库进行了全面分析。以下是修复计划：
+
+---
+
+## 计划：修复 Issue #84 — 审核反馈的 5 个问题
+
+### 待修改文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `desktop_app/src/stores/projectStore.ts` | 添加工厂模式 + 修复 `loadRecentProjects` |
+| `desktop_app/src/pages/DashboardPage.tsx` | 接入 `isInitializing` 到 UI |
+| `desktop_app/tests/projectStore.test.mjs` | 新建：单元测试 |
+
+---
+
+### Task 1: 工厂模式重构 (`projectStore.ts`)
+
+将 `create<ProjectState>(...)` 重构为 `createProjectStore(overrides)`，与 `createRunStore` 模式一致：
+
+```typescript
+interface ProjectStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
+```
+
+动作：
+- 提取 `createProjectStoreDeps(overrides)` 辅助函数
+- 将 `useProjectStore` 改为 `export const useProjectStore = createProjectStore();`
+- `ensureConfigInitialized` 改为通过闭包访问 `deps.invoke`（而非模块级 `tauriInvoke`）
+
+### Task 2: 修复 `loadRecentProjects`（`projectStore.ts:186-214`）
+
+将 Tauri 分支中 `detect_project_config → set({ config })` 改为 `detect_project_config → ensureConfigInitialized → set({ config })`：
+
+```typescript
+const config = await ensureConfigInitialized(path, detected, set);
+set({ projectPath: path, config });
+```
+
+### Task 3: 接入 `isInitializing` 到 DashboardPage UI
+
+在 `ProjectInfoScreen` 中，当 `isInitializing` 为 `true` 时，在配置卡片区域显示带旋转动画的"正在初始化项目配置..."提示。
+
+### Task 4: 单元测试 (`projectStore.test.mjs`)
+
+覆盖：
+- `isConfigIncomplete(null)` → `true`
+- `isConfigIncomplete({ has_autoresearch_dir: false, ... })` → `true`
+- `isConfigIncomplete({ has_autoresearch_dir: true, has_program_md: true, has_agents_dir: true })` → `false`
+- `normalizeProjectError` — 错误格式化和中文保留
+- `createProjectStore` — 使用 `createInvokeMock` 模式注入 mock：
+
+  ```javascript
+  const store = createProjectStore({
+    isTauri: true,
+    invoke: createInvokeMock({
+      select_project_dir: () => '/tmp/project',
+      detect_project_config: () => INCOMPLETE_CONFIG,
+      init_project_config: () => FULL_CONFIG,
+      save_recent_project: () => {},
+      get_recent_project: () => '/tmp/project',
+    }),
+  });
+  ```
+
+- `loadRecentProjects` 调用 `ensureConfigInitialized`（即配置不完整时调用 `init_project_config`）
+- `selectProject` 中 `ensureConfigInitialized` 失败时设置 `error` 但不抛出
+- `isInitializing` 在初始化期间为 `true`，完成后为 `false`
+
+### Task 5 (可选): 自检
+
+按 `run.sh` 规范执行：
+- `npm --prefix desktop_app run typecheck`
+- `npm --prefix desktop_app test`
+- `npm --prefix desktop_app run build`
+
+---
+
+**是否按此计划执行？或有任何调整建议？**

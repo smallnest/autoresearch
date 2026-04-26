@@ -1,0 +1,96 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+Now let me look at a factory-pattern store test and the existing store test to understand patterns:
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [limit=80][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/tests/runConfigStore.test.mjs[90m [limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [offset=80][0m
+Now I have a comprehensive understanding of the codebase. Let me present my plan.
+
+---
+
+## Plan: Fix Issue #84 Review Feedback
+
+### Problem Analysis
+
+The review identified **2 blocking issues** (score 66/100, needs ≥85):
+
+**Issue A — `loadRecentProjects` missing `ensureConfigInitialized`** (lines 193-196)
+`loadRecentProjects` calls `detect_project_config` but then directly `set({ projectPath, config })` without calling `ensureConfigInitialized`. This means when the app starts and auto-loads the last project, missing `.autoresearch` files are never created.
+
+**Issue B — No factory pattern → untestable**  
+`projectStore` hardcodes `isTauri` and `tauriInvoke` at module level (lines 5, 8-11), unlike every other store (`runStore`, `iterationStore`, `runConfigStore`, `historyStore`) which all export `createXStore(overrides?)` factory functions with dependency injection.
+
+**Issue C — No projectStore tests** (suggested, not blocking)
+
+### Fix Plan
+
+#### Task 1: Refactor to factory pattern
+
+Following the exact `createRunStore→createRunStoreDeps` / `createIterationStore→createIterationStoreDeps` pattern:
+- Add `ProjectStoreDeps` interface with `{ isTauri, invoke }`
+- Add `createProjectStoreDeps(overrides?)` helper
+- Convert `create<ProjectState>(...)` → `createProjectStore(overrides?)` factory
+- Change internal `isTauri` → `deps.isTauri` and `tauriInvoke(...)` → `deps.invoke(...)`
+- Keep `useProjectStore = createProjectStore()` at module level
+
+#### Task 2: Fix `loadRecentProjects` initialization gap
+
+In `loadRecentProjects` (Tauri branch, line 192-196), change from:
+```
+set({ recentProjects: [path] });
+if (!get().projectPath) {
+  const config = await tauriInvoke<ProjectConfig>('detect_project_config', { projectPath: path });
+  set({ projectPath: path, config });
+}
+```
+To:
+```
+set({ recentProjects: [path] });
+if (!get().projectPath) {
+  const detected = await deps.invoke<ProjectConfig>('detect_project_config', { projectPath: path });
+  const config = await ensureConfigInitialized(path, detected, set);
+  set({ projectPath: path, config });
+}
+```
+
+#### Task 3: Add projectStore tests
+
+Create `tests/projectStore.test.mjs` covering:
+1. `isConfigIncomplete` — null config returns true, complete config returns false, partial returns true
+2. `createProjectStore` with injected deps — `selectProject`/`loadProject` call `ensureConfigInitialized`
+3. `loadRecentProjects` autoloads and initializes (the regression fix)
+4. Browser fallback (`isTauri: false`) — no errors, uses `detectConfigBrowser`
+5. Error propagation — when `detect_project_config` fails, error is set correctly
+6. `isInitializing` state transitions
+7. `refreshConfig` updates config when project matches
+
+### Files to Modify
+
+1. **`desktop_app/src/stores/projectStore.ts`** — factory refactor + loadRecentProjects fix
+2. **`desktop_app/tests/projectStore.test.mjs`** — new test file (pattern: `node --test --experimental-strip-types`)
+3. **`desktop_app/tests/storeErrorLocalization.test.mjs`** — no changes needed (already imports `normalizeProjectError`)
+
+### No-Change Items
+
+- `desktop_app/src/stores/uiError.ts` — already used correctly by `normalizeProjectError`
+- `desktop_app/src-tauri/src/lib.rs` — backend already has `init_project_config`, no changes needed
+- No other files need modification
+
+### Runbook
+
+After implementation:
+```bash
+npm --prefix desktop_app test               # Run test suite
+npm --prefix desktop_app run typecheck      # TypeScript check (if available)
+npm --prefix desktop_app run build          # Full build (if available)
+```
+
+Does this plan look good? Any adjustments you'd like before I proceed with implementation?

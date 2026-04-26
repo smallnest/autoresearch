@@ -1,0 +1,112 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m→ [0mRead desktop_app/src/stores
+[0m✱ [0mGlob "desktop_app/src/stores/*.test.*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts[90m [limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [offset=60][0m
+[0m→ [0mRead desktop_app/tests/runConfigStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts[90m [offset=100][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in . · 13 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=60][0m
+[0m✱ [0mGrep "from.*projectStore"[90m in desktop_app/src · 6 matches[0m
+[0m✱ [0mGrep "from.*projectStore"[90m in desktop_app/tests · 1 match[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+Now I have a complete understanding of the codebase. Here's the repair plan:
+
+---
+
+## 修复计划：Issue #84 — 工厂模式重构 + 测试覆盖
+
+### 分析总结
+
+当前 `projectStore.ts` 存在 4 个问题，按优先级排列：
+
+| 优先级 | 问题 | 当前状态 | 工作量 |
+|--------|------|---------|--------|
+| **P0** | 未使用工厂模式，核心逻辑不可测 | `isTauri`/`tauriInvoke` 模块级硬编码 | ~30行重构 |
+| **P0** | 无测试 | 零测试覆盖 | ~100行新测试 |
+| **P1** | `loadRecentProjects` 未自动初始化 | 启动加载时遗漏 `ensureConfigInitialized` | ~5行修复 |
+| **P2** | `ensureConfigInitialized` 的 `set` 参数类型可简化 | 使用内联类型 | ~2行简化 |
+
+### 影响范围
+
+**只修改 1 个文件 + 新建 1 个测试文件**。现有 6 个页面组件从 `projectStore.ts` 导入 `useProjectStore` 的方式保持完全兼容（`export const useProjectStore = createProjectStore()` 末尾导出）。
+
+### 步骤一：重构为工厂模式 (`projectStore.ts`)
+
+提取 `ProjectStoreDeps` 接口，包裹 `create<ProjectState>` 为工厂，与 `runStore.ts` / `iterationStore.ts` / `historyStore.ts` 完全一致。
+
+```typescript
+// 新增
+interface ProjectStoreDeps {
+  isTauri: boolean;
+  invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+}
+
+// 内部辅助
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+async function tauriInvoke<T>(...): Promise<T> { ... }
+
+function createProjectStoreDeps(overrides: Partial<ProjectStoreDeps> = {}): ProjectStoreDeps {
+  return { isTauri, invoke: tauriInvoke, ...overrides };
+}
+
+// 工厂函数
+export function createProjectStore(overrides: Partial<ProjectStoreDeps> = {}) {
+  const deps = createProjectStoreDeps(overrides);
+  return create<ProjectState>((set, get) => ({
+    // ... 所有现有逻辑，将模块级 isTauri/tauriInvoke 替换为 deps.isTauri/deps.invoke
+  }));
+}
+
+// 默认实例 (向后兼容)
+export const useProjectStore = createProjectStore();
+```
+
+同时修复 `loadRecentProjects` 的自动初始化缺失：
+
+```typescript
+// loadRecentProjects 中
+if (path) {
+  if (!get().projectPath) {
+    const detected = await deps.invoke<ProjectConfig>('detect_project_config', {
+      projectPath: path,
+    });
+    const config = await ensureConfigInitialized(path, detected, set);
+    set({ projectPath: path, config });
+  }
+}
+```
+
+### 步骤二：编写单元测试 (`tests/projectStore.test.mjs`)
+
+新建测试文件覆盖以下场景：
+
+| 测试 | 验证内容 |
+|------|---------|
+| `isConfigIncomplete` 纯函数 | null → true, all true → false, partial → true |
+| `selectProject` 选择项目后自动初始化 | mock `select_project_dir` → mock `detect_project_config` (不完整) → mock `init_project_config` → 检查最终 config |
+| `selectProject` 配置已完整时不调用 init | mock `detect_project_config` (完整) → 验证 `init_project_config` 不被调用 |
+| `selectProject` 初始化失败时设置 error | mock `init_project_config` → throw → 验证 error 被设置, config 保持原值 |
+| `selectProject` isInitializing 状态转换 | 验证 true → finally → false |
+| `loadProject` 同样支持自动初始化 | 同 selectProject 模式 |
+| `loadRecentProjects` 自动初始化 | 启动加载时调用 ensureConfigInitialized |
+| 浏览器 fallback 不调用 Tauri | `isTauri: false` 时 selectProject 不走 factory deps |
+
+### 步骤三：事后检查
+
+- [ ] 确认 `npm --prefix desktop_app test` 通过
+- [ ] 确认 `npx tsc --noEmit` 通过 (类型检查)
+
+---
+
+这个方案是否 OK？我可以开始执行。

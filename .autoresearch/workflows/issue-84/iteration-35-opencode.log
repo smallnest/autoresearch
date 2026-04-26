@@ -1,0 +1,44 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m✱ [0mGrep "InitTemplatePrompt"[90m in desktop_app · 3 matches[0m
+## 修复计划
+
+基于审核反馈，需要修改两个文件。当前状态：
+
+- `projectStore.ts` — 已添加 `isInitializing`, `ensureConfigInitialized`，但缺少 `retryInitialize` action
+- `DashboardPage.tsx` — 完全未被修改，`InitTemplatePrompt` 仍是旧版纯提示 UI
+
+### 任务清单
+
+**T1: `projectStore.ts` — 添加 `retryInitialize` action**
+- 在 `ProjectState` 接口中添加 `retryInitialize: (projectPath: string) => Promise<void>`
+- 在 store 工厂中添加实现：isInitializing=true → invoke `init_project_config` → 更新 config/error → isInitializing=false，用 `get().projectPath === projectPath` 守卫
+- 移除 `ensureConfigInitialized` 中 `console.warn` 行
+
+**T2: `DashboardPage.tsx` — 更新 `InitTemplatePrompt` 组件**
+- 移除 `onLearnMore` prop 和"了解"按钮
+- 新增 `onRetry`、`isInitializing`、`initError` props
+- `isInitializing` 时显示 loading spinner
+- `initError` 非空时显示错误消息 + 重试按钮
+- 保留"稍后"按钮（`onLater`）
+
+**T3: `DashboardPage.tsx` — 更新 `ProjectInfoScreen`**
+- 从 store 获取 `isInitializing`、`error`、`retryInitialize`、`projectPath`
+- 移除 `handleLearnMore` 和 `alert()`
+- 新增 `handleRetryInitialize = () => retryInitialize(projectPath)`
+- 传递新 props 给 `InitTemplatePrompt`
+
+**T4: `DashboardPage.tsx` — 跟踪初始化完成后的状态**
+- 初始化成功后，当 `isInitializing` 从 true→false 且无 error 时，自动收起提示（setShowInitPrompt(false)）
+- 可通过在 `InitTemplatePrompt` 内部检测 `!isInitializing && !initError` 来自动隐藏
+
+---
+
+### 交叉验证
+
+改动后 `InitTemplatePrompt` API 将变为：`{ onLater, onRetry, isInitializing, initError }`，无 `onLearnMore`，无"了解"按钮。`ProjectInfoScreen` 负责从 store 读取 `isInitializing`/`error`/`retryInitialize`，通过闭包绑定 `projectPath` 后传入。
+
+是否开始执行？

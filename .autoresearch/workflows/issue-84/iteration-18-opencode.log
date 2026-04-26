@@ -1,0 +1,143 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=485, limit=40][0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts[90m [limit=60][0m
+[0m✱ [0mGlob "desktop_app/tests/*.mjs"[90m 12 matches[0m
+Now let me examine an existing factory-pattern store and test to understand the pattern:
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [offset=60, limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts[90m [offset=60, limit=180][0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [limit=100][0m
+Now I have a complete picture. Let me also check the DashboardPage more closely to understand the `isInitializing` consumption:
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && grep -r "createProjectStore" src/ 2>/dev/null || echo "Not found in src"
+Not found in src
+[0m
+Based on my analysis of the codebase and the audit feedback, here's my plan:
+
+---
+
+## 修复计划
+
+### 问题分析
+
+审核评分 **82/100**（< 85），需要修改。核心问题：
+
+| # | 问题 | 维度影响 | 严重性 |
+|---|------|---------|--------|
+| 1 | 没有 factory 模式，`tauriInvoke` 硬编码，store 不可测 | 测试质量 - 严重 | 必须修复 |
+| 2 | 缺少 `projectStore` 核心逻辑的测试 | 测试质量 - 严重 | 必须修复 |
+| 3 | `loadRecentProjects` 未调用 `ensureConfigInitialized` | 正确性 - 一般 | 建议修复 |
+| 4 | `DashboardPage` 未消费 `isInitializing` | 代码质量 - 建议 | 可选改进 |
+
+---
+
+### 任务清单
+
+#### 任务 1: 将 projectStore 重构为工厂模式
+**文件**: `desktop_app/src/stores/projectStore.ts`
+
+- 提取 `ProjectStoreDeps` 接口（`isTauri`, `invoke`）
+- 创建 `createProjectStoreDeps(overrides)` 函数
+- 将顶层 `const isTauri` 和 `function tauriInvoke` 保留为 fallback
+- 将 `ensureConfigInitialized` 改为接收 `deps` 参数
+- 导出 `createProjectStore(overrides)` 工厂函数
+- 保持 `useProjectStore = createProjectStore()` 作为默认导出
+
+#### 任务 2: 修复 `loadRecentProjects` 未调用 `ensureConfigInitialized`
+**文件**: `desktop_app/src/stores/projectStore.ts`
+
+- 在 `loadRecentProjects` 的 Tauri 分支中，加载 recent project 后检测配置不完整时调用 `ensureConfigInitialized`
+
+#### 任务 3: 创建 `projectStore.test.mjs` 测试文件
+**文件**: `desktop_app/tests/projectStore.test.mjs`
+
+- 测试 `isConfigIncomplete` 纯函数（各种边界情况）
+- 测试 `ensureConfigInitialized` 行为：配置完整时跳过初始化、配置缺失时调用 init、init 失败时返回原 config、set isInitializing 状态正确切换
+- 测试 `selectProject` 中 Tauri 分支的初始化调用
+- 测试 `loadProject` 中 Tauri 分支的初始化调用
+- 测试 `loadRecentProjects` 中 Tauri 分支的初始化调用
+
+#### 任务 4: 让 `DashboardPage` 消费 `isInitializing`
+**文件**: `desktop_app/src/pages/DashboardPage.tsx`
+
+- 从 store 解构 `isInitializing`
+- 在 `ProjectInfoScreen` 或 `WelcomeScreen` 中显示初始化状态指示（如 spinner 或加载文本）
+
+#### 任务 5: 更新 CLAUDE.md（可选，建议）
+**文件**: `desktop_app/src/CLAUDE.md`
+
+- 添加关于 `loadRecentProjects` 初始化的 checklist 经验
+
+---
+
+### 影响评估
+
+- **projectStore.ts**: 重构为工厂模式 — 兼容性良好，外部消费方（DashboardPage 等）只需改 import 语句
+- **DashboardPage.tsx**: 新增 `isInitializing` 消费 — 无破坏性变更
+- **测试**: 新测试文件，不影响现有测试
+
+### 验收条件
+
+| # | 条件 | 验证方式 |
+|---|------|---------|
+| 1 | 工厂模式支持测试注入 | 测试中 `createProjectStore({ isTauri: true, invoke: mockFn })` 可创建 |
+| 2 | `isConfigIncomplete` 纯函数测试覆盖 | `node --test` 通过 |
+| 3 | `ensureConfigInitialized` 行为测试覆盖 | `node --test` 通过 |
+| 4 | `loadRecentProjects` 调用 `ensureConfigInitialized` | 测试验证通过 |
+| 5 | `isInitializing` 在 UI 中有反馈 | DashboardPage 展示初始化状态 |
+| 6 | 类型检查通过 | `npm run typecheck` 或 tsc 无错误 |
+[0m✱ [0mGrep "useProjectStore"[90m in desktop_app/src · 17 matches[0m
+以下是修复计划。主要改动涉及 3 个文件 + 1 个新测试文件：
+
+---
+
+## 任务清单
+
+### 1. 重构 projectStore 为工厂模式
+**文件**: `desktop_app/src/stores/projectStore.ts`
+
+- 创建 `ProjectStoreDeps` 接口，包含 `isTauri` + `invoke`
+- 创建 `createProjectStoreDeps(overrides)` 函数（与其他 store 一致）
+- 将 `ensureConfigInitialized` 改为接收 `deps` 参数
+- 导出 `createProjectStore(overrides)` 工厂函数
+- `useProjectStore` 改为 `createProjectStore()` 调用，保持向后兼容
+- 所有 import 该 store 的外部组件无需改动
+
+### 2. `loadRecentProjects` 接入自动初始化
+**文件**: `desktop_app/src/stores/projectStore.ts`
+
+- 在 `loadRecentProjects` 的 Tauri 分支中，加载 recent project + detect 后，调用 `ensureConfigInitialized`
+- 这是跨迭代 8 次标记的遗漏路径
+
+### 3. 创建 `projectStore.test.mjs`
+**文件**: `desktop_app/tests/projectStore.test.mjs`
+
+覆盖以下场景：
+| 测试 | 类型 |
+|------|------|
+| `isConfigIncomplete(null)` → `true` | 纯函数 |
+| `isConfigIncomplete(all true)` → `false` | 纯函数 |
+| `isConfigIncomplete(partial)` → `true` | 纯函数 |
+| `ensureConfigInitialized` 配置完整时跳过 init | 工厂注入 |
+| `ensureConfigInitialized` 配置缺失时调用 `init_project_config` | 工厂注入 |
+| `ensureConfigInitialized` init 失败时返回原 config + error | 工厂注入 |
+| `ensureConfigInitialized` 切换 `isInitializing` 状态 | 工厂注入 |
+| `selectProject` Tauri 路径完整流程 | 工厂注入 |
+| `loadProject` Tauri 路径完整流程 | 工厂注入 |
+| `loadRecentProjects` Tauri 路径调用 ensureConfigInitialized | 工厂注入 |
+
+### 4. DashboardPage 消费 `isInitializing`
+**文件**: `desktop_app/src/pages/DashboardPage.tsx`
+
+- `DashboardPage` 解构 `isInitializing`
+- 当 `isInitializing` 为 `true` 时，在 `ProjectInfoScreen` 中显示一个简单的初始化状态指示器（"正在初始化项目配置..." + spinner/loading 文本）
+
+---
+
+预计所有改动完成后，评分将从 82→90+（测试质量从 40→100），类型检查应保持通过。准备好后我可以开始执行。

@@ -1,0 +1,40 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+I'll read the current state of the relevant files to understand what needs to be changed.
+我已经分析了所有相关文件。以下是修复计划：
+
+---
+
+## 修复计划
+
+### 背景
+
+当前状态：
+- **Store 层** ✅ `isInitializing` 字段和 `ensureConfigInitialized` 函数已实现，`selectProject` 和 `loadProject` 中已调用
+- **Store 层** ❌ 缺少供 UI 调用的 `retryInitialize` action；`loadRecentProjects` 自动加载路径未调用 `ensureConfigInitialized`
+- **UI 层** ❌ `InitTemplatePrompt` 仍是旧的纯提示 UI，"了解"按钮 + `alert` 未移除
+- **UI 层** ❌ `ProjectInfoScreen` 未消费 `isInitializing`/`error` store 字段
+
+### 任务列表
+
+**Task 1: 在 store 中添加 `retryInitialize` action** (`projectStore.ts`)
+- 新增 `retryInitialize` action：组合调用 `refreshConfig` + 再次 `tauriInvoke('init_project_config')`，设置 `isInitializing`/`error` 状态
+- 修复 `loadRecentProjects` 的自动加载路径，使其也调用 `ensureConfigInitialized`
+
+**Task 2: 重写 `InitTemplatePrompt` 组件** (`DashboardPage.tsx`)
+- 移除 `onLearnMore` prop 和 "了解" 按钮 + `alert`
+- 新增 props: `isInitializing: boolean`, `error: string | null`, `onRetry: () => void`
+- 初始化进行中 → 显示加载动画 + "正在初始化配置..." 文案
+- 初始化失败有 `error` → 显示错误信息 + "重试" 按钮
+- 初始化成功/无错误 → 可隐藏或显示成功状态
+
+**Task 3: 更新 `ProjectInfoScreen` 消费 store 状态** (`DashboardPage.tsx`)
+- 从 `useProjectStore` 获取 `isInitializing`, `error`, `retryInitialize`, `clearError`
+- 移除本地 `showInitPrompt` state，改为 store 驱动的条件渲染
+- 将 `isInitializing`/`error`/`onRetry` 传递给 `InitTemplatePrompt`
+
+可以开始实现吗？

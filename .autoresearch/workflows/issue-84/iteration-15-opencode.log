@@ -1,0 +1,89 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m 12 matches[0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+Let me examine the existing tests and factory patterns used in other stores.
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+Now let me also check the `uiError.ts` helper and look at `storeErrorLocalization.test.mjs` to understand the error normalization testing pattern.
+## 分析总结
+
+我已经仔细阅读了审核反馈和所有相关源码。以下是当前代码状态和需要修复的问题：
+
+### 问题状态核实
+
+| 问题 | 优先级 | 状态 |
+|------|--------|------|
+| `loadRecentProjects` 未调用 `ensureConfigInitialized` (Tauri 分支 line 193-196) | **严重** | 待修复 |
+| `refreshConfig` 未调用 `ensureConfigInitialized` (line 224-229) | **一般** | 待修复 |
+| Store 未采用工厂模式 → 无法测试 | **严重** | 待修复 |
+| 无 `projectStore` 测试文件 | **严重** | 待修复 |
+
+### 关键发现
+
+其他可测试的 store（`runStore.ts`, `historyStore.ts`, `iterationStore.ts`）都遵循完全一致的工厂模式结构：
+```
+ProjectStoreDeps → createProjectStoreDeps() → createProjectStore(overrides?) → useProjectStore = createProjectStore()
+```
+
+`projectStore.ts` 是唯一例外——直接 `create<ProjectState>(...)`，导致 `ensureConfigInitialized` 硬编码了 `tauriInvoke`，无法 mock 测试。
+
+---
+
+## 修复计划
+
+### Task 1: Refactor `projectStore.ts` → 工厂模式
+
+- 添加 `ProjectStoreDeps` 接口（`isTauri`, `invoke`）
+- 添加 `createProjectStoreDeps()` 函数
+- 将 `ensureConfigInitialized` 移入工厂闭包，使其使用 `deps.invoke` 而非 `tauriInvoke`
+- 导出 `createProjectStore(overrides?)` 工厂函数
+- `export const useProjectStore = createProjectStore()`
+
+### Task 2: 修复 `loadRecentProjects` — Tauri 分支调用 `ensureConfigInitialized`
+
+替换：
+```typescript
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', { projectPath: path });
+set({ projectPath: path, config });
+```
+为：
+```typescript
+const detected = await deps.invoke<ProjectConfig>('detect_project_config', { projectPath: path });
+const config = await ensureConfigInitialized(path, detected, set, deps.invoke);
+set({ projectPath: path, config });
+```
+
+### Task 3: 修复 `refreshConfig` — Tauri 分支调用 `ensureConfigInitialized`
+
+类似 fix，注意只在 `projectPath` 匹配时更新状态。
+
+### Task 4: 创建 `projectStore.test.mjs`
+
+遵循 `runStore.test.mjs` / `historyStore.test.mjs` 的测试模式：
+- `createInvokeMock` 辅助函数
+- 测试 `isConfigIncomplete` 纯函数
+- 测试 `loadRecentProjects` Tauri 模式（mock 调用 `detect_project_config` + `ensureConfigInitialized`）
+- 测试 `selectProject` Tauri 模式
+- 测试 `loadProject` Tauri 模式
+- 测试完整/不完整配置的不同行为
+- 测试错误路径（invoke 拒绝）
+- 测试 `refreshConfig` 正确初始化
+
+### 不变部分
+
+- `isConfigIncomplete` 保持导出（纯函数，不依赖 deps）
+- `normalizeProjectError` 保持导出（已在 `storeErrorLocalization.test.mjs` 中覆盖）
+- 浏览器 fallback 分支行为不变
+- Rust 后端正交，无需改动
+
+---
+
+需要我开始实现吗？

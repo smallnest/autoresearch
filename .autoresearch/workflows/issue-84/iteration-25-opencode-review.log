@@ -1,0 +1,215 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/hard-gate-23.log
+Now let me check for any test files and the recent iteration log to understand the full context:
+[0m✱ [0mGrep "projectStore|DashboardPage|InitTemplatePrompt"[90m in desktop_app · 5 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src · 1 match[0m
+Now let me check the store's test file existence and also look at the full picture of what's been implemented:
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline --all -20
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+c190f24 Merge pull request #79 from smallnest/feature/issue-34
+c78e166 feat: implement issue #34 - [desktop-app] 配置文件编辑器
+9665586 On feature/issue-34: autoresearch-temp-continue-34-1777115688
+65dca0d index on feature/issue-34: 33ed825 Merge pull request #78 from smallnest/feature/issue-33
+cad518d untracked files on feature/issue-34: 33ed825 Merge pull request #78 from smallnest/feature/issue-33
+33ed825 Merge pull request #78 from smallnest/feature/issue-33
+a303498 feat: implement issue #33 - [desktop-app] 评分趋势折线图
+f1aadaf Merge pull request #77 from smallnest/feature/issue-73
+ae6246d feat: implement issue #73 - [desktop-app] 项目配置模板初始化
+1be412f Merge pull request #76 from smallnest/feature/issue-74
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD~5..HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts 2>/dev/null | head -200
+(no output)
+[0m
+Let me check the git diff to understand what changes were actually made for this issue:
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git branch -a | grep -i issue-84
+* feature/issue-84
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --all --oneline --grep="issue.*84\|#84" -10 2>/dev/null
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log feature/issue-84 --oneline -10
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff main..feature/issue-84 -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts
+fatal: bad revision 'main..feature/issue-84'
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git status --short desktop_app/src/
+M desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline -1 -- desktop_app/src/pages/DashboardPage.tsx
+53e0316 feat: implement issue #74 - [desktop-app] UI 全面中文化
+[0m
+[0m# [0mTodos
+[x] 完成 T-002 审核报告 — 评分 25/100，阻塞状态
+[x] 审计 DashboardPage.tsx 的 InitTemplatePrompt 实现
+[x] 审计 projectStore.ts 的 store 层改动
+[x] 检查测试覆盖和版本控制状态
+[0m
+现在我对 T-002 的实现状态有了完整的了解。以下是审核报告：
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代次数: 23 (当前)
+- 当前子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+
+### 总体评价
+**评分: 25/100** — 未达标（严重未完成）
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 | 原因 |
+|------|------|------|------|------|
+| 正确性 | 35% | 10 | 3.5 | T-002 的 UI 层完全未实现 |
+| 测试质量 | 25% | 20 | 5.0 | 无 InitTemplatePrompt 测试，无组件测试 |
+| 代码质量 | 20% | 40 | 8.0 | store 层改动合理，但 UI 层零改动 |
+| 安全性 | 10% | 100 | 10.0 | 无安全问题 |
+| 性能 | 10% | 100 | 10.0 | 无性能问题 |
+| **总分** | 100% | | **36.5** | |
+
+### 严重问题（必须修复）
+
+1. **InitTemplatePrompt 组件完全未被修改** — `DashboardPage.tsx` 自 issue #74 合并后无任何改动。当前 `InitTemplatePrompt` 依然保留原有的：
+   - 无功能的"了解"按钮（`alert('了解更多功能将在后续版本中实现')`），直接违反验收条件 1
+   - 无加载/进度状态（未连接 `isInitializing`），违反验收条件 2
+   - 无成功反馈和自动隐藏，违反验收条件 3
+   - 无错误信息和重试按钮，违反验收条件 4
+
+2. **store 层改动未提交** — `projectStore.ts` 的改动（`isInitializing`、`ensureConfigInitialized`）处于 unstaged 状态，未进入版本控制。
+
+3. **结论：T-002 完全未实现** — 只有存储层（T-001）的 `ensureConfigInitialized` 和 `isInitializing` 已实现，但 UI 组件（T-002 的核心交付物）没有任何修改。
+
+### 一般问题（建议修复）
+
+- **InitTemplatePrompt 的 props 需要重构**：应移除 `onLearnMore` prop，将 `onLater` 改为 `onRetry` 或其他语义更明确的接口
+- **`ProjectInfoScreen` 未读取 `isInitializing` 状态**：虽然 store 有此字段，但 UI 层未引用
+- **缺失 `handleRetry` 函数**：失败重试需要调用 `refreshConfig()` + 再次触发 `init_project_config`
+- **无测试文件**：缺少对 `InitTemplatePrompt` 渲染、状态变化的测试
+
+### 审核结论
+- [x] **阻塞** — UI 层零改动，T-002 未实现
+
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查 — 跳过（无构建命令）
+- [ ] 实现者已执行 Lint 检查 — 跳过（无 lint 命令）
+- [ ] 实现者已运行相关测试 — 跳过（无测试命令，但也无相关测试）
+- [x] 硬门禁日志（hard-gate-23.log）显示所有检查均跳过
+
+### 所需改动
+
+需要修改 `DashboardPage.tsx` 中的 `InitTemplatePrompt` 组件和 `ProjectInfoScreen`：
+
+1. **`InitTemplatePrompt`**：从接收 `onLater`/`onLearnMore` 改为接收初始化状态和操作回调
+2. **连接 `isInitializing`**：初始化进行中时显示 spinner/进度指示
+3. **错误+重试**: 初始化失败时显示错误信息和重试按钮（调用 `refreshConfig` + 通过 store action 重试）
+4. **成功自动隐藏**: 初始化成功后显示 `ConfigCompleteNotification`（已存在）并在几秒后自动消失
+5. **移除 `onLearnMore`** 和 `alert()` 调用
+6. **添加测试**：为 `normalizeProjectError`、`ensureConfigInitialized`、UI 组件添加测试
+## Learnings
+
+- **模式**: `DashboardPage.tsx` 是纯 UI 层，store 状态（`isInitializing`）在 `projectStore.ts` 中定义，UI 组件需要从 store 解构获取这些状态。
+- **踩坑**: store 层改动（`projectStore.ts`）处于 unstaged 状态，但 UI 层文件（`DashboardPage.tsx`）完全未修改。T-002 的 store 依赖已就绪，但 UI 组件是零改动。
+- **经验**: T-002 不是独立的"新增功能"，而是对已有组件 `InitTemplatePrompt` 的状态化重构，需要同步修改组件 props 接口和调用方 `ProjectInfoScreen` 的 logic。发往 `ProjectInfoScreen` 时需从 store 解构 `isInitializing`, `error`, `refreshConfig` 和新增的 `retryInitialize` action。

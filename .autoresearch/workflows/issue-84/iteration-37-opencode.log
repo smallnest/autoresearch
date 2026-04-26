@@ -1,0 +1,58 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m✱ [0mGlob "desktop_app/src/**/*.test.*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/__tests__/**"[90m in . · 0 matches[0m
+I'll analyze the current state of the relevant files to build a comprehensive fix plan.
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+[0m✱ [0mGrep "create.*Store\(overrides\)"[90m in desktop_app/src/stores · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/stores/*.test.*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/**/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=50][0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+[0m✱ [0mGrep "isConfigIncomplete|ensureConfigInitialized|isInitializing"[90m in desktop_app/tests · 0 matches[0m
+现在我对代码库有了全面的了解。以下是基于审核反馈的修复计划：
+
+---
+
+## 修复计划：Issue #84 — 完善 .autoresearch 配置自动初始化
+
+### 审核发现的 4 个问题
+
+1. **DashboardPage.tsx 未修改** — `InitTemplatePrompt` 仍然是旧版纯提示 UI，带 `onLearnMore` + `alert('了解更多...')`，未接入 `isInitializing`/`error`/`retryInitialize`
+2. **Store 缺少 `retryInitialize` action** — `ensureConfigInitialized` 是模块私有函数，UI 无法调用重试
+3. **浏览器 fallback 路径未整合初始化逻辑** — `selectProject` 和 `loadProject` 的浏览器分支未设置 `isInitializing` 状态
+4. **无前端测试覆盖** — `isConfigIncomplete`、`normalizeProjectError` 等纯函数无可测试验证
+
+### 任务拆解
+
+**Task 1: projectStore.ts — 添加 `retryInitialize` action**
+- 在 `ProjectState` 接口中添加 `retryInitialize: () => Promise<void>`
+- 实现逻辑：`refreshConfig()` → 如果 `isConfigIncomplete` → 调 `init_project_config` → 更新 config + clearError
+- 修改 `ensureConfigInitialized` 支持浏览器模式（非 Tauri 时不调 `tauriInvoke`）
+- 在 `selectProject` 和 `loadProject` 的浏览器分支中添加初始化集成
+
+**Task 2: DashboardPage.tsx — 重写 InitTemplatePrompt**
+- 移除 `onLearnMore` prop 和 `handleLearnMore` 中的 `alert`
+- 从 store 消费 `isInitializing`、`error`、`config`、`retryInitialize`
+- 三种状态展示：
+  - **初始化中**：琥珀色加载状态（spinner + "正在初始化配置…"）
+  - **初始化失败**：错误信息 + "重试"按钮（调 `retryInitialize`）
+  - **初始化成功**：绿色成功反馈（config 变完整时自动展示）
+- 保留"稍后"按钮用于关闭提示
+- 更新 `ProjectInfoScreen` 不再管理 `showInitPrompt` 本地状态，由 store 驱动
+
+**Task 3: 添加测试覆盖**
+- 为 `isConfigIncomplete` 添加测试：null、完整、部分缺失等场景
+- 为 `normalizeProjectError` 添加测试
+- 测试工厂模式下的初始化流程（mock Tauri invoke）
+
+### 需要做的权衡/询问
+
+1. **store 工厂模式重构**：当前 `useProjectStore` 是直接 `create()` 的 singleton。为了测试，需要改成工厂模式 (`export function createProjectStore(overrides?)`) 并让 `useProjectStore = createProjectStore()`。这是最小侵入方案，不影响已有消费者。是否接受？
+
+2. **测试深度**：是否只需要测试导出的纯函数（`isConfigIncomplete`、`normalizeProjectError`），还是也要通过工厂模式覆盖 `retryInitialize` 的完整 action 链路？
+
+3. **浏览器 fallback 的初始化处理**：在浏览器模式下，`init_project_config` 不可用。我的方案是：如果非 Tauri 且配置不完整，把 `isInitializing` 设为 true 再立即设为 false（模拟一次空初始化），让 UI 状态机保持正确。看起来可以吗？

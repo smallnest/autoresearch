@@ -1,0 +1,81 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me also look at an existing test file and the current projectStore.ts:
+[0m
+[0m$ [0mcat /Users/chaoyuepan/ai/autoresearch/desktop_app/package.json | grep -A5 '"test"'
+"test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+[0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m 12 matches[0m
+Now I have a clear picture. Let me also check the existing `package.json` test script:
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs
+现在我有了完整的了解。以下是计划：
+
+---
+
+## 修复计划
+
+### 审核发现的问题
+1. **未使用工厂模式** — `projectStore.ts` 使用模块级 `tauriInvoke`，导致无法注入 mock 依赖进行测试
+2. **无测试覆盖** — 新增了纯函数（`isConfigIncomplete`、`normalizeProjectError`）和核心逻辑（`ensureConfigInitialized`），但没有对应的测试文件
+3. （次要）`loadRecentProjects` 未对最近项目进行自动初始化
+
+### 任务清单
+
+#### 任务 1：将 `projectStore` 重构为工厂模式
+遵循 `runStore.ts`、`iterationStore.ts`、`historyStore.ts` 的确切约定：
+- 添加 `ProjectStoreDeps` 接口（`isTauri`、`invoke`）
+- 添加 `createProjectStoreDeps(overrides)` 默认值工厂函数
+- 使 `ensureConfigInitialized` 接受 `invoke` 作为参数（替代硬编码的 `tauriInvoke`）
+- 将所有 `tauriInvoke(...)` 调用转换为 `deps.invoke(...)`，并通过闭包捕获 `deps`
+- 将 `create<ProjectState>(...)` 包裹在 `createProjectStore(overrides)` 中
+- 保留向后兼容：`export const useProjectStore = createProjectStore()`
+
+#### 任务 2：创建 `tests/projectStore.test.mjs`
+按照 `historyStore.test.mjs` 和 `runStore.test.mjs` 的模式：
+
+**纯函数测试：**
+- `isConfigIncomplete(null)` → `true`
+- `isConfigIncomplete({ has_autoresearch_dir: false })` → `true`
+- `isConfigIncomplete({ all true })` → `false`
+- `normalizeProjectError` 与 Error / 中文错误 / null
+
+**依赖注入的 Store 测试：**
+- `selectProject` 在 Tauri 模式下调用 `detect_project_config` + `init_project_config`
+- `ensureConfigInitialized` 成功时 → 返回新配置，`isInitializing` 切换为 true/false
+- `ensureConfigInitialized` 失败时 → 设置 error，返回原始配置
+- `loadProject` 在 Tauri 模式下也能自动初始化
+- `loadRecentProjects` 在 Tauri 模式下加载并初始化最近项目
+- 浏览器模式回退路径
+
+#### 任务 3：修复 `loadRecentProjects` 以支持自动初始化
+在 `loadRecentProjects` 的 Tauri 路径中，在 `detect_project_config` 之后添加 `ensureConfigInitialized` 调用，与 `selectProject` 和 `loadProject` 保持一致。
+
+#### 任务 4：记录模式
+将以下内容添加到 `desktop_app/src/CLAUDE.md`：
+
+```
+- `projectStore` 现在也遵循 `createProjectStore(overrides)` 工厂模式，用于测试依赖注入
+```
+
+---
+
+### 测试验证
+完成所有四项任务后，运行：
+```bash
+cd desktop_app && npm test   # 运行 tests/*.test.mjs
+cd desktop_app && npm run typecheck   # tsc --noEmit
+```
+
+需要我按此计划实施吗？

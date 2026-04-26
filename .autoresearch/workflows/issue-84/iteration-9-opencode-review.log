@@ -1,0 +1,137 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m✱ [0mGlob "desktop_app/src/**/*.ts"[90m in . · 17 matches[0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGlob "desktop_app/tests/*project*"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "isInitializing|ensureConfigInitialized|isConfigIncomplete|init_project_config"[90m in desktop_app · 10 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+[0m✱ [0mGrep "loadRecentProjects"[90m in desktop_app · 2 matches[0m
+[0m✱ [0mGrep "loadRecentProjects|loadProject"[90m in desktop_app · 5 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=945, limit=60][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2850, limit=120][0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx[90m [offset=175, limit=50][0m
+[0m✱ [0mGrep "projectStore|project_stoer|projectStore\.test"[90m in desktop_app/tests · 4 matches[0m
+[0m✱ [0mGrep "isConfigIncomplete|isInitializing"[90m in desktop_app · 6 matches[0m
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app/src · 4 matches[0m
+[0m✱ [0mGrep "normalizeProjectError|ProjectConfig"[90m in desktop_app/tests · 4 matches[0m
+[0m
+[0m$ [0mls /Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.json 2>/dev/null && cat /Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.json 2>/dev/null || echo "No tsconfig.json found"
+/Users/chaoyuepan/ai/autoresearch/desktop_app/tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "react-markdown": ["./src/vendor/react-markdown"]
+    },
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+[0m
+## 审核报告
+
+### Issue
+- 编号: #84 (T-001)
+- 迭代次数: 8
+
+### 总体评价
+
+**评分: 74/100** — 低于达标线 85，需要修改
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 85 | 29.75 |
+| 测试质量 | 25% | 30 | 7.50 |
+| 代码质量 | 20% | 85 | 17.00 |
+| 安全性 | 10% | 100 | 10.00 |
+| 性能 | 10% | 100 | 10.00 |
+| **总计** | **100%** | | **74.25** |
+
+### 严重问题（必须修复）
+
+**1. 测试覆盖率为零 — 已被连续 6 次迭代标记**
+
+`isConfigIncomplete` 和 `ensureConfigInitialized` 是本次新增的核心函数，没有任何单元测试。项目已有成熟的测试模式（`node --test --experimental-strip-types` + 工厂注入），且 `isConfigIncomplete` 是纯函数，测试成本极低。
+
+建议添加：
+- `isConfigIncomplete(null)` 返回 `true`
+- `isConfigIncomplete({ has_autoresearch_dir: false, ... })` 返回 `true`  
+- `isConfigIncomplete({ has_autoresearch_dir: true, has_program_md: true, has_agents_dir: true })` 返回 `false`
+- `ensureConfigInitialized` 在 Tauri invoke 成功/失败时的分支测试
+
+**2. `loadRecentProjects` 未接入 `ensureConfigInitialized`**
+
+`desktop_app/src/stores/projectStore.ts:186-214` — 应用启动时自动加载最近项目，调用了 `detect_project_config` 但未调用 `ensureConfigInitialized`。用户可能看到"配置不完整"状态而实际上配置可以通过自动初始化补全。需要补上：
+
+```typescript
+const config = await ensureConfigInitialized(path, detected, set);
+```
+
+替换现有的：
+```typescript
+set({ projectPath: path, config });
+```
+
+**3. 缺少可注入的工厂模式**
+
+与其他 store（`runStore`、`iterationStore` 等）不同，`projectStore` 没有暴露工厂函数（如 `createProjectStore`），导致单元测试必须 mock `@tauri-apps/api/core` 的 `invoke`，而无法通过注入 mock 函数来隔离测试。
+
+### 一般问题（建议修改）
+
+**4. `isInitializing` 未接入 UI**
+
+AC 中提到 `isInitializing` "用于 UI 显示初始化进度"，但该字段仅存在 store 中，没有任何 UI 组件（如 `DashboardPage`）读取它。初始化过程中用户看不到任何进度反馈。
+
+### 建议改进（可选）
+
+**5. 初始化失败后重试路径不清晰**
+
+当 `ensureConfigInitialized` 失败后，`error` 被设置，但 `selectProject`/`loadProject` 下一次被调用时会先 `set({ error: null })`，导致前一次 init 失败的错误信息被清除。建议在 `refreshConfig` 中增加手动 init 重试能力，或在 Dashboard 展示一个"重新初始化"按钮。
+
+### 审核结论
+
+- [ ] 通过
+- [x] 需要修改
+
+**核心问题**: 零测试覆盖（连续 7 次迭代未解决）+ `loadRecentProjects` 遗漏自动初始化。评分 74/100 低于达标线 85，需修复后重新审核。
+
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+自检未执行：当前无 `projectStore` 测试，亦无证据表明 TypeScript 类型检查已通过。
+
+---
+
+## Learnings
+
+- **模式**: `loadRecentProjects` 是 `selectProject`/`loadProject` 之外的第三条项目加载路径，审核时必须同时检查三条路径的 `ensureConfigInitialized` 接入情况，不能只检查显式声明的两个方法。
+- **踩坑**: `ensureConfigInitialized` 正确地设置了 `error` 状态（满足 AC 5），但外层 `selectProject`/`loadProject` 的 `set({ isLoading: true, error: null })` 在每次调用时清除旧 error，可能导致错误信息丢失。这是当前设计的固有行为，非本次迭代引入的 bug。
+- **踩坑**: 连续 6 次迭代均因"无工厂模式 + 无测试"被扣分，但实现者始终只做最小修复。对于这种明确的标准化问题，审核时应直接将其提升为阻塞级别。
+- **经验**: Rust 后端 `init_project_config` 的测试覆盖全面（4 个测试用例覆盖完整初始化、部分初始化、非目录路径、冲突路径），前端配套测试完全缺失，前后端测试覆盖严重失衡。

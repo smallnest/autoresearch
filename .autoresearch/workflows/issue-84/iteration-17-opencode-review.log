@@ -1,0 +1,179 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead .
+[0m✱ [0mGlob "**/projectStore*"[90m in . · 1 match[0m
+[0m✱ [0mGlob "**/projectStore*.test*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/*"[90m in . · 42 matches[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m✱ [0mGlob "**/projectStore*"[90m in . · 1 match[0m
+Let me read the key files to understand the current implementation.
+[0m✱ [0mGlob "**/projectStore*test*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m in . · 13 matches[0m
+[0m✱ [0mGlob "desktop_app/src-tauri/src/**/*.rs"[90m in . · 2 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app · 15 matches[0m
+Let me also check for tests and the backend implementation.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=940, limit=80][0m
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+[0m✱ [0mGrep "createProjectStore|create.*Store"[90m in desktop_app/src/stores · 20 matches[0m
+[0m✱ [0mGlob ".autoresearch/workflows/issue-84/**"[90m in . · 51 matches[0m
+[0m✱ [0mGlob ".autoresearch/archive/*issue-84*/**"[90m in . · 0 matches[0m
+Now let me check the actual workflow archive to understand the full iteration history.
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-17-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-17-opencode-review.log[90m [offset=23][0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/stores/projectStore.ts | head -200
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline -5
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+[0m
+Let me verify the current git state.
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 - 在 projectStore 中添加自动初始化逻辑
+- 迭代次数: 16 (当前版本) / 累计 17 次迭代
+
+### 总体评价
+**评分: 63/100**
+
+核心功能路径（`selectProject`、`loadProject`）正确实现了 `ensureConfigInitialized` 调用链，`isInitializing` 状态字段、错误处理、浏览器 fallback 逻辑均正确。但 `loadRecentProjects` 作为第三条关键初始化路径连续 8 次迭代遗漏，且无工厂模式重构、无前端测试，导致评分持续不达标。
+
+### 严重问题 (必须修复)
+
+**1. `loadRecentProjects` 未调用 `ensureConfigInitialized` (正确性 - 严重)**
+
+`desktop_app/src/stores/projectStore.ts:186-214` — `loadRecentProjects` 仅在 Tauri 模式下调用 `detect_project_config` 后直接 `set({ projectPath, config })`，未经过 `ensureConfigInitialized`。这意味着应用启动自动加载最近项目时，配置缺失的项目不会被自动初始化，用户必须手动点击"选择项目目录"才能触发初始化。
+
+这是从迭代 8 开始连续标记的问题，已遗漏 8 次。修复很简单：将第 193 行的 `detect_project_config` 返回值传入 `ensureConfigInitialized`，用其结果覆盖 `config`。
+
+**2. 无前端测试覆盖 (测试质量 - 严重)**
+
+`desktop_app/tests/` 目录下 12 个测试文件，0 个覆盖 `projectStore`。Rust 后端有 4 个 `init_project_config` 测试，前端配套测试完全缺失。
+
+**3. 未使用工厂模式导致不可测试 (测试质量 - 严重)**
+
+其他所有 store（`runStore`、`iterationStore`、`historyStore`、`historyDetailStore`、`logViewerStore`、`runConfigStore`）均导出 `createXStore(overrides)` 工厂函数以支持依赖注入。`projectStore` 使用裸 `create<ProjectState>()`，硬编码了 `tauriInvoke` 和 `isTauri`，无法注入 mock 进行单元测试。这是连续 11 次迭代标记的结构性问题。
+
+### 一般问题 (建议修复)
+
+**4. `refreshConfig` 未调用 `ensureConfigInitialized`**
+
+`desktop_app/src/stores/projectStore.ts:216-240` — `refreshConfig` 只重新检测配置但不初始化。如果 Issue #84 的范围包含此方法（描述提及"所有检测到配置不完整的地方都自动初始化"），则应一并修复。需确认 Issue 覆盖范围。
+
+**5. `normalizeProjectError` 暴露给全局作用域**
+
+第 90 行导出 `normalizeProjectError` 为模块公开函数。该函数仅被 `ensureConfigInitialized` 和 `selectProject`/`loadProject` 的 catch 块使用，与 `isConfigIncomplete` 一同导出。虽然不影响功能，但增加了公共 API 面，建议通过工厂模式内聚。
+
+### 审核结论
+- 需要修改（不达标：63 < 85）
+
+### 实现者自检确认
+
+```markdown
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+```
+
+### 修复建议摘要
+
+| # | 问题 | 修改 | 估计工作量 |
+|---|------|------|-----------|
+| 1 | `loadRecentProjects` 遗漏 `ensureConfigInitialized` | 添加 2 行调用 | 5min |
+| 2 | 无工厂模式 | 提取 `createProjectStoreDeps` + `createProjectStore` | 30min |
+| 3 | 无测试 | 基于工厂模式写 `projectStore.test.mjs` | 45min |
+| 4 | `refreshConfig` 初始化 (待确认) | 同 #1 | 5min |
+
+---
+
+## Learnings
+
+- **踩坑**: `loadRecentProjects` 从迭代 8 到迭代 16 连续 8 次被标记遗漏但从未修复。这不是 Agent 能力问题，而是每次只做最小修复（只修复审核明确指出的路径），从不主动检查其他路径。需要在 `CLAUDE.md` 中添加强制性 checklist。
+- **模式**: 所有 store 测试必须同时具备"工厂模式 + 测试文件"——工厂模式是测试的前提，测试是工厂模式的验证。二者缺一不可，应在首次实现时同步完成。

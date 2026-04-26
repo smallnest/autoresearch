@@ -1,0 +1,94 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [limit=200][0m
+[0m✱ [0mGlob "desktop_app/tests/**/*project*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*store*"[90m 1 match[0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri/src · 13 matches[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m 12 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=80][0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+[0m✱ [0mGrep "create.*Store|createRunStore|createHistoryStore|createIterationStore"[90m in desktop_app/src/stores · 20 matches[0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=115, limit=40][0m
+[0m✗ [0mread failed
+[91m[1mError: [0mFile not found: /Users/chaoyuepan/ai/autoresearch/desktop_app/.autoresearch/agents/opencode.md
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGrep "loadRecentProjects|ensureConfigInitialized"[90m in desktop_app/src · 9 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/*projectStore*"[90m 1 match[0m
+[0m✱ [0mGrep "projectStore"[90m in desktop_app/tests · 4 matches[0m
+现在我已掌握所有需要的信息。以下是审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 - 在 projectStore 中添加自动初始化逻辑
+- 迭代次数: 10
+
+### 总体评价
+**评分: 66/100**
+
+### 严重问题 (必须修复)
+
+**1. `loadRecentProjects` 仍未调用 `ensureConfigInitialized`**
+
+`loadRecentProjects` (line 186-213) 在检测到配置后调用 `detect_project_config`，但没有调用 `ensureConfigInitialized`。这意味着当用户打开应用并从最近项目自动加载时，缺失的 `.autoresearch` 文件不会被自动创建。
+
+该问题已在 iteration 10 和 12 的审核中被标记，但**跨 3 次迭代仍未修复**。
+
+```typescript
+// loadRecentProjects — missing ensureConfigInitialized call:
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath: path,
+});
+set({ projectPath: path, config });
+// 应该在这里调用 ensureConfigInitialized(path, config, set)
+```
+
+修复：在 `set({ projectPath: path, config })` 之前插入：
+```typescript
+const config = await ensureConfigInitialized(path,
+  await tauriInvoke<ProjectConfig>('detect_project_config', { projectPath: path }),
+  set
+);
+```
+
+**2. 没有遵守项目可测试性工厂模式约定**
+
+所有其他 store（`createRunStore`、`createHistoryStore`、`createIterationStore` 等）都使用工厂模式实现依赖注入（`runStore.ts:130`），将 `isTauri`、`invoke`、`listen` 作为可覆盖参数公开。`projectStore` 在模块级硬编码 `isTauri`（line 5）和 `tauriInvoke`（line 8-11），没有任何工厂导出。这使得其实质上无法进行单元测试。
+
+修复：将 `projectStore` 重构为 `createProjectStore(overrides?)` 工厂模式，以匹配 `createRunStore` 的模式。
+
+### 一般问题 (建议修复)
+
+**3. 没有 projectStore 测试**
+
+`tests/` 目录包含 12 个测试文件，覆盖了 runStore、historyStore、iterationStore、logViewerStore 等。但没有 projectStore 的测试（`storeErrorLocalization.test.mjs` 中有一个 `normalizeProjectError` 的防护断言）。核心逻辑 (`isConfigIncomplete`、`ensureConfigInitialized`、`isInitializing` 状态管理) 完全没有测试覆盖。
+
+### 审核结论
+- [ ] 通过 / [x] 需要修改 / [ ] 阻塞
+
+**评分: 66/100 — 未达标（需要 ≥ 85）**
+
+阻止通过的关键问题：
+1. 跨三次迭代仍未修复 `loadRecentProjects` 的自动初始化缺失
+2. 无工厂模式导致 projectStore 不可测试（违反 `runStore` 以来持续使用的约定）
+3. 无测试覆盖初始化逻辑
+
+### 实现者自检确认
+- [ ] 已执行编译/类型检查 — 未核实
+- [ ] 已执行 Lint 检查 — 未核实
+- [ ] 已运行相关测试 — 未核实
+- [ ] 已确认测试覆盖 — 未覆盖
+
+---
+
+## Learnings
+
+- **模式**: 所有可测试的 store 必须导出 `createXStore(overrides?)` 工厂函数以支持依赖注入。`projectStore` 是唯一的例外，这也使其成为唯一一个没有测试的 store。
+- **踩坑**: `loadRecentProjects`（在应用启动时通过 `DashboardPage` 调用）是第三条关键初始化路径，与 `selectProject` 和 `loadProject` 并列。它必须包含 `ensureConfigInitialized`，但已连续三次迭代未修复，成为持久回归点。
+- **经验**: 单次迭代审核往往会重新发现之前标记但未解决的问题。应更加系统地审计跨迭代工单，确保问题一旦标记就能得到修复，而不是被同一或不同的 Agent 重新发现。

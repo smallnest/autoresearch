@@ -1,0 +1,150 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mReview T-001 implementation[90m Explore Agent[0m
+Let me examine the implementation to review it against the acceptance criteria.
+[0m✓ [0mReview T-001 implementation[90m Explore Agent[0m
+[0m• [0mCheck TS config and lint[90m Explore Agent[0m
+Let me check a few more things about the codebase before writing the review.
+[0m✓ [0mCheck TS config and lint[90m Explore Agent[0m
+我已经审核了 T-001 子任务的实现。以下是审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 - 在 projectStore 中添加自动初始化逻辑
+- 迭代次数: 10
+
+### 总体评价
+**评分: 70/100**
+
+### 严重问题 (必须修复)
+
+**1. `loadRecentProjects` 未调用 `ensureConfigInitialized`**
+
+`loadRecentProjects` 在检测到最近项目后仅调用了 `detect_project_config`，但没有调用 `ensureConfigInitialized`。这意味着应用启动后自动加载最近项目时，如果 `.autoresearch` 配置不完整，用户会看到配置缺失但不会自动初始化。
+
+**位置**: `desktop_app/src/stores/projectStore.ts:184-187`
+
+```typescript
+// 现有代码 (缺失 ensureConfigInitialized)
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath: path,
+});
+set({ projectPath: path, config });
+```
+
+**建议修复**: 添加 `ensureConfigInitialized` 调用：
+```typescript
+const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath: path,
+});
+const config = await ensureConfigInitialized(path, detected, set);
+set({ projectPath: path, config });
+```
+
+跨迭代经验已多次记录此问题，但仍未修复。
+
+**2. `isInitializing` 未被任何 UI 组件消费**
+
+AC 要求"新增 isInitializing 状态字段，用于 UI 显示初始化进度"，但 `isInitializing` 虽然在 store 中定义和设置，`DashboardPage.tsx` 中的 `WelcomeScreen` 和 `ProjectInfoScreen` 均未订阅此字段。用户无法在初始化期间看到加载指示。
+
+**位置**: 
+- `projectStore.ts:24,77,86,99` — 定义了并设置 `isInitializing`
+- `DashboardPage.tsx` — 未引用 `isInitializing`，仅使用了 `isLoading`
+
+**建议修复**: 在 `DashboardPage.tsx` 中从 store 读取 `isInitializing`，在初始化期间显示加载指示（或集成到现有的 LoadingSpinner）。
+
+**3. 无前端测试覆盖**
+
+项目其他 store（`runStore`、`iterationStore`、`historyStore` 等）均有对应的 `.test.mjs` 文件，使用 factory 模式注入 mock。但 `projectStore` 没有任何测试文件。Rust 后端虽然有 4 个完整的测试用例，但前端 store（核心逻辑所在）的测试覆盖为零。本项目使用 `node --test --experimental-strip-types` 运行测试，完全可以为项目 store 编写单元测试。
+
+**建议修复**: 创建 `desktop_app/tests/projectStore.test.mjs`，覆盖：
+- `selectProject` 调用 `ensureConfigInitialized` 的路径
+- `loadProject` 调用 `ensureConfigInitialized` 的路径
+- `isConfigIncomplete` 的各种输入组合
+- 初始化成功时 config 正确更新
+- 初始化失败时 error 被设置且不阻塞
+
+### 一般问题 (建议修复)
+
+**1. `detect_project_config` 冗余调用导致两次后端往返**
+
+`selectProject` 先调用 `detect_project_config`，然后将结果传入 `ensureConfigInitialized`，后者调用 `init_project_config`，而 `init_project_config_sync` 内部又调用了 `detect_project_config_sync` 做路径验证。当需要初始化时，这导致 2 次 Tauri IPC 调用而不是 1 次。
+
+**建议优化**: 可以将 `ensureConfigInitialized` 改为直接调用 `init_project_config`（它内部包含路径验证），省去第一次 `detect_project_config` 调用。当不需要初始化时仍然只调用一次 `detect_project_config`。
+
+**2. 初始化失败后的 stale error 未自动清除**
+
+当 `ensureConfigInitialized` 失败时设置 `error`，但 `selectProject` 继续执行并成功完成（save_recent_project 等）。此时 UI 上显示 error 但项目已被选中（带不完整 config）。error 会一直存在直到下一次 `selectProject` 调用（顶部 `set({ error: null })` 清除）。
+
+**建议**: 在应用的 `selectProject`/`loadProject`/`useEffect` 中监听 projectPath 的变化，当用户看到项目已选中时自动清除 stale error。
+
+**3. 缺少 factory 模式**
+
+其他 store（如 `runStore`）使用 `createRunConfigStore({ storage })` 模式注入依赖（mock storage），便于测试。`projectStore` 硬编码了 `tauriInvoke` 函数，使得单元测试需要模拟整个 `@tauri-apps/api/core` 模块。
+
+**建议**: 考虑重构为 factory 模式以保持一致性并提升可测试性。
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 75 | 26.25 |
+| 测试质量 | 25% | 40 | 10.00 |
+| 代码质量 | 20% | 80 | 16.00 |
+| 安全性 | 10% | 100 | 10.00 |
+| 性能 | 10% | 80 | 8.00 |
+| **总分** | **100%** | | **70** |
+
+### 正确性评分说明 (75分)
+
+- `selectProject` 正确调用 `ensureConfigInitialized` ✓
+- `loadProject` 正确调用 `ensureConfigInitialized` ✓
+- `isInitializing` 状态字段正确定义，在初始化期间为 true，完成后为 false ✓
+- 初始化失败时 error 被设置且不阻塞用户操作 ✓
+- `isConfigIncomplete` 和 `ensureConfigInitialized` 作为独立函数提取，逻辑清晰 ✓
+- `loadRecentProjects` **未**调用 `ensureConfigInitialized`（严重遗漏）✗
+- 初始化失败后 store 中的 error 状态在后续正常操作中未自动清除（stale error）
+
+### 测试质量评分说明 (40分)
+
+- Rust 后端 `init_project_config` 有 4 个完善测试（完整初始化、部分填充、非目录拒绝、冲突路径）
+- 前端 store 零测试覆盖，而项目中其他 store 均有对应的 `.test.mjs` 文件
+- 测试基础设施已经就绪（`node --test --experimental-strip-types`），添加测试没有额外成本
+
+### 代码质量评分说明 (80分)
+
+- 代码结构清晰，职责分离良好（`isConfigIncomplete`、`ensureConfigInitialized` 独立提取）
+- 浏览器回退处理正确（非 Tauri 环境可用最低功能）
+- 缺少 factory 模式，与其他 store 模式不一致
+- `tauriInvoke` 的命名和用法与其他 store 的依赖注入方式不一致
+
+### 安全性评分 (100分)
+
+- Tauri 后端 `init_project_config_sync` 有完善的路径验证（拒绝非目录路径、冲突路径检测）
+- 前端不直接操作文件系统，所有路径操作通过 Tauri IPC 委托给后端
+- 无注入风险，无敏感信息泄露
+
+### 审核结论
+- ❌ **需要修改** — 必须修复 `loadRecentProjects` 未自动初始化的问题，添加前端测试覆盖，并确认类型检查通过
+
+### 自检验证
+
+| 检查项 | 状态 |
+|--------|------|
+| TypeScript 类型检查 (`tsc --noEmit`) | 待确认 |
+| ESLint 检查 | 待确认 |
+| 测试覆盖 | ❌ 无测试 |
+| `isInitializing` UI 消费 | ❌ 未实现 |
+
+---
+
+## Learnings
+
+- **模式**: `loadRecentProjects` 是配置初始化的第三条关键路径（继 `selectProject` 和 `loadProject` 之后），所有调用 `detect_project_config` 的地方都必须配齐 `ensureConfigInitialized`。
+- **经验**: Rust 后端 `init_project_config` 有完整的 4 个测试用例，但前端配套测试完全缺失，前后端测试覆盖严重失衡。
+- **模式**: 项目内其他 store 使用 factory 模式实现依赖注入，`projectStore` 硬编码 `tauriInvoke` 破坏了这一模式，这是其无法被单元测试的根本原因。

@@ -1,0 +1,102 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m
+[0m$ [0mgit log --oneline -20
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+c190f24 Merge pull request #79 from smallnest/feature/issue-34
+c78e166 feat: implement issue #34 - [desktop-app] 配置文件编辑器
+33ed825 Merge pull request #78 from smallnest/feature/issue-33
+a303498 feat: implement issue #33 - [desktop-app] 评分趋势折线图
+f1aadaf Merge pull request #77 from smallnest/feature/issue-73
+ae6246d feat: implement issue #73 - [desktop-app] 项目配置模板初始化
+1be412f Merge pull request #76 from smallnest/feature/issue-74
+53e0316 feat: implement issue #74 - [desktop-app] UI 全面中文化
+d78f2a3 fix: resolve merge conflict in results.tsv
+aced020 Merge pull request #75 from smallnest/feature/issue-32
+[0m
+[0m$ [0mgit diff HEAD -- desktop_app/src/pages/DashboardPage.tsx
+(no output)
+[0m
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代: 30+
+- 子任务: T-002 (UI 类型)
+
+### 总体评价
+
+**评分: 40/100**
+
+Store 层变更（`isInitializing` 字段、`ensureConfigInitialized` 函数）合理且功能正确，但 T-002 的核心交付物——Dashboard 页面 `InitTemplatePrompt` 组件的 UI 更新——**完全未实现**。`git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx` 输出为空，该文件 0 行变更。
+
+### 严重问题 (必须修复)
+
+1. **InitTemplatePrompt 未做任何修改** (`DashboardPage.tsx:243-293`)
+   - 代码仍是"配置不完整"的纯提示 UI，完全未使用 `isInitializing`、`error` 等 store 字段
+   - "了解"按钮（`onLearnMore`）及其 `alert('了解更多功能将在后续版本中实现')` 依然存在，违反验收条件「移除原来无功能的"了解"按钮和 alert」
+   - 无初始化进行中的加载/进度状态显示
+   - 无初始化失败后的错误信息和重试按钮
+
+2. **Store 缺少 `retryInitialize` action** (`projectStore.ts:19-31`)
+   - 验收条件要求"初始化失败时显示错误信息和重试按钮（手动调用 refreshConfig + init_project_config）"
+   - 当前 store 有 `refreshConfig` 但未暴露 `retryInitialize` action，UI 即使想实现重试也无处调用
+   - 需要在 store 中添加 `retryInitialize` action，组合调用 `refreshConfig` + `init_project_config`
+
+3. **`ProjectInfoScreen` 未消费 `isInitializing`/`error`** (`DashboardPage.tsx:317-492`)
+   - 组件仅在渲染时检查 `config` 的静态缺失状态，未订阅 store 中的 `isInitializing` 动态状态
+   - 初始化进行中时，用户看到的仍是旧的"配置不完整"提示，而不是进度反馈
+   - 初始化失败后的 `error` 仅在 `WelcomeScreen` 中显示，`ProjectInfoScreen` 中未做展示
+
+### 一般问题 (建议修复)
+
+1. **`ensureConfigInitialized` 静默吞失败** (`projectStore.ts:80-84`)
+   - 初始化失败时仅 `console.warn` 并设置 `error`，返回旧 `config` 
+   - 这会导致 `DashboardPage` 切换到 `ProjectInfoScreen` 后立即显示"配置不完整"的 `InitTemplatePrompt`，但完全不知道刚才发生了什么
+   - 建议：失败时保留错误状态，让 UI 能展示错误和重试选项
+
+2. **`loadRecentProjects` 中 `auto-load` 未走 `ensureConfigInitialized`** (`projectStore.ts:186-214`)
+   - 当启动时从最近项目恢复，调用 `detect_project_config` 后直接 `set({ projectPath, config })`
+   - 没有调用 `ensureConfigInitialized`，意味着自动启动加载的场景不会触发自动初始化
+
+### 建议改进 (可选)
+
+1. 考虑在 store 初始化时统一加载/错误/初始化三个状态的管理，避免 `selectProject` 和 `loadProject` 中有重复的 set 逻辑
+2. 添加 `isInitializing` 的响应式测试
+
+### 审核结论
+
+- [ ] 需要修改（评分 40/100 未达 85 分门槛）
+
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查 — N/A（无变更文件）
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [x] 实现者已确认测试覆盖 — **未确认，DashboardPage.tsx 无变更**
+
+> 自检未执行：`DashboardPage.tsx` 自迭代 1 起持续无变更，验收条件全部未满足。
+
+### 复审发现
+
+该实现共经历 30+ 次迭代，但 `DashboardPage.tsx` 始终未被触及。Store 层变更具备自动初始化能力，但缺少 UI 层消费和 `retryInitialize` action，导致用户完全感知不到初始化过程，且在失败时没有恢复路径。
+
+---
+
+## Learnings
+
+- **踩坑**: 跨迭代持续性错误 — Agent 反复只改 store 不改 UI，导致 T-002 文件经 30+ 轮迭代仍为 0 行变更。需强制 `git diff HEAD -- <subtask_file>` 在审核前验证目标文件是否被触碰。
+- **模式**: Store action 的设计应提前考虑 UI 消费场景。`ensureConfigInitialized` 完整实现了初始化逻辑，但缺少 `retryInitialize` 对外 action，UI 即使想实现重试也被阻塞。
+- **经验**: 审核 T-002 前应先检查 `DashboardPage.tsx` 中 `InitTemplatePrompt` 组件的实际代码，再检查 store 是否提供了 UI 所需的全部 action 接口。当前情况是 UI 需重试但 store 未暴露对应方法。

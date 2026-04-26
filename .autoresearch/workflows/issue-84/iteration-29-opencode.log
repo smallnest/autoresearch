@@ -1,0 +1,46 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts[90m [offset=19, limit=13][0m
+现在我对现有代码和审核反馈有了全面的了解。关键问题：
+
+1. **`DashboardPage.tsx`**: `InitTemplatePrompt` 仍然有旧的"了解"按钮 + `alert()`，不读取 `isInitializing`/`error`
+2. **`projectStore.ts`**: 缺少 `retryInitialize` action，UI 无法从失败中重试
+3. **`loadRecentProjects`**: 未串联 `ensureConfigInitialized`
+
+这是修复计划：
+
+---
+
+## 修复计划
+
+### Task 1: 在 `projectStore.ts` 中添加 `retryInitialize` action
+
+在 `ProjectState` 接口和 store 实现中添加：
+### 计划
+
+| # | Task | 文件 | 变更 |
+|---|------|------|------|
+| 1 | 添加 `retryInitialize` action | `projectStore.ts` | Interface + 实现：清除 error → detect_config → `ensureConfigInitialized` → 更新 config，浏览器模式 no-op |
+| 2 | 修复 `loadRecentProjects` | `projectStore.ts` | Tauri 路径调用 `ensureConfigInitialized`，串联所有入口 |
+| 3 | 重写 `InitTemplatePrompt` | `DashboardPage.tsx` | 移除 `onLearnMore` prop / "了解"按钮 / `alert()`；直接从 store 读取 `isInitializing`、`error`、`retryInitialize`；三态：loading spinner / error+retry / 默认 prompt |
+| 4 | 清理 `ProjectInfoScreen` | `DashboardPage.tsx` | 移除 `handleLearnMore`，传递新 props |
+
+**`InitTemplatePrompt` 三态设计：**
+
+```
+isInitializing=true  → 蓝色 loading spinner + "正在初始化项目配置..."
+error!=null          → 红色 error 卡片 + 错误消息 + "重试"按钮 + "稍后"按钮
+default              → 琥珀色 prompt + 无"了解"按钮 + 仅保留"稍后"按钮
+```
+
+**`retryInitialize` 实现逻辑：**
+
+```
+clearError → detect_project_config → ensureConfigInitialized(path, detected, set) → 更新 config
+```
+
+需要我确认并开始执行吗？

@@ -1,0 +1,85 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m 13 matches[0m
+[0m✱ [0mGrep "ensureConfigInitialized|isConfigIncomplete|isInitializing|loadRecentProjects"[90m in desktop_app · 15 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+Now let me look at tests and the related files.
+[0m✱ [0mGrep "projectStore|project_store"[90m in desktop_app/tests · 4 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2770, limit=200][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts[90m [offset=185, limit=30][0m
+Now let me check the `loadRecentProjects` more carefully to confirm the missing auto-init:
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 (在 projectStore 中添加自动初始化逻辑)
+- 迭代: 当前
+
+### 总体评价
+**评分: 65/100**
+
+### 严重问题 (必须修复)
+
+**1. `loadRecentProjects` 未接入 `ensureConfigInitialized` (正确性)**
+
+`projectStore.ts:186-197` 中 `loadRecentProjects` 调用了 `detect_project_config` 但未调用 `ensureConfigInitialized`。跨迭代经验明确指出了这一模式：
+
+> `loadRecentProjects` 是 `selectProject`/`loadProject` 之外的第三条项目加载路径，审核时必须同时检查三条路径的 `ensureConfigInitialized` 接入情况
+
+当前代码：
+```typescript
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath: path,
+});
+set({ projectPath: path, config });
+// ^^^^ 缺失: const config = await ensureConfigInitialized(path, detected, set);
+```
+
+后果：当应用启动自动加载最近项目时，配置不完整的项目不会触发自动初始化，用户看到的是"缺失"状态而非自动修复后的"完整"状态。
+
+**2. 无前端测试覆盖 (测试质量)**
+
+`projectStore.ts` 的核心逻辑（`isConfigIncomplete`、`ensureConfigInitialized`、`selectProject`、`loadProject`、`loadRecentProjects`）没有任何前端测试。其他 store（`runStore`、`iterationStore`、`historyStore`、`configEditor` 等）均有 `.test.mjs` 测试，项目 store 是唯一缺失的。跨迭代经验已多次将此标记为扣分项，本次应提升为阻塞级别。
+
+**3. 未使用工厂模式，导致依赖不可注入 (代码质量)**
+
+`projectStore.ts` 在模块级别硬编码了 `isTauri` 和 `tauriInvoke`，不遵循项目的 `createXxxStore(overrides)` 工厂模式（如 `createRunStore(overrides)`、`createIterationStore(overrides)`）。这使得：
+- 无法在 `node --test --experimental-strip-types` 下测试 store 的异步行为
+- 覆盖率只能停留在 Rust 后端，前端逻辑完全无保障
+- 浏览器 fallback 路径也无法通过测试验证
+
+### 一般问题 (建议修复)
+
+**4. 错误清除时序问题 (正确性)**
+
+`selectProject:103` / `loadProject:157` 的 `set({ isLoading: true, error: null })` 会清除 `ensureConfigInitialized` 在 catch 中设置的 `error`。如果连续两次调用（第一次 init 失败，第二次用户重试），前一次的错误消息在用户看到前就被清除了——不过这是跨迭代已知的设计缺陷，非本次引入的 bug。
+
+### 建议改进 (可选)
+
+- **`ensureConfigInitialized` 应作为 `loadRecentProjects` 的 Tauri 分支标准流程**：现在的代码模式是 detect → ensureConfigInit → saveRecent → set state，`loadRecentProjects` 也应该遵循这一模式
+- `loadRecentProjects` 的 catch 只写了 `console.error` 没有设置 `error` 状态，意味着即使 init 失败用户也看不到任何反馈
+
+### 审核结论
+- [ ] 阻塞
+
+### 实现者自检确认
+- [x] `selectProject` 正确调用 `ensureConfigInitialized` ✅
+- [x] `loadProject` 正确调用 `ensureConfigInitialized` ✅
+- [x] `isInitializing` 状态字段完整实现（interface/init/set true/set false）✅
+- [ ] `loadRecentProjects` 缺失 `ensureConfigInitialized` ❌
+- [ ] 无前端测试覆盖 ❌
+- [ ] 无工厂模式注入 ❌
+
+**修复要点**：
+1. `loadRecentProjects` 的 Tauri 分支添加 `ensureConfigInitialized(path, detected, set)` 调用
+2. 添加 `projectStore.test.mjs`，覆盖 `isConfigIncomplete`、`ensureConfigInitialized` 和三条加载路径
+3. 建议重构为工厂模式 `createProjectStore(overrides)` 以支持注入测试
+
+## Learnings
+
+- **模式**: `loadRecentProjects` 在应用启动时自动加载了最近项目，是配置初始化的第三条关键路径。审核心法是"所有调用 `detect_project_config` 的地方都必须配齐 `ensureConfigInitialized`"。
+- **经验**: Rust 后端 `init_project_config` 有完整的 4 个测试用例（完整初始化、部分填充、非目录拒绝、冲突路径检测），但前端配套测试完全缺失，前后端测试覆盖严重失衡。

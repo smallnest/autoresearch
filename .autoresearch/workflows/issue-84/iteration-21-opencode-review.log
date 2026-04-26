@@ -1,0 +1,96 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m✱ [0mGlob "desktop_app/tests/**/*store*"[90m in . · 1 match[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*project*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*init*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src-tauri/src/tests/**"[90m in . · 0 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+Now let me check the test files and remaining related files.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1588][0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3059][0m
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m in . · 12 matches[0m
+Let me also check the test files and look at the rest of the Rust test file for completeness.
+[0m✱ [0mGrep "projectStore|project_store|ensureConfigInitialized|isConfigIncomplete"[90m in . · 4 matches[0m
+[0m✱ [0mGrep "createProjectStore"[90m in desktop_app/src · 0 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4478][0m
+Let me check the remaining Rust tests and search for any projectStore-related test files:
+[0m✱ [0mGrep "isConfigIncomplete|ensureConfigInitialized|createProjectStore"[90m in . · 471 matches[0m
+## 审核报告
+
+### Issue
+- 编号: #84
+- 当前子任务: T-001
+- 迭代次数: 21
+
+### 总体评价
+**评分: 72/100**
+
+### 严重问题 (必须修复)
+
+**1. 缺少 `createProjectStore(overrides)` 工厂模式，导致核心逻辑不可测试**
+
+`projectStore.ts` 是目前唯一没有工厂模式的主 store。`ensureConfigInitialized`、`selectProject` 的初始化流程、`loadProject` 的初始化路径等核心逻辑均无法通过依赖注入隔离测试。该项目已有 12 个测试文件覆盖其他 store（`runStore.test.mjs`、`iterationStore.test.mjs` 等均使用工厂模式），`projectStore` 的 0 测试覆盖是严重缺口。
+
+**建议**: 添加 `createProjectStore(overrides)` 工厂函数（注入 `isTauri`、`invoke`），将 `ensureConfigInitialized` 移入闭包，导出默认实例保持接口兼容。编写 `projectStore.test.mjs` 覆盖：
+- `isConfigIncomplete` 纯函数（null、完整、部分配置）
+- `ensureConfigInitialized` 行为（配置完整跳过、缺失调用 init、失败返回原 config、isInitializing 状态切换）
+- 浏览器 fallback 不调用 init 的守卫逻辑
+
+### 一般问题 (建议修复)
+
+**2. `loadRecentProjects` 未调用 `ensureConfigInitialized`**
+
+`projectStore.ts:186-214` — `loadRecentProjects` 在 Tauri 模式下加载最近项目时，调用了 `detect_project_config` 后直接写入 state，未检查配置完整性并触发自动初始化。子任务描述明确提及"确保从最近项目加载时也能自动初始化"。
+
+该问题已被跨迭代经验连续多次标记（迭代 12-20），成为持久回归点。
+
+**建议**: 在 `detect_project_config` 之后添加 `ensureConfigInitialized` 调用，与 `selectProject`/`loadProject` 保持一致。
+
+**3. `refreshConfig` 未调用 `ensureConfigInitialized`**
+
+`projectStore.ts:216-240` — `refreshConfig` 仅调用 `detect_project_config` 并更新 state，未检查配置完整性。如果用户在 Settings 页面修改配置后 `.autoresearch/` 目录处于缺失状态，`refreshConfig` 不会触发自动初始化。
+
+**建议**: 在 `detect_project_config` 后添加 `ensureConfigInitialized` 调用。
+
+### 建议改进 (可选)
+
+**4. 两次 IPC 往返的冗余问题**
+
+`selectProject` 和 `loadProject` 在 Tauri 路径中先调 `detect_project_config` 获取检测结果，再由 `ensureConfigInitialized` 在配置不完整时调 `init_project_config`。后者内部又调 `detect_project_config_sync` 做路径验证。当需要初始化时产生 2 次 IPC 往返。
+
+**建议**: 可以将 `detect_project_config` 结果直接在 `ensureConfigInitialized` 中使用，当配置不完整时直接调用 `init_project_config`（它内部包含路径验证+创建+重新检测）。这可以消除一次不必要的 IPC 调用。
+
+**5. `normalizeProjectError` 缺少专用测试**
+
+当前 `storeErrorLocalization.test.mjs` 测试了 `normalizeProjectError`，但只有 2 个用例，覆盖率有限。
+
+### 审核结论
+- [ ] 需要修改 (需补充工厂模式+测试，评分未达 85)
+
+### 自检验证
+
+```markdown
+### 实现者自检确认
+- [ ] 编译/类型检查 — 未验证
+- [ ] Lint 检查 — 未验证
+- [ ] 测试覆盖 — 未验证 (0 个 projectStore 测试)
+- [ ] 工厂模式 — 未实现
+```
+
+### 各维度评分明细
+
+| 维度 | 权重 | 得分 | 原因 |
+|------|------|------|------|
+| 正确性 | 35% | 85 | AC 5/6 满足（selectProject、loadProject、isInitializing、error 处理、config 更新）；`loadRecentProjects` 遗漏自动初始化 |
+| 测试质量 | 25% | 30 | 无工厂模式、0 个核心逻辑测试、仅 `normalizeProjectError` 被覆盖；Rust 侧 4 个 init 测试完整 |
+| 代码质量 | 20% | 80 | 命名清晰、结构合理、`ensureConfigInitialized` 抽象干净；缺少工厂模式、`isInitializing` 未在 UI 中使用 |
+| 安全性 | 10% | 100 | Tauri 命令路径验证完整、`spawn_blocking` 隔离文件 IO |
+| 性能 | 10% | 90 | `detect`→`init` 两次 IPC 可优化性建议，不影响功能 |
+
+**总分 = 85×0.35 + 30×0.25 + 80×0.20 + 100×0.10 + 90×0.10 = 29.75 + 7.5 + 16 + 10 + 9 = 72.25 ≈ 72/100**

@@ -1,0 +1,106 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m✱ [0mGlob "desktop_app/src/stores/runStore.ts"[90m in . · 1 match[0m
+[0m✱ [0mGlob "desktop_app/src/stores/iterationStore.ts"[90m in . · 1 match[0m
+[0m✱ [0mGlob "desktop_app/src/stores/historyStore.ts"[90m in . · 1 match[0m
+Now let me examine how other stores implement the factory pattern for dependency injection:
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+[0m→ [0mRead desktop_app/tests
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+## 修复计划
+
+基于审核反馈和代码分析，我制定了以下修复计划。核心问题分为 **5 个任务**：
+
+---
+
+### 任务 1：重构为工厂模式（核心改造）
+
+**问题**: `projectStore` 是唯一不遵循 `createXStore(overrides?)` 工厂模式的 store，导致无法单元测试。
+
+**方案**: 参照 `runStore.ts` 和 `iterationStore.ts` 的模式：
+1. 新增 `ProjectStoreDeps` 接口（`isTauri`, `invoke`）
+2. 新增 `createProjectStoreDeps(overrides)` 函数
+3. 将 `ensureConfigInitialized` 改为闭包（位于 `createProjectStore` 内部），使用 `deps.invoke` 而非模块级 `tauriInvoke`
+4. 导出 `createProjectStore(overrides?)`，同时保持 `useProjectStore` 作为默认实例
+
+**涉及文件**: `desktop_app/src/stores/projectStore.ts`
+
+---
+
+### 任务 2：修复 `loadRecentProjects` 未调用 `ensureConfigInitialized`（严重问题，审核扣分重点）
+
+**问题**: Tauri 分支中 `loadRecentProjects` 调用 `detect_project_config` 后直接 `set({ config })`，跳过初始化检查，导致应用启动时自动加载的项目不会触发 `.autoresearch` 配置初始化。该问题在多次迭代审核中反复标记但未被修复。
+
+**方案**: 在 `detect_project_config` 调用后插入 `ensureConfigInitialized`，用初始化后的 config 更新状态：
+```typescript
+// 旧的:
+set({ projectPath: path, config });
+
+// 新的:
+const initializedConfig = await ensureConfigInitialized(path, config, set);
+set({ projectPath: path, config: initializedConfig });
+```
+
+并为 Browser fallback 分支添加注释说明为何不调用（浏览器模式无 Tauri 后端）。
+
+**涉及文件**: `desktop_app/src/stores/projectStore.ts`
+
+---
+
+### 任务 3：修复 `refreshConfig` 未调用 `ensureConfigInitialized`（行为完整性）
+
+**问题**: 用户手动刷新配置时，预期也应触发自动初始化。当前 `refreshConfig` 的 Tauri 分支直接 `set({ config })`，绕过了 `ensureConfigInitialized`。
+
+**方案**: 在 `refreshConfig` Tauri 分支中增加 `ensureConfigInitialized` 调用，与 `selectProject` / `loadProject` 保持一致。
+
+**涉及文件**: `desktop_app/src/stores/projectStore.ts`
+
+---
+
+### 任务 4：保留但完善 `console.warn`（轻微改进）
+
+**问题**: `ensureConfigInitialized` 使用了 `console.warn`，而其他 store 倾向于将错误上报到 store 的 error 字段。
+
+**方案**: 保留 `console.warn`（已有 `set({ error })` 配合），保持与现有行为一致。纯改良项，不影响功能。
+
+**涉及文件**: `desktop_app/src/stores/projectStore.ts`
+
+---
+
+### 任务 5：添加单元测试（覆盖核心逻辑）
+
+**问题**: `projectStore` 是唯一没有对应测试的 store。`isConfigIncomplete`、`ensureConfigInitialized` 等逻辑无测试覆盖。
+
+**方案**: 创建 `tests/projectStore.test.mjs`，使用 `node --test --experimental-strip-types` 运行，覆盖：
+- **`isConfigIncomplete`**: null 输入、全 true、部分 false（三个维度各测一次）、全 false
+- **`normalizeProjectError`**: 中文消息保留、英文消息追加 fallback
+- **`createProjectStore` 工厂模式注入测试**:
+  - **`selectProject`**: mock invoke 验证调用链和状态变更
+  - **`loadProject`**: mock invoke 验证 `ensureConfigInitialized` 被调用
+  - **`loadRecentProjects`**: mock invoke 验证自动初始化路径
+  - **`refreshConfig`**: mock invoke 验证自动初始化路径
+  - **`ensureConfigInitialized` 生命周期** (通过内部测试 helper): 初始化成功路径、失败返回原 config、失败后 error 设置、`isInitializing` true→false 转换
+
+**涉及文件**: `desktop_app/tests/projectStore.test.mjs`（新建）
+
+---
+
+### 执行顺序
+
+1. → 任务 1（工厂模式重构）
+2. → 任务 2（修复 `loadRecentProjects`）
+3. → 任务 3（修复 `refreshConfig`）
+4. → 任务 4（完善 `console.warn` — 极小改动，可随任务 1 一并完成）
+5. → 任务 5（添加单元测试）
+
+每个任务都可通过 `tsc --noEmit` 和 `node --test --experimental-strip-types` 快速验证。
+
+---
+
+是否按照这个计划开始实现？

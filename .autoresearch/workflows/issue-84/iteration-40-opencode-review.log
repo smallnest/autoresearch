@@ -1,0 +1,158 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+## Reviewing Issue #84 T-002 Implementation
+
+Let me examine the current state of the relevant files.
+[0m✱ [0mGrep "dashboardPage|DashboardPage|InitTemplatePrompt"[90m in desktop_app · 1 match[0m
+[0m✱ [0mGrep "dashboardPage|DashboardPage|InitTemplatePrompt"[90m in desktop_app · 0 matches[0m
+[0m→ [0mRead desktop_app/src/stores
+Now let me check if there are any test files or additional context.
+[0m
+[0m$ [0mgit diff HEAD --name-only
+desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mgit log --oneline -10
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+[0m
+[0m✱ [0mGrep "json2ts|ts2json|projectStore|detect_project_config|init_project_config"[90m in desktop_app/src-tauri · 22 matches[0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代次数: 37-39 (当前检查)
+- 子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+
+### 总体评价
+**评分: 20/100**
+
+---
+
+### 致命问题 (必须修复)
+
+**1. `DashboardPage.tsx` 未被修改 — 目标文件零改动**
+
+```
+$ git diff HEAD --name-only
+desktop_app/src/stores/projectStore.ts     ← 只有 store 被改了
+```
+
+`git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx` 输出为空。`InitTemplatePrompt` 组件仍然是旧版本：
+
+- 第 244-249 行：仍然包含 `onLearnMore` prop
+- 第 283-287 行：仍然包含 `onLearnClick` → `alert('了解更多功能将在后续版本中实现')`
+- 未接入 store 的 `isInitializing` 状态（第 24 行）
+- 未接入 store 的 `error` 状态
+- 无加载/进度 UI
+- 无错误态重试按钮
+
+这直接违反了验收条件 1-4。
+
+**2. 缺少 `retryInitialize` store action**
+
+`projectStore.ts` 暴露了 `ensureConfigInitialized` 作为内部函数，但没有暴露给组件的 retry action。`InitTemplatePrompt` 即使接入了 store，也没有可调用的重试方法。违反验收条件 4（"初始化失败时显示错误信息和重试按钮"）。
+
+---
+
+### 问题定位
+
+当前自动初始化流程在 `selectProject` 内完成：
+```
+selectProject → detect_project_config → ensureConfigInitialized → set({projectPath, config})
+```
+初始化成功时用户直接看到 `ConfigCompleteNotification`。初始化失败时用户看到 `InitTemplatePrompt` + `error`，但组件既无错显示，也无重试能力。
+
+---
+
+### 修复计划
+
+需要修改 **2 个文件**：
+
+#### 1. `desktop_app/src/stores/projectStore.ts`
+
+**在 `ProjectState` 接口中新增「重试初始化」action**：
+
+```typescript
+interface ProjectState {
+  // ... 现有字段
+  retryInitialize: () => Promise<void>;
+}
+```
+
+**实现 `retryInitialize` action**：
+- 获取当前 `projectPath`
+- `set({ error: null, isInitializing: true })`
+- 调用 `detect_project_config` 重测
+- 如果仍不完整，调用 `init_project_config`
+- 更新 `config` 状态
+- `finally { set({ isInitializing: false }) }`
+
+#### 2. `desktop_app/src/pages/DashboardPage.tsx`
+
+**(a) 重写 `InitTemplatePrompt` 组件**：
+
+```tsx
+// 去掉 onLearnMore prop
+function InitTemplatePrompt({ onLater }: { onLater: () => void }): JSX.Element {
+  const { projectPath, isInitializing, error, retryInitialize, clearError } = useProjectStore();
+
+  // 状态 1: 正在初始化 — 加载动画
+  if (isInitializing) {
+    return (
+      <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 mb-6">
+        <Spinner /> 正在初始化项目配置...
+      </div>
+    );
+  }
+
+  // 状态 2: 初始化失败 — 错误 + 重试
+  if (error) {
+    return (
+      <div className="p-4 rounded-lg bg-red-50 border border-red-200 mb-6">
+        <p>{error}</p>
+        <button onClick={retryInitialize}>重试</button>
+        <button onClick={() => { clearError(); onLater(); }}>稍后</button>
+      </div>
+    );
+  }
+
+  // 状态 3: 默认 — 仅提示，仅"稍后"按钮
+  return ( ... );
+}
+```
+
+**(b) 更新 `ProjectInfoScreen`**：
+- 去掉 `handleLearnMore` 和 `onLearnMore` prop 传递
+- 从 store 解构 `isInitializing`、`error`、`retryInitialize`
+
+---
+
+### 审核结论
+
+- [ ] **阻塞** — `DashboardPage.tsx` 完全未修改，T-002 未实现
+
+---
+
+### 自检验证
+
+实现者自检确认：
+- [ ] 实现者应执行 `git diff HEAD --name-only` 确认目标文件已被修改
+- [ ] 实现者应验证编译/类型检查无错误
+- [ ] 实现者应验证 Tailwind 样式与新状态组件一致
+
+## Learnings
+
+- **踩坑**: 第 10+ 次出现"只改 store 不改 UI"模式。`DashboardPage.tsx` 作为 T-002 唯一定义的目标文件，`git diff HEAD --name-only` 可在 3 秒内确认未被修改，但实现者未执行此检查即进入提交阶段。
+- **经验**: store 的 `isInitializing` 和 `ensureConfigInitialized` 实现质量良好，但缺少配套的 `retryInitialize` action，导致 UI 的重试按钮无 store action 可调用。审核需要覆盖"store action 是否完整满足验收条件"而不只是"store 是否已改"。

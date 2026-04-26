@@ -1,0 +1,59 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1, limit=100][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=945, limit=250][0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me examine more of the relevant code.
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3059, limit=200][0m
+[0m✱ [0mGrep "useProjectStore"[90m in desktop_app/src · 17 matches[0m
+[0m✱ [0mGrep "createProjectStore|createProjectStoreDeps|ProjectStoreDeps"[90m in desktop_app · 0 matches[0m
+[0m✱ [0mGrep "from.*projectStore"[90m in desktop_app/src · 6 matches[0m
+Let me check all the imports of `useProjectStore` to ensure the factory refactor doesn't miss anything.
+现在我已经有了全面的理解。以下是详细的计划：
+
+---
+
+## 修复计划
+
+### 步骤 1：重构 `projectStore.ts` → 工厂模式
+
+参考 `runStore.ts` / `iterationStore.ts` 的模式：
+
+1. 新增 `ProjectStoreDeps` 接口（包含 `isTauri`、`invoke`）
+2. 新增 `createProjectStoreDeps(overrides)` 辅助函数
+3. 在 `ensureConfigInitialized` 的参数列表中添加 `invoke`，使其可直接注入（从 `tauriInvoke` 切换为 `deps.invoke`）
+4. 将 store 主体包裹在 `createProjectStore(overrides)` 工厂函数中
+5. 默认实例保持 `export const useProjectStore = createProjectStore()`
+6. 修复 **`loadRecentProjects`** ——在 `detect_project_config` 之后调用 `ensureConfigInitialized`
+7. 保留所有现有导出（`ProjectConfig`、`isConfigIncomplete`、`normalizeProjectError`）
+
+### 步骤 2：新建 `desktop_app/tests/projectStore.test.mjs`
+
+参照 `runStore.test.mjs` 的模式，覆盖以下场景：
+
+| 测试 | 场景 |
+|------|------|
+| `isConfigIncomplete` | null、不完整、完整 |
+| `selectProject` | 用户取消 → 无状态变更 |
+| | 配置完整 → 不初始化，直接更新状态 |
+| | 配置不完整 → 调用 `init_project_config`，更新状态 |
+| | 调用失败 → 设置 error |
+| `loadProject` | 配置不完整 → 调用 `ensureConfigInitialized` |
+| | 错误路径 → 设置 error |
+| `loadRecentProjects` | 有最近项目且无当前 `projectPath` → 调用 `ensureConfigInitialized` |
+| | 已有 `projectPath` → 仅更新列表 |
+| | 错误 → 静默吞异常 |
+
+### 步骤 3：更新 `desktop_app/src/CLAUDE.md`
+
+记录 projectStore 工厂模式的知识点。
+
+---
+
+是否按此计划开始实施？

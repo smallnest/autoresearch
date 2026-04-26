@@ -1,0 +1,105 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead .
+[0m✱ [0mGlob "**/projectStore*"[90m in . · 1 match[0m
+Let me review the implementation by reading the key files.
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src
+[0m✱ [0mGlob "desktop_app/src/**/*"[90m in . · 42 matches[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGlob "desktop_app/src-tauri/src/**/*.rs"[90m in . · 2 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m in . · 13 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m✱ [0mGrep "loadRecentProjects|ensureConfigInitialized|isInitializing"[90m in desktop_app/src · 13 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app · 15 matches[0m
+[0m✱ [0mGlob "desktop_app/package.json"[90m in . · 1 match[0m
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app/src/pages · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/**/tsconfig*"[90m in . · 2 matches[0m
+[0m→ [0mRead desktop_app/package.json
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app/src · 0 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && grep -l "create.*Store\|factory\|overrides" desktop_app/src/stores/*.ts
+desktop_app/src/stores/historyDetailStore.ts
+desktop_app/src/stores/historyStore.ts
+desktop_app/src/stores/iterationStore.ts
+desktop_app/src/stores/logViewerStore.ts
+desktop_app/src/stores/runConfigStore.ts
+desktop_app/src/stores/runStore.ts
+[0m
+[0m✱ [0mGlob "desktop_app/tests/*projectStore*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*"[90m in . · 13 matches[0m
+[0m✱ [0mGrep "runWithRetry|ensureConfigInitialized|normalizeProjectError|isConfigIncomplete"[90m in desktop_app/tests · 4 matches[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs[90m [limit=50][0m
+Now I have a complete picture. Let me compile my review report.
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 — 在 projectStore 中添加自动初始化逻辑
+
+### 总体评价
+**评分: 82/100**
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 100 | 35.0 |
+| 测试质量 | 25% | 40 | 10.0 |
+| 代码质量 | 20% | 85 | 17.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总计** | **100%** | | **82.0** |
+
+### 验收条件逐条审核
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | selectProject 检测到配置缺失时自动调用 init_project_config | ✅ | `selectProject` → `ensureConfigInitialized` → `init_project_config` (L111) |
+| 2 | init_project_config 返回的 ProjectConfig 正确更新到 store.config | ✅ | `ensureConfigInitialized` 返回值赋给 `config`，写入 store (L111-116) |
+| 3 | 新增 isInitializing 状态字段 | ✅ | 定义 (L24)、初始值 (L99)、init 开始/结束切换 (L77/L86) |
+| 4 | loadProject 方法同样支持自动初始化 | ✅ | `loadProject` 同样调用 `ensureConfigInitialized` (L163) |
+| 5 | 初始化失败时 error 正确设置，不阻塞 | ✅ | `catch` 设 error 并 return 原 config (L80-84) |
+| 6 | TypeScript 类型检查通过 | ⚠️ | 未验证，但源码无显式类型错误 |
+
+### 严重问题（必须修复）
+
+**1. 缺少 projectStore 核心逻辑的单元测试（测试质量 - 40分）**
+
+`projectStore.ts` 导出了可独立测试的纯函数/半纯函数：
+- `isConfigIncomplete(config)` — 纯函数，可直接断言
+- `ensureConfigInitialized(path, config, set)` — set 注入后完全可测
+- `normalizeProjectError(error)` — 有测试（storeErrorLocalization.test.mjs）但不完整
+
+当前项目有完整的 store 测试实践（6/8 个 store 有测试），但 `projectStore` 核心逻辑（`ensureConfigInitialized`、`isConfigIncomplete`、`selectProject`/`loadProject` 中的初始化分支行为）未被任何测试覆盖。必须补充测试。
+
+**2. 未遵循工厂模式，导致 store 不可测试（代码质量 - 85分）**
+
+`desktop_app/src/CLAUDE.md` 明确规定：
+> Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports
+
+当前 `projectStore` 硬编码了 `tauriInvoke`，没有工厂/注入模式。与之对比，`runStore`、`historyStore`、`iterationStore`、`logViewerStore`、`runConfigStore`、`historyDetailStore` 均遵循了此模式。这使得 `selectProject`/`loadProject` 中的两条 Tauri 调用路径完全不可在 Node 测试中覆盖。
+
+### 一般问题（建议修复）
+
+**1. `loadRecentProjects` 未纳入自动初始化**
+
+虽然不是 T-001 的显式验收条件，但此路径已被跨迭代经验连续 8 次标记为遗漏点。当前 `loadRecentProjects`（L186-214）检测到配置不完整时不会调用 `ensureConfigInitialized`，用户通过"上次打开的项目"加载后不会触发自动初始化。
+
+**2. DashboardPage 未消费 `isInitializing`**
+
+`isInitializing` 状态已正确加入 store，但 `DashboardPage.tsx` 未将其用于 UI 显示（L496 只解构了 `projectPath`, `config`, `loadRecentProjects`）。初始化期间用户看不到进度反馈。
+
+### 建议改进
+
+- 将 `projectStore` 重构为 `createProjectStore(overrides)` 工厂模式以支持测试注入
+- 为 `ensureConfigInitialized`、`isConfigIncomplete` 创建 `projectStore.test.mjs`，覆盖：配置完全时跳过初始化、配置缺失时调用 init、init 失败时返回原 config、浏览器 fallback 不调 init
+- 在 `loadRecentProjects` 中复用 `ensureConfigInitialized`
+- DashboardPage 添加 `isInitializing` 状态的处理（spinner 或 toast）
+
+### 审核结论
+- ❌ **需要修改**（评分 82 < 85）
+
+实现者需补充测试覆盖并确认类型检查通过后重新审核。
