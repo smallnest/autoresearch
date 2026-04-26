@@ -40,8 +40,8 @@ test('store error normalizers preserve Chinese copy and append English errors to
     '路径格式无效，请输入绝对路径'
   );
 
-  assert.equal(normalizeIssueListError(new Error('Request failed')), '加载议题失败，请重试。：Request failed');
-  assert.equal(normalizeIssueDetailError(new Error('Request failed')), '加载议题详情失败，请重试。：Request failed');
+  assert.equal(normalizeIssueListError(new Error('Request failed')), '加载 Issues 失败，请重试。：Request failed');
+  assert.equal(normalizeIssueDetailError(new Error('Request failed')), '加载 Issues 详情失败，请重试。：Request failed');
   assert.equal(normalizeLogViewerError(new Error('Permission denied')), '加载日志失败，请重试。：Permission denied');
 });
 

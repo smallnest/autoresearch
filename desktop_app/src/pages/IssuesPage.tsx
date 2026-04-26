@@ -380,7 +380,7 @@ function IssuesPage(): JSX.Element {
             请先选择项目
           </h2>
           <p className="text-gray-500 text-center max-w-md">
-            在“概览”页面选择一个项目目录后，即可查看和管理 GitHub 议题
+            在”概览”页面选择一个项目目录后，即可查看和管理 GitHub Issues
           </p>
         </div>
       </div>
@@ -392,9 +392,9 @@ function IssuesPage(): JSX.Element {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">议题</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Issues</h1>
           <p className="text-sm text-gray-500">
-            管理和追踪 GitHub 未关闭议题（{filteredIssues.length} / {issues.length}）
+            管理和追踪 GitHub 未关闭 Issues（{filteredIssues.length} / {issues.length}）
           </p>
         </div>
 
@@ -472,7 +472,7 @@ function IssuesPage(): JSX.Element {
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
-                placeholder="搜索议题标题或编号..."
+                placeholder="搜索 Issues 标题或编号..."
                 value={searchQuery}
                 onChange={handleSearchChange}
                 className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
@@ -529,7 +529,7 @@ function IssuesPage(): JSX.Element {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                <p className="text-sm text-gray-500">正在加载议题...</p>
+                <p className="text-sm text-gray-500">正在加载 Issues...</p>
               </div>
             ) : pagedIssues.length > 0 ? (
               pagedIssues.map((issue) => (
@@ -545,8 +545,8 @@ function IssuesPage(): JSX.Element {
               <EmptyState
                 message={
                   searchQuery || selectedLabel
-                    ? '没有匹配的议题'
-                    : '暂无议题'
+                    ? '没有匹配的 Issues'
+                    : '暂无 Issues'
                 }
               />
             )}

@@ -75,11 +75,11 @@ const mockProcessedNumbers: number[] = [];
 const mockIssueDetails: Record<number, IssueDetail> = {};
 
 export function normalizeIssueListError(error: unknown): string {
-  return normalizeUserFacingError(error, '加载议题失败，请重试。');
+  return normalizeUserFacingError(error, '加载 Issues 失败，请重试。');
 }
 
 export function normalizeIssueDetailError(error: unknown): string {
-  return normalizeUserFacingError(error, '加载议题详情失败，请重试。');
+  return normalizeUserFacingError(error, '加载 Issues 详情失败，请重试。');
 }
 
 function formatDate(dateString: string): string {
@@ -130,7 +130,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
         set({
           issues: mockIssues,
           processedNumbers: mockProcessedNumbers,
-          error: '浏览器模式不支持获取 GitHub 议题，请通过 tauri dev 运行',
+          error: '浏览器模式不支持获取 GitHub Issues，请通过 tauri dev 运行',
         });
       }
 
@@ -174,7 +174,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
                 resolve(mockDetail);
                 return;
               }
-              reject(new Error(`未找到议题 #${_issueNumber}`));
+              reject(new Error(`未找到 Issue #${_issueNumber}`));
             }, 250);
           });
 

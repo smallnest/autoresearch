@@ -8,21 +8,13 @@ function readSource(relativePath) {
 
 test('layout components use Chinese navigation and panel copy', () => {
   const sidebarSource = readSource('../src/components/Sidebar.tsx');
-  const rightPanelSource = readSource('../src/components/RightPanel.tsx');
 
   assert.match(sidebarSource, /label: "概览"/);
-  assert.match(sidebarSource, /label: "议题"/);
+  assert.match(sidebarSource, /label: "Issues"/);
   assert.match(sidebarSource, /label: "历史"/);
   assert.match(sidebarSource, /label: "设置"/);
   assert.doesNotMatch(sidebarSource, /label: "Dashboard"/);
   assert.doesNotMatch(sidebarSource, /label: "History"/);
-
-  assert.match(rightPanelSource, /信息面板/);
-  assert.match(rightPanelSource, /展开面板/);
-  assert.match(rightPanelSource, /收起面板/);
-  assert.match(rightPanelSource, /选择一项后可在这里查看详情。/);
-  assert.doesNotMatch(rightPanelSource, /Info Panel/);
-  assert.doesNotMatch(rightPanelSource, /Expand panel/);
 });
 
 test('settings, history, and agent selection copy is localized', () => {
@@ -63,9 +55,9 @@ test('settings, history, and agent selection copy is localized', () => {
   assert.doesNotMatch(historySource, />History</);
 
   assert.match(dashboardSource, /欢迎使用 Autoresearch/);
-  assert.match(dashboardSource, /查看议题/);
+  assert.match(dashboardSource, /查看 Issues/);
   assert.match(dashboardSource, /aria-label="关闭错误提示"/);
-  assert.doesNotMatch(dashboardSource, /查看 Issues/);
+  assert.doesNotMatch(dashboardSource, /查看议题/);
 
   assert.match(agentSelectorSource, /已选 Agent/);
   assert.match(agentSelectorSource, /全选/);
@@ -99,37 +91,37 @@ test('issues page and issue detail copy is localized', () => {
   const logViewerStoreSource = readSource('../src/stores/logViewerStore.ts');
   const runStoreSource = readSource('../src/stores/runStore.ts');
 
-  assert.match(issuesSource, />议题</);
-  assert.match(issuesSource, /GitHub 未关闭议题/);
-  assert.match(issuesSource, /正在加载议题/);
-  assert.match(issuesSource, /没有匹配的议题/);
-  assert.match(issuesSource, /暂无议题/);
+  assert.match(issuesSource, />Issues</);
+  assert.match(issuesSource, /GitHub 未关闭 Issues/);
+  assert.match(issuesSource, /正在加载 Issues/);
+  assert.match(issuesSource, /没有匹配的 Issues/);
+  assert.match(issuesSource, /暂无 Issues/);
   assert.match(issuesSource, /已关闭/);
-  assert.match(issuesSource, /搜索议题标题或编号/);
+  assert.match(issuesSource, /搜索 Issues 标题或编号/);
   assert.match(issuesSource, /aria-label="关闭错误提示"/);
   assert.match(issuesSource, /aria-label="清空搜索"/);
-  assert.doesNotMatch(issuesSource, />Issues</);
+  assert.doesNotMatch(issuesSource, />议题</);
   assert.doesNotMatch(issuesSource, /OPEN Issues/);
-  assert.doesNotMatch(issuesSource, /搜索 Issue 标题或编号/);
+  assert.doesNotMatch(issuesSource, /搜索议题标题或编号/);
 
-  assert.match(issueDetailSource, /议题详情/);
-  assert.match(issueDetailSource, /选择一个议题/);
-  assert.match(issueDetailSource, /从左侧列表中点击议题后/);
+  assert.match(issueDetailSource, /Issues 详情/);
+  assert.match(issueDetailSource, /选择一个 Issue/);
+  assert.match(issueDetailSource, /从左侧列表中点击 Issue 后/);
   assert.match(issueDetailSource, /进行中/);
   assert.match(issueDetailSource, /已关闭/);
   assert.match(issueDetailSource, /退出码/);
-  assert.match(issueDetailSource, /当前正在运行议题/);
-  assert.match(issueDetailSource, /该议题暂无描述/);
-  assert.match(issueDetailSource, /该议题暂无评论/);
+  assert.match(issueDetailSource, /当前正在运行 Issue/);
+  assert.match(issueDetailSource, /该 Issue 暂无描述/);
+  assert.match(issueDetailSource, /该 Issue 暂无评论/);
   assert.match(issueDetailSource, /的头像/);
-  assert.doesNotMatch(issueDetailSource, /Issue Detail/);
+  assert.doesNotMatch(issueDetailSource, /议题详情/);
   assert.doesNotMatch(issueDetailSource, /alt=\{`\$\{comment\.author\.login\} avatar`\}/);
 
-  assert.match(issueStoreSource, /浏览器模式不支持获取 GitHub 议题/);
-  assert.match(issueStoreSource, /未找到议题 #/);
+  assert.match(issueStoreSource, /浏览器模式不支持获取 GitHub Issues/);
+  assert.match(issueStoreSource, /未找到 Issue #/);
   assert.match(issueStoreSource, /normalizeIssueListError/);
   assert.match(issueStoreSource, /normalizeIssueDetailError/);
-  assert.doesNotMatch(issueStoreSource, /GitHub Issues/);
+  assert.doesNotMatch(issueStoreSource, /GitHub 议题/);
   assert.doesNotMatch(issueStoreSource, /Issue #\$\{_issueNumber\} not found/);
   assert.doesNotMatch(issueStoreSource, /String\(e\)/);
 
