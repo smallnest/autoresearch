@@ -1,0 +1,16 @@
+T-003 已完全实现。以下是针对每个验收标准的验证：
+
+| # | 验收标准 | 状态 | 证据 |
+|---|---------|--------|----------|
+| 1 | 通知开关已添加到设置页面 UI | 完成 | `SettingsPage.tsx:385-423` — “通知设置”部分，带有切换开关 |
+| 2 | 开关状态在应用重启后持久化 | 完成 | `runConfigStore.ts:20,26,33,45,89,123,146` — `notificationsEnabled` 通过 zustand `persist` + `partialize` 持久化，并同步到 Rust 存储通过 `AppShell.tsx:18-25` |
+| 3 | 默认状态为启用 | 完成 | `runConfigStore.ts:20` — `DEFAULT_NOTIFICATIONS_ENABLED = true`；Rust 备用：`lib.rs:1437` — `unwrap_or(true)` |
+| 4 | 禁用时，Rust 不发送系统通知 | 完成 | `lib.rs:900-907` — `send_notification` 在发送前检查 `notifications_enabled`，如果为 `false` 则提前返回 |
+| 5 | 重新启用后通知恢复 | 完成 | `AppShell.tsx:74-76` — `useEffect` 在更改时同步偏好；Rust 端每次 `send_notification` 调用时读取当前偏好 |
+| 6 | 类型检查和 lint 通过 | 完成 | `tsc --noEmit` ✓，`eslint` ✓，`cargo clippy` ✓ |
+
+## 经验总结
+
+- **模式**：T-003 使用了双层持久化模式：前端 zustand store（用于响应式 UI）+ Rust Tauri store（用于后端读取偏好设置）。`AppShell.tsx` 中的 `syncNotificationPreference` 函数是桥梁 — 前端 `useEffect` 在 zustand 值变化时调用 `invoke("set_notification_enabled", { enabled })`，Rust 则在 `send_notification` 中读取相同的 store。
+- **模式**：通知切换开关复用了 `continueMode` 的 `role="switch"` 模式，并带有 `aria-checked` 和焦点环 — 与现有 UI 约定保持一致。
+- **踩坑**：审核反馈最初指出 T-003 “完全未实现”，但代码检查显示所有部分都已存在于工作树更改中。审核者可能只查看了 `git diff` 与上次提交的差异，而没有考虑到所有 T-001/T-002/T-003 的更改都尚未提交。

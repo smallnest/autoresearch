@@ -877,6 +877,141 @@ async fn get_iteration_progress(
         .map_err(|e| format!("Task join error: {e}"))?
 }
 
+// ========================================
+// Desktop notification helpers
+// ========================================
+
+/// Sends a desktop notification using tauri-plugin-notification.
+///
+/// Silently returns on failure — notifications are best-effort and should
+/// not block the main workflow if the OS denies permission or the plugin
+/// is unavailable.
+///
+/// The `notification_type` and `issue_number` are attached as extra data
+/// so the frontend `onAction` handler can navigate to the relevant page
+/// when the user clicks the notification.
+fn send_notification(
+    app: &tauri::AppHandle,
+    title: &str,
+    body: &str,
+    notification_type: &str,
+    issue_number: i64,
+) {
+    // Check notification preference before sending
+    if let Ok(store) = tauri_plugin_store::StoreExt::store(app, "app.json") {
+        if let Some(enabled) = store.get("notifications_enabled") {
+            if enabled.as_bool() == Some(false) {
+                return;
+            }
+        }
+    }
+
+    use tauri_plugin_notification::NotificationExt;
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .extra("type", notification_type)
+        .extra("issue_number", issue_number)
+        .show()
+    {
+        eprintln!("Notification error: {e}");
+    }
+}
+
+/// Notifies that an iteration review completed with a score.
+fn notify_iteration_complete(app: &tauri::AppHandle, issue_number: i64, score: i32) {
+    send_notification(
+        app,
+        &format!("Issue #{issue_number} 迭代完成"),
+        &format!("评分: {score}/100"),
+        "iteration_complete",
+        issue_number,
+    );
+}
+
+/// Notifies that the quality gate has been passed.
+fn notify_passing_score(app: &tauri::AppHandle, issue_number: i64, score: i32) {
+    send_notification(
+        app,
+        &format!("Issue #{issue_number} 质量通过"),
+        &format!("评分: {score}/100"),
+        "passing_score",
+        issue_number,
+    );
+}
+
+/// Notifies that a PR has been created.
+fn notify_pr_created(app: &tauri::AppHandle, issue_number: i64) {
+    send_notification(
+        app,
+        &format!("Issue #{issue_number} PR 已创建"),
+        "Pull Request 已成功创建",
+        "pr_created",
+        issue_number,
+    );
+}
+
+/// Notifies that the run failed or exited abnormally.
+fn notify_run_failure(app: &tauri::AppHandle, issue_number: i64, exit_code: Option<i32>) {
+    let body = match exit_code {
+        Some(code) => format!("异常退出，退出码: {code}"),
+        None => "异常退出".to_string(),
+    };
+    send_notification(
+        app,
+        &format!("Issue #{issue_number} 处理失败"),
+        &body,
+        "run_failure",
+        issue_number,
+    );
+}
+
+/// Checks the iteration progress diff and sends appropriate notifications.
+///
+/// Detects:
+/// - Iteration review completed (score appeared or changed)
+/// - Passing score reached (score >= threshold)
+/// - PR created (all subtasks passing)
+#[cfg(unix)]
+fn check_and_notify_progress(
+    app: &tauri::AppHandle,
+    issue_number: i64,
+    old_progress: Option<&IterationProgress>,
+    new_progress: &IterationProgress,
+) {
+    let old_score = old_progress.and_then(|p| p.last_score);
+    let new_score = new_progress.last_score;
+
+    // A new score appeared or the score changed → iteration review completed
+    if new_score != old_score {
+        if let Some(score) = new_score {
+            notify_iteration_complete(app, issue_number, score);
+
+            // Passing score reached?
+            if score >= new_progress.passing_score {
+                // Only notify if the old score was below threshold (or didn't exist)
+                let was_below = old_score.is_none_or(|s| s < new_progress.passing_score);
+                if was_below {
+                    notify_passing_score(app, issue_number, score);
+                }
+            }
+        }
+    }
+
+    // All subtasks passing → PR was (or will be) created
+    let old_all_passed = old_progress.is_some_and(|p| {
+        !p.subtasks.is_empty() && p.subtasks.iter().all(|s| s.status == SubtaskStatus::Passing)
+    });
+    let new_all_passed = !new_progress.subtasks.is_empty()
+        && new_progress.subtasks.iter().all(|s| s.status == SubtaskStatus::Passing);
+
+    if new_all_passed && !old_all_passed {
+        notify_pr_created(app, issue_number);
+    }
+}
+
 #[cfg(unix)]
 async fn emit_iteration_progress(app: &tauri::AppHandle) {
     let (project_path, issue_number) = {
@@ -897,7 +1032,7 @@ async fn emit_iteration_progress(app: &tauri::AppHandle) {
         _ => return,
     };
 
-    let should_emit = {
+    let (should_emit, old_progress) = {
         let state = get_run_state();
         let mut state_guard = state.lock().await;
         let Some(process) = state_guard.process.as_mut() else {
@@ -907,14 +1042,16 @@ async fn emit_iteration_progress(app: &tauri::AppHandle) {
             return;
         }
         if process.last_progress.as_ref() == Some(&progress) {
-            false
+            (false, None)
         } else {
+            let old = process.last_progress.clone();
             process.last_progress = Some(progress.clone());
-            true
+            (true, old)
         }
     };
 
     if should_emit {
+        check_and_notify_progress(app, issue_number, old_progress.as_ref(), &progress);
         let _ = app.emit(
             "iteration-progress",
             &IterationProgressEvent {
@@ -1285,6 +1422,28 @@ async fn save_recent_project(app: tauri::AppHandle, path: String) -> Result<(), 
     let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
         .map_err(|e| format!("Failed to open store: {e}"))?;
     store.set("recent_project", path);
+    store.save().map_err(|e| e.to_string())
+}
+
+/// Retrieves the notification enabled preference from the Tauri store.
+/// Returns `true` by default (notifications enabled).
+#[tauri::command]
+async fn get_notification_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+    let enabled = store
+        .get("notifications_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    Ok(enabled)
+}
+
+/// Saves the notification enabled preference to the Tauri store.
+#[tauri::command]
+async fn set_notification_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let store = tauri_plugin_store::StoreExt::store(&app, "app.json")
+        .map_err(|e| format!("Failed to open store: {e}"))?;
+    store.set("notifications_enabled", enabled);
     store.save().map_err(|e| e.to_string())
 }
 
@@ -2001,6 +2160,12 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
         // Check if we were killed by stop_run
         let was_killed = get_was_killed().swap(false, Ordering::SeqCst);
 
+        // Capture issue_number before clearing process state
+        let issue_number = {
+            let state_guard = state_clone.lock().await;
+            state_guard.process.as_ref().map(|p| p.issue_number)
+        };
+
         // Clear the process state
         {
             let mut state_guard = state_clone.lock().await;
@@ -2023,6 +2188,14 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
                     killed: false,
                 },
             };
+
+            // Send failure notification for abnormal exit (non-zero exit code)
+            let is_failure = exit_event.exit_code != Some(0);
+            if is_failure {
+                if let Some(issue_num) = issue_number {
+                    notify_run_failure(&app_clone, issue_num, exit_event.exit_code);
+                }
+            }
 
             let _ = app_clone.emit("run-exit", &exit_event);
         }
@@ -2966,6 +3139,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -3054,6 +3228,8 @@ pub fn run() {
             reset_config_file,
             get_recent_project,
             save_recent_project,
+            get_notification_enabled,
+            set_notification_enabled,
             list_issues,
             check_processed_issues,
             get_issue_detail,
@@ -3763,12 +3939,14 @@ mod tests {
                 {
                     "number": 42,
                     "title": "feat: add login page",
+                    "state": "OPEN",
                     "headRefName": "feature/login",
                     "body": "Implements the login UI"
                 },
                 {
                     "number": 43,
                     "title": "fix: correct date format",
+                    "state": "CLOSED",
                     "headRefName": "bugfix/date",
                     "body": ""
                 }
@@ -3782,6 +3960,7 @@ mod tests {
             GhPullRequest {
                 number: 42,
                 title: "feat: add login page".to_string(),
+                state: "OPEN".to_string(),
                 head_ref_name: "feature/login".to_string(),
                 body: "Implements the login UI".to_string(),
             }

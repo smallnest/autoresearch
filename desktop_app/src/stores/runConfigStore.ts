@@ -17,17 +17,20 @@ export const MAX_PASSING_SCORE = 100;
 export const DEFAULT_PASSING_SCORE = 85;
 
 export const DEFAULT_CONTINUE_MODE = true;
+export const DEFAULT_NOTIFICATIONS_ENABLED = true;
 
 interface RunConfigValues {
   maxIterations: number;
   passingScore: number;
   continueMode: boolean;
+  notificationsEnabled: boolean;
 }
 
 export interface RunConfigState extends RunConfigValues {
   setMaxIterations: (value: number) => void;
   setPassingScore: (value: number) => void;
   setContinueMode: (value: boolean) => void;
+  setNotificationsEnabled: (value: boolean) => void;
   reset: () => void;
 }
 
@@ -39,6 +42,7 @@ const DEFAULT_CONFIG: RunConfigValues = {
   maxIterations: DEFAULT_MAX_ITERATIONS,
   passingScore: DEFAULT_PASSING_SCORE,
   continueMode: DEFAULT_CONTINUE_MODE,
+  notificationsEnabled: DEFAULT_NOTIFICATIONS_ENABLED,
 };
 
 const noopStorage: StateStorage = {
@@ -82,6 +86,7 @@ export function sanitizeRunConfig(values: Partial<RunConfigValues>): RunConfigVa
       MAX_PASSING_SCORE
     ),
     continueMode: sanitizeBoolean(values.continueMode, DEFAULT_CONTINUE_MODE),
+    notificationsEnabled: sanitizeBoolean(values.notificationsEnabled, DEFAULT_NOTIFICATIONS_ENABLED),
   };
 }
 
@@ -115,6 +120,11 @@ function createRunConfigState(
         continueMode: sanitizeBoolean(value, state.continueMode),
       }));
     },
+    setNotificationsEnabled: (value) => {
+      set((state) => ({
+        notificationsEnabled: sanitizeBoolean(value, state.notificationsEnabled),
+      }));
+    },
     reset: () => {
       set({ ...DEFAULT_CONFIG });
     },
@@ -133,6 +143,7 @@ function createPersistOptions(
       maxIterations: state.maxIterations,
       passingScore: state.passingScore,
       continueMode: state.continueMode,
+      notificationsEnabled: state.notificationsEnabled,
     }),
     merge: (persistedState, currentState) => ({
       ...currentState,

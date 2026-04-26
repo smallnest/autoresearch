@@ -1,0 +1,806 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-40/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-40/planning.log
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline -20
+5fa3bcc Refine desktop app icon
+c9aabd3 Update desktop app icon
+5967c54 Merge pull request #92 from smallnest/feature/issue-39
+0630347 feat: implement issue #39 - [desktop-app] 系统托盘集成
+d01c7de Merge pull request #91 from smallnest/feature/issue-83
+2778f37 feat: implement issue #83 - [desktop-app] 应用图标设计与 macOS DMG 安装包打包
+8f530ee feat: PR 列表显示已关闭的 PR，文件变更列表可折叠
+871212c fix: 修复切换 Issue 时状态残留、日志闪烁及面板默认宽度
+5056b18 feat: Issues/历史记录详情面板拖拽调整宽度，下拉框扁平化，继续模式默认开启
+1b46ee0 fix: 修复 runtime 资源路径解析，解决 dev 模式初始化失败
+78e5b52 fix: 统一 UI 文案，将"议题"替换为"Issues"并移除未使用的 RightPanel 组件
+26a60af Merge pull request #90 from smallnest/feature/issue-88
+b0037dd feat: implement issue #88 - [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+e62621a Merge pull request #89 from smallnest/feature/issue-84
+8056110 feat: implement issue #84 - [desktop-app] 选择新项目时未自动初始化 .autoresearch 配置文件
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline --all | head -30
+5fa3bcc Refine desktop app icon
+c9aabd3 Update desktop app icon
+5967c54 Merge pull request #92 from smallnest/feature/issue-39
+0630347 feat: implement issue #39 - [desktop-app] 系统托盘集成
+d01c7de Merge pull request #91 from smallnest/feature/issue-83
+2778f37 feat: implement issue #83 - [desktop-app] 应用图标设计与 macOS DMG 安装包打包
+8f530ee feat: PR 列表显示已关闭的 PR，文件变更列表可折叠
+871212c fix: 修复切换 Issue 时状态残留、日志闪烁及面板默认宽度
+5056b18 feat: Issues/历史记录详情面板拖拽调整宽度，下拉框扁平化，继续模式默认开启
+1b46ee0 fix: 修复 runtime 资源路径解析，解决 dev 模式初始化失败
+78e5b52 fix: 统一 UI 文案，将"议题"替换为"Issues"并移除未使用的 RightPanel 组件
+26a60af Merge pull request #90 from smallnest/feature/issue-88
+b0037dd feat: implement issue #88 - [desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装
+e62621a Merge pull request #89 from smallnest/feature/issue-84
+8056110 feat: implement issue #84 - [desktop-app] 选择新项目时未自动初始化 .autoresearch 配置文件
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+c190f24 Merge pull request #79 from smallnest/feature/issue-34
+c78e166 feat: implement issue #34 - [desktop-app] 配置文件编辑器
+9665586 On feature/issue-34: autoresearch-temp-continue-34-1777115688
+65dca0d index on feature/issue-34: 33ed825 Merge pull request #78 from smallnest/feature/issue-33
+cad518d untracked files on feature/issue-34: 33ed825 Merge pull request #78 from smallnest/feature/issue-33
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git branch -a | head -20
+feature/issue-2
+  feature/issue-25
+  feature/issue-26
+  feature/issue-34
+* feature/issue-40
+  feature/issue-50
+  feature/issue-51
+  feature/issue-6
+  feature/issue-9
+  master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/feature/issue-1
+  remotes/origin/feature/issue-13
+  remotes/origin/feature/issue-2
+  remotes/origin/feature/issue-22
+  remotes/origin/feature/issue-25
+  remotes/origin/feature/issue-27
+  remotes/origin/feature/issue-28
+  remotes/origin/feature/issue-29
+  remotes/origin/feature/issue-30
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff master...HEAD --stat
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff master...HEAD
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git status
+On branch feature/issue-40
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   desktop_app/package-lock.json
+	modified:   desktop_app/package.json
+	modified:   desktop_app/src-tauri/Cargo.lock
+	modified:   desktop_app/src-tauri/Cargo.toml
+	modified:   desktop_app/src-tauri/capabilities/default.json
+	modified:   desktop_app/src-tauri/src/lib.rs
+	modified:   desktop_app/src/components/AppShell.tsx
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.autoresearch/workflows/issue-40/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log master..feature/issue-40
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff
+diff --git a/desktop_app/package-lock.json b/desktop_app/package-lock.json
+index 6cfb9aa..6597666 100644
+--- a/desktop_app/package-lock.json
++++ b/desktop_app/package-lock.json
+@@ -11,6 +11,7 @@
+         "@dnd-kit/core": "^6.3.1",
+         "@dnd-kit/sortable": "^10.0.0",
+         "@tauri-apps/api": "^2",
++        "@tauri-apps/plugin-notification": "^2",
+         "@tauri-apps/plugin-opener": "^2",
+         "react": "^18.3.1",
+         "react-dom": "^18.3.1",
+@@ -1953,6 +1954,15 @@
+         "node": ">= 10"
+       }
+     },
++    "node_modules/@tauri-apps/plugin-notification": {
++      "version": "2.3.3",
++      "resolved": "https://registry.npmjs.org/@tauri-apps/plugin-notification/-/plugin-notification-2.3.3.tgz",
++      "integrity": "sha512-Zw+ZH18RJb41G4NrfHgIuofJiymusqN+q8fGUIIV7vyCH+5sSn5coqRv/MWB9qETsUs97vmU045q7OyseCV3Qg==",
++      "license": "MIT OR Apache-2.0",
++      "dependencies": {
++        "@tauri-apps/api": "^2.8.0"
++      }
++    },
+     "node_modules/@tauri-apps/plugin-opener": {
+       "version": "2.5.3",
+       "resolved": "https://registry.npmjs.org/@tauri-apps/plugin-opener/-/plugin-opener-2.5.3.tgz",
+diff --git a/desktop_app/package.json b/desktop_app/package.json
+index 425070c..65bbdf6 100644
+--- a/desktop_app/package.json
++++ b/desktop_app/package.json
+@@ -16,6 +16,7 @@
+     "@dnd-kit/core": "^6.3.1",
+     "@dnd-kit/sortable": "^10.0.0",
+     "@tauri-apps/api": "^2",
++    "@tauri-apps/plugin-notification": "^2",
+     "@tauri-apps/plugin-opener": "^2",
+     "react": "^18.3.1",
+     "react-dom": "^18.3.1",
+diff --git a/desktop_app/src-tauri/Cargo.lock b/desktop_app/src-tauri/Cargo.lock
+index 024bfeb..e61daa3 100644
+--- a/desktop_app/src-tauri/Cargo.lock
++++ b/desktop_app/src-tauri/Cargo.lock
+@@ -722,6 +722,7 @@ dependencies = [
+  "tauri",
+  "tauri-build",
+  "tauri-plugin-dialog",
++ "tauri-plugin-notification",
+  "tauri-plugin-opener",
+  "tauri-plugin-store",
+  "tokio",
+@@ -2084,6 +2085,18 @@ version = "0.1.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
+ 
++[[package]]
++name = "mac-notification-sys"
++version = "0.6.12"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "29a16783dd1a47849b8c8133c9cd3eb2112cfbc6901670af3dba47c8bbfb07d3"
++dependencies = [
++ "cc",
++ "objc2",
++ "objc2-foundation",
++ "time",
++]
++
+ [[package]]
+ name = "markup5ever"
+ version = "0.14.1"
+@@ -2262,6 +2275,20 @@ dependencies = [
+  "windows-sys 0.60.2",
+ ]
+ 
++[[package]]
++name = "notify-rust"
++version = "4.16.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "5e551a9f0db223eaf3eb156906f99f46897fd951ee66dd1cb0be14db4d36d2fa"
++dependencies = [
++ "futures-lite",
++ "log",
++ "mac-notification-sys",
++ "serde",
++ "tauri-winrt-notification",
++ "zbus",
++]
++
+ [[package]]
+ name = "notify-types"
+ version = "2.1.0"
+@@ -2750,7 +2777,7 @@ checksum = "740ebea15c5d1428f910cd1a5f52cebf8d25006245ed8ade92702f4943d91e07"
+ dependencies = [
+  "base64 0.22.1",
+  "indexmap 2.14.0",
+- "quick-xml",
++ "quick-xml 0.38.4",
+  "serde",
+  "time",
+ ]
+@@ -2890,6 +2917,15 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
++[[package]]
++name = "quick-xml"
++version = "0.37.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
++dependencies = [
++ "memchr",
++]
++
+ [[package]]
+ name = "quick-xml"
+ version = "0.38.4"
+@@ -2945,6 +2981,16 @@ dependencies = [
+  "rand_core 0.6.4",
+ ]
+ 
++[[package]]
++name = "rand"
++version = "0.9.4"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea"
++dependencies = [
++ "rand_chacha 0.9.0",
++ "rand_core 0.9.5",
++]
++
+ [[package]]
+ name = "rand_chacha"
+ version = "0.2.2"
+@@ -2965,6 +3011,16 @@ dependencies = [
+  "rand_core 0.6.4",
+ ]
+ 
++[[package]]
++name = "rand_chacha"
++version = "0.9.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
++dependencies = [
++ "ppv-lite86",
++ "rand_core 0.9.5",
++]
++
+ [[package]]
+ name = "rand_core"
+ version = "0.5.1"
+@@ -2983,6 +3039,15 @@ dependencies = [
+  "getrandom 0.2.17",
+ ]
+ 
++[[package]]
++name = "rand_core"
++version = "0.9.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
++dependencies = [
++ "getrandom 0.3.4",
++]
++
+ [[package]]
+ name = "rand_hc"
+ version = "0.2.0"
+@@ -3918,6 +3983,25 @@ dependencies = [
+  "url",
+ ]
+ 
++[[package]]
++name = "tauri-plugin-notification"
++version = "2.3.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "01fc2c5ff41105bd1f7242d8201fdf3efd70749b82fa013a17f2126357d194cc"
++dependencies = [
++ "log",
++ "notify-rust",
++ "rand 0.9.4",
++ "serde",
++ "serde_json",
++ "serde_repr",
++ "tauri",
++ "tauri-plugin",
++ "thiserror 2.0.18",
++ "time",
++ "url",
++]
++
+ [[package]]
+ name = "tauri-plugin-opener"
+ version = "2.5.3"
+@@ -4056,6 +4140,18 @@ dependencies = [
+  "toml 0.9.12+spec-1.1.0",
+ ]
+ 
++[[package]]
++name = "tauri-winrt-notification"
++version = "0.7.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "0b1e66e07de489fe43a46678dd0b8df65e0c973909df1b60ba33874e297ba9b9"
++dependencies = [
++ "quick-xml 0.37.5",
++ "thiserror 2.0.18",
++ "windows",
++ "windows-version",
++]
++
+ [[package]]
+ name = "tempfile"
+ version = "3.27.0"
+diff --git a/desktop_app/src-tauri/Cargo.toml b/desktop_app/src-tauri/Cargo.toml
+index c09c2a8..e0183eb 100644
+--- a/desktop_app/src-tauri/Cargo.toml
++++ b/desktop_app/src-tauri/Cargo.toml
+@@ -21,6 +21,7 @@ tauri-build = { version = "2", features = [] }
+ tauri = { version = "2", features = ["tray-icon"] }
+ tauri-plugin-opener = "2"
+ tauri-plugin-dialog = "2"
++tauri-plugin-notification = "2"
+ tauri-plugin-store = "2"
+ serde = { version = "1", features = ["derive"] }
+ serde_json = "1"
+diff --git a/desktop_app/src-tauri/capabilities/default.json b/desktop_app/src-tauri/capabilities/default.json
+index dac40fd..dc64157 100644
+--- a/desktop_app/src-tauri/capabilities/default.json
++++ b/desktop_app/src-tauri/capabilities/default.json
+@@ -5,6 +5,7 @@
+   "windows": ["main"],
+   "permissions": [
+     "core:default",
++    "notification:default",
+     "opener:default",
+     "dialog:default",
+     "dialog:allow-open",
+diff --git a/desktop_app/src-tauri/src/lib.rs b/desktop_app/src-tauri/src/lib.rs
+index 72fe075..9755eda 100644
+--- a/desktop_app/src-tauri/src/lib.rs
++++ b/desktop_app/src-tauri/src/lib.rs
+@@ -877,6 +877,132 @@ async fn get_iteration_progress(
+         .map_err(|e| format!("Task join error: {e}"))?
+ }
+ 
++// ========================================
++// Desktop notification helpers
++// ========================================
++
++/// Sends a desktop notification using tauri-plugin-notification.
++///
++/// Silently returns on failure — notifications are best-effort and should
++/// not block the main workflow if the OS denies permission or the plugin
++/// is unavailable.
++///
++/// The `notification_type` and `issue_number` are attached as extra data
++/// so the frontend `onAction` handler can navigate to the relevant page
++/// when the user clicks the notification.
++fn send_notification(
++    app: &tauri::AppHandle,
++    title: &str,
++    body: &str,
++    notification_type: &str,
++    issue_number: i64,
++) {
++    use tauri_plugin_notification::NotificationExt;
++    if let Err(e) = app
++        .notification()
++        .builder()
++        .title(title)
++        .body(body)
++        .extra("type", notification_type)
++        .extra("issue_number", issue_number)
++        .show()
++    {
++        eprintln!("Notification error: {e}");
++    }
++}
++
++/// Notifies that an iteration review completed with a score.
++fn notify_iteration_complete(app: &tauri::AppHandle, issue_number: i64, score: i32) {
++    send_notification(
++        app,
++        &format!("Issue #{issue_number} 迭代完成"),
++        &format!("评分: {score}/100"),
++        "iteration_complete",
++        issue_number,
++    );
++}
++
++/// Notifies that the quality gate has been passed.
++fn notify_passing_score(app: &tauri::AppHandle, issue_number: i64, score: i32) {
++    send_notification(
++        app,
++        &format!("Issue #{issue_number} 质量通过"),
++        &format!("评分: {score}/100"),
++        "passing_score",
++        issue_number,
++    );
++}
++
++/// Notifies that a PR has been created.
++fn notify_pr_created(app: &tauri::AppHandle, issue_number: i64) {
++    send_notification(
++        app,
++        &format!("Issue #{issue_number} PR 已创建"),
++        "Pull Request 已成功创建",
++        "pr_created",
++        issue_number,
++    );
++}
++
++/// Notifies that the run failed or exited abnormally.
++fn notify_run_failure(app: &tauri::AppHandle, issue_number: i64, exit_code: Option<i32>) {
++    let body = match exit_code {
++        Some(code) => format!("异常退出，退出码: {code}"),
++        None => "异常退出".to_string(),
++    };
++    send_notification(
++        app,
++        &format!("Issue #{issue_number} 处理失败"),
++        &body,
++        "run_failure",
++        issue_number,
++    );
++}
++
++/// Checks the iteration progress diff and sends appropriate notifications.
++///
++/// Detects:
++/// - Iteration review completed (score appeared or changed)
++/// - Passing score reached (score >= threshold)
++/// - PR created (all subtasks passing)
++#[cfg(unix)]
++fn check_and_notify_progress(
++    app: &tauri::AppHandle,
++    issue_number: i64,
++    old_progress: Option<&IterationProgress>,
++    new_progress: &IterationProgress,
++) {
++    let old_score = old_progress.and_then(|p| p.last_score);
++    let new_score = new_progress.last_score;
++
++    // A new score appeared or the score changed → iteration review completed
++    if new_score != old_score {
++        if let Some(score) = new_score {
++            notify_iteration_complete(app, issue_number, score);
++
++            // Passing score reached?
++            if score >= new_progress.passing_score {
++                // Only notify if the old score was below threshold (or didn't exist)
++                let was_below = old_score.is_none_or(|s| s < new_progress.passing_score);
++                if was_below {
++                    notify_passing_score(app, issue_number, score);
++                }
++            }
++        }
++    }
++
++    // All subtasks passing → PR was (or will be) created
++    let old_all_passed = old_progress.is_some_and(|p| {
++        !p.subtasks.is_empty() && p.subtasks.iter().all(|s| s.status == SubtaskStatus::Passing)
++    });
++    let new_all_passed = !new_progress.subtasks.is_empty()
++        && new_progress.subtasks.iter().all(|s| s.status == SubtaskStatus::Passing);
++
++    if new_all_passed && !old_all_passed {
++        notify_pr_created(app, issue_number);
++    }
++}
++
+ #[cfg(unix)]
+ async fn emit_iteration_progress(app: &tauri::AppHandle) {
+     let (project_path, issue_number) = {
+@@ -897,7 +1023,7 @@ async fn emit_iteration_progress(app: &tauri::AppHandle) {
+         _ => return,
+     };
+ 
+-    let should_emit = {
++    let (should_emit, old_progress) = {
+         let state = get_run_state();
+         let mut state_guard = state.lock().await;
+         let Some(process) = state_guard.process.as_mut() else {
+@@ -907,14 +1033,16 @@ async fn emit_iteration_progress(app: &tauri::AppHandle) {
+             return;
+         }
+         if process.last_progress.as_ref() == Some(&progress) {
+-            false
++            (false, None)
+         } else {
++            let old = process.last_progress.clone();
+             process.last_progress = Some(progress.clone());
+-            true
++            (true, old)
+         }
+     };
+ 
+     if should_emit {
++        check_and_notify_progress(app, issue_number, old_progress.as_ref(), &progress);
+         let _ = app.emit(
+             "iteration-progress",
+             &IterationProgressEvent {
+@@ -2001,6 +2129,12 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
+         // Check if we were killed by stop_run
+         let was_killed = get_was_killed().swap(false, Ordering::SeqCst);
+ 
++        // Capture issue_number before clearing process state
++        let issue_number = {
++            let state_guard = state_clone.lock().await;
++            state_guard.process.as_ref().map(|p| p.issue_number)
++        };
++
+         // Clear the process state
+         {
+             let mut state_guard = state_clone.lock().await;
+@@ -2024,6 +2158,14 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
+                 },
+             };
+ 
++            // Send failure notification for abnormal exit (non-zero exit code)
++            let is_failure = exit_event.exit_code != Some(0);
++            if is_failure {
++                if let Some(issue_num) = issue_number {
++                    notify_run_failure(&app_clone, issue_num, exit_event.exit_code);
++                }
++            }
++
+             let _ = app_clone.emit("run-exit", &exit_event);
+         }
+     });
+@@ -2966,6 +3108,7 @@ pub fn run() {
+     tauri::Builder::default()
+         .plugin(tauri_plugin_opener::init())
+         .plugin(tauri_plugin_dialog::init())
++        .plugin(tauri_plugin_notification::init())
+         .plugin(tauri_plugin_store::Builder::default().build())
+         .setup(move |app| {
+             let handle = app.handle().clone();
+@@ -3763,12 +3906,14 @@ mod tests {
+                 {
+                     "number": 42,
+                     "title": "feat: add login page",
++                    "state": "OPEN",
+                     "headRefName": "feature/login",
+                     "body": "Implements the login UI"
+                 },
+                 {
+                     "number": 43,
+                     "title": "fix: correct date format",
++                    "state": "CLOSED",
+                     "headRefName": "bugfix/date",
+                     "body": ""
+                 }
+@@ -3782,6 +3927,7 @@ mod tests {
+             GhPullRequest {
+                 number: 42,
+                 title: "feat: add login page".to_string(),
++                state: "OPEN".to_string(),
+                 head_ref_name: "feature/login".to_string(),
+                 body: "Implements the login UI".to_string(),
+             }
+diff --git a/desktop_app/src/components/AppShell.tsx b/desktop_app/src/components/AppShell.tsx
+index ccb75fb..3fa770e 100644
+--- a/desktop_app/src/components/AppShell.tsx
++++ b/desktop_app/src/components/AppShell.tsx
+@@ -1,7 +1,63 @@
+-import { Outlet } from "react-router-dom";
++import { useEffect } from "react";
++import { Outlet, useNavigate } from "react-router-dom";
+ import Sidebar from "./Sidebar";
+ 
++async function requestNotificationPermission() {
++  try {
++    const { requestPermission } = await import(
++      "@tauri-apps/plugin-notification"
++    );
++    await requestPermission();
++  } catch {
++    // Non-Tauri environment or permission already denied — ignore
++  }
++}
++
++async function setupNotificationClickHandler(navigate: ReturnType<typeof useNavigate>) {
++  try {
++    const { onAction } = await import("@tauri-apps/plugin-notification");
++    const { getCurrentWindow } = await import("@tauri-apps/api/window");
++
++    await onAction((notification) => {
++      // Bring the app window to the foreground
++      const mainWindow = getCurrentWindow();
++      mainWindow.show();
++      mainWindow.setFocus();
++
++      // Optionally navigate based on notification type
++      if (notification.extra) {
++        const type = notification.extra["type"] as string | undefined;
++        const issueNumber = notification.extra["issue_number"];
++
++        if (type && issueNumber != null) {
++          switch (type) {
++            case "iteration_complete":
++            case "passing_score":
++              navigate(`/issues?issue=${issueNumber}`);
++              break;
++            case "pr_created":
++              navigate(`/history?issue=${issueNumber}`);
++              break;
++            case "run_failure":
++              navigate(`/issues?issue=${issueNumber}`);
++              break;
++          }
++        }
++      }
++    });
++  } catch {
++    // Non-Tauri environment — ignore
++  }
++}
++
+ function AppShell() {
++  const navigate = useNavigate();
++
++  useEffect(() => {
++    requestNotificationPermission();
++    setupNotificationClickHandler(navigate);
++  }, [navigate]);
++
+   return (
+     <div className="flex h-screen overflow-hidden bg-white text-gray-900">
+       <Sidebar />
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && ls desktop_app/src-tauri/rust-toolchain* 2>/dev/null; cat desktop_app/src-tauri/rust-toolchain* 2>/dev/null; grep -r 'channel' desktop_app/src-tauri/rust-toolchain* 2>/dev/null
+zsh:1: no matches found: desktop_app/src-tauri/rust-toolchain*
+zsh:1: no matches found: desktop_app/src-tauri/rust-toolchain*
+zsh:1: no matches found: desktop_app/src-tauri/rust-toolchain*
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri && cargo check 2>&1 | tail -20
+warning: desktop_app@0.1.0: Runtime resources prepared (version 0.1.0)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.64s
+[0m
+Now let me read the key source files and run the compilation checks.
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && ls desktop_app/src/__tests__ desktop_app/src/*.test.* desktop_app/src/*.spec.* 2>/dev/null; find desktop_app -name "*.test.*" -o -name "*.spec.*" -o -name "__tests__" -type d 2>/dev/null | head -10
+zsh:1: no matches found: desktop_app/src/*.test.*
+desktop_app/node_modules/.pnpm/gensync@1.0.0-beta.2/node_modules/gensync/test/index.test.js
+desktop_app/node_modules/.pnpm/json-schema-traverse@0.4.1/node_modules/json-schema-traverse/spec/index.spec.js
+desktop_app/node_modules/gensync/test/index.test.js
+desktop_app/node_modules/json-schema-traverse/spec/index.spec.js
+desktop_app/tests/iterationStore.test.mjs
+desktop_app/tests/scoreTrendChart.test.mjs
+desktop_app/tests/runStore.test.mjs
+desktop_app/tests/iterationProgressPanel.test.mjs
+desktop_app/tests/logViewerStore.test.mjs
+desktop_app/tests/iterationProgressView.test.mjs
+[0m
+[0m→ [0mRead desktop_app/tests
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri && cargo clippy -- -D warnings 2>&1 | tail -20
+Compiling desktop_app v0.1.0 (/Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri)
+warning: desktop_app@0.1.0: Runtime resources prepared (version 0.1.0)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.34s
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && grep -r "notification\|onAction\|click" desktop_app/tests/ --include="*.mjs" -l 2>/dev/null
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && cat tests/runConfigStore.test.mjs 2>/dev/null | head -40
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  createRunConfigStore,
+  DEFAULT_CONTINUE_MODE,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PASSING_SCORE,
+  RUN_CONFIG_STORE_KEY,
+  sanitizeRunConfig,
+} from '../src/stores/runConfigStore.ts';
+
+function createMemoryStorage(initialState = {}) {
+  const data = new Map(Object.entries(initialState));
+
+  return {
+    getItem: (name) => data.get(name) ?? null,
+    setItem: (name, value) => {
+      data.set(name, value);
+    },
+    removeItem: (name) => {
+      data.delete(name);
+    },
+    dump: () => Object.fromEntries(data.entries()),
+  };
+}
+
+test('runConfigStore exposes required default values', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  assert.equal(store.getState().maxIterations, DEFAULT_MAX_ITERATIONS);
+  assert.equal(store.getState().passingScore, DEFAULT_PASSING_SCORE);
+  assert.equal(store.getState().continueMode, DEFAULT_CONTINUE_MODE);
+});
+
+test('runConfigStore clamps numeric setters to accepted ranges', () => {
+  const storage = createMemoryStorage();
+  const store = createRunConfigStore({ storage });
+
+  store.getState().setMaxIterations(0);
+[0m
+[0m→ [0mRead desktop_app/src/components/AppShell.tsx
+Now I have all the information needed. Let me compile the review.
+
+## 审核报告
+
+### Issue
+- 编号: #40
+- 当前子任务: T-002 - Implement notification click-to-focus behavior
+
+### 总体评价
+
+**评分: 85/100**
+
+T-002 的核心功能已实现：`onAction` 回调中调用了 `getCurrentWindow().show()` 和 `setFocus()`，并基于 `notification.extra` 的 `type` 和 `issue_number` 实现了页面路由导航。`cargo check` 和 `cargo clippy` 均通过。存在几个需要修复的问题。
+
+---
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 85 | 29.75 |
+| 测试质量 | 25% | 70 | 17.50 |
+| 代码质量 | 20% | 90 | 18.00 |
+| 安全性 | 10% | 100 | 10.00 |
+| 性能 | 10% | 100 | 10.00 |
+| **总分** | | | **85.25 → 85** |
+
+---
+
+### 严重问题 (必须修复)
+
+**问题 1: 缺失 window show/setFocus 权限声明**
+
+`desktop_app/src-tauri/capabilities/default.json` 中仅添加了 `notification:default`，但未添加 `core:window:allow-show` 和 `core:window:allow-set-focus`。前端 `setupNotificationClickHandler` 中调用了 `mainWindow.show()` 和 `mainWindow.setFocus()`，如果 `core:default` 不包含这两个权限，点击通知后将无法将窗口带到前台。
+
+建议在 `default.json` 中显式添加：
+```json
+"core:window:allow-show",
+"core:window:allow-set-focus"
+```
+
+**问题 2: 缺少测试覆盖**
+
+项目已有完善的测试框架（`desktop_app/tests/` 下 13 个测试文件，使用 `node:test` + 依赖注入模式），但 T-002 的点击处理逻辑完全没有测试。`setupNotificationClickHandler` 中的路由导航逻辑（4 个分支）适合提取为纯函数并单独测试。
+
+建议将导航逻辑提取为可测试的纯函数：
+```typescript
+// 提取为纯函数
+function getNotificationNavigation(type: string, issueNumber: number): string | null {
+  switch (type) {
+    case "iteration_complete":
+    case "passing_score":
+    case "run_failure":
+      return `/issues?issue=${issueNumber}`;
+    case "pr_created":
+      return `/history?issue=${issueNumber}`;
+    default:
+      return null;
+  }
+}
+```
+
+---
+
+### 一般问题 (建议修复)
+
+**问题 3: useEffect 缺少 cleanup，onAction 可能重复注册**
+
+`AppShell.tsx:56-59` 的 `useEffect` 没有返回 cleanup 函数。在 React StrictMode 开发模式下（双渲染）或组件卸载后重新挂载时，`onAction` 可能会注册多个监听器。如果 `@tauri-apps/plugin-notification` 的 `onAction` 是累加式注册而非覆盖式，会导致一次通知点击触发多次 `navigate`。
+
+建议：
+```typescript
+useEffect(() => {
+  requestNotificationPermission();
+  const cleanup = setupNotificationClickHandler(navigate);
+  return cleanup;
+}, [navigate]);
+```
+
+`setupNotificationClickHandler` 中需要返回 `onAction` 的取消注册函数（如果 `onAction` 返回取消函数）。
+
+---
+
+### 审核结论
+
+- [x] 需要修改 — 权限问题和测试缺失需要修复后才能通过
+
+**注意**: 当前评分 85 恰好达到阈值，但上述"严重问题"必须修复。尤其是权限问题可能导致功能在 release 构建中完全失效。

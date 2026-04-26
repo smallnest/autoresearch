@@ -1,0 +1,121 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mReview Issue #40 implementation[90m Explore Agent[0m
+[0m✓ [0mReview Issue #40 implementation[90m Explore Agent[0m
+[0m→ [0mRead .autoresearch/workflows/issue-40/tasks.json
+[0m✗ [0mread failed
+[91m[1mError: [0mFile not found: /Users/chaoyuepan/ai/autoresearch/desktop_app/src/renderer/src/pages/SettingsPage.tsx
+[0m→ [0mRead .autoresearch/workflows/issue-40/log.md[90m [limit=100][0m
+Let me verify the current state directly.
+[0m✱ [0mGlob "**/SettingsPage*"[90m in . · 1 match[0m
+[0m✱ [0mGlob "**/settings*"[90m in desktop_app/src · 0 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-40/log.md[90m [offset=35][0m
+[0m→ [0mRead desktop_app/src/pages/SettingsPage.tsx
+[0m→ [0mRead desktop_app/src/stores/runConfigStore.ts
+[0m✱ [0mGrep "send_notification|notifications_enabled|set_notification_enabled|get_notification_enabled"[90m in desktop_app/src-tauri/src · 12 matches[0m
+[0m✱ [0mGrep "syncNotificationPreference|requestNotificationPermission|setupNotificationClickHandler"[90m in desktop_app/src · 6 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=885, limit=90][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1425, limit=35][0m
+[0m→ [0mRead desktop_app/src/components/AppShell.tsx[90m [limit=85][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3220, limit=25][0m
+[0m✱ [0mGrep "notif"[90m in tests · 0 matches[0m
+[0m✱ [0mGrep "notificationsEnabled|notification"[90m in desktop_app/src · 0 matches[0m
+[0m✱ [0mGrep "notification"[90m in desktop_app/src-tauri/capabilities · 1 match[0m
+[0m✱ [0mGrep "tauri-plugin-notification"[90m in desktop_app/src-tauri · 1 match[0m
+## 审核报告
+
+### Issue
+- 编号: #40
+- 标题: [desktop-app] 桌面通知系统
+- 子任务: T-003 - Add notification toggle in Settings page
+- 类型: ui
+- 迭代次数: 6 (审核)
+
+---
+
+### 总体评价
+
+**评分: 73/100**
+
+T-003 的功能实现**已基本完成**，5 项功能验收标准全部满足。核心扣分项是**测试覆盖率为零**；TypeScript/Rust 项目测试未豁免，该维度得 0 分导致总分低于 85 达标线。
+
+---
+
+### 验收标准逐项核查
+
+| # | 验收标准 | 状态 | 证据 |
+|---|---------|------|------|
+| 1 | 通知开关添加到设置页面 UI | ✅ | `SettingsPage.tsx:385-423` — 新增"通知设置"`<section>`，含 `role="switch"` 按钮、`aria-checked`、动画 thumb、状态文字 |
+| 2 | 开关状态在应用重启后持久化 | ✅ | `runConfigStore.ts:26` — `notificationsEnabled` 加入 `RunConfigValues` 接口，`partialize`(L146) 写入 `localStorage`，`merge`(L148) 反序列化时经 `sanitizeBoolean` 校验；Rust 侧通过 `set_notification_enabled`(L1443) 同步到 `app.json` |
+| 3 | 默认状态为启用 | ✅ | 前端 `DEFAULT_NOTIFICATIONS_ENABLED = true`(L20)；后端 `unwrap_or(true)`(L1437) |
+| 4 | 关闭时不发送通知 | ✅ | `send_notification()`(L900-907) 读取 `notifications_enabled`，为 `false` 时直接 `return`，所有 4 种通知类型均经过此单一守卫 |
+| 5 | 重新启用后恢复通知 | ✅ | 守卫是纯前置判断，不存持久化的 "muted" 状态；前端 `syncNotificationPreference`(AppShell.tsx:75) 在每次 toggle 变化时同步后端 |
+| 6 | Typecheck 和 lint 通过 | ❓ | 未验证 |
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 | 说明 |
+|------|------|------|------|------|
+| 正确性 | 35% | **100** | 35.0 | 5 项功能验收标准全部满足；错误处理完整（sanitizeBoolean、try/catch fallback、unwrap_or）、边界情况（非 Tauri 环境降级、store 不存在默认 true）覆盖到位 |
+| 测试质量 | 25% | **0** | 0.0 | 无任何测试。无 `send_notification` 守卫测试、无 `runConfigStore` notification 持久化测试、无 `AppShell` 同步逻辑测试。本项目测试框架完善（`node --test`、`#[cfg(test)]`），测试未豁免 |
+| 代码质量 | 20% | **90** | 18.0 | 命名清晰（`notificationsEnabled`/`setNotificationsEnabled`/`syncNotificationPreference`）、完全遵循项目既有模式（zustand persist + partialize + sanitizeRunConfig）、纯函数提取合理 |
+| 安全性 | 10% | **100** | 10.0 | 无注入风险；`sanitizeBoolean` 校验输入类型；Rust store 路径硬编码 `"app.json"`；-1 分建议：前端 `role="switch"` 仅设置 `aria-checked`，缺少配套 `aria-label`（已通过 `htmlFor`+`id` 隐式关联，可接受） |
+| 性能 | 10% | **100** | 10.0 | 守卫是 O(1) store 读取，无性能隐患；zustand persist 仅在初始化/变更时序列化，无额外开销 |
+
+**总分 = 35.0 + 0.0 + 18.0 + 10.0 + 10.0 = 73.0**
+
+---
+
+### 严重问题 (必须修复)
+
+**1. 测试覆盖率为零（正确性 → 一般，测试质量 → 严重）**
+
+`runConfigStore`、`AppShell.tsx` 中的同步逻辑、Rust `send_notification` 守卫均无任何测试。参照项目既有模式（`createRunConfigStore(deps)` 工厂 + 注入 storage），可以低成本覆盖：
+- `sanitizeRunConfig` 对 `notificationsEnabled` 的 boolean 校验
+- `setNotificationsEnabled` 的合法性守卫
+- 持久化 → 反序列化 → hydration 全链路
+- Rust `send_notification` 守卫的 `false`/`missing`/`true` 三种分支
+
+**2. Typecheck/Lint 未验证（正确性 → 一般）**
+
+验收标准第 6 项（`npx tsc --noEmit` / `npx eslint`）未执行，不对其做有罪推定，但低分报告需声明此状态。
+
+---
+
+### 一般问题 (建议修复)
+
+无。
+
+---
+
+### 建议改进 (可选)
+
+- `runConfigStore.ts` 中的重置函数 (`reset`) 目前重置为 `DEFAULT_CONFIG`（含 `notificationsEnabled: true`），这个行为符合预期，但前端在第一次初始化 Rust store 时可能不同步——建议 `reset()` 后也调用一次 `syncNotificationPreference(true)`。非阻塞。
+
+---
+
+### 审核结论
+
+- [ ] **需要修改** — 评分 73/100 < 85
+
+**提升路径**: `0 → 100`（测试质量）→ 总分 `73 → 98`。主要障碍是测试覆盖不足。建议实现者为 T-003 代码补充单元测试（store 持久化 + Rust 守卫逻辑），然后重新提交审核。
+
+---
+
+### 实现者自检确认
+
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+> 自检未完全确认：Typecheck/lint 执行情况未知；测试覆盖率为零。
+
+---
+
+## Learnings
+
+- **模式**: T-003 的前端持久化方案完全复用了 `runConfigStore` 现有的 zustand `persist` + `sanitizeBoolean` + `partialize` + `merge` 模式，后端子任务应优先遵循此既有架构而非另起炉灶。
+- **踩坑**: 功能实现全部集中在工作区未提交，区分子任务归属需通过 `tasks.json` 的 `passes` 状态 + `git diff` 文件范围交叉验证。T-003 代码存在于同一组未提交变更中。
+- **经验**: UI 类型子任务的审核不应仅看渲染层——`AppShell.tsx` 中的 `syncNotificationPreference` 和 `requestNotificationPermission` 是 T-003 的关键集成逻辑，审核时必须覆盖。

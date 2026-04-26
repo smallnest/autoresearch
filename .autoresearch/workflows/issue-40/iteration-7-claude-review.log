@@ -1,0 +1,107 @@
+现在我已全面了解。让我来整理审核报告。
+
+## 审核报告
+
+### Issue
+- 编号: #40
+- 标题: [desktop-app] 桌面通知系统
+- 迭代次数: 7
+- 当前子任务: T-003 - Add notification toggle in Settings page
+
+---
+
+### 总体评价
+
+**评分: 88/100**
+
+T-003 的实现完整覆盖了全部 6 项验收标准。前端 UI 开关、zustand 持久化、前后端同步、Rust 端过滤逻辑均已就位，且 TypeScript 类型检查和 ESLint 零错误，Rust 编译通过。存在少量可改进项但不影响功能正确性。
+
+---
+
+### 验收标准逐项核查
+
+| # | 验收标准 | 状态 | 证据 |
+|---|---------|------|------|
+| 1 | Notification toggle added to Settings page UI | 通过 | `SettingsPage.tsx:385-423` — 独立"通知设置"section，含 `role="switch"` toggle 按钮 |
+| 2 | Toggle state persisted across app restarts | 通过 | `runConfigStore.ts:20,26,45,89,123,146` — `notificationsEnabled` 通过 zustand `persist` + `partialize` + `merge` 持久化到 localStorage |
+| 3 | Default state is enabled (notifications on) | 通过 | `runConfigStore.ts:20` — `DEFAULT_NOTIFICATIONS_ENABLED = true`；Rust 端 `lib.rs:1437` — `unwrap_or(true)` |
+| 4 | When disabled, no system notifications are sent from Rust side | 通过 | `lib.rs:900-907` — `send_notification` 在发送前检查 `notifications_enabled`，为 `false` 时提前 return |
+| 5 | When re-enabled, notifications resume | 通过 | 前端 `AppShell.tsx:74-76` 在 `notificationsEnabled` 变化时调用 `syncNotificationPreference` → Rust `set_notification_enabled`；`send_notification` 的 check 逻辑对 `true` 不拦截 |
+| 6 | Typecheck and lint pass | 通过 | `npx tsc --noEmit` 零错误，ESLint 零错误，`cargo check` 通过 |
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 1: 前端与 Rust 端的持久化存储不统一
+
+**位置**: `runConfigStore.ts` vs `lib.rs:1431-1448`
+
+**问题描述**:
+前端通知偏好通过 zustand persist 存储在浏览器 localStorage（key `autoresearch-run-config`），而 Rust 端的 `send_notification` 检查的是 Tauri Store（`app.json` 中的 `notifications_enabled`）。两者是不同的存储后端。前端通过 `AppShell.tsx` 的 `syncNotificationPreference` 调用 `set_notification_enabled` 将值同步到 Rust 端，但这依赖应用启动后的 `useEffect` 执行。如果应用在 `useEffect` 执行前就触发了 `send_notification`（例如自动恢复运行），Rust 端会读取 `app.json` 中的旧值，可能与 localStorage 中的最新值不一致。
+
+**影响**: 边界情况下可能出现短暂的偏好不一致，但正常运行流程中 `AppShell` 挂载后立即同步，实际风险较低。
+
+**建议**: 可在 `send_notification` 中添加注释说明这个设计决策；或在 Rust 端 `set_notification_enabled` 时也同步写 localStorage（但跨端写入 localStorage 并非标准做法，当前方案已可接受）。
+
+---
+
+#### 问题 2: `requestNotificationPermission` 在禁用时不请求权限，但切换为启用后未重新请求
+
+**位置**: `AppShell.tsx:68-71`
+
+**问题描述**:
+当 `notificationsEnabled` 从 `false` 切换为 `true` 时，`useEffect` 会重新执行 `requestNotificationPermission(notificationsEnabled)`，该函数在 `notificationsEnabled` 为 `true` 时确实会调用 `requestPermission()`。但操作系统的通知权限对话框通常只弹出一次，如果用户之前已拒绝，切换 toggle 不会重新弹出系统权限对话框，用户可能困惑。
+
+**影响**: 低。这是操作系统级别的行为限制，非代码缺陷。
+
+---
+
+### 建议改进 (可选)
+
+- Settings page 的通知开关使用的是自定义 `<button role="switch">`，考虑引入 `@headlessui` 或 `@radix-ui` 的 Switch 组件以获得更好的可访问性支持（键盘操作、ARIA 属性等）。当前实现已包含 `role="switch"` 和 `aria-checked`，基本可访问性已满足。
+- `send_notification` 中的 store 查询是同步的，每次发送通知都会打开 store。可考虑在 Rust 端使用 `Arc<Mutex<bool>>` 缓存偏好值，由 `set_notification_enabled` 更新，避免重复 store 读取开销。但当前通知频率低，性能影响可忽略。
+
+---
+
+### 代码质量评价
+
+**前端**:
+- `runConfigStore.ts` 完整遵循了既有 zustand 持久化模式：接口扩展 → 默认值常量 → setter → `sanitizeBoolean` → `partialize` → `merge`，与 `continueMode` 实现完全对称。
+- `SettingsPage.tsx` 的通知 section 样式与现有 section（运行参数、Agent 配置）保持一致。
+- Toggle 使用 `role="switch"` + `aria-checked`，可访问性基本达标。
+
+**Rust 端**:
+- `send_notification` 的偏好检查逻辑简洁，使用 `if let` 链处理 store 读取可能失败的情况，且默认放行（store 读取失败时不阻止通知），符合"默认启用"语义。
+- `get_notification_enabled` / `set_notification_enabled` 遵循了项目已有的 Tauri Store 访问模式。
+
+---
+
+### 安全性评价
+
+- 通知偏好的读写不涉及敏感数据。
+- `set_notification_enabled` 通过 Tauri 命令暴露，仅接受 `bool` 类型，无注入风险。
+- `send_notification` 的 store 查询使用 Tauri 官方 Store API，无路径遍历风险。
+
+---
+
+### 测试质量评价
+
+**测试质量维度已豁免**。此子任务为 UI 类型，主要涉及 React 组件渲染、zustand store 持久化和 Tauri 命令集成。项目无针对 UI 组件的浏览器测试框架，且 `runConfigStore` 的 `sanitizeBoolean` 已被既有测试覆盖。Rust 端的 `send_notification` 是副作用函数（调用系统通知 API），单元测试需要 mock Tauri AppHandle，当前项目未建立此 mock 基础设施。
+
+---
+
+### 审核结论
+
+- [x] 通过 - 代码质量达标，可以进入 UI 截图验证
+
+**下一步行动**:
+代码审核通过，可进行浏览器截图验证以确认 UI 渲染正确。
+
+---
+
+## Learnings
+
+- **模式**: T-003 的前端持久化完全复用了 `runConfigStore` 的 zustand `persist` + `sanitizeBoolean` + `partialize` + `merge` 模式，后端通过 `AppShell.tsx` 的 `syncNotificationPreference` 同步到 Rust Store。这种"前端 zustand 持久化 + useEffect 同步到 Rust"的双写模式在偏好设置类功能中可复用。
+- **经验**: 前后端偏好存储不统一（localStorage vs Tauri Store `app.json`）时，同步时机依赖 React `useEffect`，在应用启动早期或异常退出场景可能出现短暂不一致。后续类似需求可考虑统一存储后端或添加初始化同步逻辑。
+- **踩坑**: `send_notification` 中的偏好检查使用 `if let` 链，在 store 读取失败时默认放行（不阻止通知），这与 `get_notification_enabled` 的 `unwrap_or(true)` 语义一致，但与 `set_notification_enabled` 写入成功后的行为可能有微妙差异——如果 store 文件损坏，`send_notification` 仍会发通知，而 `get_notification_enabled` 返回 `true`，两者行为一致。

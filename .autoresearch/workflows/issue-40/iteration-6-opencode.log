@@ -1,0 +1,78 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue #40 code[90m Explore Agent[0m
+I'll analyze the review feedback and explore the codebase to create a comprehensive plan.
+[0m✓ [0mExplore Issue #40 code[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/tests/runConfigStore.test.mjs
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+Let me examine the existing test patterns more closely.
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3200][0m
+[0m✱ [0mGrep "#\[cfg\(test\)\]"[90m in desktop_app/src-tauri/src · 1 match[0m
+Let me check the Rust test patterns.
+Now I have a thorough understanding of the codebase. Let me present the analysis and plan.
+
+---
+
+## Analysis
+
+The review scored **73/100** (failing), with the root cause being **zero test coverage** (25% weight → 0 points). The implementation itself is **correct** (100/100 correctness, 90/100 code quality).
+
+### What needs test coverage
+
+| Layer | What exists | What's missing |
+|-------|-------------|----------------|
+| `runConfigStore.ts` | Tests for `maxIterations`, `passingScore`, `continueMode` | No tests for `notificationsEnabled` default, setter, persistence, sanitization |
+| `SettingsPage.tsx` notification section | Source-level tests for other UI sections | No assertion that notification toggle JSX is rendered |
+| Rust `send_notification` guard | No Tauri integration test infra exists | Guard is fundamentally tied to `tauri::AppHandle` — not unit-testable like pure functions |
+
+### Constraints
+
+- `send_notification` / `get_notification_enabled` / `set_notification_enabled` all depend on `tauri::AppHandle` + `tauri_plugin_store`, **cannot** be unit-tested with `#[cfg(test)]` in the current setup
+- `AppShell.tsx`'s `syncNotificationPreference`, `requestNotificationPermission`, `setupNotificationClickHandler` use dynamic `import()` from Tauri modules — not testable via `node --test`
+- The existing test pattern for frontend is pure-function/store tests via `node --test --experimental-strip-types`
+
+---
+
+## Plan
+
+### Task 1: Add `notificationsEnabled` tests to `runConfigStore.test.mjs`
+
+Add these test cases following the existing pattern:
+
+1. **Default value** — assert `notificationsEnabled` is `true` on store creation
+2. **Setter** — `setNotificationsEnabled(false)` then verify state, then toggle back
+3. **Persistence** — set `notificationsEnabled = false`, verify it appears in `partialize` output
+4. **Sanitization during hydration** — persisted `"notificationsEnabled": "non-boolean"` falls back to default `true`
+5. **`sanitizeRunConfig` with non-boolean** — `{ notificationsEnabled: 'false' }` → defaults to `true`
+6. **Reset** — after setting `false`, `reset()` restores to `true`
+
+### Task 2: Add source-level assertion test for SettingsPage notification toggle
+
+Add a test file (or add to an existing one) that:
+- Reads `SettingsPage.tsx` source
+- Asserts the notification section `<section>` with "通知设置" heading exists
+- Asserts the `<button role="switch">` with `aria-checked={notificationsEnabled}` exists
+- Asserts both "通知已开启" / "通知已关闭" status text branches exist
+- Asserts `setNotificationsEnabled` is wired to `onClick`
+
+### Task 3: Verify typecheck and lint pass
+
+Run:
+```bash
+npm --prefix desktop_app run typecheck
+npm --prefix desktop_app run lint
+```
+
+### Task 4: Learnings & CLAUDE.md update
+
+Update `desktop_app/tests/CLAUDE.md` and `desktop_app/src/CLAUDE.md` with new patterns discovered.
+
+---
+
+Shall I proceed with this plan? A few things to confirm:
+
+1. **Rust notification guard**: Since `send_notification` requires Tauri runtime (`AppHandle` + plugin store), it cannot be unit-tested with `#[cfg(test)]`. The existing project doesn't have Tauri integration test infrastructure. The frontend store tests + source assertions cover the notification toggle's correctness from both sides. Does this approach sound acceptable?
+
+2. **No DOM test infrastructure**: `SettingsPage.tsx`'s notification toggle interaction (`setNotificationsEnabled` when clicked) can only be verified via source-level string assertion (checking the JSX has the correct wiring), not through DOM interaction. This matches the project's existing pattern.

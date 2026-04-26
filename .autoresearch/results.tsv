@@ -47,3 +47,4 @@
 2026-04-26T12:37:35+08:00	88	[desktop-app] 将 run.sh 及依赖库打包到桌面应用中并在初始化时自动安装	completed	13	false	86	86	feature/issue-88	
 2026-04-26T16:11:32+08:00	83	[desktop-app] 应用图标设计与 macOS DMG 安装包打包	completed	6	false	94	94	feature/issue-83	
 2026-04-26T19:00:47+08:00	39	[desktop-app] 系统托盘集成	completed	6	false	91	91	feature/issue-39	
+2026-04-26T20:45:07+08:00	40	[desktop-app] 桌面通知系统	completed	7	false	88	88	feature/issue-40	

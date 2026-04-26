@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import AgentSelector from '../components/AgentSelector';
 import RunConfigPanel from '../components/RunConfigPanel';
 import { useProjectStore } from '../stores/projectStore';
+import { useRunConfigStore } from '../stores/runConfigStore';
 import { normalizeUserFacingError } from '../stores/uiError';
 import {
   buildConfigEditorViewModel,
@@ -30,6 +31,7 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
 
 function SettingsPage() {
   const { projectPath, refreshConfig } = useProjectStore();
+  const { notificationsEnabled, setNotificationsEnabled } = useRunConfigStore();
   const [activeFileId, setActiveFileId] = useState<ConfigFileId>('program.md');
   const [currentFile, setCurrentFile] = useState<ConfigFileContent | null>(null);
   const [editorContent, setEditorContent] = useState('');
@@ -377,6 +379,46 @@ function SettingsPage() {
             collapsed={runConfigCollapsed}
             onCollapsedChange={setRunConfigCollapsed}
           />
+        </div>
+      </section>
+
+      <section className="max-w-3xl bg-white border border-gray-200 rounded-xl shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold mb-2">通知设置</h2>
+          <p className="text-sm text-gray-500">
+            控制是否在任务完成、质量通过或失败时发送系统通知。
+          </p>
+        </div>
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <label
+                htmlFor="notificationsEnabled"
+                className="text-sm font-medium text-gray-700"
+              >
+                系统通知
+              </label>
+              <p className="text-xs text-gray-500">
+                {notificationsEnabled ? '通知已开启' : '通知已关闭'}
+              </p>
+            </div>
+            <button
+              type="button"
+              id="notificationsEnabled"
+              role="switch"
+              aria-checked={notificationsEnabled}
+              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                notificationsEnabled ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </section>
 

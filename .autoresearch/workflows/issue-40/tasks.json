@@ -1,0 +1,54 @@
+{
+  "issueNumber": 40,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "Add tauri-plugin-notification and implement notification triggers for key events",
+      "description": "Add the tauri-plugin-notification dependency to both Rust (Cargo.toml) and frontend (package.json), register the plugin in the Tauri builder, add notification capability permission to capabilities/default.json, request macOS notification permission on app start, and create a notification helper module in Rust. Then wire notification sending into existing event emission points in lib.rs for: (1) iteration complete — include issue number and score, (2) passing score reached — include '质量通过' message, (3) PR created — include issue number, (4) failure/exception exit — include error info. Each notification must contain relevant key information (issue number, score, etc.).",
+      "acceptanceCriteria": [
+        "tauri-plugin-notification added to Cargo.toml and package.json",
+        "Plugin registered in Tauri builder and notification capability added to default.json",
+        "macOS notification permission requested on app start",
+        "Notification sent when iteration completes (includes issue number + score)",
+        "Notification sent when passing score is reached (includes '质量通过')",
+        "Notification sent when PR is created (includes issue number)",
+        "Notification sent on failure/exception exit (includes error info)",
+        "All notifications contain key info (issue number, score, etc.)",
+        "cargo check and cargo clippy pass"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-002",
+      "title": "Implement notification click-to-focus behavior",
+      "description": "Handle notification click events so that when a user clicks a desktop notification, the app window is brought to the foreground. This involves using tauri-plugin-notification's click handler and Tauri's window API to show/focus the main window. Optionally navigate to the relevant page based on notification type (e.g., Dashboard for iteration events, PR page for PR created notifications).",
+      "acceptanceCriteria": [
+        "Clicking a notification brings the app window to the foreground",
+        "Window is shown and focused even if previously minimized/hidden",
+        "Notification click handler properly receives notification data",
+        "cargo check and cargo clippy pass"
+      ],
+      "priority": 2,
+      "type": "code",
+      "passes": true
+    },
+    {
+      "id": "T-003",
+      "title": "Add notification toggle in Settings page",
+      "description": "Add a notification enabled/disabled toggle switch in the SettingsPage.tsx. Persist the notification preference (e.g., in runConfigStore or a new dedicated store via localStorage). Pass the preference to the Rust backend so that notifications are only sent when enabled. When disabled, the notification helper in Rust should skip sending. The toggle should default to enabled.",
+      "acceptanceCriteria": [
+        "Notification toggle added to Settings page UI",
+        "Toggle state persisted across app restarts",
+        "Default state is enabled (notifications on)",
+        "When disabled, no system notifications are sent from Rust side",
+        "When re-enabled, notifications resume",
+        "Typecheck and lint pass (npx tsc --noEmit, npx eslint)"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": true
+    }
+  ]
+}
