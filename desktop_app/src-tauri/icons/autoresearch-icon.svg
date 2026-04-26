@@ -10,14 +10,30 @@
       <stop offset="0.48" stop-color="#ffffff" stop-opacity="0.18"/>
       <stop offset="1" stop-color="#49f5d0" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="loop" x1="230" y1="260" x2="790" y2="780" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#13d7b6"/>
-      <stop offset="0.45" stop-color="#10bfe9"/>
-      <stop offset="1" stop-color="#2778ff"/>
+    <linearGradient id="loop" x1="250" y1="260" x2="780" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#21d6ad"/>
+      <stop offset="0.46" stop-color="#12c4df"/>
+      <stop offset="1" stop-color="#246ff2"/>
+    </linearGradient>
+    <linearGradient id="rimLight" x1="330" y1="390" x2="620" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.24" stop-color="#ffffff" stop-opacity="0.48"/>
+      <stop offset="0.58" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
     <filter id="softShadow" x="-18%" y="-18%" width="136%" height="140%" color-interpolation-filters="sRGB">
       <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#1b6678" flood-opacity="0.22"/>
     </filter>
+    <mask id="upperArcMask" maskUnits="userSpaceOnUse">
+      <rect width="1024" height="1024" fill="black"/>
+      <path
+        d="M270 536c0-136 110-246 246-246 56 0 108 19 149 50"
+        fill="none"
+        stroke="white"
+        stroke-width="82"
+        stroke-linecap="round"
+      />
+    </mask>
   </defs>
 
   <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
@@ -25,37 +41,42 @@
 
   <g filter="url(#softShadow)">
     <path
-      d="M266 535c0-136 110-246 246-246 55 0 106 18 147 48"
+      d="M270 536c0-136 110-246 246-246 56 0 108 19 149 50"
       fill="none"
       stroke="url(#loop)"
-      stroke-width="76"
+      stroke-width="82"
       stroke-linecap="round"
     />
     <path
-      d="M758 489c0 136-110 246-246 246-55 0-106-18-147-48"
+      d="M754 488c0 136-110 246-246 246-56 0-108-19-149-50"
       fill="none"
       stroke="url(#loop)"
-      stroke-width="76"
+      stroke-width="82"
       stroke-linecap="round"
     />
     <path
-      d="M690 270l8 138-132-38"
+      d="M692 272l8 142-135-41"
       fill="none"
       stroke="url(#loop)"
-      stroke-width="76"
+      stroke-width="82"
       stroke-linecap="round"
       stroke-linejoin="round"
     />
     <path
-      d="M334 754l-8-138 132 38"
+      d="M332 752l-8-142 135 41"
       fill="none"
       stroke="url(#loop)"
-      stroke-width="76"
+      stroke-width="82"
       stroke-linecap="round"
       stroke-linejoin="round"
+    />
+    <path
+      d="M334 398c45-45 108-70 176-69 39 1 76 10 109 27"
+      fill="none"
+      stroke="url(#rimLight)"
+      stroke-width="17"
+      stroke-linecap="round"
+      mask="url(#upperArcMask)"
     />
   </g>
-
-  <circle cx="512" cy="512" r="112" fill="#ffffff" opacity="0.96" filter="url(#softShadow)"/>
-  <circle cx="512" cy="512" r="44" fill="#0e7f92"/>
 </svg>
