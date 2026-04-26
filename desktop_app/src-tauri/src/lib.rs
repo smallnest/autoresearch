@@ -116,6 +116,7 @@ struct IssueDetail {
 struct GhPullRequest {
     number: i64,
     title: String,
+    state: String,
     #[serde(rename = "headRefName")]
     head_ref_name: String,
     body: String,
@@ -1576,9 +1577,9 @@ fn list_prs_sync(project_path: &str) -> Result<Vec<GhPullRequest>, String> {
             "pr",
             "list",
             "--state",
-            "open",
+            "all",
             "--json",
-            "number,title,headRefName,body",
+            "number,title,state,headRefName,body",
         ])
         .current_dir(base)
         .output()

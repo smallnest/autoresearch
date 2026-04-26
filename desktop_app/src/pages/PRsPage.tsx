@@ -120,6 +120,39 @@ function FileChangeRow({ file }: { file: PrFileChange }): JSX.Element {
   );
 }
 
+// Collapsible file change list
+function FileChangeList({ files }: { files: PrFileChange[] }): JSX.Element {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-gray-500 font-medium mb-2 hover:text-gray-700 transition-colors"
+      >
+        <svg
+          className={`w-3.5 h-3.5 transition-transform ${expanded ? '' : '-rotate-90'}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+        文件变更列表
+        <span className="text-gray-400">({files.length})</span>
+      </button>
+      {expanded && (
+        <div className="bg-white rounded-md border border-gray-200 divide-y divide-gray-100">
+          {files.map((file) => (
+            <FileChangeRow key={file.path} file={file} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // PR list item with expandable detail
 function PRListItem({
   pr,
@@ -168,6 +201,13 @@ function PRListItem({
               <span className="text-xs text-gray-500 font-mono">
                 #{pr.number}
               </span>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${
+                pr.state === 'OPEN'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : 'bg-purple-50 text-purple-700 border-purple-200'
+              }`}>
+                {pr.state === 'OPEN' ? '开启' : '已关闭'}
+              </span>
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                 {pr.headRefName}
               </span>
@@ -195,7 +235,8 @@ function PRListItem({
       {/* Expanded file list and diff */}
       {isSelected && (
         <div className="border-t border-gray-200 bg-gray-50/50 px-4 py-3">
-          {/* Action buttons */}
+          {/* Action buttons — only for open PRs */}
+          {pr.state === 'OPEN' && (
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={(e) => { e.stopPropagation(); onMerge(); }}
@@ -232,6 +273,7 @@ function PRListItem({
               关闭
             </button>
           </div>
+          )}
 
           {detailLoading || diffLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -262,14 +304,7 @@ function PRListItem({
             <>
               {/* File change summary */}
               {detail && detail.files.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2 font-medium">文件变更列表</p>
-                  <div className="bg-white rounded-md border border-gray-200 divide-y divide-gray-100">
-                    {detail.files.map((file) => (
-                      <FileChangeRow key={file.path} file={file} />
-                    ))}
-                  </div>
-                </div>
+                <FileChangeList files={detail.files} />
               )}
 
               {/* Diff viewer */}

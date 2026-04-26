@@ -15,6 +15,7 @@ async function tauriInvoke<T>(
 export interface GhPullRequest {
   number: number;
   title: string;
+  state: string;
   headRefName: string;
   body: string;
 }
