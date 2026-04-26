@@ -1,0 +1,113 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore T-002 codebase state[90m Explore Agent[0m
+[0m✓ [0mExplore T-002 codebase state[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src/stores/agentStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/runtimeStore.ts
+Let me verify the implementation by reading the actual files.
+[0m✱ [0mGlob "desktop_app/tests/*agent*"[90m 0 matches[0m
+[0m✱ [0mGlob ".autoresearch/workflows/issue-93/tasks.json"[90m 1 match[0m
+[0m→ [0mRead desktop_app/src/components/AgentSelector.tsx
+Now let me check the existing test files and the rust backend integration point, and look for the `tasks.json` to confirm subtask progress.
+[0m→ [0mRead .autoresearch/workflows/issue-93/tasks.json
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/main.tsx
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=1, limit=10][0m
+[0m✱ [0mGrep "agentStore"[90m in desktop_app/src · 2 matches[0m
+[0m✱ [0mGrep "agentStore|AgentStore|agent_store"[90m in desktop_app/tests · 0 matches[0m
+以下是 T-002 实现审核结果：
+
+---
+
+## 审核报告
+
+### Issue
+- **编号**: #93
+- **标题**: Desktop app startup checks for required CLI tools
+- **子任务**: T-002 — 前端启动检测与 agent 状态集成
+- **迭代次数**: 3
+
+### 总体评价
+
+**评分: 87/100** — 达标
+
+### 验收条件逐项核查
+
+| # | 验收条件 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | 应用启动时自动调用 `detect_cli_tools` 并更新 store | **通过** | `DashboardPage.tsx:714-720` 的 `useEffect` 中调用了 `initializeFromDetection()` |
+| 2 | `installedAgents` 记录每个 agent 的安装状态和路径 | **通过** | `agentStore.ts:56` 定义，`AgentInstallStatus` 含 `installed` + `path` |
+| 3 | 首次启动时仅自动选中已安装的 agent，顺序 claude > codex > opencode | **通过** | `agentStore.ts:186-193` 遍历 `AVAILABLE_AGENTS`（即 `[claude, codex, opencode]`），`selectedAgents.length === 0` 时筛选已安装项 |
+| 4 | 非首次启动保留用户选择，标记未安装 agent 状态 | **通过** | `agentStore.ts:196-197` 仅更新 `installedAgents`/`ghInstalled`，不覆盖 `selectedAgents` |
+| 5 | `ghInstalled` 正确反映 gh CLI 安装情况 | **通过** | `agentStore.ts:58` + `:181` 读取 `result.gh.installed` |
+
+### 维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 95 | 33.25 |
+| 测试质量 | 25% | 60 | 15.00 |
+| 代码质量 | 20% | 95 | 19.00 |
+| 安全性 | 10% | 100 | 10.00 |
+| 性能 | 10% | 100 | 10.00 |
+| **总分** | **100%** | | **87.25** |
+
+### 正确性 (95/100)
+
+所有 5 条验收条件均已实现。关键设计决策正确：
+- **工厂模式** 注入 `isTauri`/`invoke` 依赖，与 `runStore.ts`、`iterationStore.ts` 保持一致
+- **partialize** 仅持久化 `selectedAgents`，`installedAgents`/`ghInstalled` 每次启动重新检测
+- **错误处理** catch 块将 `isDetecting` 置为 false 并保持现有状态，启动检测是非关键路径，失败不应影响 app 正常启动
+
+### 测试质量 (60/100)
+
+无专门的 `agentStore` 测试。虽然测试职责属于 T-004，但工厂模式使依赖注入测试已可方便实现。缺少基本的 `toggleAgent`/`reorderAgents` 边界测试和 `initializeFromDetection` 四类场景测试（gh 缺失、单 agent、多 agent、无 agent）。
+
+### 代码质量 (95/100)
+
+- 类型定义清晰，与 Rust 端 `CliToolStatus`/`CliToolsResult` 结构对齐
+- `reorderAgents` 有索引越界保护（`agentStore.ts:123-130`）
+- `AVAILABLE_AGENTS` 以 `as const` 定义，确保 `AgentId` 类型为字面量联合
+- 仅有的可改进点：`catch` 块缺少 `console.error` 日志输出，不利于调试启动阶段检测失败
+
+### 安全性 (100/100)
+
+无用户输入、无敏感数据处理，无安全问题。
+
+### 性能 (100/100)
+
+启动时单次检测，`partialize` 减少 localStorage 写入次数，无性能隐患。
+
+### 严重问题
+
+无。
+
+### 一般问题
+
+1. **缺少错误日志** (`agentStore.ts:199-202`) — `initializeFromDetection` 的 catch 块应添加 `console.error`，因启动检测失败时用户端无任何反馈，调试无头绪
+
+### 建议改进
+
+1. 考虑在非 Tauri 环境使用 mock 数据填充 `installedAgents`，使浏览器开发模式下的 AgentSelector 能展示不同安装状态而非全空
+
+### 审核结论
+
+- [x] **通过** — 评分 87/100，验收条件全部达标
+
+### 实现者自检确认
+
+- [ ] 实现者已执行编译/类型检查 — 需确认
+- [ ] 实现者已执行 Lint 检查 — 需确认
+- [ ] 实现者已运行相关测试 — N/A（无 agentStore 测试）
+- [ ] 实现者已确认测试覆盖 — N/A
+
+---
+
+## Learnings
+
+- **模式**: `agentStore.ts` 遵循与 `runStore.ts` 一致的工厂模式 + zustand `persist` 中间件，注入 `isTauri`/`invoke` 依赖，新 store 应沿用此模式
+- **踩坑**: T-002 初期被评 0/100 后在同一迭代中被实现，但 `tasks.json` 的 `passes` 标记未更新，表明当次迭代的 review-repair 导致的状态同步问题
+- **经验**: 启动检测应是非关键路径 — 失败不应阻塞 app 使用。`agentStore` 的 `partialize` 设计（仅持久 `selectedAgents`）确保了「每次启动重新检测」的语义
+- **经验**: 涉及多文件的前端功能需同时检查 store、入口调用点、消费组件三端。当前 T-002 完成 store 和入口点，但 AgentSelector 消费 `installedAgents` 属于 T-003 范围

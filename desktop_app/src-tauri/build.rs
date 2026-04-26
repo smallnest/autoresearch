@@ -52,8 +52,7 @@ fn main() {
     // Generate version.txt by parsing version from tauri.conf.json
     let tauri_conf_path = manifest.join("tauri.conf.json");
     let version = if tauri_conf_path.exists() {
-        let content =
-            fs::read_to_string(&tauri_conf_path).expect("Failed to read tauri.conf.json");
+        let content = fs::read_to_string(&tauri_conf_path).expect("Failed to read tauri.conf.json");
         extract_version(&content).unwrap_or_else(|| "0.0.0".to_string())
     } else {
         "0.0.0".to_string()
@@ -72,30 +71,26 @@ fn main() {
 
 /// Copy a file only if the destination content differs.
 fn copy_if_different(src: &Path, dst: &Path) {
-    let src_content = fs::read(src).unwrap_or_else(|e| {
-        panic!("Failed to read {}: {}", src.display(), e)
-    });
+    let src_content =
+        fs::read(src).unwrap_or_else(|e| panic!("Failed to read {}: {}", src.display(), e));
     if let Ok(dst_content) = fs::read(dst) {
         if dst_content == src_content {
             return; // identical — skip to avoid touching mtime
         }
     }
-    fs::write(dst, &src_content).unwrap_or_else(|e| {
-        panic!("Failed to write {}: {}", dst.display(), e)
-    });
+    fs::write(dst, &src_content)
+        .unwrap_or_else(|e| panic!("Failed to write {}: {}", dst.display(), e));
 }
 
 /// Recursively copy a directory, only overwriting files whose content changed.
 fn copy_dir_if_different(src: &Path, dst: &Path) {
-    fs::create_dir_all(dst).unwrap_or_else(|e| {
-        panic!("Failed to create dir {}: {}", dst.display(), e)
-    });
-    for entry in fs::read_dir(src).unwrap_or_else(|e| {
-        panic!("Failed to read dir {}: {}", src.display(), e)
-    }) {
-        let entry = entry.unwrap_or_else(|e| {
-            panic!("Failed to read entry in {}: {}", src.display(), e)
-        });
+    fs::create_dir_all(dst)
+        .unwrap_or_else(|e| panic!("Failed to create dir {}: {}", dst.display(), e));
+    for entry in
+        fs::read_dir(src).unwrap_or_else(|e| panic!("Failed to read dir {}: {}", src.display(), e))
+    {
+        let entry =
+            entry.unwrap_or_else(|e| panic!("Failed to read entry in {}: {}", src.display(), e));
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
         if src_path.is_dir() {

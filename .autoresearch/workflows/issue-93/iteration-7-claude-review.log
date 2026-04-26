@@ -1,0 +1,160 @@
+## 审核报告
+
+### Issue
+- 编号: #93
+- 标题: Desktop app startup checks for required CLI tools
+- 迭代次数: 7
+- 当前子任务: T-003 - 启动检查结果 UI 展示与运行阻断
+
+---
+
+### 总体评价
+
+**评分: 71/100**
+
+T-003 的完整数据链路已打通：`agentStore.initializeFromDetection()` → `installedAgents`/`ghInstalled`/`isDetecting` → 三个消费组件（AgentSelector、IssueDetailPanel、DashboardPage）均正确读取并渲染。5 条验收条件基本满足，但存在 store 层防护缺失、前端测试空白、以及检测失败/加载态处理不严谨等问题。
+
+---
+
+### 验收条件逐项核查
+
+| # | 验收条件 | 结果 | 说明 |
+|---|----------|------|------|
+| 1 | gh 未安装时界面显示提示卡片，包含 brew install gh 安装命令 | **通过** | `DashboardPage.tsx:487-504` 显示红色警告卡片，包含 `brew install gh` 代码块 |
+| 2 | AgentSelector 中已安装 agent 正常显示，未安装 agent 显示禁用/灰色状态并标注"未安装" | **基本通过** | `AgentTag` 和 `SortableTag` 均区分 installed/uninstalled 状态，显示灰色+禁用+"未安装"标签。但 store 层 `toggleAgent` 未防护 |
+| 3 | 三个 agent 均未安装时，运行任务入口被禁用或显示明确错误引导 | **通过** | `IssueDetailPanel.tsx:235-236` `canStart` 条件加入 `hasAnyInstalledAgent`；L350-355 显示红色错误提示 |
+| 4 | 检测加载期间有适当的 loading 状态，不出现内容闪烁 | **部分通过** | AgentSelector 有骨架屏 loading（`AgentSkeletonTag`），但 DashboardPage 的 gh 警告卡片在检测期间可能短暂闪现 |
+| 5 | 安装状态变化后（如用户安装工具后重启 app）UI 正确更新 | **通过** | `DashboardPage` 的 `useEffect` 调用 `initializeFromDetection()`，重启后重新检测 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: `toggleAgent` store 层未防护未安装 agent
+
+**位置**: `desktop_app/src/stores/agentStore.ts:150-164`
+
+**问题描述**:
+`toggleAgent` 不检查 agent 是否已安装，允许将未安装的 agent 加入 `selectedAgents`。UI 层的 `handleToggle`（AgentSelector.tsx:152-155）做了防护，但 store 应是数据完整性的守门人——其他调用路径（如未来新组件、测试、或 `selectAll` 逻辑变更）可能绕过 UI 层检查。
+
+**代码片段**:
+```typescript
+toggleAgent: (_agentId: AgentId) => {
+  set((state) => {
+    const isSelected = state.selectedAgents.includes(_agentId);
+    if (isSelected) {
+      return { selectedAgents: state.selectedAgents.filter((id) => id !== _agentId) };
+    } else {
+      // 没有 installedAgents 检查！
+      return { selectedAgents: [...state.selectedAgents, _agentId] };
+    }
+  });
+},
+```
+
+**建议修复**:
+```typescript
+toggleAgent: (_agentId: AgentId) => {
+  set((state) => {
+    const isSelected = state.selectedAgents.includes(_agentId);
+    if (isSelected) {
+      return { selectedAgents: state.selectedAgents.filter((id) => id !== _agentId) };
+    } else {
+      // 仅允许选择已安装的 agent
+      if (!state.installedAgents[_agentId]?.installed) return state;
+      return { selectedAgents: [...state.selectedAgents, _agentId] };
+    }
+  });
+},
+```
+
+**原因**: Store 是唯一的数据源，数据完整性约束应在 store 层强制执行，而非依赖 UI 层的间接防护。
+
+---
+
+#### 问题 2: 前端缺少 agentStore 测试
+
+**位置**: `desktop_app/tests/` 目录下无 agentStore 相关测试
+
+**问题描述**:
+`createAgentStore` 已正确使用工厂模式+依赖注入，具备完整的可测试性，但没有测试文件。项目中有 12 个其他 store 测试文件（如 `runConfigStore.test.mjs`、`runStore.test.mjs`），但 agentStore 的新增逻辑（`initializeFromDetection`、`selectAll` 过滤逻辑、`toggleAgent` 约束）完全无测试覆盖。
+
+**建议增加**: `desktop_app/tests/agentStore.test.mjs`，覆盖以下场景：
+- `initializeFromDetection` 首次启动自动选择已安装 agent
+- `initializeFromDetection` 非首次启动保留用户选择
+- `initializeFromDetection` 检测失败不破坏已有状态
+- `selectAll` 仅选择已安装 agent
+- `toggleAgent` 不允许添加未安装 agent（修复问题 1 后）
+- 非 Tauri 环境 `initializeFromDetection` 为 no-op
+
+**原因**: `initializeFromDetection` 是核心业务逻辑，涉及异步调用、状态合并和分支处理，无测试意味着这些路径完全未验证。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: gh 警告卡片在检测加载期间可能闪现
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx:487`
+
+**问题描述**:
+`ghInstalled` 初始值为 `false`，`isDetecting` 初始值为 `false`。在 `initializeFromDetection` 中先 `set({ isDetecting: true })` 再异步获取结果，但 `DashboardPage` 的 gh 警告条件是 `ghInstalled === false`，没有检查 `isDetecting`。如果渲染恰好在 `isDetecting: true` 之后、结果返回之前，虽然 `isDetecting` 为 true 但 gh 警告卡在 ProjectInfoScreen 中不受 AgentSelector 的 loading 态保护，可能短暂闪现。
+
+**建议修复**:
+```tsx
+{ghInstalled === false && !isDetecting && (
+  // ... gh warning card
+)}
+```
+
+需要在 `ProjectInfoScreen` 中也获取 `isDetecting` 状态。
+
+**原因**: 验收条件要求"不出现内容闪烁"，加载期间显示不完整状态违反此要求。
+
+---
+
+#### 问题 4: 检测失败时状态不精确
+
+**位置**: `desktop_app/src/stores/agentStore.ts:201-205`
+
+**问题描述**:
+检测失败时（catch 块），只设置 `isDetecting: false`，但 `ghInstalled` 仍为初始值 `false`，`installedAgents` 仍为空对象 `{}`。这导致 UI 会显示"gh 未安装"和"无 agent 已安装"的错误提示，但实际情况是"检测失败，无法确定安装状态"。
+
+**建议修复**:
+```typescript
+catch {
+  // Detection failed — preserve existing detection state, just stop loading
+  set({ isDetecting: false });
+}
+```
+
+至少应在 UI 层区分"未检测到"和"检测失败"。一种方式是引入 `detectionError` 状态字段，或保留上次成功的检测结果（如果有）。
+
+**原因**: 误导性错误提示会降低用户信任，用户可能花时间安装已存在的工具。
+
+---
+
+### 建议改进 (可选)
+
+- `hasAnyInstalledAgent` 在 `IssueDetailPanel` 中每次渲染重新计算（L225-227），虽然 `AVAILABLE_AGENTS` 只有 3 个元素性能影响可忽略，但可以考虑移到 store getter 或用 `useMemo` 包裹
+- `AgentSkeletonTag` 固定渲染 3 个骨架标签，不区分实际已选 agent 数量，但作为 loading 占位可接受
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 在 `toggleAgent` 中添加未安装 agent 防护
+2. 添加 `agentStore.test.mjs` 测试文件，覆盖核心逻辑
+3. gh 警告卡片加入 `isDetecting` 条件避免闪烁
+4. 改进检测失败时的状态处理
+
+---
+
+## Learnings
+
+- **模式**: UI 消费链路验证完整后，还需确认 store 层数据约束（如 toggleAgent 防护）与 UI 层一致。Store 是唯一数据源，约束应在 store 层强制执行
+- **踩坑**: `ghInstalled` 初始值 `false` 与 `isDetecting` 初始值 `false` 的组合，在异步检测期间可能导致 UI 在非 loading 态下显示不完整的检测结果。初始态和加载态需要仔细区分
+- **经验**: 工厂模式（`createAgentStore`）的测试价值取决于是否真正编写了测试。可测试 ≠ 已测试，审核时应验证是否有对应测试文件

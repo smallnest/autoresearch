@@ -1,0 +1,61 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/agentStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m✱ [0mGlob "desktop_app/tests/*.test.mjs"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/src/stores
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src/components/AgentSelector.tsx
+[0m→ [0mRead desktop_app/src/components/IssueDetailPanel.tsx
+## 分析结果
+
+审核反馈的核心问题：**评分 79/100，低于 85 的通过线**。扣分主要在测试质量（权重 25%，得分 40）。
+
+### 需要修复的问题
+
+**1. 测试覆盖（必须修复）**
+`agentStore` 零测试覆盖，而其他 8 个 store 均有 `.test.mjs` 文件。需要新增 `desktop_app/tests/agentStore.test.mjs`，参考 `runStore.test.mjs` / `iterationStore.test.mjs` 的模式（`node --test --experimental-strip-types`，工厂注入 mock invoke）。
+
+**2. gh 警告闪烁（建议修复）**
+`DashboardPage.tsx:487` — `ghInstalled === false` 在检测完成前会先闪现红色警告卡片。加上 `isDetecting` 检查即可。
+
+---
+
+## 修复计划
+
+### Task 1: 编写 agentStore 测试
+
+**文件**: `desktop_app/tests/agentStore.test.mjs`
+
+覆盖以下核心测试点（参考 `runStore.test.mjs` 的 `createInvokeMock` 模式）：
+
+| # | 测试 | 说明 |
+|---|------|------|
+| 1 | `initializeFromDetection` 成功路径 | 正确定置 `installedAgents`/`ghInstalled`/`isDetecting` |
+| 2 | `initializeFromDetection` 非 Tauri 环境 | no-op，`isTauri: false` 时不调用 invoke |
+| 3 | `initializeFromDetection` 错误路径 | catch 后设置 `isDetecting: false`，不崩溃 |
+| 4 | auto-select 首次启动 | `selectedAgents` 为空时，按 `claude > codex > opencode` 优先级选已安装的 |
+| 5 | auto-select 非首次启动 | `selectedAgents` 非空时，保留用户选择 |
+| 6 | `selectAll` 只选已安装 agent | 过滤 `installedAgents` |
+| 7 | `selectAll` 无已安装 agent | 结果为空数组 |
+| 8 | `toggleAgent` 添加/移除 | 基本增删行为 |
+| 9 | `toggleAgent` 不能选中未安装 agent | handler 层已阻止（但这是组件层逻辑，可测 store 层 toggle 本身不限制） |
+| 10 | persist partialize 只存 `selectedAgents` | 验证 `partialize` 行为（可在 `createAgentStore` 测试中验证 storage） |
+
+### Task 2: 修复 gh 警告闪烁
+
+**文件**: `desktop_app/src/pages/DashboardPage.tsx`
+
+修改 `ProjectInfoScreen` 组件的 gh 警告条件：
+```
+- {ghInstalled === false && (
++ {!isDetecting && ghInstalled === false && (
+```
+
+从 `useAgentStore()` 中额外解构 `isDetecting`。
+
+---
+
+需要开始执行吗？

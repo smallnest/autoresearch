@@ -8,6 +8,7 @@ import {
   DEFAULT_PASSING_SCORE,
   useRunConfigStore,
 } from '../stores/runConfigStore';
+import { useAgentStore, AgentId, AVAILABLE_AGENTS } from '../stores/agentStore';
 import RunConfigPanel from './RunConfigPanel';
 import AgentSelector from './AgentSelector';
 import { buildIssueRunRequest } from './issueRunRequest';
@@ -220,6 +221,11 @@ function IssueDetailPanel({
     continueMode,
   } = useRunConfigStore();
 
+  const { installedAgents, isDetecting } = useAgentStore();
+  const hasAnyInstalledAgent = AVAILABLE_AGENTS.some(
+    (id: AgentId) => installedAgents[id]?.installed
+  );
+
   if (!issue) {
     return <EmptySelectionState />;
   }
@@ -227,7 +233,7 @@ function IssueDetailPanel({
   const isRunActive = runStatus === 'running' || runStatus === 'stopping';
   const isCurrentIssueRunning = activeIssueNumber === issue.number && isRunActive;
   const canStart =
-    Boolean(projectPath) && isSupported && !isRunActive;
+    Boolean(projectPath) && isSupported && !isRunActive && hasAnyInstalledAgent;
   const canStop = isSupported && isRunActive;
   const showRunMeta =
     activeIssueNumber === issue.number &&
@@ -339,6 +345,12 @@ function IssueDetailPanel({
           {!isSupported && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               浏览器模式不支持启动任务，请通过 `pnpm tauri dev` 运行桌面应用。
+            </div>
+          )}
+
+          {isSupported && !hasAnyInstalledAgent && !isDetecting && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              未检测到已安装的 Agent CLI，请先安装 Claude、Codex 或 OpenCode 后重启应用。
             </div>
           )}
 

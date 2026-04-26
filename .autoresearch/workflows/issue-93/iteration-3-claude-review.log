@@ -1,0 +1,136 @@
+我已经彻底理解了情况。以下是我的审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #93
+- 标题: Desktop app startup checks for required CLI tools
+- 子任务: T-002 - 前端启动检测与 agent 状态集成
+- 迭代次数: 3
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-002 子任务完全未实现。当前代码库中没有任何前端变更 — `desktop_app/src/` 目录下零 diff。T-001（Rust 后端）已在工作树中实现，但 T-002 所需的全部前端工作均不存在。
+
+---
+
+### 验收条件逐项核查
+
+| # | 验收条件 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | 应用启动时自动调用 detect_cli_tools 并更新 store | **未实现** | 无任何前端代码调用 `detect_cli_tools` |
+| 2 | installedAgents 记录每个 agent 的安装状态和路径 | **未实现** | `agentStore.ts` 中无 `installedAgents` 字段 |
+| 3 | 首次启动时仅自动选中已安装的 agent，顺序 claude > codex > opencode | **未实现** | 无相关逻辑 |
+| 4 | 非首次启动时保留用户已有选择，但标记未安装 agent 的状态 | **未实现** | 无相关逻辑 |
+| 5 | ghInstalled 状态正确反映 gh CLI 的安装情况 | **未实现** | `agentStore.ts` 中无 `ghInstalled` 字段 |
+
+---
+
+### 致命问题 (必须修复)
+
+#### 问题 1: T-002 完全未实现
+
+**位置**: `desktop_app/src/stores/agentStore.ts`
+
+**问题描述**:
+当前 `agentStore.ts` 仍是原始状态，未做任何 T-002 相关修改。需要实现以下内容：
+
+1.  **扩展 `AgentState` 接口** — 添加 `installedAgents`、`ghInstalled`、`isDetecting` 字段和 `initializeFromDetection()` 方法
+2.  **添加 TypeScript 接口** — 前端需要镜像 Rust 的 `CliToolStatus` 和 `CliToolsResult` 类型
+3.  **实现 `initializeFromDetection()`** — 调用 `invoke('detect_cli_tools')`，更新 store，处理首次/非首次启动逻辑
+4.  **遵循项目依赖注入模式** — 参考 `runStore.ts` 的 `createRunStore(overrides)` 工厂模式，注入 `invoke` 以便测试
+5.  **处理 persist middleware 与检测的交互** — Zustand `persist` 中间件会从 localStorage 恢复 `selectedAgents`，`initializeFromDetection()` 需要区分"首次启动（selectedAgents 为空）"和"非首次启动（有已恢复的数据）"
+
+**建议实现**:
+```typescript
+// 新增类型
+interface CliToolStatus {
+  installed: boolean;
+  path: string | null;
+}
+
+interface CliToolsResult {
+  gh: CliToolStatus;
+  claude: CliToolStatus;
+  codex: CliToolStatus;
+  opencode: CliToolStatus;
+}
+
+interface AgentInstallStatus {
+  installed: boolean;
+  path: string | null;
+}
+
+// 扩展 AgentState
+interface AgentState {
+  selectedAgents: AgentId[];
+  installedAgents: Record<AgentId, AgentInstallStatus>;
+  ghInstalled: boolean;
+  isDetecting: boolean;
+  initializeFromDetection: () => Promise<void>;
+  // ... 现有 actions
+}
+
+// initializeFromDetection 逻辑:
+// 1. set isDetecting = true
+// 2. const result = await deps.invoke<CliToolsResult>('detect_cli_tools')
+// 3. 更新 installedAgents 和 ghInstalled
+// 4. 如果 selectedAgents 为空 (首次启动):
+//    - 按 claude > codex > opencode 优先级，仅选 installed 为 true 的
+// 5. 如果 selectedAgents 非空 (非首次启动):
+//    - 保留用户选择 (installedAgents 仅记录状态，不修改 selectedAgents)
+// 6. set isDetecting = false
+```
+
+#### 问题 2: 启动流程未接入检测
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx:714-717`
+
+**问题描述**:
+当前 `DashboardPage` 的 `useEffect` 仅调用 `loadRecentProjects()` 和 `initializeRuntime()`，未调用 `initializeFromDetection()`。
+
+**建议修复**:
+```typescript
+useEffect(() => {
+  loadRecentProjects();
+  initializeRuntime();
+  initializeFromDetection();  // 新增
+}, [loadRecentProjects, initializeRuntime, initializeFromDetection]);
+```
+
+---
+
+### 实现者自检确认
+
+- [ ] 实现者已执行编译/类型检查 — 未执行 (无代码)
+- [ ] 实现者已执行 Lint 检查 — 未执行 (无代码)
+- [ ] 实现者已运行相关测试 — 未执行 (无代码)
+- [ ] 实现者已确认测试覆盖 — 未执行 (无代码)
+
+---
+
+### 审核结论
+
+- [ ] 阻塞 - 子任务完全未实现，需要从头开始
+
+**下一步行动**:
+实现 T-002 的全部内容，核心工作：
+1.  扩展 `agentStore.ts` — 添加 `installedAgents`、`ghInstalled`、`isDetecting`、`initializeFromDetection()`
+2.  使用 `createAgentStore(overrides)` 工厂模式注入 `invoke` 依赖
+3.  在 `DashboardPage.tsx` 启动 effect 中调用 `initializeFromDetection()`
+4.  处理 persist middleware 的首次/非首次启动逻辑
+
+---
+
+## 经验总结
+
+- **模式**: `runStore.ts` 使用 `createRunStore(overrides)` 工厂模式注入 `invoke`/`listen`/`isTauri` 依赖，`agentStore` 应遵循相同模式以确保可测试性
+- **模式**: Zustand `persist` 中间件会异步恢复 localStorage 数据，`initializeFromDetection()` 需要在 rehydration 完成后才执行检测逻辑（可通过 `onRehydrateStorage` 回调或检查 `selectedAgents` 状态判断）
+- **模式**: Rust `CliToolsResult` 使用 snake_case 字段（`gh`, `claude`, `codex`, `opencode`），前端 TypeScript 接口需匹配
+- **踩坑**: 当前 `agentStore` 直接使用 `create()` 而非工厂函数，改造时需要同时更新所有 import `useAgentStore` 的地方

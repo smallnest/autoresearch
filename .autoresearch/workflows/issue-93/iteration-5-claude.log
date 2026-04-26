@@ -1,0 +1,32 @@
+所有修改均已实现，且 TypeScript 编译通过。以下是所做工作的总结：
+
+## 对4个文件所做的修改
+
+### 1. `agentStore.ts` — 修复 `selectAll`
+- `selectAll` 现在仅选择 `installedAgents[id]?.installed` 为 true 的 agent，而不是全部 3 个
+
+### 2. `AgentSelector.tsx` — 已安装/未安装的 UI + 加载骨架屏
+- 从 store 中读取 `installedAgents` 和 `isDetecting`
+- 在 `isDetecting` 期间，显示带有 `AgentSkeletonTag` 的骨架屏（使用 `skeleton-shimmer`）
+- **已安装的 agent**：正常可点击的标签（蓝色/灰色，与之前相同）
+- **未安装的 agent**：显示为灰色、`opacity-50`、`cursor-not-allowed`，并带有一个"未安装"标签
+- `handleToggle` 会拒绝切换未安装的 agent
+- `SortableTag`（选中的 agent）也会显示 `installed` 状态 — 未安装的选中 agent 会显示灰色并带有"未安装"标签
+
+### 3. `IssueDetailPanel.tsx` — 在没有 agent 时阻止启动
+- 从 `useAgentStore` 中读取 `installedAgents`
+- `canStart` 现在包含 `hasAnyInstalledAgent` 检查
+- 当 `isSupported && !hasAnyInstalledAgent` 时，显示红色警告卡片："未检测到已安装的 Agent CLI，请先安装 Claude、Codex 或 OpenCode 后重启应用。"
+
+### 4. `DashboardPage.tsx` — gh 未安装警告卡片
+- 在 `ProjectInfoScreen` 中从 `useAgentStore` 读取 `ghInstalled`
+- 当 `ghInstalled === false` 时，显示红色警告卡片，内容为：
+  - 标题："缺少 GitHub CLI"
+  - 说明文本，并带有样式化的 `gh` 代码引用
+  - 安装命令：`brew install gh`
+
+## 经验总结
+
+- **模式**: 对于 UI 子任务，验证的关键链路是"存储字段 → 组件读取 → 渲染逻辑"。`installedAgents`/`ghInstalled`/`isDetecting` 在 T-002 中存在于存储中，但直到组件消费它们才算完成。
+- **陷阱**: `ghInstalled` 默认为 `false` — 必须与 `=== false` 进行比较（而不是 `!ghInstalled`），以避免在检测完成前（此时该值为 `false` 但实际上尚未检查）显示警告。存储在非 Tauri 环境中将 `ghInstalled` 初始化为 `false`，因此该卡片将按预期仅在 Tauri 桌面环境中显示。
+- **学习**: `selectAll` 和 `toggleAgent` 需要安装感知逻辑 — 否则用户可能会选择未安装的 agent，然后在运行时感到困惑。存储层面的防护 (`selectAll` 过滤) 和 UI 层面的防护 (`toggleAgent` 无操作) 都很重要。

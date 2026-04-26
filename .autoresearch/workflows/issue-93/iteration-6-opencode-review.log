@@ -1,0 +1,75 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/agentStore.ts
+[0m→ [0mRead desktop_app/src/components/AgentSelector.tsx
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/runtimeStore.ts
+I'll start by reading all relevant files to assess the current state of T-003 implementation.
+[0m• [0mFind IssueDetailPanel and tests[90m Explore Agent[0m
+Now let me check the IssueDetailPanel and any test files to complete the picture.
+[0m✓ [0mFind IssueDetailPanel and tests[90m Explore Agent[0m
+Let me read the IssueDetailPanel to verify the implementation details directly.
+[0m→ [0mRead desktop_app/src/components/IssueDetailPanel.tsx
+[0m✱ [0mGlob "desktop_app/tests/*agent*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*agent*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**"[90m 13 matches[0m
+Now I have all the information needed for a comprehensive review. Let me verify the test files list as well.
+## 审核报告
+
+### Issue
+- 编号: #93
+- 迭代次数: 6 (current)
+- 当前子任务: T-003 - 启动检查结果 UI 展示与运行阻断
+- 类型: UI
+
+### 总体评价
+
+**评分: 79/100**
+
+实现已正确覆盖全部 5 条验收条件，UI 渲染链路从 store → 组件 → 视觉效果完整贯通。与迭代 5 的 15/100 相比，当前实现已完成功能主体。主要扣分点在于**测试覆盖为零**——agentStore 的核心逻辑（auto-select 算法、installedAgents 过滤、initializeFromDetection 错误路径）没有单元测试，而其他 store 均有 `.test.mjs` 文件。
+
+### 验收条件核查
+
+| # | 验收条件 | 状态 | 说明 |
+|---|----------|------|------|
+| 1 | gh 未安装时显示提示卡片 + brew install gh | ✅ | DashboardPage 红线 487-504: `ghInstalled === false` 时渲染红色警告卡片，包含 `<code>brew install gh</code>` |
+| 2 | AgentSelector 中区分已安装/未安装 agent | ✅ | `SortableTag` opacity 0.5 + `cursor-not-allowed` + "未安装"标签；`AgentTag` 使用 `bg-gray-100 text-gray-400` + `opacity-50` + "未安装"标签；`handleToggle` 阻止选中未安装 agent |
+| 3 | 三 agent 均未安装时阻断运行 | ✅ | IssueDetailPanel 红线 225-227 计算 `hasAnyInstalledAgent`；红线 236 `canStart` 含此条件禁用"启动"按钮；红线 351-355 显示红色错误引导文案 |
+| 4 | 加载期间有 loading 状态 | ⚠️ 部分满足 | AgentSelector 红线 161-176 使用 `AgentSkeletonTag` skeleton shimmer；但 DashboardPage 的 `ghInstalled` 默认 `false`，加载期间可能先闪现一次红色 gh 警告卡片再消失 |
+| 5 | 重启后 UI 正确更新 | ✅ | `partialize` 仅持久 `selectedAgents`，`installedAgents`/`ghInstalled` 每次启动重新检测 |
+
+### 维度评分
+
+| 维度 | 权重 | 得分 | 理由 |
+|------|------|------|------|
+| **正确性** | 35% | 90 | 5/5 验收条件通过；AC 4 有轻微闪烁隐患但无实质功能问题 |
+| **测试质量** | 25% | 40 | 零测试覆盖。agentStore 的 `initializeFromDetection`、`selectAll` 过滤逻辑、错误路径均可测试 (factory 模式已注入)，但完全没有 `.test.mjs` 文件。同仓库其他 8 个 store 均有测试 |
+| **代码质量** | 20% | 90 | 命名清晰，结构符合项目约定，AGENT_METADATA 分离得当 |
+| **安全性** | 10% | 100 | 纯渲染逻辑，无注入/泄露风险 |
+| **性能** | 10% | 95 | 检测只在 mount 时执行一次，无需渲染时重新计算 |
+
+**总分: 90×0.35 + 40×0.25 + 90×0.20 + 100×0.10 + 95×0.10 = 31.5 + 10.0 + 18.0 + 10.0 + 9.5 = 79.0**
+
+### 建议改进
+
+1. **测试覆盖 (必须修复)**: 为 `agentStore` 添加测试，参考 `runStore.test.mjs`/`historyStore.test.mjs` 模式。核心测试点：`initializeFromDetection` 成功后正确设置 `installedAgents`/`ghInstalled`；`selectAll` 只选已安装 agent；auto-select 优先顺序；`isDetecting` 状态生命周期。
+
+2. **gh 警告闪烁 (建议修复)**: DashboardPage 的 `ghInstalled` 在检测完成前默认为 `false`，可能闪现红色警告。一个修复方案是在 ProjectInfoScreen 中检查 `isDetecting`：
+   ```tsx
+   const { ghInstalled, isDetecting } = useAgentStore();
+   // ...
+   {!isDetecting && ghInstalled === false && (...卡片渲染...)}
+   ```
+
+### 审核结论
+
+- [x] 需要修改 — 测试覆盖不足，建议增补 agentStore 测试后进入人工审核
+
+---
+
+## Learnings
+
+- **模式**: 本次实现完成了从 `agentStore` → 消费组件 (`AgentSelector`, `IssueDetailPanel`, `DashboardPage`) 的完整链路。确认验收条件检查需要追踪 "store 字段 → 组件读取 → 渲染条件 → 视觉效果" 四个环节
+- **踩坑**: 迭代 5 评为 15/100 时核心问题是 store 有数据但 UI 未消费；迭代 6 已完整修复该问题
+- **经验**: 测试框架已成熟（其他 8 个 store 有 `.test.mjs`），此测试缺失属于实现遗漏而非框架不支持

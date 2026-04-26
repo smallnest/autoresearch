@@ -1,0 +1,154 @@
+现在我已全面了解情况。接下来我将整理审核报告。
+
+## 审核报告
+
+### Issue
+- 编号: #93
+- 标题: Desktop app startup checks for required CLI tools
+- 迭代次数: 9
+- 当前子任务: T-004 - CLI 检测逻辑单元测试
+
+---
+
+### 总体评价
+
+**评分: 83/100**
+
+前端测试覆盖了 initializeFromDetection 的主要路径和 toggleAgent/selectAll/reorder 等操作逻辑，且全部 14 个测试通过；Rust 后端有 8 个测试覆盖 check_cli_tool / detect_cli_tools_sync / get_shell_path / 序列化，也全部通过。但验收条件要求的四类场景中，"gh 缺失"和"无 agent 安装"两个场景在前端测试中完全缺失，"UI 提示函数被调用"和"运行阻断标记"也无法在纯 store 测试中直接体现。Rust 后端测试依赖真实系统环境而非 mock，属于集成测试而非严格单元测试。
+
+---
+
+### 验收条件逐项核查
+
+| # | 验收条件 | 结果 | 说明 |
+|---|----------|------|------|
+| 1 | Rust 后端 detect_cli_tools 有对应单元测试（可 mock 命令执行） | 部分通过 | 有测试，但依赖真实 `which` 命令，非 mock 环境 |
+| 2 | 前端 agentStore 的 initializeFromDetection 方法有四类场景测试 | 部分通过 | 覆盖了多 agent 和单 agent 场景，缺少 gh 缺失和零 agent 场景 |
+| 3 | gh 缺失场景：ghInstalled === false，UI 提示函数被调用 | 未通过 | 无 `gh: false` 的测试用例，无 UI 提示函数调用断言 |
+| 4 | 单 agent 场景：仅已安装 agent 被选中 | 通过 | 第 21-35 行测试 claude-only 场景 |
+| 5 | 多 agent 场景：选中顺序稳定，按 claude > codex > opencode | 通过 | 第 21-35 行验证 `['claude', 'codex']` 顺序 |
+| 6 | 无 agent 场景：selectedAgents 为空，运行阻断标记为 true | 未通过 | 无 `claude: false, codex: false, opencode: false` 的测试用例 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少 "gh 缺失" 场景的前端测试
+
+**位置**: `desktop_app/tests/agentStore.test.mjs`
+
+**问题描述**:
+验收条件明确要求"gh 缺失场景：ghInstalled === false，UI 提示函数被调用"，但所有 14 个测试用例中 `makeDetectResult` 的 `gh` 参数均默认为 `true`，从未测试 `gh: false` 的情况。`DashboardPage.tsx:487` 有 `ghInstalled === false && !isDetecting` 条件渲染 gh 警告卡片，但前端测试未覆盖这条路径。
+
+**建议修复**:
+添加测试用例：
+```js
+test('initializeFromDetection sets ghInstalled to false when gh is missing', async () => {
+  const store = createAgentStore({
+    isTauri: true,
+    invoke: createInvokeMock(makeDetectResult({ gh: false, claude: true, codex: false, opencode: false })),
+  });
+
+  await store.getState().initializeFromDetection();
+
+  assert.equal(store.getState().ghInstalled, false);
+  assert.equal(store.getState().selectedAgents.length, 1);
+  assert.equal(store.getState().selectedAgents[0], 'claude');
+});
+```
+
+**原因**: gh 检测是 Issue #93 的核心需求之一，缺少该场景测试无法验证 gh 缺失时 store 状态正确性。
+
+---
+
+#### 问题 2: 缺少 "无 agent 安装" 场景的前端测试
+
+**位置**: `desktop_app/tests/agentStore.test.mjs`
+
+**问题描述**:
+验收条件要求"无 agent 场景：selectedAgents 为空，运行阻断标记为 true"。当前测试没有 `claude: false, codex: false, opencode: false` 的组合。`IssueDetailPanel.tsx:351` 有 `!hasAnyInstalledAgent` 条件渲染"无 agent"提示并阻断运行按钮，但该路径未被测试。
+
+**建议修复**:
+```js
+test('initializeFromDetection selects no agents when none are installed', async () => {
+  const store = createAgentStore({
+    isTauri: true,
+    invoke: createInvokeMock(makeDetectResult({ gh: true, claude: false, codex: false, opencode: false })),
+  });
+
+  await store.getState().initializeFromDetection();
+
+  assert.deepEqual(store.getState().selectedAgents, []);
+  assert.equal(store.getState().installedAgents.claude.installed, false);
+  assert.equal(store.getState().installedAgents.codex.installed, false);
+  assert.equal(store.getState().installedAgents.opencode.installed, false);
+});
+```
+
+**原因**: 无 agent 是关键边界场景，直接关联"运行阻断"功能。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: Rust 后端测试依赖真实系统环境，无法 mock
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:5789-5937`
+
+**问题描述**:
+`detect_cli_tools_sync` 和 `check_cli_tool` 的测试直接调用 `which` 命令和系统 PATH，属于集成测试而非严格的单元测试。验收条件写明"可 mock 命令执行"，但当前实现无法注入 mock。例如 `detect_cli_tools_sync_returns_all_fields` 测试使用条件断言（`if result.gh.installed`），意味着在不同环境下测试行为不同。
+
+**建议修复**:
+将 `check_cli_tool` 的 `which` 调用提取为可注入 trait，或在 `detect_cli_tools_sync` 中接受 PATH 参数使其可测试。短期可接受当前方案，长期应重构为可 mock 设计。
+
+---
+
+#### 问题 4: zustand persist 中间件警告噪音
+
+**位置**: `desktop_app/tests/agentStore.test.mjs` 运行输出
+
+**问题描述**:
+测试运行时产生 8 条 `[zustand persist middleware] Unable to update item 'autoresearch-agents'` 警告。这是因为在 Node.js 环境中 `localStorage` 不可用。不影响正确性，但污染测试输出。
+
+**建议修复**:
+在 `createAgentStore` 工厂中测试模式下注入内存 storage，或在测试文件顶部 mock `localStorage`。
+
+---
+
+### 建议改进 (可选)
+
+- `initializeFromDetection` 中 "first launch" 判断依据是 `selectedAgents.length === 0`，但 persist rehydration 可能延迟导致误判为首次启动。建议增加 `detectionDone` 作为辅助判断。
+- Rust 测试 `detect_cli_tools_sync_returns_all_fields` 使用条件断言（`if result.gh.installed`），在 CI 环境中可能所有 tool 都缺失，导致测试实际未断言任何内容。建议补充使用硬编码 PATH 的确定性测试。
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 78 | 四类场景缺两类，gh 缺失和零 agent 未测试 |
+| 测试质量 (25%) | 75 | 已有测试覆盖度好，但缺关键边界场景；Rust 测试非 mock |
+| 代码质量 (20%) | 90 | 测试代码清晰，mock 工厂设计良好，命名有意义 |
+| 安全性 (10%) | 100 | 无安全风险 |
+| 性能 (10%) | 100 | 无性能问题 |
+
+**加权总分**: 78×0.35 + 75×0.25 + 90×0.20 + 100×0.10 + 100×0.10 = **83/100**
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 添加 "gh 缺失" 前端测试（`gh: false` 场景，验证 `ghInstalled === false`）
+2. 添加 "无 agent 安装" 前端测试（所有 agent `installed: false`，验证 `selectedAgents` 为空）
+3. (可选) Rust 侧补充 mock 注入机制或至少补充确定性测试
+
+---
+
+## Learnings
+
+- **模式**: 验收条件中的"四类场景"是枚举性质的，必须逐条对照检查是否有对应测试用例，不能因为已有多 agent 测试就默认覆盖了单 agent / 零 agent 场景
+- **踩坑**: `makeDetectResult` 的默认参数 `gh = true, claude = true` 会让编写测试的人倾向于只测试"有 gh、有 claude"的路径，忽略"缺失"路径。建议工厂函数的默认值应覆盖最常见的测试场景，或在测试文件中显式列出所有场景矩阵
+- **经验**: Zustand persist 在 Node.js 测试环境中会产生 localStorage 不可用警告，虽不影响正确性但影响测试输出可读性。可在工厂函数中接受自定义 storage 参数来消除

@@ -1,0 +1,27 @@
+所有任务完成。以下是已实现内容的总结：
+
+## 所做更改
+
+### 1. `desktop_app/src/stores/agentStore.ts` - 完整重构
+
+- **添加了 TypeScript 类型**：`CliToolStatus`、`CliToolsResult`、`AgentInstallStatus` — 镜像 Rust 后端结构
+- **工厂模式**：使用 `createAgentStore(overrides)` 重写，匹配 `runStore.ts` 模式 — 将 `isTauri` 和 `invoke` 注入以实现可测试性
+- **新状态字段**：
+  - `installedAgents: Record<AgentId, AgentInstallStatus>` — 每个agent的安装状态和路径
+  - `ghInstalled: boolean` — gh CLI检测
+  - `isDetecting: boolean` — 加载指示器
+- **`initializeFromDetection()`**：调用 `invoke('detect_cli_tools')`，然后：
+  - 首次启动（`selectedAgents` 为空）：按照 `claude > codex > opencode` 优先级自动选择已安装的agent
+  - 非首次启动：保留用户现有选择，仅更新安装状态
+- **`partialize`**：只有 `selectedAgents` 被持久化到 localStorage；安装检测结果在每次启动时重新计算
+
+### 2. `desktop_app/src/pages/DashboardPage.tsx` - 启动集成
+
+- 在启动 `useEffect` 中将 `initializeFromDetection()` 与 `loadRecentProjects()` 和 `initializeRuntime()` 一起添加
+
+## 学习要点
+
+- **模式**：`agentStore` 现在遵循与 `runStore`/`iterationStore` 相同的 `createXStore(overrides)` 工厂模式 — 所有面向 Tauri 的存储都使用依赖注入
+- **模式**：`persist` + `partialize` 确保只有用户偏好（`selectedAgents`）被持久化；易变的检测结果不会过时地保留在 `localStorage` 中
+- **模式**：Rust `CliToolsResult` 使用 `snake_case` 字段（`gh`、`claude`、`codex`、`opencode`）；前端 TypeScript 接口直接匹配这些字段名
+- **边缘情况**：首次启动检测依赖于 `selectedAgents` 为空，这在 Zustand rehydration 之前是成立的。由于 `persist` 在存储创建时同步 rehydrate，所以当 `initializeFromDetection` 在 `useEffect` 中运行时（在组件挂载之后），rehydration 已经完成，因此 `selectedAgents.length === 0` 正确地区分了首次与非首次启动。
