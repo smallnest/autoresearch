@@ -1,0 +1,31 @@
+所有任务完成。以下是变更总结：
+
+## 变更内容
+
+### 1. Rust 侧 (`lib.rs`) — 通知携带结构化数据
+
+- `send_notification()` 新增 `notification_type` 和 `issue_number` 参数，通过 `.extra("type", ...)` 和 `.extra("issue_number", ...)` 附加到通知
+- 所有 `notify_*` 辅助函数传递对应的通知类型：`iteration_complete`、`passing_score`、`pr_created`、`run_failure`
+
+### 2. 前端 (`AppShell.tsx`) — 通知点击处理
+
+- 新增 `setupNotificationClickHandler()` 函数，使用 `onAction` 监听通知点击事件
+- 点击时调用 `getCurrentWindow().show()` + `setFocus()` 将窗口拉到前台（即使最小化/隐藏状态）
+- 根据通知 `extra.type` 路由到对应页面：
+  - `iteration_complete` / `passing_score` / `run_failure` → Issues 页面
+  - `pr_created` → History 页面
+
+### 验收标准对照
+
+| 验收标准 | 状态 |
+|---------|------|
+| Clicking a notification brings the app window to the foreground | ✅ `onAction` → `show()` + `setFocus()` |
+| Window is shown and focused even if previously minimized/hidden | ✅ `show()` 会恢复最小化/隐藏窗口 |
+| Notification click handler properly receives notification data | ✅ `onAction` 回调接收 `Options` 含 `extra` 字段 |
+| cargo check and cargo clippy pass | ✅ 均通过 |
+
+## Learnings
+
+- **模式**: `tauri-plugin-notification` v2 的通知点击处理**仅在前端 JS 侧**支持（`onAction`），Rust `NotificationBuilder` 没有 `.on_action()` 方法。审核建议的"方案 A"（Rust 侧 `.on_action()`）实际上不可用，必须走前端 JS 方案。
+- **踩坑**: `NotificationBuilder::extra()` 的 value 参数需要实现 `Serialize`，`i64` 和 `&str` 都满足，无需手动序列化。
+- **经验**: Tauri v2 中窗口 show/focus 的模式统一为 `window.show()` + `window.set_focus()`（Rust）/ `window.show()` + `window.setFocus()`（JS），与托盘点击和菜单事件中的用法一致。

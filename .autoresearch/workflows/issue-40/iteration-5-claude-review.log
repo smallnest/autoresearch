@@ -1,0 +1,82 @@
+我现在对情况有了完整的了解。审核如下：
+
+## 审核报告
+
+### Issue
+- 编号: #40
+- 标题: [desktop-app] 桌面通知系统
+- 迭代次数: 5 (审核 T-003)
+
+---
+
+### 总体评价
+
+**评分: 0/100**
+
+T-003 (通知开关) **完全未实现**。当前未提交的代码改动全部属于 T-001（通知发送）和 T-002（通知点击），这两个子任务已标记为 `passes: true`。T-003 的六项验收标准无一达成。
+
+---
+
+### 验收标准逐项核查
+
+| # | 验收标准 | 状态 | 证据 |
+|---|---------|------|------|
+| 1 | 通知开关添加到设置页面 UI | 未实现 | `SettingsPage.tsx` 无任何 diff，页面仅含配置编辑器、运行参数、Agent 配置三个 section |
+| 2 | 开关状态在应用重启后持久化 | 未实现 | `runConfigStore.ts` 无 diff，无 `notificationsEnabled` 字段 |
+| 3 | 默认状态为启用 | 未实现 | 无相关代码 |
+| 4 | 禁用时 Rust 端不发送系统通知 | 未实现 | `send_notification()` (lib.rs:893) 无偏好检查，始终无条件发送 |
+| 5 | 重新启用后通知恢复 | 未实现 | 无相关代码 |
+| 6 | 类型检查和 lint 通过 | 不适用 | 无新代码可供检查 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: T-003 完全未实现
+
+**位置**: 全部涉及文件
+
+**问题描述**:
+T-003 要求在设置页添加通知开关、持久化偏好、将偏好传递给 Rust 后端、在 `send_notification` 中做条件跳过。当前代码中没有任何实现。
+
+**建议实现方案**:
+
+1. **`runConfigStore.ts`** — 添加 `notificationsEnabled: boolean`（默认 `true`），添加 `setNotificationsEnabled` action，更新 `partialize`、`sanitizeRunConfig`、`sanitizeBoolean` 处理，更新 `DEFAULT_CONFIG` 和 `RunConfigValues` 接口。
+
+2. **`SettingsPage.tsx`** — 在"运行参数"和"Agent 配置"section 之间或之后，新增"通知设置"section，包含一个 toggle switch（复用 `continueMode` 的 `role="switch"` 模式），绑定到 `useRunConfigStore` 的 `notificationsEnabled` / `setNotificationsEnabled`。
+
+3. **`lib.rs`** — 添加 Tauri 命令 `get_notification_enabled`，使用 `app.json` store（已有的 `StoreExt` 模式）读取偏好；修改 `send_notification()` 在发送前读取偏好，若禁用则提前返回。或者在前端 `invoke('start_run', ...)` 时将 `notificationsEnabled` 作为参数传入并存储在 `RunProcess` 中。
+
+4. **`AppShell.tsx`** — 可选：在 `requestNotificationPermission()` 中检查偏好，禁用时不请求权限。
+
+---
+
+### 实现者自检确认
+
+- [x] 实现者已执行编译/类型检查 — T-001/T-002 代码可编译
+- [x] 实现者已执行 Lint 检查 — T-001/T-002 代码通过
+- [ ] 实现者已运行相关测试 — T-003 无新测试
+- [ ] 实现者已确认测试覆盖 — T-003 无代码
+
+> T-003 无任何实现代码，自检不适用。
+
+---
+
+### 审核结论
+
+- [x] 需要修改 — T-003 完全未实现，需要从零开始
+
+**下一步行动**:
+请实现 T-003 的全部六项验收标准。核心工作：
+1. 在 `runConfigStore` 中添加 `notificationsEnabled` 持久化字段
+2. 在 `SettingsPage` 中添加通知开关 UI section
+3. 在 Rust 后端添加偏好读取命令，并修改 `send_notification()` 做条件跳过
+4. 确保类型检查和 lint 通过
+
+---
+
+## Learnings
+
+- **踩坑**: T-001/T-002 的代码改动仍在工作区（未提交），审核时需区分"哪些改动属于当前子任务"vs"哪些属于已通过的前序子任务"。通过 `git diff` 逐文件比对和 `tasks.json` 的 `passes` 标记可以明确区分。
+- **经验**: 审核 UI 类型子任务时，如果 `SettingsPage.tsx` 无任何 diff，可以直接判定"设置页面无改动"，无需深入阅读页面代码来确认。
+- **模式**: `runConfigStore` 使用 zustand `persist` + `partialize` + `sanitizeRunConfig` 模式来持久化和校验配置，添加新的布尔偏好（如 `notificationsEnabled`）应遵循完全相同的模式：接口扩展 → 默认值 → setter → partialize → sanitize → merge。

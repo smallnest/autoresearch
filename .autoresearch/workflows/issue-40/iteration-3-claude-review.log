@@ -1,0 +1,196 @@
+我已掌握所需全部信息。以下是审核内容：
+
+## 审核报告
+
+### Issue
+- 编号: #40
+- 标题: [desktop-app] 桌面通知系统
+- 迭代次数: 3
+- 当前子任务: T-002 - Implement notification click-to-focus behavior
+
+---
+
+### 总体评价
+
+**评分: 40/100**
+
+T-002 子任务的核心需求——"notification click-to-focus behavior"——**完全未实现**。当前代码变更仅覆盖了 T-001（通知发送）的功能，没有任何通知点击事件处理逻辑。T-002 的四项验收标准无一满足。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 完全缺失通知点击处理 — T-002 核心功能未实现
+
+**位置**: `desktop_app/src-tauri/src/lib.rs`, `desktop_app/src/components/AppShell.tsx`
+
+**问题描述**:
+T-002 要求"Handle notification click events so that when a user clicks a desktop notification, the app window is brought to the foreground"，但代码中没有任何通知点击处理逻辑。
+
+具体缺失：
+1. **Rust 侧**: `send_notification()` 仅调用 `.show()` 发送通知，没有设置 `.on_action()` 或任何点击回调。`tauri-plugin-notification` v2 的 Rust builder 支持 `.on_action()` 方法，可以在通知被点击时触发回调。
+2. **前端侧**: `AppShell.tsx` 只调用 `requestPermission()`，没有注册 `onAction` 监听器来处理通知点击事件。
+3. **窗口聚焦逻辑**: 虽然托盘点击和菜单已有 `window.show()` + `window.set_focus()` 的模式（第 3096-3097 行、3118-3119 行），但通知点击场景下完全缺失同样的逻辑。
+
+**验收标准对照**:
+| 验收标准 | 状态 |
+|---------|------|
+| Clicking a notification brings the app window to the foreground | **未实现** |
+| Window is shown and focused even if previously minimized/hidden | **未实现** |
+| Notification click handler properly receives notification data | **未实现** |
+| cargo check and cargo clippy pass | ✅ 通过 |
+
+**建议修复**:
+
+方案 A — Rust 侧处理（推荐，无需前端改动）:
+
+```rust
+fn send_notification(app: &tauri::AppHandle, title: &str, body: &str) {
+    use tauri_plugin_notification::NotificationExt;
+    let handle = app.clone();
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .on_action(move |_app| {
+            if let Some(window) = handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        })
+        .show()
+    {
+        eprintln!("Notification error: {e}");
+    }
+}
+```
+
+方案 B — 前端 JS 侧处理:
+
+```typescript
+// In AppShell.tsx or a dedicated hook
+import { onAction } from "@tauri-apps/plugin-notification";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+async function setupNotificationClickHandler() {
+  try {
+    await onAction(() => {
+      const mainWindow = getCurrentWindow();
+      mainWindow.show();
+      mainWindow.setFocus();
+    });
+  } catch {
+    // Non-Tauri environment — ignore
+  }
+}
+```
+
+**原因**: 这是 T-002 子任务的核心需求，未实现等于子任务完成度为 0%。
+
+---
+
+#### 问题 2: 通知不携带可区分数据，无法实现"可选导航"
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:889-893`
+
+**问题描述**:
+T-002 描述提到"Optionally navigate to the relevant page based on notification type"。即使点击处理被加上，当前 `send_notification()` 只发送 title/body 文本，没有附加任何结构化数据（如 notification type 或 issue number），导致点击处理器无法判断通知类型并导航到对应页面。
+
+**代码片段**:
+```rust
+fn send_notification(app: &tauri::AppHandle, title: &str, body: &str) {
+    // 只传了 title 和 body，没有任何 extra data
+    app.notification().builder().title(title).body(body).show()
+}
+```
+
+**建议修复**:
+在 `send_notification` 或其调用方中，通过 `.extra()` 或 `.data()` 添加结构化信息，使点击处理器可以根据通知类型路由到不同页面。例如：
+
+```rust
+fn send_notification_with_type(
+    app: &tauri::AppHandle,
+    title: &str,
+    body: &str,
+    notification_type: &str,
+    issue_number: i64,
+) {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .extra("type", notification_type)
+        .extra("issue_number", &issue_number.to_string())
+        .show()
+}
+```
+
+**原因**: 缺少数据载体意味着未来即使加上了点击处理，也无法实现按通知类型导航的需求。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: `send_notification` 忽略错误仅打印 stderr
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:889-893`
+
+**问题描述**:
+`send_notification` 在发送失败时仅 `eprintln!`。虽然注释说明"notifications are best-effort"，但完全静默可能掩盖权限被拒绝等用户可操作的问题。建议至少在首次失败时通过前端 event 提示用户。
+
+**建议修复**: 低优先级，可在 T-003 的通知开关设置中一并考虑权限状态提示。
+
+---
+
+### 建议改进 (可选)
+
+- 各 `notify_*` 函数（`notify_iteration_complete`、`notify_passing_score` 等）可考虑传递通知类型枚举，以便 T-002 的点击处理器做路由判断
+- 前端 `requestNotificationPermission()` 仅在 AppShell mount 时调用一次，如果用户初次拒绝后到系统设置中重新授权，没有重新请求的机制
+
+---
+
+### 实现者自检确认
+
+- [x] 实现者已执行编译/类型检查 — cargo check 通过
+- [x] 实现者已执行 Lint 检查 — cargo clippy 通过
+- [ ] 实现者已运行相关测试 — 未确认
+- [ ] 实现者已确认测试覆盖 — 无测试覆盖通知相关逻辑
+
+### 测试质量维度说明
+
+T-002 要求的核心功能（通知点击→窗口聚焦）属于 Tauri 插件与 OS 交互层，难以纯单元测试覆盖。但 `send_notification` 辅助函数以及 `check_and_notify_progress` 的决策逻辑（何时发哪种通知）是可测试的。当前 T-001 实现的 `check_and_notify_progress` 也缺少单元测试。测试质量维度不豁免，但考虑到 OS 交互限制，给予适当分数。
+
+---
+
+### 审核结论
+
+- [ ] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. **必须**: 在 `send_notification()` 中添加 `.on_action()` 回调（或在 AppShell.tsx 中注册 `onAction`），实现点击通知→显示并聚焦主窗口
+2. **必须**: 确保窗口在最小化/隐藏状态下也能通过 `window.show()` + `window.set_focus()` 恢复
+3. **建议**: 为通知附加结构化数据（type + issue_number），为可选导航提供基础
+4. **建议**: 为 `check_and_notify_progress` 决策逻辑添加单元测试
+
+---
+
+### 评分计算
+
+| 维度 | 得分 | 权重 | 加权分 |
+|------|------|------|--------|
+| 正确性 | 10 | 0.35 | 3.5 |
+| 测试质量 | 40 | 0.25 | 10.0 |
+| 代码质量 | 85 | 0.20 | 17.0 |
+| 安全性 | 90 | 0.10 | 9.0 |
+| 性能 | 90 | 0.10 | 9.0 |
+| **总分** | | | **48.5 → 40** |
+
+> 正确性仅 10 分：T-002 的 4 项验收标准中 3 项核心功能完全未实现，1 项（cargo check/clippy）通过。代码质量和安全性本身没问题（T-001 的实现是合理的），但 T-002 的核心需求缺失是致命的。
+
+## Learnings
+
+- **模式**: Tauri v2 通知点击处理有两个层面：(1) Rust 侧 `NotificationBuilder::on_action()` 回调，(2) 前端 JS 侧 `onAction()` 监听器。Rust 侧更适合做窗口 show/focus（无需前端介入），前端 JS 侧更适合做页面路由导航。两者可以组合使用。
+- **踩坑**: `tauri-plugin-notification` v2 的 `on_action` 是 per-notification 的回调（在 builder 上设置），不是全局事件。这与很多人预期的全局 `notification-click` 事件模型不同。前端 `onAction()` 则是全局监听。
+- **经验**: 审核子任务时，必须先对照 diff 和验收标准逐条验证，不能假设"有通知功能 = 有点击处理"。T-001（通知发送）和 T-002（通知点击）是明确分开的两个子任务。

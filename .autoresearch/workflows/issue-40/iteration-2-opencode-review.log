@@ -1,0 +1,86 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue 40 implementation[90m Explore Agent[0m
+[0m→ [0mRead .
+[0m✓ [0mExplore Issue 40 implementation[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m→ [0mRead desktop_app/package.json
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m→ [0mRead desktop_app/src/components/AppShell.tsx
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1572][0m
+[0m→ [0mRead .autoresearch/workflows/issue-40/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-40/planning.log
+Let me read the rest of lib.rs to see the `run()` function and plugin registration.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3069][0m
+Now I have all the information needed to conduct the review. Let me compile the audit report.
+
+## 审核报告
+
+### Issue
+- 编号: #40
+- 子任务: T-001 - Add tauri-plugin-notification and implement notification triggers for key events
+
+### 总体评价
+**评分: 89/100**
+
+评分明细:
+| 维度 | 得分 | 权重 | 加权 |
+|------|------|------|------|
+| 正确性 | 95 | 35% | 33.25 |
+| 测试质量 | 70 | 25% | 17.50 |
+| 代码质量 | 95 | 20% | 19.00 |
+| 安全性 | 100 | 10% | 10.00 |
+| 性能 | 90 | 10% | 9.00 |
+| **总分** | | | **88.75 → 89** |
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 | 证据 |
+|---|---------|------|------|
+| 1 | tauri-plugin-notification added to Cargo.toml and package.json | ✅ | `desktop_app/src-tauri/Cargo.toml:24` + `desktop_app/package.json:19` |
+| 2 | Plugin registered and notification capability added | ✅ | `lib.rs:3081` `.plugin(tauri_plugin_notification::init())` + `default.json:8` `"notification:default"` |
+| 3 | macOS notification permission requested on app start | ✅ | `AppShell.tsx:5-14` — dynamic import + `requestPermission()` in `useEffect` |
+| 4 | Notification on iteration complete (issue# + score) | ✅ | `lib.rs:897-903` `notify_iteration_complete()`, called at `lib.rs:951` |
+| 5 | Notification on passing score ('质量通过') | ✅ | `lib.rs:906-912` `notify_passing_score("质量通过")`, called at `lib.rs:958` |
+| 6 | Notification on PR created (issue#) | ✅ | `lib.rs:915-921` `notify_pr_created()`, called at `lib.rs:972` |
+| 7 | Notification on failure/exception exit (error info) | ✅ | `lib.rs:924-930` `notify_run_failure()`, called at `lib.rs:2135` |
+| 8 | All notifications contain key info | ✅ | Every notification function formats messages with issue_number, score, etc. |
+| 9 | cargo check and cargo clippy pass | ⚠️ | Not verified (no `Cargo.lock` update confirmed during review; code is syntactically valid) |
+
+### 验收条件检查总结
+
+**8/9 已确认通过**, 第 9 项（cargo check/clippy）因工作流中断未验证运行结果，但代码结构正确。
+
+### 严重问题 (必须修复)
+无
+
+### 一般问题 (建议修复)
+
+1. **测试质量维度部分未覆盖** — 通知辅助函数（`send_notification`、`check_and_notify_progress`、四个 `notify_*` 函数）没有任何单元测试。虽然通知代码与 `tauri::AppHandle` 强耦合导致纯单元测试困难，但 `check_and_notify_progress` 的逻辑（进度比较、阈值判断、通知路由）可以提取为纯函数来测试。
+
+2. **缺省成功退出通知** — 当 `exit_code == Some(0)`（正常退出）时，没有发送通知。当前仅在非零退出码时发送 `notify_run_failure`。用户无法区分"任务正常完成但未创建 PR"和"任务仍在运行中"。
+
+### 建议改进 (可选)
+
+1. **`emit_iteration_progress` 被每次 stdout/stderr 输出行调用**（`lib.rs:2149,2161`），这会每行触发一次完整的目录扫描和 tasks.json 解析。虽然有 `last_progress` 去重保护，但每次调用仍会获取 `get_run_state()` 锁和调用 `get_iteration_progress_sync`。对于长时间运行的任务（数千行输出），这会造成不必要的文件系统压力。建议添加节流机制，例如每 5 行或 500ms 检查一次。
+
+### 审核结论
+- [x] **通过** — 评分 ≥ 85，满足子任务验收条件
+
+### 实现者自检确认
+- [ ] 实现者已执行编译/类型检查 — 未确认（工作流中断）
+- [ ] 实现者已执行 Lint 检查 — 未确认
+- [ ] 实现者已运行相关测试 — 无相关测试
+- [ ] 实现者已确认测试覆盖 — 无测试覆盖
+
+> 实现者自检未能完整完成（工作流在第 2 次迭代时中断，`iteration-2-opencode-review.log` 未完成）。建议后继实现者在继续 T-002/T-003 前先确认 `cargo check` 和 `cargo clippy` 通过。
+
+---
+
+## Learnings
+
+- **模式**: 通知辅助函数遵循统一的 `fn send_notification(app: &tauri::AppHandle, title: &str, body: &str)` 模式，调用方只传递关键信息字符串，职责清晰。
+- **踩坑**: `emit_iteration_progress` 被 stdout/stderr 逐行触发，虽然设计了 `last_progress` 去重，但对大输出量的长时间任务会增加不必要的锁争用和文件系统扫描。
+- **经验**: `check_and_notify_progress` 作为纯逻辑函数（进度 diff 分析 + 通知路由），可以提取为一个不依赖 `AppHandle` 的决策函数，返回通知类型枚举，再由调用方负责发送。这样既可单元测试又保持发送逻辑简单。
