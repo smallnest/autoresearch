@@ -1,0 +1,61 @@
+我现在对项目有了清晰的了解。接下来我将规划子任务拆分。
+
+基于对当前状态的分析：
+
+- **桌面应用位于** `desktop_app/`（而非根目录）
+- **图标**：默认的 Tauri 脚手架图标（16 个文件，包括 .icns、.ico、各种 PNG 尺寸）
+- **打包配置**：最小化，仅包含 `"targets": "all"`，没有特定于 macOS 的配置，没有 DMG 背景，没有权利
+- **Tauri v2** 配合 React 18 + TypeScript + Vite 7
+
+此 Issue 自然分为 3 个可独立验证的子任务：
+
+```json
+{
+  "issueNumber": 83,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "设计并生成 Autoresearch 专属应用图标集",
+      "description": "为 Autoresearch Desktop 设计专属应用图标，替换 desktop_app/src-tauri/icons/ 下的默认 Tauri 图标。图标应体现自动化/研究/AI 主题，简洁且辨识度高。需要生成全尺寸图标集：icon.png (1024x1024 源图)、icon.icns (macOS)、icon.ico (Windows)，以及各尺寸 PNG（32x32, 128x128, 128x128@2x, Square 系列, StoreLogo 等）。可使用 AI 图像生成工具或 SVG 矢量图作为源图，再通过 tauri icon 命令或 icns/ico 工具转换生成全部尺寸。",
+      "acceptanceCriteria": [
+        "desktop_app/src-tauri/icons/ 下所有 16 个图标文件已替换为自定义图标，非 Tauri 默认图标",
+        "icon.png 源图尺寸为 1024x1024",
+        "图标视觉统一，各尺寸清晰可辨",
+        "icon.icns 和 icon.ico 包含完整的多尺寸图标"
+      ],
+      "priority": 1,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "配置 tauri.conf.json 的 macOS bundle 及 DMG 打包选项",
+      "description": "修改 desktop_app/src-tauri/tauri.conf.json 的 bundle 部分，添加完整的 macOS 打包配置：1) 设置 bundle.targets 为 DMG 优先；2) 添加 bundle.macOS 配置项（category: DeveloperTool, minimumSystemVersion: 10.15）；3) 添加 bundle.dmg 配置（背景图路径、窗口布局、appPosition、applicationFolderPosition）；4) 设置 bundle.shortDescription 和 bundle.longDescription；5) 预留 code signing 和 notarization 配置项（entitlements 路径等，不强制要求证书）。创建 DMG 背景图文件（放置于 desktop_app/src-tauri/dmg/ 目录下）。",
+      "acceptanceCriteria": [
+        "tauri.conf.json 包含 bundle.macOS 对象，设置 category 为 DeveloperTool，minimumSystemVersion 为 10.15",
+        "tauri.conf.json 包含 bundle.dmg 对象，配置了 appPosition 和 applicationFolderPosition",
+        "tauri.conf.json 包含 bundle.shortDescription 和 bundle.longDescription",
+        "DMG 背景图文件存在且路径在 tauri.conf.json 中正确引用",
+        "bundle.targets 配置为包含 dmg 的目标列表"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "验证 DMG 打包构建与应用安装运行",
+      "description": "执行 pnpm tauri build 验证完整打包流程，确保能成功生成 .dmg 安装包。验证内容包括：1) 构建无报错，产物中包含 .dmg 文件；2) DMG 挂载后显示正确的背景图和窗口布局；3) 拖拽安装到 Applications 后应用可正常启动；4) 应用图标在 Dock 和 Launchpad 中正确显示自定义图标；5) src-tauri/icons/ 中所有图标文件已在构建产物中正确生效。如发现问题则修复配置并重新验证。",
+      "acceptanceCriteria": [
+        "pnpm tauri build 成功执行，无构建错误",
+        "构建产物中包含 .dmg 文件",
+        "DMG 挂载后显示背景图和应用+Applications 快捷方式",
+        "安装后应用可正常启动运行",
+        "应用在 Dock/Launchpad 中显示自定义图标"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```
