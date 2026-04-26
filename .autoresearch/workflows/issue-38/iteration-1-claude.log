@@ -1,0 +1,35 @@
+T-001 已完成。以下是已实现功能的摘要：
+
+## 实现总结
+
+### 新增类型
+- `PrActionResponse` 结构体 (`desktop_app/src-tauri/src/lib.rs`)，包含 `success: bool` 和 `message: String` 字段
+
+### 新增命令 (2)
+- **`merge_pr`** (`project_path, pr_number`) — 调用 `gh pr merge N --merge`，返回 `PrActionResponse`
+- **`close_pr`** (`project_path, pr_number`) — 调用 `gh pr close N`，返回 `PrActionResponse`
+
+两者都遵循现有模式：异步 Tauri 命令 → `spawn_blocking` → 同步辅助函数，包含路径验证和 `gh` CLI 执行。
+
+### 错误映射辅助函数 (2)
+- **`map_pr_merge_error`** — 处理：未找到，已合并，合并冲突，权限被拒绝
+- **`map_pr_close_error`** — 处理：未找到，已关闭
+
+### 注册
+这两个命令均已添加到 `invoke_handler` 中的 `tauri::generate_handler![]`。
+
+### 测试 (4 个新增测试，共 113 个通过)
+- `merge_pr_rejects_non_directory_path`
+- `close_pr_rejects_non_directory_path`
+- `map_pr_merge_error_handles_known_patterns`
+- `map_pr_close_error_handles_known_patterns`
+
+### 验证
+- `cargo check` — 通过
+- `cargo clippy -- -D warnings` — 通过（0 警告）
+- `cargo test` — 113/113 通过
+
+## 经验总结
+- **模式**：PR action 命令对成功和失败路径都返回 `Result<PrActionResponse, String>`，其中 `success: false` 用于用户可见的操作失败（已合并、未找到等），而 `Err(String)` 仅用于系统级错误（无效路径、任务连接失败）。这使得前端可以统一处理两种响应类型。
+- **坑**：测试模块需要显式导入所有新的 sync 辅助函数和错误映射器——`cargo check` 通过（因为它不编译测试），但 `cargo test` 失败并提示作用域错误。
+- **经验**：对于不返回结构化 `gh` JSON 的 action 命令，返回一个通用的 `{success, message}` 结构体，而不是解析 `gh` CLI 输出。

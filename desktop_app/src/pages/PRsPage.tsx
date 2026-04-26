@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import {
   usePrStore,
@@ -6,6 +6,8 @@ import {
   PrFileChange,
 } from '../stores/prStore';
 import DiffViewer from '../components/DiffViewer';
+import ConfirmModal from '../components/ConfirmModal';
+import Toast, { useToast } from '../components/Toast';
 
 // PR Icon
 function PRIcon({ className }: { className?: string }): JSX.Element {
@@ -127,6 +129,9 @@ function PRListItem({
   detailLoading,
   diffText,
   diffLoading,
+  actionLoading,
+  onMerge,
+  onClose,
 }: {
   pr: GhPullRequest;
   isSelected: boolean;
@@ -135,6 +140,9 @@ function PRListItem({
   detailLoading: boolean;
   diffText: string;
   diffLoading: boolean;
+  actionLoading: boolean;
+  onMerge: () => void;
+  onClose: () => void;
 }): JSX.Element {
   return (
     <div
@@ -187,6 +195,44 @@ function PRListItem({
       {/* Expanded file list and diff */}
       {isSelected && (
         <div className="border-t border-gray-200 bg-gray-50/50 px-4 py-3">
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={(e) => { e.stopPropagation(); onMerge(); }}
+              disabled={actionLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {actionLoading ? (
+                <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              合并
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              disabled={actionLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {actionLoading ? (
+                <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth={4} />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+              关闭
+            </button>
+          </div>
+
           {detailLoading || diffLoading ? (
             <div className="flex items-center justify-center py-4">
               <svg
@@ -262,15 +308,24 @@ function PRsPage(): JSX.Element {
     isLoading,
     detailLoading,
     diffLoading,
+    actionLoading,
     error,
     detailError,
     loadPrs,
     loadPrDetail,
     loadPrDiff,
+    mergePr,
+    closePr,
     clearPrDetail,
     clearError,
     clearDetailError,
   } = usePrStore();
+
+  const { toasts, addToast, removeToast } = useToast();
+
+  // Confirmation modal state
+  const [confirmAction, setConfirmAction] = useState<'merge' | 'close' | null>(null);
+  const [confirmPr, setConfirmPr] = useState<GhPullRequest | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -328,6 +383,36 @@ function PRsPage(): JSX.Element {
     }
     usePrStore.getState().selectPr(prNumber);
   };
+
+  const openConfirm = useCallback((action: 'merge' | 'close', pr: GhPullRequest) => {
+    setConfirmAction(action);
+    setConfirmPr(pr);
+  }, []);
+
+  const cancelConfirm = useCallback(() => {
+    setConfirmAction(null);
+    setConfirmPr(null);
+  }, []);
+
+  const executeAction = useCallback(async () => {
+    if (!confirmAction || !confirmPr || !projectPath) return;
+    const action = confirmAction;
+    const pr = confirmPr;
+    setConfirmAction(null);
+    setConfirmPr(null);
+
+    const result =
+      action === 'merge'
+        ? await mergePr(projectPath, pr.number)
+        : await closePr(projectPath, pr.number);
+
+    if (result.success) {
+      addToast(result.message || `${action === 'merge' ? '合并' : '关闭'} PR #${pr.number} 成功`, 'success');
+      loadPrs(projectPath);
+    } else {
+      addToast(result.message, 'error');
+    }
+  }, [confirmAction, confirmPr, projectPath, mergePr, closePr, addToast, loadPrs]);
 
   if (!projectPath) {
     return (
@@ -501,6 +586,9 @@ function PRsPage(): JSX.Element {
               detailLoading={selectedPrNumber === pr.number && detailLoading}
               diffText={selectedPrNumber === pr.number ? (prDiff?.diff ?? '') : ''}
               diffLoading={selectedPrNumber === pr.number && diffLoading}
+              actionLoading={selectedPrNumber === pr.number && actionLoading}
+              onMerge={() => openConfirm('merge', pr)}
+              onClose={() => openConfirm('close', pr)}
             />
           ))
         ) : (
@@ -551,6 +639,29 @@ function PRsPage(): JSX.Element {
           </div>
         </div>
       )}
+
+      {/* Confirmation modal */}
+      <ConfirmModal
+        open={confirmAction !== null && confirmPr !== null}
+        title={confirmAction === 'merge' ? '确认合并 PR' : '确认关闭 PR'}
+        message={
+          confirmPr
+            ? `${confirmAction === 'merge' ? '合并' : '关闭'} PR #${confirmPr.number}：${confirmPr.title}`
+            : ''
+        }
+        confirmLabel={confirmAction === 'merge' ? '合并' : '关闭'}
+        confirmClass={
+          confirmAction === 'merge'
+            ? 'bg-green-600 hover:bg-green-700 text-white'
+            : 'bg-red-600 hover:bg-red-700 text-white'
+        }
+        loading={actionLoading}
+        onConfirm={executeAction}
+        onCancel={cancelConfirm}
+      />
+
+      {/* Toast notifications */}
+      <Toast toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

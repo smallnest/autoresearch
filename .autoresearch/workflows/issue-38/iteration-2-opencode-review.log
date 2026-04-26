@@ -1,0 +1,105 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m• [0mExplore Issue #38 implementation[90m Explore Agent[0m
+[0m✓ [0mExplore Issue #38 implementation[90m Explore Agent[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=100, limit=60][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1680, limit=120][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3620, limit=80][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2770, limit=40][0m
+Let me now read the actual implementation code to review it thoroughly.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1559, limit=120][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2810, limit=30][0m
+Let me check the existing PR command signatures for naming consistency.
+Now I have a complete picture. Let me compile the review.
+
+## 审核报告
+
+### Issue
+- 编号: #38
+- 子任务: T-001 — Rust 后端实现 merge_pr 和 close_pr Tauri commands
+- 迭代次数: 1
+
+### 总体评价
+**评分: 93/100**
+
+### 维度得分明细
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 95 | 33.25 |
+| 测试质量 | 25% | 85 | 21.25 |
+| 代码质量 | 20% | 95 | 19.00 |
+| 安全性 | 10% | 95 | 9.50 |
+| 性能 | 10% | 100 | 10.00 |
+| **总分** | 100% | | **93.00** |
+
+### 分项评价
+
+**正确性 (95/100)**
+- `merge_pr` 正确调用 `gh pr merge N --merge`，`close_pr` 正确调用 `gh pr close N` ✓
+- 两个命令均通过 `PrActionResponse { success, message }` 返回操作结果 ✓
+- 两个命令均已注册到 `invoke_handler` (`lib.rs:2802-2803`) ✓
+- 错误处理分两层：系统错误（路径无效、gh 未安装等）→ `Err(String)`，操作失败（PR 不存在、已合并等）→ `Ok(PrActionResponse { success: false })`，设计合理 ✓
+- 参数命名 `pr_number: i64` 与既有 `get_pr_detail`/`get_pr_diff` 保持一致 ✓
+
+**测试质量 (85/100)**
+- `map_pr_merge_error_handles_known_patterns` 覆盖 5 种错误模式（not found, already merged, conflict, permission denied, unknown）✓
+- `map_pr_close_error_handles_known_patterns` 覆盖 3 种错误模式（not found, already closed, unknown）✓
+- `merge_pr_rejects_non_directory_path` / `close_pr_rejects_non_directory_path` 覆盖路径验证 ✓
+- 缺少 success 路径测试（非必选：模拟 gh CLI 需要外部工具，代码库无此先例）⚠️
+- 缺少 `PrActionResponse` 序列化验证测试（轻微）⚠️
+
+**代码质量 (95/100)**
+- 代码结构清晰，严格遵循现有 `list_prs`/`get_pr_detail`/`get_pr_diff` 模式（async → spawn_blocking → sync helper）✓
+- 函数命名合理：`merge_pr_sync`、`map_pr_merge_error`、`PrActionResponse` 等 ✓
+- 错误消息包含具体 PR 编号，便于调试 ✓
+- 使用 `String::from_utf8_lossy` 安全处理 gh 输出 ✓
+
+**安全性 (95/100)**
+- `pr_number` 为 `i64` 类型，不存在命令注入风险 ✓
+- 使用 `Command::new("gh")` API（非 shell），避免 shell 注入 ✓
+- 路径存在性检查 (`is_dir()`) 提供基本防护 ✓
+- 路径遍历、符号链接跳转未做显式防护（与既有命令一致，非此子任务独有问题）⚠️
+
+**性能 (100/100)**
+- 使用 `spawn_blocking` 避免阻塞 Tauri 异步运行时 ✓
+- 无不必要的内存分配或冗余操作 ✓
+
+### 严重问题 (必须修复)
+
+无。所有验收条件均已满足。
+
+### 一般问题 (建议修复)
+
+1. **错误映射的边界精度**: `map_pr_merge_error` 将 `"No commits to merge"` 与 `"already merged"` 归为同一类。实际上 `"No commits to merge"` 也可能指分支和 base 之间无差异但 PR 尚未被 merge 的状态（例如 rebase 后 base 已包含所有 commit）。建议拆分为独立分支，给出更精确的消息。
+
+   ```rust
+   // 在 map_pr_merge_error 中
+   if stderr.contains("No commits to merge") {
+       return format!("Pull request #{pr_number} has no new commits to merge");
+   }
+   ```
+
+### 建议改进 (可选)
+
+1. `merge_pr_sync` 和 `close_pr_sync` 中 `String::from_utf8_lossy(&output.stdout).trim().to_string()` 可简化为 `String::from_utf8(output.stdout).unwrap_or_default()`，减少一次 `Cow` → `&str` → `String` 转换。但保持 `from_utf8_lossy` 的防御性编码风格也无问题。
+
+### 审核结论
+
+- [x] **通过** — 评分 ≥ 85，可进入人工审核阶段
+
+### 自检验证
+
+基于迭代 1 报告确认：
+- [x] `cargo clippy -- -D warnings` — 通过（0 警告）
+- [x] `cargo test` — 113/113 通过
+
+---
+
+## Learnings
+
+- **模式**: PR action 类命令（merge/close）使用 `Result<PrActionResponse, String>` 返回值，区分"系统错误"（Err）和"操作结果"（Ok + success: false），而非继续沿用 `get_pr_detail` 用 `Err` 表示 gh CLI 失败的模式。这是合理的设计选择，前端可根据 `success` 字段区分展示。
+- **模式**: 新命令的参数命名 `pr_number: i64` 与既有 `get_pr_detail`/`get_pr_diff` 保持一致，而非沿用子任务描述中的 `number`。
+- **踩坑**: 无实际踩坑。实现严格遵循既有模式，无回归风险。
+- **经验**: `PrActionResponse` 未出现在测试模块的导入列表中，因为当前测试仅测试错误路径（返回 `Err`）。后续如需为 success 路径添加测试需额外导入。

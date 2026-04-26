@@ -1,0 +1,37 @@
+所有任务已完成。以下是已实现功能的总结：
+
+## 实现总结 (T-002)
+
+### 修改/创建的文件
+
+1.  **`desktop_app/src/stores/prStore.ts`** — 添加了 `PrActionResponse` 类型、`actionLoading` 状态、`mergePr`/`closePr` 操作以及 `normalizePrActionError` 辅助函数
+
+2.  **`desktop_app/src/components/ConfirmModal.tsx`** (新增) — 自定义 React 模态框，包含：
+    *   用于关闭的 Esc 键处理
+    *   用于关闭的背景点击
+    *   确认按钮上的加载微调器
+    *   可自定义的确认按钮样式（合并为绿色，关闭为红色）
+
+3.  **`desktop_app/src/components/Toast.tsx`** (新增) — Toast 通知系统，包含：
+    *   `useToast` hook，用于状态管理
+    *   绿色成功 / 红色错误变体
+    *   3 秒自动消失
+    *   手动关闭按钮
+
+4.  **`desktop_app/src/pages/PRsPage.tsx`** — 添加了：
+    *   展开式 PR 详情区域中的“合并”/“关闭”按钮
+    *   显示 PR 编号 + 标题的确认对话框
+    *   加载微调器在操作期间禁用按钮
+    *   成功时显示绿色提示 + PR 列表刷新
+    *   失败时显示带有后端消息的红色提示
+
+### 验证
+*   `npx tsc --noEmit` — 通过 (0 错误)
+*   `npx eslint` — 通过 (0 错误)
+
+## 学习要点
+
+*   **模式**：`PrActionResponse { success, message }` 的设计使得前端可以统一处理：`success: true` → 绿色提示 + 刷新；`success: false` → 红色提示，显示 `message`；`Err(String)` → 通过 `normalizePrActionError` 捕获
+*   **模式**：Tauri 会自动将 Rust 的 `snake_case` 参数 (`pr_number`) 转换为 JS 的 `camelCase` (`prNumber`)，因此前端的 `invoke` 会使用 `{ projectPath, prNumber }`
+*   **模式**：本项目使用纯 Tailwind 自定义组件（没有 `dialog`/`toast` 库），因此 `ConfirmModal` 和 `Toast` 遵循现有的 SVG 图标 + Tailwind 样式模式
+*   **陷阱**：`useMemo` 导入在添加 `useCallback` 后需要更新；始终验证未使用的变量不会触发 TS6133
