@@ -1,0 +1,58 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m→ [0mRead desktop_app/src-tauri/icons
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri && cargo check 2>&1
+warning: desktop_app@0.1.0: Runtime resources prepared (version 0.1.0)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.63s
+[0m
+[0m$ [0mls -la /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/32x32.png
+-rw-r--r--@ 1 chaoyuepan  staff  2122 Apr 26 16:11 /Users/chaoyuepan/ai/autoresearch/desktop_app/src-tauri/icons/32x32.png
+[0m
+## 审核报告
+
+### Issue
+- 编号: #39
+- 子任务: T-001 - 配置 Tauri tray-icon 功能与权限
+- 迭代: 1
+
+### 总体评价
+**评分: 100/100**
+
+#### 各维度得分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 100 | 35.0 |
+| 测试质量 | 25% | 100 | 25.0 |
+| 代码质量 | 20% | 100 | 20.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | **100%** | | **100/100** |
+
+#### 验收标准对照
+
+| 标准 | 状态 | 证据 |
+|------|------|------|
+| Cargo.toml 含 `features = ["tray-icon"]` | ✅ | `Cargo.toml:21` |
+| tauri.conf.json 含 `trayIcon` (id, iconPath, tooltip) | ✅ | `tauri.conf.json:24-28` |
+| capabilities/default.json 含 tray 权限 | ✅ | `default.json:13` — `core:tray:default` |
+| cargo check 编译通过 | ✅ | 耗时 0.63s，无错误 |
+| 图标资源可用 | ✅ | `icons/32x32.png` (2122 bytes) 存在 |
+
+#### 问题列表
+
+无任何问题。所有验收标准均满足，实现简洁正确。
+
+#### 审核结论
+
+- [x] **通过**
+
+### Learnings
+
+- **验证**: Tauri 2 的 tray-icon 配置在 `app.trayIcon` 层级，权限在 `core:tray` 命名空间。`Cargo.toml`、`tauri.conf.json`、`capabilities/default.json` 三者配合紧密，缺一不可。本实现三处改动均正确。
+- **检查要点**: 审核此类配置性子任务时，验证路径是：feature flag → 配置文件 → 权限声明 → 资源存在 → 编译通过。所有节点均通过即为满分。

@@ -1,0 +1,32 @@
+所有任务已完成。以下是所做工作的总结：
+
+## T-001 实现总结
+
+### 所做更改
+
+1. **`desktop_app/src-tauri/Cargo.toml`** — 在 tauri 依赖中添加了 `features = ["tray-icon"]`
+2. **`desktop_app/src-tauri/tauri.conf.json`** — 在 `app` 部分下添加了 `trayIcon` 配置：
+   - `id`: "main-tray"
+   - `iconPath`: "icons/32x32.png" (现有图标，适用于 macOS 托盘)
+   - `tooltip`: "Autoresearch Desktop"
+3. **`desktop_app/src-tauri/capabilities/default.json`** — 添加了 `"core:tray:default"` 权限
+
+### 验证
+- `cargo check` — 通过
+- `cargo clippy -- -D warnings` — 通过
+- 现有 `icons/32x32.png` 适用于 macOS 系统托盘 (macOS 菜单栏图标的 16-32px 标准尺寸)
+
+### 验收标准状态
+- [x] `Cargo.toml` 中 tauri 依赖包含 `features = ["tray-icon"]`
+- [x] `tauri.conf.json` 包含 `trayIcon` 配置 (`id`、`iconPath`、`tooltip`)
+- [x] `capabilities/default.json` 包含 `core:tray:default` 权限
+- [x] `cargo check` 编译通过
+- [x] 已有图标资源可用于托盘显示 (`icons/32x32.png`)
+
+### 单元测试
+单元测试不适用于此子任务 — 变更是配置文件 (`Cargo.toml`、`tauri.conf.json`、`capabilities/default.json`)，而非可测试的逻辑代码。
+
+## 经验总结
+- **Tauri 2 tray 权限命名空间**: Tray 权限位于 `core:tray` 下 (而非 `tray`)。使用 `tray:default` 会导致构建时错误。检查生成的 `acl-manifests.json` 以发现正确的命名空间。
+- **Tauri tray-icon 是 Rust 端功能**: `Cargo.toml` 中的 `tray-icon` feature 启用了 `TrayIconBuilder` API。`tauri.conf.json` 中的 `trayIcon` 配置设置了初始的托盘图标。前端权限 (`core:tray:default`) 用于 JS 端的托盘操作。
+- **图标尺寸**: macOS 菜单栏图标通常为 16x16 或 22x22 逻辑像素。32x32 图标适用于高 DPI 显示；Tauri 会自动缩放。

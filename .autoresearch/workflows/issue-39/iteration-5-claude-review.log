@@ -1,0 +1,219 @@
+现在我已全面了解情况。以下是我的审核意见：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #39
+- 标题: [desktop-app] 系统托盘集成
+- 迭代次数: 当前
+- 子任务: T-003 - 关闭窗口最小化到托盘而非退出
+
+---
+
+### 总体评价
+
+**评分: 45/100**
+
+T-003 的核心功能——窗口关闭时隐藏到托盘而非退出——**完全未实现**。当前实现仅完成了托盘图标的基础搭建（菜单、点击恢复窗口），但缺少最关键的 `close_requested` 事件拦截。点击关闭按钮时应用会直接退出，而非最小化到托盘。Cmd+Q 退出流程也未实现。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 缺少 `close_requested` 事件处理 — 核心功能未实现
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:2960` (`run()` 函数)
+
+**问题描述**:
+T-003 的核心需求是"关闭窗口最小化到托盘而非退出"，但代码中没有任何 `on_window_event` 或 `CloseRequested` 事件处理。用户点击窗口关闭按钮时，应用会直接退出。
+
+**当前代码**:
+`run()` 函数中 `tauri::Builder` 链上没有 `.on_window_event()` 处理。
+
+**建议修复**:
+在 `tauri::Builder` 链上添加 `on_window_event` 处理，拦截 `CloseRequested` 事件，阻止默认关闭并隐藏窗口：
+
+```rust
+tauri::Builder::default()
+    // ... plugins ...
+    .setup(|app| { /* tray setup */ })
+    .on_window_event(|window, event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+    })
+    .invoke_handler(...)
+```
+
+同时需要一个退出标志，让托盘菜单"退出"能真正关闭应用：
+
+```rust
+// 在 setup 中用 app.manage 管理退出标志
+use std::sync::atomic::{AtomicBool, Ordering};
+let should_exit = std::sync::Arc::new(AtomicBool::new(false));
+app.manage(ShouldExit(should_exit.clone()));
+
+// on_window_event 中判断
+.on_window_event(|window, event| {
+    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        let should_exit = window.state::<ShouldExit>();
+        if should_exit.0.load(Ordering::SeqCst) {
+            // 托盘菜单退出，允许关闭
+        } else {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+    }
+})
+
+// 托盘菜单 "quit" 中先设置标志再关闭
+"quit" => {
+    let should_exit = app.state::<ShouldExit>();
+    should_exit.0.store(true, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.close();
+    }
+}
+```
+
+**原因**: 这是 T-003 的验收条件 #1，也是最核心的功能需求。
+
+---
+
+#### 问题 2: Cmd+Q 退出流程未实现
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:2982` (quit 菜单项)
+
+**问题描述**:
+验收条件要求"Cmd+Q 全局快捷键应触发真正的退出流程（通过托盘菜单退出）"。当前托盘菜单的"退出"调用 `app.exit(0)`，但 macOS 上 Cmd+Q 会触发 `CloseRequested` 事件。如果按问题 1 修复后拦截了 `CloseRequested`，Cmd+Q 也会被拦截导致无法退出。
+
+**建议修复**:
+方案一：使用 `tauri-plugin-global-shortcut` 注册 Cmd+Q 快捷键，直接调用 `app.exit(0)`。
+
+方案二（更轻量）：在 macOS 上添加应用菜单的 "Quit" 项（带 Cmd+Q 加速键），该菜单项调用 `app.exit(0)` 绕过 `CloseRequested`：
+
+```rust
+use tauri::menu::{Menu, MenuItem};
+
+let quit_menu = MenuItem::with_id(app, "quit_app", "Quit Autoresearch", true, Some("CmdOrCtrl+Q"))?;
+let menu = Menu::with_items(app, &[&quit_menu])?;
+app.set_menu(menu)?;
+```
+
+**原因**: 这是 T-003 的验收条件 #4。
+
+---
+
+#### 问题 3: 可能出现重复托盘图标
+
+**位置**: `desktop_app/src-tauri/tauri.conf.json:24` + `desktop_app/src-tauri/src/lib.rs:2969`
+
+**问题描述**:
+`tauri.conf.json` 中定义了 `trayIcon` 配置（id: "main-tray"），Tauri 会自动创建一个托盘图标。同时 `TrayIconBuilder::new()` 又创建了第二个托盘图标。这可能导致显示两个托盘图标。
+
+**当前代码**:
+```json
+// tauri.conf.json
+"trayIcon": { "id": "main-tray", "iconPath": "icons/32x32.png", "tooltip": "..." }
+```
+```rust
+// lib.rs — 再创建一个
+let _tray = tauri::tray::TrayIconBuilder::new()
+    .menu(&menu)
+    ...
+    .build(app)?;
+```
+
+**建议修复**:
+移除 `tauri.conf.json` 中的 `trayIcon` 配置，在 `TrayIconBuilder` 中显式设置所有属性：
+
+```rust
+let _tray = tauri::tray::TrayIconBuilder::with_id("main-tray")
+    .icon(app.default_window_icon().unwrap().clone())
+    .tooltip("Autoresearch Desktop")
+    .menu(&menu)
+    // ... event handlers
+    .build(app)?;
+```
+
+或保留配置，在 setup 中通过 `app.tray_by_id("main-tray")` 获取已有图标并设置菜单/事件。
+
+**原因**: 两个托盘图标会让用户困惑，也不符合桌面应用常规。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 4: 前端未处理 `tray-stop-task` 事件
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:2980` + `desktop_app/src/stores/runStore.ts`
+
+**问题描述**:
+托盘菜单"停止当前任务"发出 `tray-stop-task` 事件，但前端没有监听该事件。点击该菜单项不会有任何效果。
+
+**建议修复**:
+在 `runStore.ts` 的 `init` 函数中添加对 `tray-stop-task` 事件的监听，收到后调用已有的 `stopRun` 逻辑：
+
+```typescript
+deps.listen('tray-stop-task', () => {
+  get().stopRun();
+});
+```
+
+**原因**: 托盘菜单"停止当前任务"是用户可见的交互项，应当可用。
+
+---
+
+#### 问题 5: `update_tray_stop_menu` 可能更新错误的托盘图标
+
+**位置**: `desktop_app/src-tauri/src/lib.rs:2951`
+
+**问题描述**:
+`update_tray_stop_menu` 通过 `app.tray_by_id("main-tray")` 查找托盘图标，但 `TrayIconBuilder::new()` 创建的图标没有设置 "main-tray" ID。如果配置中定义的托盘图标与 Builder 创建的是两个不同实例，`update_tray_stop_menu` 更新的是配置托盘，而事件处理在 Builder 托盘上。
+
+**建议修复**:
+与问题 3 一并修复，确保只有一个托盘图标且 ID 为 "main-tray"。
+
+---
+
+### 建议改进 (可选)
+
+- `on_tray_icon_event` 中只处理了 `Click` 事件，在 Windows 上可能还需要处理 `DoubleClick`；macOS 上托盘图标通常只响应单击
+- 考虑添加窗口隐藏时的通知提示（如 toast 通知"已最小化到托盘"），帮助首次使用的用户理解行为
+- 可考虑添加"关闭时最小化到托盘"的设置项，允许用户切换行为
+
+---
+
+### 验收条件逐项检查
+
+| 验收条件 | 状态 | 说明 |
+|---|---|---|
+| 点击窗口关闭按钮时窗口隐藏而非退出应用 | ❌ 未实现 | 缺少 `close_requested` 事件拦截 |
+| 隐藏后托盘图标仍然存在 | ⚠️ 部分 | 托盘图标已创建，但因关闭直接退出，无法验证 |
+| 通过托盘图标/菜单可恢复显示窗口 | ✅ 已实现 | 点击图标和"显示主窗口"菜单均可恢复 |
+| Cmd+Q 可真正退出应用 | ❌ 未实现 | 无 Cmd+Q 处理，且未拦截关闭事件 |
+| macOS Dock 中应用图标行为正常 | ✅ 符合 | 未设置 LSUIElement |
+| npx tsc --noEmit 类型检查通过 | ✅ 通过 | TypeScript 和 cargo check 均无错误 |
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. **[必须]** 添加 `on_window_event` 处理 `CloseRequested`，阻止默认关闭并隐藏窗口，同时引入退出标志让托盘"退出"能真正关闭应用
+2. **[必须]** 实现 Cmd+Q 退出流程（全局快捷键或应用菜单加速键）
+3. **[必须]** 修复可能重复的托盘图标问题（移除 tauri.conf.json 中的 trayIcon 或改用 `TrayIconBuilder::with_id`）
+4. **[建议]** 前端添加 `tray-stop-task` 事件监听
+
+---
+
+## Learnings
+
+- **模式**: Tauri v2 中窗口关闭拦截需使用 `.on_window_event()` 处理 `WindowEvent::CloseRequested`，通过 `api.prevent_close()` 阻止默认行为
+- **踩坑**: `tauri.conf.json` 中的 `trayIcon` 配置会自动创建托盘图标，与 `TrayIconBuilder` 可能产生重复；需要二选一
+- **经验**: macOS 上 Cmd+Q 会触发 `CloseRequested`，如需区分"关闭到托盘"和"Cmd+Q 退出"，需要引入退出标志或使用应用菜单加速键/全局快捷键

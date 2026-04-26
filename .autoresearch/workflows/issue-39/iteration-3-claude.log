@@ -1,0 +1,15 @@
+## Summary
+
+The T-002 tray code was **already present** in `lib.rs` but had **two compilation errors** that prevented it from building:
+
+1. **`Menu` missing generic parameter** — Tauri 2's `Menu<R>` requires an explicit runtime type. Fixed by changing `tauri::menu::Menu` → `tauri::menu::Menu<tauri::Wry>` in `build_tray_menu`'s return type.
+
+2. **Type mismatch in `.setup()`** — The setup closure receives `&mut App`, but `build_tray_menu` expects `&AppHandle`. Fixed by calling `app.handle().clone()` and passing the handle reference.
+
+After these fixes, `cargo check` and `cargo clippy -- -D warnings` both pass cleanly. All T-002 acceptance criteria are met.
+
+## Learnings
+
+- **模式**: Tauri 2 的 `Menu<R>` 是泛型类型，必须指定运行时参数 `tauri::Wry`。直接写 `tauri::menu::Menu` 会导致编译错误 `E0107: missing generics`。
+- **踩坑**: `.setup()` 闭包的参数类型是 `&mut App<R, M>`，不是 `&AppHandle`。需要通过 `app.handle()` 获取 `AppHandle`。在 Tauri 2 中，`App` 实现了 `Manager` trait，所以也可以直接调用 `.get_webview_window()` 等方法，但如果需要传给接受 `&AppHandle` 的函数，必须显式转换。
+- **经验**: 审核报告说"T-002 完全未实现"，但实际上代码已经写好，只是编译不过。审核 Agent 可能没有尝试编译，或者查看的是旧的代码快照。后续迭代应先运行 `cargo check` 确认编译状态，再判断是否"未实现"。

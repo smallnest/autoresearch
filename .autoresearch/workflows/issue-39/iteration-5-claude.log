@@ -1,0 +1,25 @@
+## 审核反馈修复完成
+
+所有 4 个问题已修复，`cargo check` 和 `npx tsc --noEmit` 均通过。
+
+### 修复总结
+
+| 问题 | 修复方案 | 文件 |
+|---|---|---|
+| **问题 1**: 缺少 `CloseRequested` 事件处理 | 添加 `ShouldExit(AtomicBool)` managed state + `on_window_event` 拦截关闭，隐藏窗口到托盘 | `lib.rs` |
+| **问题 2**: Cmd+Q 退出流程未实现 | 添加 app menu 带 `CmdOrCtrl+Q` 加速键，设置 exit flag 后关闭窗口 | `lib.rs` |
+| **问题 3**: 可能重复托盘图标 | 移除 `tauri.conf.json` 中的 `trayIcon`，`TrayIconBuilder` 改用 `with_id("main-tray")` | `lib.rs` + `tauri.conf.json` |
+| **问题 4**: 前端未处理 `tray-stop-task` | 在 `runStore.ts` 的 `initialize` 中添加 `tray-stop-task` 事件监听，调用 `stopRun()` | `runStore.ts` |
+
+### 核心逻辑流程
+
+- **点击关闭按钮** → `CloseRequested` → `should_exit` 为 false → `prevent_close()` + `hide()` → 窗口隐藏到托盘
+- **托盘菜单"退出"** → 设置 `should_exit = true` → `window.close()` → `CloseRequested` → `should_exit` 为 true → 允许关闭
+- **Cmd+Q** → app menu `quit_app` → 设置 `should_exit = true` → `window.close()` → 同上
+
+## Learnings
+
+- **模式**: Tauri v2 中实现"关闭到托盘"需要三部分配合：(1) `on_window_event` 拦截 `CloseRequested`，(2) `AtomicBool` 退出标志区分"隐藏"和"真正退出"，(3) app menu 或全局快捷键绕过 `CloseRequested` 实现 Cmd+Q
+- **踩坑**: `tauri.conf.json` 中的 `trayIcon` 会自动创建托盘图标，与 `TrayIconBuilder` 产生重复；应二选一，推荐在代码中用 `with_id` 显式创建
+- **经验**: `TrayIconBuilder::new()` 创建的托盘没有 ID，`tray_by_id()` 找不到；必须用 `TrayIconBuilder::with_id("main-tray")` 才能让 `update_tray_stop_menu` 正确更新菜单
+- **经验**: `setup` 闭包中如果捕获了外部变量（如 `should_exit`），需要用 `move` 关键字，否则编译器报 closure may outlive borrowed value
