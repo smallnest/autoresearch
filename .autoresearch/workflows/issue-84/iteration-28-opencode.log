@@ -1,0 +1,57 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m✱ [0mGlob "desktop_app/tests/**/*project*"[90m 0 matches[0m
+[0m✱ [0mGrep "projectStore|useProjectStore"[90m 4 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*store*"[90m 1 match[0m
+Let me also check if there are any tests for the store:
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+## 修复计划
+
+根据审核反馈，共发现 **6 个问题**需要修复，覆盖 store 和 UI 两层。
+
+### 现有状态
+
+- **projectStore.ts**: T-001 已完成，`isInitializing`、`ensureConfigInitialized`、`isConfigIncomplete` 已实现
+- **DashboardPage.tsx**: T-002 未被触及，`InitTemplatePrompt` 仍是旧版纯提示 UI
+
+### 任务分解
+
+#### Task 1: Store — 添加 `retryInitialize` action
+`projectStore.ts:26` 接口追加 `retryInitialize: () => Promise<void>`，实现：
+- guard 检查 `projectPath`
+- 依次调用 `detect_project_config` → `ensureConfigInitialized`
+- 更新 state 并显式设 `isInitializing: false`
+- `projectPath` 过期保护
+
+#### Task 2: Store — 修复 `loadRecentProjects` 遗漏的自动初始化
+`projectStore.ts:192-196` Tauri auto-load 分支在 `detect_project_config` 后插入 `ensureConfigInitialized(path, detected, set)`——这是唯一位于 `selectProject`/`loadProject` 之外的入口路径。
+
+#### Task 3: UI — 重写 `InitTemplatePrompt`
+`DashboardPage.tsx:242-293`：
+- 移除 `onLearnMore` prop 和"了解"按钮/alert
+- 新增 `isInitializing`、`initError`、`onRetry` props
+- 三态渲染：
+  - **加载中**（`isInitializing`）→ 蓝色卡片 + spinner + "正在初始化配置..."
+  - **错误**（`initError && !isInitializing`）→ 红色卡片 + 错误消息 + "重试"按钮 + "稍后"按钮
+  - **静默** → 返回 `null`
+
+#### Task 4: UI — 更新 `ProjectInfoScreen`
+`DashboardPage.tsx:316-491`：
+- 从 store 解构 `isInitializing`、`error`、`retryInitialize`、`clearError`
+- 用本地 `showInitPrompt` 管理显隐（初始化失败/用户稍后）
+- 展示条件改为 `(isInitializing || error) && showInitPrompt`（不只依赖 `hasMissingConfig`）
+- "稍后"同时调用 `clearError` 清除 store 错误
+
+#### Task 5: 验证
+- 无 console 错误
+- 所有状态过渡平滑（初始化中→成功→`ConfigCompleteNotification`，或初始化失败→错误重试）
+- 移除无用 import（`WelcomeScreen` 中的 `ProjectConfig` 导入——实际在 `ProjectInfoScreen` 使用）
+
+---
+
+是否按此计划执行？

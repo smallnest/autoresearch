@@ -1,0 +1,79 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m✱ [0mGlob "desktop_app/src/**/*"[90m in . · 42 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m in . · 13 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/projectStore*"[90m in . · 0 matches[0m
+[0m✱ [0mGrep "init_project_config"[90m in . · 676 matches[0m
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app · 4 matches[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+[0m✱ [0mGrep "projectStore"[90m in desktop_app/tests · 4 matches[0m
+[0m✱ [0mGrep "createProjectStore|create.*Store.*project"[90m in desktop_app/src · 0 matches[0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [limit=50][0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=50, limit=80][0m
+[0m✱ [0mGrep "create.*Store"[90m in desktop_app/src/stores · 20 matches[0m
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 - 在 projectStore 中添加自动初始化逻辑
+- 当前迭代: 19
+
+### 总体评价
+**评分: 75/100**
+> 评分计算: 正确性 90×0.35 + 测试质量 40×0.25 + 代码质量 95×0.20 + 安全性 100×0.10 + 性能 90×0.10 = 75.0
+
+未达标（< 85）。核心功能实现正确，但缺少工厂模式和配套测试是阻塞性问题。
+
+### 严重问题 (必须修复)
+
+**1. 缺少工厂模式和配套测试**（正确性 -10, 测试质量 -60）
+
+`projectStore.ts` 是仓库中**唯一**没有工厂模式的主 store。对比：
+- `runStore.ts`: `createRunStore(overrides)` ✅
+- `iterationStore.ts`: `createIterationStore(overrides)` ✅
+- `historyStore.ts`: `createHistoryStore(overrides)` ✅
+- `logViewerStore.ts`: `createLogViewerStore(overrides)` ✅
+- `projectStore.ts`: 直接 `create()` ❌
+
+直接后果：`tests/` 下 12 个测试文件，0 个覆盖 `projectStore`。`storeErrorLocalization.test.mjs` 仅测试了导出的 `normalizeProjectError` 纯函数，store 的核心逻辑（`selectProject` 的初始化流程、`ensureConfigInitialized` 的 mock 调用、`loadProject` 的初始化路径、错误处理分支）完全无测试覆盖。
+
+此问题已在迭代 7-18 中被连续标记 12+ 次，反复指出但从未修复。
+
+修复方案：为 `projectStore` 添加 `createProjectStore(overrides)` 工厂模式（注入 `isTauri`/`invoke` 依赖），然后编写测试覆盖以下场景：
+- `selectProject` Tauri 模式：配置不完整 → 调 `init_project_config`
+- `selectProject` Tauri 模式：配置已完整 → 不调 `init_project_config`
+- `selectProject` Tauri 模式：初始化失败 → error 被设置，config 保留检测值
+- `loadProject` Tauri 模式：同样走 `ensureConfigInitialized`
+- `loadProject` 非 Tauri 模式：不走初始化
+- `loadProject` 初始化失败 → error 被设置
+- `isInitializing` 状态转换正确
+
+### 一般问题 (建议修复)
+
+**2. `loadRecentProjects` Tauri 分支未使用 `ensureConfigInitialized`**（正确性 -10）
+
+`projectStore.ts:188-198`，`loadRecentProjects` 在 Tauri 模式下加载最近项目时调用了 `detect_project_config` 但未调用 `ensureConfigInitialized`。虽然不在本次 AC 中，但从项目重启恢复的角度，如果 `.autoresearch/` 目录被删除或损坏，app 启动后用户看到的是过时/错误的配置状态。建议统一调用路径。
+
+**3. `selectProject` 在配置完整时仍调用了 2 次 `detect_project_config`**（性能 -10）
+
+`projectStore.ts:108-111`：`detect_project_config` → `ensureConfigInitialized`(内部→ `isConfigIncomplete` → 不调 `init`)，但 `detect_project_config` 的结果如果不完整，`ensureConfigInitialized` 再调 `init_project_config`（内部又调 `detect_project_config_sync` 验证路径）。当需要初始化时产生 2 次 IPC 往返。可优化：直接调 `init_project_config`（它内部包含路径验证），当不需要初始化时只调 `detect_project_config`。
+
+### 审核结论
+- ❌ **需要修改** — 必须添加工厂模式和测试后重新审核
+
+### 自检验证
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖
+
+---
+
+## Learnings
+
+- **模式**: `projectStore.ts` 是仓库中唯一没有工厂模式的主 store。其他 5 个主 store（runStore/iterationStore/historyStore/logViewerStore/historyDetailStore）全部使用 `create*Store(overrides)` 模式。这已成为贯穿迭代 7-18 的持续问题，需要在实现时同步跟上项目约定。
+- **经验**: 仓库 `tests/CLAUDE.md` 和 `src/CLAUDE.md` 都明确记录了工厂模式的要求（"Store-heavy logic should be written so it can be instantiated with injected dependencies"），但 `projectStore` 从未遵循。建议在 `src/stores/CLAUDE.md` 中补充 checklist 条目："新 store 必须同时提供工厂函数和对应测试，否则不得合入"。

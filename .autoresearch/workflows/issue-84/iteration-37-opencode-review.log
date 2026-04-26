@@ -1,0 +1,148 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src
+Let me first read the current state of the relevant files to understand the implementation.
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts 2>/dev/null; echo "---FILE_CHECK---"; git diff HEAD --name-only 2>/dev/null | head -20
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+---FILE_CHECK---
+desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline -5 2>/dev/null
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+[0m
+Let me also check the git diff to confirm exactly what was modified.
+[0m✱ [0mGrep "init_project_config"[90m in . · 785 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD --name-only 2>/dev/null
+desktop_app/src/stores/projectStore.ts
+[0m
+Let me also verify that the `init_project_config` command exists in the backend, and check what other files might have been modified.
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+- 迭代次数: 37
+
+### 总体评价
+**评分: 38/100**
+
+### 严重问题 (必须修复)
+
+1. **DashboardPage.tsx 未被修改** — T-002 唯一的目标文件 `desktop_app/src/pages/DashboardPage.tsx` 在本次迭代中未被触碰。`git diff HEAD --name-only` 确认仅 `projectStore.ts` 有改动。`InitTemplatePrompt` 组件仍然是旧版纯提示 UI：
+
+   - 仍包含 `onLearnMore` prop 和调用 `alert('了解更多功能将在后续版本中实现')` 的"了解"按钮
+   - 未消费 `useProjectStore().isInitializing` 状态
+   - 无初始化进行中的加载/进度显示
+   - 无初始化成功的反馈显示
+   - 无初始化失败的错误信息 + 重试按钮
+   - **这已是该问题至少第 10 次重复出现（迭代 #24-#36 持续相同的模式）**
+
+2. **Store 缺少 `retryInitialize` action** — 验收条件明确要求"初始化失败时显示错误信息和重试按钮（手动调用 refreshConfig + init_project_config）"，但 `projectStore.ts` 未暴露 `retryInitialize` action。`ensureConfigInitialized` 是模块私有函数，UI 无法调用重试。`ProjectState` 接口需要添加：
+
+   ```typescript
+   retryInitialize: () => Promise<void>;
+   ```
+
+   实现逻辑：`refreshConfig()` → 如 config 仍不完整 → `init_project_config` → 更新 config。
+
+3. **浏览器 fallback 路径未整合初始化逻辑** — `selectProject` 和 `loadProject` 的浏览器分支（第 119-147 行、第 170-177 行）未调用 `ensureConfigInitialized`。浏览器模式下 `isInitializing` 永远为 false，初始化失败状态也永远不会设置。
+
+### 一般问题 (建议修复)
+
+4. **无前端测试覆盖** — `projectStore.ts` 新增的 `isConfigIncomplete`、`ensureConfigInitialized` 功能无对应单元测试。该项目已建立使用 `node --test --experimental-strip-types` 测试 Zustand store 的模式，且已有 `createRunStore(overrides)` 工厂模式作为参考。新增逻辑完全可测试却无任何测试覆盖。
+
+### 审核结论
+- [ ] 阻塞 — 目标文件未修改，无法通过
+
+### 实现者自检确认
+- [ ] 实现者未执行自检 — 任何自检都会立即发现 DashboardPage.tsx 未被修改
+
+---
+
+## Learnings
+
+- **踩坑**: 本次迭代再次出现完全相同的"只改 store 不改 UI"问题。`DashboardPage.tsx` 作为 T-002 唯一的目标文件，`git diff HEAD --name-only` 即可在 3 秒内发现其未被修改。该模式已重复至少 10 次以上，提示当前 prompts 对 UI 目标文件的约束力严重不足。
+- **模式**: 需要将 `retryInitialize` action 的缺失作为"每次都漏"的已知缺陷记录在 agents/*.md 中，而非每次仅在审核中提及。建议在 `agents/opencode.md` 中添加显式检查规则："修改前先用 `git diff HEAD --name-only` 确认目标文件已被修改"。

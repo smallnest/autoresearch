@@ -1,0 +1,63 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m 13 matches[0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me explore the test infrastructure and existing tests for patterns.
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/package.json
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts[90m [limit=60][0m
+Now I have a complete picture. Let me present my plan.
+
+## Plan
+
+Based on the audit (score 66/100, AC #5 not met + no tests), here's the task breakdown:
+
+### Task 1: Fix error state on init failure
+
+**File:** `desktop_app/src/stores/projectStore.ts`
+
+In both `selectProject` (line 98-101) and `loadProject` (line 162-164), add `set({ error: normalizeProjectError(initError) })` inside the catch blocks before `console.warn`. This satisfies acceptance criterion #5: "初始化失败时 error 状态被正确设置".
+
+### Task 2: Refactor projectStore to factory pattern
+
+Follow the established pattern from `runStore.ts` and `iterationStore.ts`:
+- Extract `ProjectStoreDeps` interface (`isTauri`, `invoke`)
+- Create `createProjectStoreDeps(overrides)` default-implementation builder
+- Export `createProjectStore(overrides)` factory
+- Keep `export const useProjectStore = createProjectStore()` as default hook (no consumer changes)
+
+This enables dependency injection for tests (replacing dynamic `import('@tauri-apps/api/core')` with mock `invoke`).
+
+### Task 3: Write tests in `tests/projectStore.test.mjs`
+
+Cover:
+
+| Test | What it verifies |
+|------|-----------------|
+| `isConfigIncomplete(null)` → `true` | Null input handling |
+| `isConfigIncomplete(partial)` → `true` | Each field false individually |
+| `isConfigIncomplete(complete)` → `false` | All fields true |
+| `selectProject` init needed → success | Config gets updated, `isInitializing` transitions |
+| `selectProject` init needed → failure | Error state set, `isInitializing` → `false` |
+| `selectProject` config already complete | `init_project_config` NOT called |
+| `loadProject` init needed → success | Same as selectProject but via `loadProject` path |
+| `loadProject` init needed → failure | Error state set |
+| `loadProject` browser fallback | Non-Tauri mode, no invoke calls |
+| `loadRecentProjects` browser fallback | localStorage path, config detected |
+
+### Task 4: Update CLAUDE.md files
+
+- `desktop_app/src/CLAUDE.md` — add projectStore factory pattern convention and testing notes
+- `desktop_app/tests/CLAUDE.md` — add testing patterns for projectStore
+
+---
+
+Shall I proceed with this plan?

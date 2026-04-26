@@ -1,0 +1,131 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=1, limit=50][0m
+Let me also look at an existing factory-pattern store and test for reference.
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri/src · 13 matches[0m
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs[90m [limit=60][0m
+Let me check a few more files for context.
+Now I have a thorough understanding of the codebase. Let me present the plan.
+
+---
+
+## 修复计划
+
+### 审核问题汇总
+
+| # | 严重度 | 问题 | 涉及文件 |
+|---|--------|------|----------|
+| 1 | **严重** | `loadRecentProjects` 未调用 `ensureConfigInitialized` | `projectStore.ts:186-214` |
+| 2 | **严重** | 无工厂模式导致不可测试 | `projectStore.ts` 整体结构 |
+| 3 | **严重** | 无前端测试覆盖 | `projectStore.test.mjs`（不存在） |
+| 4 | 一般 | `refreshConfig` 未调用 `ensureConfigInitialized` | `projectStore.ts:216-240` |
+| 5 | 建议 | `normalizeProjectError` 全局导出 | `projectStore.ts:90` |
+
+### 逐步实现方案
+
+---
+
+#### **步骤 1：重构为工厂模式** (修改 `projectStore.ts`)
+
+参考 `runStore.ts` / `iterationStore.ts` 的既有模式：
+
+1. 提取 `ProjectStoreDeps` 接口（`isTauri` + `invoke`）
+2. 创建 `createProjectStoreDeps(overrides)` helper
+3. 创建 `createProjectStore(overrides)` 工厂函数，将逻辑移到 zustand `create` 闭包内：
+   - `ensureConfigInitialized` 移到工厂内部，通过闭包捕获 `set` 和 `deps.invoke`（不再将 `set` 作为参数传递）
+   - `normalizeProjectError` 移到工厂内部（仅被 `ensureConfigInitialized` 和 catch 块使用）
+4. `export const useProjectStore = createProjectStore()` 保持接口兼容
+5. 保留 `isConfigIncomplete` 作为模块级导出（DashboardPage 使用）
+
+**不修改**：
+- `ProjectConfig` 接口（组件引用）
+- `detectConfigBrowser` / `loadRecentFromStorage` / `saveRecentToStorage` / `isProjectPath`（纯函数，无依赖）
+- `normalizeProjectError`（我选择**保留导出**以与其他 store 保持一致，参见 `runStore.ts` 模式）
+
+---
+
+#### **步骤 2：修复 `loadRecentProjects`** (修改 `projectStore.ts`)
+
+在第 193 行 `detect_project_config` 之后添加 `ensureConfigInitialized` 调用：
+
+```ts
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath: path,
+});
+// ↓ 新增
+const initialized = await ensureConfigInitialized(path, config);
+set({ projectPath: path, config: initialized });
+```
+
+注意同时修复浏览器 fallback 路径 —— 但浏览器模式没有 `init_project_config` 后端，所以 fallback 仍然不做初始化（与 `selectProject`/`loadProject` 浏览器路径一致）。
+
+---
+
+#### **步骤 3：修复 `refreshConfig`** (修改 `projectStore.ts`)
+
+在第 224 行 `detect_project_config` 之后添加 `ensureConfigInitialized` 调用：
+
+```ts
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+  projectPath,
+});
+// ↓ 新增
+const initialized = await ensureConfigInitialized(path, config);
+if (get().projectPath === targetProjectPath) {
+  set({ config: initialized });
+}
+```
+
+`refreshConfig` 的语义包含“确保当前配置完整”，所以做初始化是合理的。
+
+---
+
+#### **步骤 4：编写测试** (新建 `projectStore.test.mjs`)
+
+按以下场景覆盖：
+
+| # | 场景 | 关键断言 |
+|---|------|----------|
+| 1 | `isConfigIncomplete` 纯函数 | null→true, 完整→false, 缺项→true |
+| 2 | `selectProject` Tauri 配置不完整 → 自动初始化 | 调用 `init_project_config`，config 更新 |
+| 3 | `selectProject` Tauri 配置已完整 → 不初始化 | `init_project_config` 不被调用 |
+| 4 | `loadProject` Tauri 配置不完整 → 自动初始化 | 同 2 |
+| 5 | **`loadRecentProjects` Tauri → 自动初始化** | **关键修复验证** |
+| 6 | `refreshConfig` Tauri → 自动初始化 | 补充修复验证 |
+| 7 | 初始化失败 → error 设置，原始 config 保留 | `set({ error: ... })` 被调用 |
+| 8 | `isInitializing` 状态转换 | true → false |
+| 9 | 浏览器 fallback 正常工作 | 不抛异常，config 使用 `detectConfigBrowser` |
+
+测试文件使用 `node --test --experimental-strip-types`，注入 mock 的 `invoke` 函数，参考 `runStore.test.mjs` 的模式。
+
+---
+
+#### **步骤 5：更新 `desktop_app/src/CLAUDE.md`**
+
+追加发现：
+- `projectStore` 现已具备工厂模式 `createProjectStore(overrides)`，测试可注入 mock
+- `loadRecentProjects`/`refreshConfig` 也经过 `ensureConfigInitialized`，与 `selectProject`/`loadProject` 一致
+
+---
+
+### 工作量预估
+
+| 步骤 | 文件 | 预估 |
+|------|------|------|
+| 1. 工厂模式重构 | `projectStore.ts` | 15min |
+| 2. 修复 `loadRecentProjects` | `projectStore.ts` | 2min |
+| 3. 修复 `refreshConfig` | `projectStore.ts` | 2min |
+| 4. 编写测试 | `projectStore.test.mjs` | 20min |
+| 5. 更新 CLAUDE.md | `CLAUDE.md` | 3min |
+| 总计 | | 约 42min |
+
+---
+
+是否按此方案执行？有什么需要调整的地方吗？

@@ -21,12 +21,14 @@ interface ProjectState {
   config: ProjectConfig | null;
   recentProjects: string[];
   isLoading: boolean;
+  isInitializing: boolean;
   error: string | null;
   selectProject: () => Promise<void>;
   loadProject: (_path: string) => Promise<void>;
   loadRecentProjects: () => Promise<void>;
   refreshConfig: (_projectPath?: string) => Promise<void>;
   clearError: () => void;
+  retryInitialize: () => Promise<void>;
 }
 
 // Browser fallback: use localStorage and show/pickFolder API
@@ -62,6 +64,30 @@ function saveRecentToStorage(path: string) {
   }
 }
 
+export function isConfigIncomplete(config: ProjectConfig | null): boolean {
+  if (!config) return true;
+  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
+}
+
+async function ensureConfigInitialized(
+  path: string,
+  config: ProjectConfig,
+  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
+): Promise<ProjectConfig> {
+  if (!isConfigIncomplete(config)) return config;
+  set({ isInitializing: true });
+  try {
+    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
+  } catch (initError) {
+    // Set error so UI can display failure feedback, but don't block the user
+    console.warn('Auto-init project config failed:', initError);
+    set({ error: normalizeProjectError(initError) });
+    return config;
+  } finally {
+    set({ isInitializing: false });
+  }
+}
+
 export function normalizeProjectError(error: unknown): string {
   return normalizeUserFacingError(error, '加载项目失败，请重试。');
 }
@@ -71,6 +97,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   config: null,
   recentProjects: [],
   isLoading: false,
+  isInitializing: false,
   error: null,
 
   selectProject: async () => {
@@ -79,9 +106,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (isTauri) {
         const path = await tauriInvoke<string | null>('select_project_dir');
         if (path) {
-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
             projectPath: path,
           });
+          const config = await ensureConfigInitialized(path, detected, set);
           await tauriInvoke('save_recent_project', { path });
           set((state) => ({
             projectPath: path,
@@ -130,9 +158,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       if (isTauri) {
-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
+        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
           projectPath: path,
         });
+        const config = await ensureConfigInitialized(path, detected, set);
         await tauriInvoke('save_recent_project', { path });
         set((state) => ({
           projectPath: path,
@@ -212,4 +241,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  retryInitialize: async () => {
+    const { projectPath } = get();
+    if (!projectPath) return;
+
+    set({ isInitializing: true, error: null });
+    try {
+      if (isTauri) {
+        const config = await tauriInvoke<ProjectConfig>('init_project_config', {
+          projectPath,
+        });
+        set({ config });
+      } else {
+        set({ config: detectConfigBrowser(projectPath) });
+      }
+    } catch (e) {
+      set({ error: normalizeProjectError(e) });
+    } finally {
+      set({ isInitializing: false });
+    }
+  },
 }));

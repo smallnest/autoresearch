@@ -1,0 +1,63 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m 13 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1588][0m
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri/src · 13 matches[0m
+[0m✱ [0mGrep "projectStore|project_store"[90m in desktop_app/tests · 4 matches[0m
+Let me continue examining the backend test code and check for any existing projectStore tests.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3059][0m
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs[90m [limit=80][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4478][0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m
+[0m$ [0mls /Users/chaoyuepan/ai/autoresearch/desktop_app/tests/ | grep -i project
+(no output)
+[0m
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001 - 在 projectStore 中添加自动初始化逻辑
+- 迭代次数: 10
+
+### 总体评价
+**评分: 71/100**
+
+### 严重问题 (必须修复)
+
+**1. `loadRecentProjects` 未调用 `ensureConfigInitialized`**
+`projectStore.ts:186-214` — `loadRecentProjects` 在应用启动时自动加载最近项目，调用 `detect_project_config` 后直接 `set({ projectPath, config })`，跳过了 `ensureConfigInitialized`。这意味着用户最近使用的项目若缺少 `.autoresearch/` 配置文件，应用启动后不会自动补全文件。跨迭代经验明确警告过此问题（"所有调用 `detect_project_config` 的地方都必须配齐 `ensureConfigInitialized`"），应予修复。
+
+**2. 缺少前端测试 + 无工厂模式（阻塞级别）**
+`selectProject`、`loadProject`、`loadRecentProjects`、`isConfigIncomplete`、`ensureConfigInitialized` 均无前端测试。跨迭代经验连续多次标记：仓库已有成熟测试模式（`runStore.test.mjs`/`iterationStore.test.mjs` 的工厂注入），但 `useProjectStore` 仍直接通过 `create<ProjectState>()` 创建，未导出工厂函数，导致 store 逻辑无法注入 mock 进行测试。此为多次迭代积压的阻塞问题，应改 `useProjectStore` 为工厂模式并补齐测试。
+
+### 一般问题 (建议修复)
+
+**3. `selectProject`/`loadProject` 入口清除旧 error**
+两方法均在 `set({ isLoading: true, error: null })` 中清除旧错误，可能导致 `ensureConfigInitialized` 内部设置的中文 error（`normalizeProjectError`）丢失——因为外层 catch 可能设置不同 error 覆盖。现有行为并非本次引入的 bug，但建议后续优化 error 管理策略。
+
+### 审核结论
+- [ ] 需要修改（评分 71/100 < 85 达标线）
+
+### 达标各项分值
+
+| 维度 | 得分 | 权重 | 加权 |
+|------|------|------|------|
+| 正确性 (35%) | 70 | 0.35 | 24.5 |
+| 测试质量 (25%) | 40 | 0.25 | 10.0 |
+| 代码质量 (20%) | 80 | 0.20 | 16.0 |
+| 安全性 (10%) | 100 | 0.10 | 10.0 |
+| 性能 (10%) | 100 | 0.10 | 10.0 |
+| **总分** | | | **71** |
+
+### 实现者自检确认
+- [ ] 编译/类型检查（不可确认——未运行）
+- [ ] 相关测试（无前端测试）
+- [ ] 测试覆盖（同上）
+- [ ] `loadRecentProjects` 路径合规性（不可确认——存在遗漏）

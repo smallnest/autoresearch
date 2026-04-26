@@ -1,0 +1,64 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m→ [0mRead desktop_app/src/stores
+[0m→ [0mRead desktop_app/tests
+Let me look at a few more files to understand existing patterns.
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+Now I have a complete understanding of the codebase. Let me present my plan.
+
+---
+
+## 修复计划
+
+### 问题分析
+
+当前 `feature/issue-84` 分支的 `git diff HEAD --name-only` 只修改了 `projectStore.ts`，`DashboardPage.tsx` 零变更。T-002（UI 层）在 30+ 次迭代中从未被触及。
+
+**剩余工作清单：**
+
+### 1. Store 层修复 (`projectStore.ts`)
+
+| # | 任务 | 说明 |
+|---|------|------|
+| 1.1 | 添加 `retryInitialize` action | 暴露重试入口：获取当前 `projectPath`，调用 `ensureConfigInitialized`，更新 config |
+| 1.2 | 修复 `loadRecentProjects` 遗漏 | `projectStore.ts:192-196` Tauri auto-load 路径添加 `ensureConfigInitialized` 调用 |
+| 1.3 | 工厂模式重构 | 参照 `runStore.ts` 的 `createRunStore(overrides)` 模式，提取 `createProjectStore(overrides)`，保持 `useProjectStore` 向后兼容 |
+
+### 2. UI 层修复 (`DashboardPage.tsx`)
+
+| # | 任务 | 说明 |
+|---|------|------|
+| 2.1 | 移除 `InitTemplatePrompt` 的"了解"按钮 | 删除 `onLearnMore` prop、`handleLearnMore`、`alert` 调用 |
+| 2.2 | 添加初始化进度状态 | 当 `isInitializing` 为 true 时，显示加载动画 + "正在初始化配置..." |
+| 2.3 | 添加初始化失败 UI | 当 `error` 非空且配置不完整时，显示错误信息和重试按钮 |
+| 2.4 | 添加初始化成功反馈 | InitTemplatePrompt 接收 `isInitializing`、`error`、`config`，自动聚合三种状态 |
+| 2.5 | 更新 `ProjectInfoScreen` | 从 store 解构 `isInitializing`, `error`, `retryInitialize`, `refreshConfig`，传入 `InitTemplatePrompt` |
+
+### 3. 测试 (`desktop_app/tests/projectStore.test.mjs`)
+
+| # | 任务 | 说明 |
+|---|------|------|
+| 3.1 | 测试 `isConfigIncomplete` | 纯函数，覆盖 null/完整/部分缺失 |
+| 3.2 | 测试 `normalizeProjectError` | 纯函数，覆盖 Error 对象/字符串/null |
+| 3.3 | 测试 `ensureConfigInitialized` | 通过 factory 注入 mock invoke，覆盖成功初始化/无需初始化/失败三种路径 |
+| 3.4 | 测试 `retryInitialize` | 通过 factory，验证重试更新 config 和 error 状态 |
+| 3.5 | 测试 `loadRecentProjects` | 通过 factory，验证 auto-load 路径串联 `ensureConfigInitialized` |
+
+### 4. 经验记录
+
+| # | 任务 |
+|---|------|
+| 4.1 | 更新 `progress.md` Codebase Patterns |
+| 4.2 | 输出 Learnings |
+
+---
+
+请确认此计划是否符合预期，或需要调整？

@@ -1,0 +1,87 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m✱ [0mGrep "init_project_config"[90m in . · 767 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/*test*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/*spec*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/__tests__/**"[90m in . · 0 matches[0m
+Let me also check the Rust backend for `init_project_config` and the test files.
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri/src/lib.rs · 13 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**"[90m in . · 13 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=945, limit=50][0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=100][0m
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+Now I have a complete picture of the codebase. Here's my analysis and plan.
+
+---
+
+## Analysis
+
+**Current state breakdown:**
+
+| File | Issue |
+|------|-------|
+| `projectStore.ts` | ✅ `isInitializing` state, ✅ `isConfigIncomplete()` exported, ✅ `ensureConfigInitialized()` internal function, but ❌ **missing `retryInitialize` action** that UI can call |
+| `DashboardPage.tsx` | ❌ `InitTemplatePrompt` still has `onLearnMore` + `alert()` call. ❌ `ProjectInfoScreen` doesn't read `isInitializing`/`error` from store. ❌ uses inline config check instead of `isConfigIncomplete()`. ❌ no retry. |
+| Tests | ❌ No tests for `isConfigIncomplete` or project store |
+
+---
+
+## Plan
+
+### Task 1: Add `retryInitialize` action to `projectStore.ts`
+
+- Add `retryInitialize: (projectPath?: string) => Promise<void>` to `ProjectState` interface
+- Implement in store `create()`:
+  - Guard for no path
+  - Set `{ isInitializing: true, error: null }`
+  - In Tauri mode: call `tauriInvoke('init_project_config', { projectPath })`, guard with `get().projectPath === path`
+  - In browser mode: re-detect via `detectConfigBrowser`
+  - Catch: set `error` via `normalizeProjectError`
+  - Finally: set `isInitializing: false`
+
+### Task 2: Refactor `InitTemplatePrompt` in `DashboardPage.tsx`
+
+**Old props:** `{ onLater, onLearnMore }`
+**New props:** `{ isInitializing, error, onRetry, onDismiss }`
+
+| State | UI |
+|-------|-----|
+| `isInitializing === true` | Spinner + "正在自动初始化项目配置..." |
+| `error !== null` | Error message + "重试" button + "关闭" button |
+| Neither (config just became complete) | Success feedback (brief, auto-hide 3s via setTimeout) |
+| Config was already complete | `null` (hidden) |
+
+Remove `onLearnMore` and `alert()` call entirely.
+
+### Task 3: Update `ProjectInfoScreen` in `DashboardPage.tsx`
+
+- Destructure `isInitializing`, `error`, `retryInitialize` from `useProjectStore()`
+- Replace inline `hasMissingConfig` with `import { isConfigIncomplete } from '../stores/projectStore'`
+- Wire `onRetry` → `retryInitialize()`
+- Use `error` from store to pass to `InitTemplatePrompt`
+- Visibility logic: `(isConfigIncomplete(config) || isInitializing) && showInitPrompt`
+- Remove `handleLearnMore`, rename `handleLater` → `handleDismiss`
+
+### Task 4: Add tests `desktop_app/tests/projectStore.test.mjs`
+
+Use `node --test --experimental-strip-types` pattern (matching existing test conventions):
+- `isConfigIncomplete(null)` → true
+- `isConfigIncomplete({ has_autoresearch_dir: false, ... })` → true for each missing field
+- `isConfigIncomplete({ has_autoresearch_dir: true, has_program_md: true, has_agents_dir: true })` → false
+
+### Task 5: Update `desktop_app/src/CLAUDE.md`
+
+Append learnings about DashboardPage's InitTemplatePrompt / projectStore patterns discovered during this fix.
+
+---
+
+**Key decisions:**
+1. Keep `showInitPrompt` local state for dismiss — users can dismiss error/success notifications
+2. Auto-init already runs in `selectProject`/`loadProject`, so the prompt serves as **after-init feedback** (loading/error/success)
+3. Success notification auto-hides after 3s via `setTimeout` in `useEffect`
+4. Error requires explicit dismiss or retry — no auto-hide for errors
+
+Shall I proceed with implementation?

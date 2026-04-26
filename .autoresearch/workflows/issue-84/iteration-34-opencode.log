@@ -1,0 +1,85 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m# [0mTodos
+[ ] Read current DashboardPage.tsx to understand InitTemplatePrompt and current UI
+[ ] Read current projectStore.ts to understand store state and actions
+[ ] Read existing test files for reference patterns
+[ ] Formulate detailed fix plan
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m 13 matches[0m
+[0m
+[0m# [0mTodos
+[x] Read current DashboardPage.tsx to understand InitTemplatePrompt and current UI
+[x] Read current projectStore.ts to understand store state and actions
+[x] Read existing test files for reference patterns
+[ ] Formulate detailed fix plan
+[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+[0m→ [0mRead desktop_app/package.json
+Let me check the existing test pattern and also look for how tests usually mock Tauri in this project.
+## 修复计划
+
+基于审核反馈和代码分析，以下是完整修复计划：
+
+---
+
+### 问题根因
+
+审核反馈非常明确：**T-002 的目标文件是 `DashboardPage.tsx`，但前一次实现只改了 `projectStore.ts`，完全未触碰 UI 文件**。此外还存在 3 个具体问题：
+1. 没有 `retryInitialize` 公开 action（`ensureConfigInitialized` 是私有函数，UI 无法调用重试）
+2. `ensureConfigInitialized` 缺少竞态保护（重叠调用可能并行执行两次 init）
+3. 零测试覆盖新逻辑
+
+---
+
+### 任务拆解
+
+#### 任务 1: `projectStore.ts` — 添加 `retryInitialize` action
+
+- 给 `ProjectState` 接口添加 `retryInitialize: () => Promise<void>`
+- 在 store factory 中实现 `retryInitialize`：从 `get()` 拿到当前 `projectPath` 和 `config`，调用 `ensureConfigInitialized(path, config, set)`，将返回的 `newConfig` 写入 state
+- 给 `ensureConfigInitialized` 添加模块级 `_initGuard` 避免重叠调用（竞态保护）
+
+#### 任务 2: `DashboardPage.tsx` — 更新 `InitTemplatePrompt` 组件
+
+重构 `InitTemplatePrompt` 为三态组件：
+
+| 状态 | 触发条件 | 显示内容 |
+|------|---------|---------|
+| **加载中** | `isInitializing === true` | 蓝色卡片 + loading spinner + "正在初始化配置..." |
+| **错误态** | `error !== null` | 红色卡片 + 错误消息 + "重试"按钮 |
+| **默认提示** | 其他情况 | 原琥珀色提示（移除"了解"按钮，保留"稍后"） |
+
+`ProjectInfoScreen` 修改：
+- 从 `useProjectStore` 解构 `isInitializing`, `error`, `retryInitialize`, `clearError`
+- 传给 `InitTemplatePrompt` 新 props
+- 用 `handleRetry` 替代原来的 `handleLearnMore`
+
+效果：初始化成功后 `config` 变为完整 → `hasMissingConfig=false` → 自动显示 `ConfigCompleteNotification`（隐式成功反馈）
+
+#### 任务 3: 新增测试 `tests/projectStore.test.mjs`
+
+覆盖 `isConfigIncomplete` 纯函数：
+- `null` config → `true`
+- 全空 config → `true`
+- 部分字段缺失 → `true`
+- 完整 config → `false`
+
+复用 `node --test --experimental-strip-types` 模式（与 `runStore.test.mjs` 一致）。
+
+---
+
+### 修改清单
+
+| 文件 | 类型 | 改动 |
+|------|------|------|
+| `desktop_app/src/stores/projectStore.ts` | 修改 | 添加 `retryInitialize` action + 竞态保护 |
+| `desktop_app/src/pages/DashboardPage.tsx` | 修改 | 重构 `InitTemplatePrompt` 三态 + 更新 `ProjectInfoScreen` |
+| `desktop_app/tests/projectStore.test.mjs` | 新增 | `isConfigIncomplete` 测试 |
+
+可以开始实现吗？

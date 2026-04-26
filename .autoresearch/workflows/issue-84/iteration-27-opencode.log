@@ -1,0 +1,82 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m✱ [0mGlob "desktop_app/tests/**/*test*"[90m in . · 12 matches[0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-27-opencode-review.log[90m [limit=200][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=100][0m
+Let me read a few more files to understand the test patterns and the review log.
+[0m→ [0mRead .autoresearch/workflows/issue-84/log.md[90m [limit=60][0m
+Now I have a complete understanding. Let me also check the existing `log.md` for any relevant patterns or context.
+Based on my analysis of the current code and the review feedback, here is my plan:
+
+---
+
+## Plan: Fix Issue #84 — T-002 UI Layer Implementation
+
+### Current State Summary
+
+| Component | Status | What's missing |
+|-----------|--------|---------------|
+| **T-001: Store layer** (`projectStore.ts`) | ✅ Done | Missing `retryInitialize` action; `loadRecentProjects` doesn't call auto-init |
+| **T-002: UI layer** (`DashboardPage.tsx`) | ❌ Not started | `InitTemplatePrompt`, `ProjectInfoScreen`, `ConfigCompleteNotification` all unchanged |
+| **Tests** | ❌ Missing | No tests for any new code |
+
+### Tasks
+
+**Task 1 — Add `retryInitialize` action to projectStore.ts**
+
+- Add to `ProjectState` interface: `retryInitialize: () => Promise<void>`
+- Implementation:
+  1. Get `projectPath` from store; return early if null
+  2. Set `{ error: null, isInitializing: true }`
+  3. Re-detect config via `detect_project_config`
+  4. If already complete → update config, clear `isInitializing`, return
+  5. If still incomplete → call `init_project_config`, update config
+  6. On error → set `error` via `normalizeProjectError`
+  7. Always clear `isInitializing` in finally
+
+**Task 2 — Fix `loadRecentProjects` to call auto-init (store)**
+
+- In the Tauri branch of `loadRecentProjects`, after `detect_project_config`, call `ensureConfigInitialized(path, config, set)` before updating state (currently it skips auto-init)
+
+**Task 3 — Refactor `InitTemplatePrompt` component**
+
+- Remove `onLearnMore` prop; remove the "了解" button
+- Add props: `isInitializing: boolean`, `error: string | null`, `onRetry: () => void`
+- Three visual states:
+  - **Loading** (`isInitializing=true`): spinner + "正在初始化项目配置..." text, buttons disabled
+  - **Error** (`error` non-null): red error card with error message + "重试" button + "稍后" dismiss
+  - **Default** (incomplete, no init/error): amber prompt with only "稍后" button (no "了解")
+
+**Task 4 — Update `ProjectInfoScreen` to wire store**
+
+- Destructure `isInitializing`, `error`, `clearError`, `retryInitialize` from store
+- Replace `handleLearnMore` with nothing; keep `handleLater` to dismiss `showInitPrompt`
+- Add `useEffect` to reset `showInitPrompt` to true when `error` changes (so error retry is visible even after dismissing)
+- Pass `isInitializing`, `error`, `onRetry={retryInitialize}`, `onLater={handleLater}` to `InitTemplatePrompt`
+
+**Task 5 — Auto-hide `ConfigCompleteNotification`**
+
+- Add internal `useState<boolean>(true)` for visibility
+- Add `useEffect` with `setTimeout(() => setVisible(false), 3000)` on mount
+- Return `null` when not visible
+
+**Task 6 — Add tests** (new file: `desktop_app/tests/projectStore.test.mjs`)
+
+- `isConfigIncomplete(null) → true`
+- `isConfigIncomplete({all false}) → true`
+- `isConfigIncomplete({all true}) → false`
+- `isConfigIncomplete({some false}) → true`
+- `normalizeProjectError` preserves Chinese, appends English
+- `ensureConfigInitialized` with complete config returns early (no init)
+- `ensureConfigInitialized` with incomplete config calls init
+- Source-code assertion that `retryInitialize` exists on store
+
+---
+
+Shall I proceed with implementation?

@@ -1,0 +1,64 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m✱ [0mGlob "desktop_app/src/stores/*.ts"[90m 11 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m 12 matches[0m
+[0m→ [0mRead desktop_app/src/CLAUDE.md
+[0m→ [0mRead desktop_app/package.json
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+[0m→ [0mRead desktop_app/src/stores/historyStore.ts
+Let me look at existing test files to understand the testing patterns:
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m✱ [0mGrep "useProjectStore|projectStore"[90m in desktop_app/src · 14 matches[0m
+Now I have a clear picture. Let me read the `program.md` and `desktop_app/tests/projectStore.test.mjs` existence check too:
+我已经完整分析了代码库。以下是修复计划：
+
+---
+
+## 修复计划
+
+审核反馈指出了 3 个问题：
+
+### Issue 1: 未使用工厂模式（严重）
+
+`projectStore.ts` 是唯一不遵循工厂模式 + 依赖注入的 store。其他所有 store（`runStore`、`iterationStore`、`historyStore`）均使用 `createXxxStore(overrides)` 工厂。
+
+**修改方案**：
+1. 新增 `ProjectStoreDeps` 接口（`isTauri`、`invoke`）
+2. 新增 `createProjectStoreDeps(overrides)` 辅助函数
+3. 修改 `ensureConfigInitialized` 接收 `deps` 参数（替代模块级 `tauriInvoke`）
+4. 将 `create<ProjectState>()` 包裹在 `createProjectStore(overrides)` 工厂内
+5. 保留 `export const useProjectStore = createProjectStore()` 作为默认实例（消费者无需改动）
+
+### Issue 2: 无测试覆盖（严重）
+
+`isConfigIncomplete`、`normalizeProjectError`、`ensureConfigInitialized` 均无测试。
+
+**修改方案**：
+- 创建 `tests/projectStore.test.mjs`
+- 覆盖纯函数：`isConfigIncomplete`（null/部分完整/完整）、`normalizeProjectError`
+- 覆盖 store 方法：`selectProject`（自动初始化成功/失败/已完整）、`loadProject`、`loadRecentProjects`
+
+### Issue 3: `loadRecentProjects` 未自动初始化（一般）
+
+`loadRecentProjects` 第 193-196 行调用 `detect_project_config` 后未调用 `ensureConfigInitialized`，导致应用自动加载最近项目时不会自动补齐缺失配置。
+
+**修改方案**：在 Tauri 分支中 `detect_project_config` 后追加 `ensureConfigInitialized` 调用。
+
+### 任务清单
+
+1. **重构工厂模式** — 修改 `desktop_app/src/stores/projectStore.ts`
+2. **修复 `loadRecentProjects`** — 追加 `ensureConfigInitialized` 调用（在同一文件）
+3. **编写测试** — 创建 `desktop_app/tests/projectStore.test.mjs`
+4. **验证** — 运行 `typecheck`、`test`、`lint`
+
+### 风险说明
+
+- `useProjectStore` 导出名称不变，所有 14 处消费者无需修改
+- `ProjectConfig` 类型导出不变，各页面 `DashboardPage`、`IssuesPage` 等不受影响
+- 测试沿用已有 `node --test --experimental-strip-types` 基础设施
+
+是否按此计划执行？

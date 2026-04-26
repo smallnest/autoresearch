@@ -1,0 +1,87 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src
+[0m✱ [0mGlob "desktop_app/tests/**/*"[90m in . · 13 matches[0m
+Let me analyze the current codebase to understand the state and create a detailed fix plan.
+[0m→ [0mRead desktop_app/src/stores
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+Let me examine an existing factory-pattern store and test to understand the conventions.
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+Let me examine an existing factory-pattern store to understand the exact pattern.
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts[90m [offset=66, limit=30][0m
+[0m→ [0mRead desktop_app/package.json
+Now I have a complete understanding of the codebase. Here's the detailed fix plan:
+
+---
+
+## Plan: Fix Issue #84 — Auto-init for `loadRecentProjects` + Factory Pattern + Tests
+
+### Problem Summary
+
+The audit found 3 issues:
+1. **Correctness bug**: `loadRecentProjects` calls `detect_project_config` but **not** `ensureConfigInitialized`, so the auto-init path is missing on app startup when loading the last opened project.
+2. **No test coverage**: `projectStore.ts` is the only store with zero test coverage (all others have `.test.mjs`).
+3. **No factory pattern**: Unlike `runStore.ts`, `iterationStore.ts`, `historyStore.ts`, etc., `projectStore.ts` hard-codes `isTauri` and `tauriInvoke` at module level, making it untestable without a Tauri runtime.
+
+### Changes
+
+#### File 1: `desktop_app/src/stores/projectStore.ts`
+
+**a. Add factory pattern** (following `runStore.ts` and `iterationStore.ts` conventions):
+- Create `ProjectStoreDeps` interface (`isTauri`, `invoke`)
+- Create `createProjectStoreDeps(overrides)` to build defaults
+- Create `createProjectStore(overrides)` factory function wrapping `create()`
+- Export `useProjectStore = createProjectStore()` (backward-compatible hook)
+- Move `ensureConfigInitialized` into the store as a method (remove `set` parameter, use closure)
+
+**b. Fix `loadRecentProjects`** — add the missing `ensureConfigInitialized` call:
+```
+// Instead of:
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', {...});
+set({ projectPath: path, config });
+
+// Use:
+const detected = await deps.invoke<ProjectConfig>('detect_project_config', {...});
+const config = await get().ensureConfigInitialized(path, detected);
+set({ projectPath: path, config });
+```
+
+**c. Keep existing exports**: `isConfigIncomplete`, `normalizeProjectError` remain exported pure functions.
+
+#### File 2: `desktop_app/tests/projectStore.test.mjs`
+
+Cover the following test cases:
+
+| # | Test | What it covers |
+|---|------|----------------|
+| 1 | `isConfigIncomplete(null)` returns `true` | Edge case |
+| 2 | `isConfigIncomplete(fullConfig)` returns `false` | Complete config |
+| 3 | `isConfigIncomplete(missingOne)` returns `true` | Partial config |
+| 4 | `ensureConfigInitialized` skips invoke when config is complete | Optimization |
+| 5 | `ensureConfigInitialized` calls invoke on incomplete config | Core fix path |
+| 6 | `ensureConfigInitialized` sets error and returns original on failure | Error handling |
+| 7 | `ensureConfigInitialized` sets/resets `isInitializing` | State flag |
+| 8 | `selectProject` Tauri branch calls `ensureConfigInitialized` | Existing behavior |
+| 9 | `loadProject` Tauri branch calls `ensureConfigInitialized` | Existing behavior |
+| 10 | `loadRecentProjects` Tauri branch calls `ensureConfigInitialized` | **THE FIX** |
+| 11 | `loadRecentProjects` no-op when no recent project | Edge case |
+| 12 | `loadRecentProjects` browser fallback | Fallback path |
+| 13 | `normalizeProjectError` returns fallback for unknown errors | Error string |
+
+### Testing
+
+```bash
+npm --prefix desktop_app test
+```
+
+Should pass all 13+ test cases. The existing tests must not regress.
+
+No Rust changes needed — `init_project_config` command and its 4 test cases are already correct.
+
+---
+
+Shall I proceed with this plan?

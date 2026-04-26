@@ -1,0 +1,72 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m in . · 12 matches[0m
+[0m✱ [0mGrep "retryInitialize|retryInit"[90m in desktop_app · 0 matches[0m
+Let me also check the Rust backend and any existing test files to understand the full picture.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=80][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2854, limit=110][0m
+[0m→ [0mRead desktop_app/tests/storeErrorLocalization.test.mjs[90m [limit=60][0m
+[0m→ [0mRead desktop_app/tests/iterationProgressPanel.test.mjs[90m [limit=80][0m
+Now I have a thorough understanding of the codebase. Let me examine the test patterns used in existing tests to understand the testing approach.
+Based on my thorough analysis, here's the complete plan:
+
+---
+
+## 修复计划
+
+### 现状分析
+
+**已完成（T-001，store 层）**:
+- `projectStore.ts`: `isInitializing` state, `ensureConfigInitialized()` function, `isConfigIncomplete()` helper 均已实现且在 `selectProject`/`loadProject` 中串联
+- Rust 后端 `init_project_config` 已实现且有完整测试
+
+**未完成（T-002，UI 层 + 缺失 action）**:
+- `DashboardPage.tsx` 零改动：`InitTemplatePrompt` 仍保留无功能的"了解"按钮 + `alert()`
+- 缺少 `retryInitialize` store action → UI 没有重试入口
+- `loadRecentProjects` 未调用 `ensureConfigInitialized` → 启动时自动加载项目不会触发初始化
+- 无对应测试
+
+### 任务清单
+
+**Task 1 — 添加 `retryInitialize` store action** (`projectStore.ts`)
+- 暴露 `retryInitialize` 异步 action：读当前 `projectPath` + `config` → 调用 `ensureConfigInitialized` → 更新 `config`
+- 此 action 供 UI 重试按钮调用
+
+**Task 2 — 更新 `loadRecentProjects` 串联初始化** (`projectStore.ts`)
+- 在 `loadRecentProjects` 的 Tauri 分支中，自动加载最后项目时检测配置是否不完整，若是则调用 `ensureConfigInitialized`
+- 修复项目启动时配置未初始化的问题
+
+**Task 3 — 重构 `InitTemplatePrompt` 组件** (`DashboardPage.tsx`)
+- 替换 props: 移除 `onLater`/`onLearnMore`，改为 `isInitializing`、`error`、`onRetry`、`onDismiss`
+- 移除 `alert()` 调用
+- 三个状态分支：
+  - **加载中** (`isInitializing=true`)：显示 spinner + "正在初始化配置..."
+  - **失败** (`error != null`)：显示错误信息 + "重试"按钮
+  - **成功** (config 完整)：不再显示此组件（由调用方控制显隐）
+
+**Task 4 — 更新 `ProjectInfoScreen` 连接 store 状态** (`DashboardPage.tsx`)
+- 从 store 解构：`isInitializing`、`error`、`retryInitialize`、`clearError`
+- 状态推导：
+  - `isInitializing` → 传给 InitTemplatePrompt 显示加载
+  - 配置缺失 + 无 init 错误 → 显示 InitTemplatePrompt（含"开始初始化"按钮）
+  - 配置缺失 + 有错误 → 显示 InitTemplatePrompt（含重试按钮）
+  - 配置完整 → 显示 `ConfigCompleteNotification`
+- 移除 `handleLearnMore`（含 `alert`）和 `handleLater`
+- 添加成功初始化后的自动隐藏定时器（`useEffect` + `setTimeout` 3s，用 `showSuccess` state 控制 `ConfigCompleteNotification` 显隐）
+
+**Task 5 — 编写测试** (`desktop_app/tests/projectStore.test.mjs`)
+- 使用 `node --test --experimental-strip-types` 模式
+- 测试 `isConfigIncomplete()`：null → true，全 false → true，全 true → false
+- 测试 `normalizeProjectError()`：保留中文，英文附加到 fallback
+- 测试 `InitTemplatePrompt` 渲染（`react-dom/server` 静态标记渲染）:
+  - 加载态显示 spinner/loading 文案
+  - 错误态显示错误信息 + 重试按钮
+  - 无错误非加载态显示"开始初始化"按钮（不再显示无功能的"了解"按钮，无 `alert`）
+
+**Task 6 — 更新 `desktop_app/src/CLAUDE.md`**（可选）
+- 追加 `retryInitialize` action 的相关约定

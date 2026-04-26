@@ -1,0 +1,127 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/tests
+[0m→ [0mRead desktop_app/tests/CLAUDE.md
+Let me first read the key files to understand the current state and existing patterns.
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+Let me look at an existing factory pattern to understand the convention.
+[0m→ [0mRead desktop_app/package.json
+[0m→ [0mRead desktop_app/tests/iterationStore.test.mjs
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me also check the test command and verify the existing test patterns.
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri/src · 13 matches[0m
+[0m→ [0mRead desktop_app/src/stores/iterationStore.ts
+Let me check the Rust backend for the init command and look at what tests exist there.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=60][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=2770, limit=200][0m
+Let me read the Rust `init_project_config` implementation to understand the backend contract.
+[0m
+[0m# [0mTodos
+[ ] 重构 projectStore.ts：添加工厂模式 createProjectStore(overrides)
+[ ] 修复 loadRecentProjects：添加自动初始化调用
+[ ] 修复 refreshConfig：添加自动初始化调用
+[ ] 编写 projectStore.test.mjs：纯函数 + 工厂注入 + 自动初始化行为
+[ ] 运行 test + typecheck 验证无回归
+[0m
+现在我已经对代码库有了全面的了解。以下是修复计划：
+
+---
+
+## 修复计划：Issue #84 — 审核反馈改进
+
+### 背景
+
+`projectStore.ts` 评分 72/100（低于 85 分通过线）。当前的 `projectStore.ts` 绑定了硬编码的 `isTauri` / `tauriInvoke`，没有工厂模式，且有两个测试覆盖缺口（无 test 文件）。
+
+---
+
+### 任务 1：重构为工厂模式（projectStore.ts）
+
+**目标**：与其他 store（`runStore.ts`、`iterationStore.ts`、`historyStore.ts`）保持一致，使 `createProjectStore(overrides)` 可注入 `isTauri` / `invoke`。
+
+**改动**：
+- 添加 `ProjectStoreDeps` 接口（`{ isTauri, invoke }`）
+- 添加 `createProjectStoreDeps(overrides)` — 使用现有 `isTauri` 检测和 `tauriInvoke` 作为默认值
+- 将 `ensureConfigInitialized` 重构成工厂模式：`createEnsureConfigInitialized(invoke)` — 返回嵌入 `invoke` 闭包的函数
+- 将 store 创建包装在 `createProjectStore(overrides)` 中，使用 `deps.invoke` 替换硬编码的 `tauriInvoke`，使用 `deps.isTauri` 替换顶层 `isTauri`
+- 导出现有 `useProjectStore = createProjectStore()` 保持向后兼容性
+- 保留 `isConfigIncomplete` 和 `normalizeProjectError` 作为导出的纯函数（它们已经是可测试的）
+
+**原因**：严重问题 #1 — 唯一没有工厂模式的主要 store，导致测试覆盖为零。
+
+### 任务 2：修复 `loadRecentProjects` — 在 Tauri 路径中添加自动初始化
+
+**目标**：消除跨迭代的持久回归（迭代 12-20 中已有标记）。
+
+**改动**：在 Tauri 路径的 `detect_project_config` 之后添加 `ensureConfigInitialized` 调用：
+
+```typescript
+const config = await tauriInvoke<ProjectConfig>('detect_project_config', { projectPath: path });
+const initialized = await ensureConfigInitialized(path, config, set);  // ← 新增
+set({ projectPath: path, config: initialized });                       // ← 使用 initialized
+```
+
+**原因**：一般问题 #2 — `loadRecentProjects` 是唯一在新项目从最近项目列表加载时跳过 auto-init 的方法。
+
+### 任务 3：修复 `refreshConfig` — 在 Tauri 路径中添加自动初始化
+
+**目标**：使通过 Settings 页面触发的重新检测也能触发自动初始化。
+
+**改动**：在 Tauri 路径的 `detect_project_config` 之后添加 `ensureConfigInitialized` 调用：
+
+```typescript
+const detected = await deps.invoke<ProjectConfig>('detect_project_config', { projectPath });
+const config = await ensureConfigInitialized(projectPath, detected, set);
+if (get().projectPath === projectPath) { set({ config }); }
+```
+
+**原因**：一般问题 #3 — 如果用户在 Settings 页面修改配置后发现 `.autoresearch/` 缺失，`refreshConfig` 应触发自动初始化。
+
+### 任务 4：编写 `projectStore.test.mjs`
+
+**目标**：覆盖核心逻辑，包括纯函数和通过工厂注入的 store 行为。
+
+**测试用例**：
+- `isConfigIncomplete` — null、完整配置、部分配置（每项缺失各一个）
+- `normalizeProjectError` — 带错误/不带错误，确保 fallback 正常
+- `createProjectStore` — 默认导出可正常创建
+- `selectProject` Tauri 路径 — 配置完整时跳过初始化；配置不完整时调用 init；init 失败返回原始 config 并设置 error
+- `selectProject` 浏览器回退 — 不调用 init（守卫逻辑）
+- `loadProject` — 配置完整时跳过初始化；配置不完整时调用 init
+- `loadRecentProjects` — Tauri 路径下调用 auto-init（新增行为）；浏览器路径保持回退
+- `refreshConfig` — 配置不完整时调用 auto-init
+- `isInitializing` — 初始化期间为 true，之后为 false
+
+**原因**：严重问题 #1 的验证所需 — 新工厂模式必须附带测试覆盖。
+
+### 任务 5：回归检查
+
+- 运行 `npm --prefix desktop_app test` — 验证现有测试通过
+- 运行 `npm --prefix desktop_app run typecheck` — 验证工厂重构后类型检查通过
+
+### 不包含的范围（建议改进，但非本次必须）
+
+- **两次 IPC 往返优化**（建议 #4）— 当前 `selectProject` / `loadProject` 对不完整配置调用 `detect_project_config` + `init_project_config`。为降低复杂度，暂时保留现有模式。后续可优化为直接调用 `init_project_config` 跳过 `detect_project_config` 以减少一次往返。
+- **`normalizeProjectError` 扩展测试**（建议 #5）— 当前 storeErrorLocalization.test.mjs 已有覆盖。本次新增的核心测试已覆盖工厂模式和自动初始化逻辑。
+
+---
+**规划完成。** 以上 5 个任务解决了审核反馈中发现的全部 3 个问题：
+
+| 审核问题 | 等级 | 对应任务 |
+|----------|------|----------|
+| 缺少工厂模式、0 测试覆盖 | 严重 | 任务 1 + 4 |
+| `loadRecentProjects` 未 auto-init | 一般 | 任务 2 |
+| `refreshConfig` 未 auto-init | 一般 | 任务 3 |
+
+### 关键设计决策
+
+1. **工厂模式遵循现有约定**：与 `createRunStore(overrides)` / `createIterationStore(overrides)` 相同模式 — `ProjectStoreDeps` 接口 + `createProjectStoreDeps()` + `createProjectStore()` + 导出现有的 `useProjectStore`
+
+2. `ensureConfigInitialized` **作为工厂函数**：不直接依赖顶层 `tauriInvoke`，通过 `createEnsureConfigInitialized(deps.invoke)` 在 `createProjectStore` 闭包内创建，与 runStore 的 `appendLine` 等方法处理方式一致
+
+3. **测试优先**：批准后首先编写测试以锁定预期行为，再在验证测试通过时重构 store 代码。使用与现有测试相同的 `createInvokeMock` 辅助模式
+
+是否开始实施？

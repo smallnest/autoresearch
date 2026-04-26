@@ -1,0 +1,119 @@
+我已经掌握了所有必要的上下文。现在我将编写评审报告。
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 标题: [desktop-app] 选择新项目时未自动初始化 .autoresearch 配置文件
+- 迭代次数: 2 (当前审核 T-001)
+
+---
+
+### 总体评价
+
+**评分: 78/100**
+
+实现基本覆盖了核心需求，代码结构清晰，TypeScript 类型检查通过。但存在一个验收条件未通过（初始化失败时 `error` 状态未被设置）以及缺少单元测试。
+
+---
+
+### 验收条件逐项检查
+
+| # | 验收条件 | 状态 |
+|---|---------|------|
+| 1 | `selectProject` 检测到配置缺失时自动调用 `init_project_config` | 通过 |
+| 2 | `init_project_config` 返回的 `ProjectConfig` 正确更新到 `store.config` | 通过 |
+| 3 | 新增 `isInitializing` 状态字段，初始化期间为 true，完成后为 false | 通过 |
+| 4 | `loadProject` 方法同样支持自动初始化 | 通过 |
+| 5 | 初始化失败时 `error` 状态被正确设置，不会阻塞用户操作 | **未通过** |
+| 6 | TypeScript 类型检查通过 | 通过 |
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: 初始化失败时 error 状态未被设置
+
+**位置**: `desktop_app/src/stores/projectStore.ts:98-100` (selectProject) 和 `desktop_app/src/stores/projectStore.ts:162-163` (loadProject)
+
+**问题描述**:
+验收条件明确要求"初始化失败时 `error` 状态被正确设置，不会阻塞用户操作"。当前实现中 `initError` 被 `console.warn` 吞掉，**未设置 `error` 状态**。这意味着用户看不到任何初始化失败的反馈。
+
+迭代 2 的审核也指出了这个问题，但当前代码尚未修复。
+
+**代码片段**:
+```typescript
+} catch (initError) {
+  // Initialization failed — keep detected config, don't block user
+  console.warn('Auto-init project config failed:', initError);
+} finally {
+```
+
+**建议修复**:
+```typescript
+} catch (initError) {
+  // Set error so UI can display failure feedback, but don't block the user
+  console.warn('Auto-init project config failed:', initError);
+  set({ error: normalizeProjectError(initError) });
+} finally {
+```
+
+**原因**: 验收条件明确要求 `error` 状态在初始化失败时被设置。`T-002`（UI 子任务）依赖此 `error` 状态来显示错误信息和重试按钮。不设置 `error` 将导致 `UI` 层无法感知初始化失败。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 2: 缺少单元测试
+
+**位置**: 整个实现
+
+**问题描述**:
+新增的 `isConfigIncomplete()` 辅助函数和 `selectProject`/`loadProject` 中的初始化逻辑没有对应的单元测试。虽然 `projectStore` 当前没有使用工厂模式（`desktop_app/src/CLAUDE.md` 明确推荐），直接硬编码 `tauriInvoke` 使得单元测试困难，但至少 `isConfigIncomplete` 作为纯函数可以被单独导出并测试。
+
+**建议**:
+1. 为 `isConfigIncomplete` 添加测试用例覆盖 `null`、完整配置、部分缺失配置
+2. 考虑后续将初始化逻辑提取为可注入依赖的模式
+
+---
+
+### 建议改进 (可选)
+
+- `selectProject` 和 `loadProject` 中的初始化逻辑完全重复（`detect` → `isConfigIncomplete` → `init` + 错误处理）。可提取为共享的 `async function ensureConfigInitialized(path: string): Promise<ProjectConfig>` 辅助函数减少重复
+- `isInitializing` 状态目前没有被任何 UI 组件消费（`InitTemplatePrompt` 尚未更新，这是 `T-002` 的职责）。但 `T-001` 完成后 `UI` 层应该已经可以绑定
+
+---
+
+### 评分明细
+
+| 维度 | 得分 | 说明 |
+|------|------|------|
+| 正确性 (35%) | 70 | 核心逻辑正确，但验收条件 #5 未通过 |
+| 测试质量 (25%) | 50 | 无新增单元测试 |
+| 代码质量 (20%) | 85 | 清晰简洁，略有重复 |
+| 安全性 (10%) | 100 | 无安全隐患 |
+| 性能 (10%) | 100 | 无性能问题 |
+
+```
+总分 = 70 × 0.35 + 50 × 0.25 + 85 × 0.20 + 100 × 0.10 + 100 × 0.10 = 24.5 + 12.5 + 17 + 10 + 10 = 74
+```
+
+考虑到 6 项验收条件中 5 项通过且代码质量良好，上调至 **78/100**。
+
+---
+
+### 审核结论
+
+- [x] 需要修改 - 存在必须修复的问题
+
+**下一步行动**:
+1. 在 `catch (initError)` 块中添加 `set({ error: normalizeProjectError(initError) })`，确保初始化失败时 `error` 状态被正确设置
+2. 为 `isConfigIncomplete` 纯函数添加单元测试
+
+---
+
+## Learnings
+
+- **模式**: `projectStore` 的初始化错误处理需要区分"外层 `catch`"（`detect_project_config` 失败，阻塞型）和"内层 `catch`"（`init_project_config` 失败，非阻塞但需报告）。内层 `catch` 设置 `error` 不影响流程继续，因为 `config` 已经有 `detect` 返回的备用值
+- **踩坑**: 验收条件"不会阻塞用户操作"不等于"不设置 `error`"——两者应同时满足：设置 `error` 让 `UI` 有反馈，同时保留已检测到的 `config` 让用户继续使用
+- **经验**: `isConfigIncomplete` 是纯函数，即使 `store` 整体不可测，纯函数部分也应该导出并添加测试

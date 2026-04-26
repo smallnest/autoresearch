@@ -1,0 +1,215 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-6-opencode.log
+[0m✗ [0mread failed
+[91m[1mError: [0mFile not found: /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-84/iteration-5-opencode.log
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline -5 --all | head -20
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD --name-only
+desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git branch --show-current
+feature/issue-84
+[0m
+[0m✱ [0mGlob "desktop_app/tests/projectStore*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m 12 matches[0m
+Let me check the current git state and look for test files:
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m✗ [0mread failed
+[91m[1mError: [0mFile not found: /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-84/iteration-3-opencode.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [limit=60][0m
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs[90m [limit=80][0m
+Let me also check the backend and existing store factory patterns:
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=50][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me also read the backend init command to verify completeness:
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-2-opencode.log
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && ls .autoresearch/workflows/issue-84/
+hard-gate-1.log
+hard-gate-2.log
+hard-gate-4.log
+hard-gate-6.log
+iteration-1-claude.log
+iteration-2-opencode-review.log
+iteration-2-opencode.log
+iteration-3-claude-review.log
+iteration-3-claude.log
+iteration-4-opencode-review.log
+iteration-4-opencode.log
+iteration-5-claude-review.log
+iteration-6-opencode-review.log
+iteration-6-opencode.log
+iteration-7-opencode-review.log
+log.md
+planning.log
+progress.md
+tasks.json
+terminal.log
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-7-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-6-opencode-review.log
+我现在掌握全部必要信息。以下是审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-001
+- 迭代次数: 7
+
+### 验收条件逐条检查
+
+| # | 条件 | 状态 | 说明 |
+|---|------|:----:|------|
+| 1 | selectProject 检测到配置缺失时自动调用 init_project_config | ✅ | `ensureConfigInitialized` 在 `detect_project_config` 后调用 |
+| 2 | init_project_config 返回的 ProjectConfig 正确更新到 store.config | ✅ | `ensureConfigInitialized` 返回值直接用于 `set({ config })` |
+| 3 | 新增 isInitializing 状态字段，初始化期间 true，完成后 false | ✅ | 字段已加，`finally` 块保证重置 |
+| 4 | loadProject 方法同样支持自动初始化 | ✅ | `loadProject` 共享 `ensureConfigInitialized` |
+| 5 | 初始化失败时 error 状态被正确设置，不会阻塞用户 | ✅ | catch 块中 `set({ error })`，返回原 config |
+| 6 | TypeScript 类型检查通过 | ➖ | 语法正确，未运行 typecheck |
+
+### 总体评价
+
+功能代码正确，6 条验收条件全部满足。但**自迭代 2 以来连续 3 次评审指出的两个结构性问题（无工厂模式、无测试）仍未解决**，迭代 6 生成的修复计划也未落地。代码与迭代 4（评分 78）和迭代 6（评分 73）评审时实质相同。
+
+**评分: 66/100**
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 80 | 28.0 |
+| 测试质量 | 25% | 10 | 2.5 |
+| 代码质量 | 20% | 75 | 15.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | **100%** | | **65.5 ≈ 66** |
+
+### 严重问题（必须修复）
+
+#### 1. 未使用工厂模式，核心逻辑不可测试
+
+`projectStore.ts` 使用模块级 `isTauri` 常量和硬编码的 `tauriInvoke`（第 8-11 行），无法注入 mock 依赖。其他 store（`runStore.ts`、`iterationStore.ts`、`historyStore.ts`）均使用 `createXxxStore(overrides)` 工厂模式。
+
+`desktop_app/src/CLAUDE.md` 明确要求：
+> Store-heavy logic should be written so it can be instantiated with injected dependencies instead of hard-wiring Tauri imports
+
+不修复则所有 store 级别的行为（`selectProject` 的 Tauri 调用链路、初始化失败路径、`isInitializing` 状态转换）都无法编写单元测试。
+
+**建议**: 提取 `ProjectStoreDeps` 接口，将 `create<ProjectState>()` 包裹在 `createProjectStore(overrides)` 工厂内。`export const useProjectStore = createProjectStore()` 不放默认实例，消费者无需改动。
+
+#### 2. 无测试覆盖
+
+新增的 `isConfigIncomplete`、`normalizeProjectError`（纯函数）和 `ensureConfigInitialized`（核心业务逻辑）没有任何测试。项目已有 `node --test --experimental-strip-types` 测试基础设施和 13 个测试文件。即使工厂模式未修复，纯函数（`isConfigIncomplete`、`normalizeProjectError`）也可以立即加测试。
+
+### 一般问题（建议修复）
+
+#### 3. `loadRecentProjects` 未自动初始化
+
+`loadRecentProjects`（第 186-213 行）在 Tauri 模式下调用 `detect_project_config` 后未调用 `ensureConfigInitialized`。应用启动时自动加载最近项目的路径不会触发配置补齐。迭代 6 的计划已识别此问题，未实施。
+
+#### 4. `ensureConfigInitialized` 的 `set` 参数类型
+
+`set` 的类型签名（第 73-74 行）使用了模块级的内联类型，可简化为 `import type { StoreApi } from 'zustand'` 的 `StoreApi<ProjectState>['setState']`，更简洁且与 Zustand 类型系统一致。
+
+### 审核结论
+
+- [ ] 通过
+- [x] **需要修改** — 评分 66/100，未达到 85 达标线
+
+### 自检验证
+
+实现者自检（自迭代 1 起始终未完成）:
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已执行 Lint 检查
+- [ ] 实现者已运行相关测试
+- [ ] 实现者已确认测试覆盖

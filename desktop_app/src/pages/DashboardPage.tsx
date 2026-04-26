@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useProjectStore, ProjectConfig } from '../stores/projectStore';
+import React, { useEffect, useState } from 'react';
+import { useProjectStore, ProjectConfig, isConfigIncomplete } from '../stores/projectStore';
 
 // Check Icon component
 function CheckIcon({ className }: { className?: string }): JSX.Element {
@@ -239,14 +239,123 @@ function WelcomeScreen(): JSX.Element {
   );
 }
 
-// Init from template prompt component
-function InitTemplatePrompt({
-  onLater,
-  onLearnMore,
-}: {
-  onLater: () => void;
-  onLearnMore: () => void;
-}): JSX.Element {
+// Init from template prompt component — shows initialization status
+function InitTemplatePrompt(): JSX.Element {
+  const { isInitializing, error, retryInitialize, config } = useProjectStore();
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const prevInitializing = React.useRef(isInitializing);
+
+  useEffect(() => {
+    // Detect transition from initializing → done
+    if (prevInitializing.current && !isInitializing) {
+      if (!error && config && !isConfigIncomplete(config)) {
+        setShowSuccess(true);
+        const timer = setTimeout(() => setShowSuccess(false), 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+    prevInitializing.current = isInitializing;
+  }, [isInitializing, error, config]);
+
+  if (dismissed && !isInitializing) {
+    return <></>;
+  }
+
+  // Success feedback
+  if (showSuccess) {
+    return (
+      <div className="p-4 rounded-lg bg-green-50 border border-green-200 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckIcon className="w-4 h-4 text-green-600" />
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-green-800">
+              初始化成功
+            </h4>
+            <p className="text-sm text-green-600">
+              .autoresearch 配置已自动创建完成
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isInitializing) {
+    return (
+      <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+            <svg
+              className="animate-spin w-4 h-4 text-blue-600"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth={4}
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-blue-800">
+              正在初始化配置...
+            </h4>
+            <p className="text-sm text-blue-600">
+              正在创建 .autoresearch/ 目录、program.md 和 agents/ 目录
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state with retry
+  if (error) {
+    return (
+      <div className="p-4 rounded-lg bg-red-50 border border-red-200 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+            <XIcon className="w-4 h-4 text-red-600" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-red-800 mb-1">
+              初始化失败
+            </h4>
+            <p className="text-sm text-red-700 mb-3">{error}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => retryInitialize()}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded transition-colors"
+              >
+                重试
+              </button>
+              <button
+                onClick={() => setDismissed(true)}
+                className="px-3 py-1.5 text-sm font-medium text-red-700 hover:text-red-900 bg-red-100 hover:bg-red-200 border border-red-300 rounded transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: config still incomplete (e.g. user dismissed and came back)
   return (
     <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 mb-6">
       <div className="flex items-start gap-3">
@@ -270,20 +379,20 @@ function InitTemplatePrompt({
             项目配置不完整
           </h4>
           <p className="text-sm text-amber-700 mb-3">
-            是否从模板初始化？这将创建 .autoresearch/ 目录、program.md 和 agents/ 目录。
+            缺少 .autoresearch 配置文件。点击初始化按钮自动创建。
           </p>
           <div className="flex gap-2">
             <button
-              onClick={onLater}
+              onClick={() => retryInitialize()}
+              className="px-3 py-1.5 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded transition-colors"
+            >
+              初始化
+            </button>
+            <button
+              onClick={() => setDismissed(true)}
               className="px-3 py-1.5 text-sm font-medium text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded transition-colors"
             >
               稍后
-            </button>
-            <button
-              onClick={onLearnMore}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded transition-colors"
-            >
-              了解
             </button>
           </div>
         </div>
@@ -322,7 +431,6 @@ function ProjectInfoScreen({
   config: ProjectConfig | null;
 }): JSX.Element {
   const { selectProject } = useProjectStore();
-  const [showInitPrompt, setShowInitPrompt] = useState(true);
 
   // Check if any config is missing
   const hasMissingConfig = config
@@ -337,16 +445,6 @@ function ProjectInfoScreen({
       config.has_program_md &&
       config.has_agents_dir
     : false;
-
-  const handleLater = () => {
-    setShowInitPrompt(false);
-  };
-
-  const handleLearnMore = () => {
-    // Just a placeholder - opens documentation or shows more info
-    alert('了解更多功能将在后续版本中实现');
-    setShowInitPrompt(false);
-  };
 
   return (
     <div className="p-6">
@@ -383,8 +481,8 @@ function ProjectInfoScreen({
       {isConfigComplete && <ConfigCompleteNotification />}
 
       {/* Init Template Prompt */}
-      {hasMissingConfig && showInitPrompt && (
-        <InitTemplatePrompt onLater={handleLater} onLearnMore={handleLearnMore} />
+      {hasMissingConfig && (
+        <InitTemplatePrompt />
       )}
 
       {/* Config Status Cards */}

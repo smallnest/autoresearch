@@ -1,0 +1,162 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m✱ [0mGlob "desktop_app/src/**/*.test.*"[90m in . · 0 matches[0m
+[0m✱ [0mGlob "desktop_app/src/**/*.spec.*"[90m in . · 0 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD --stat
+desktop_app/src/stores/projectStore.ts | 32 ++++++++++++++++++++++++++++++--
+ 1 file changed, 30 insertions(+), 2 deletions(-)
+[0m
+Let me check for test files and also verify the full extent of changes.
+[0m✱ [0mGrep "init_project_config"[90m in . · 772 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && grep -n "isInitializing\|retryInitialize\|ensureConfigInitialized" desktop_app/src/pages/DashboardPage.tsx
+(no output)
+[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*.ts"[90m in . · 0 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && grep -rn "projectStore\|isInitializing\|isConfigIncomplete\|ensureConfigInitialized" desktop_app/tests/ 2>/dev/null || echo "No matches"
+desktop_app/tests/storeErrorLocalization.test.mjs:6:import { normalizeProjectError } from '../src/stores/projectStore.ts';
+desktop_app/tests/uiLocalization.test.mjs:98:  const projectStoreSource = readSource('../src/stores/projectStore.ts');
+desktop_app/tests/uiLocalization.test.mjs:136:  assert.match(projectStoreSource, /normalizeProjectError/);
+desktop_app/tests/uiLocalization.test.mjs:137:  assert.doesNotMatch(projectStoreSource, /String\(e\)/);
+[0m
+[0m✱ [0mGrep "projectStore"[90m in desktop_app/tests · 4 matches[0m
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+- 迭代次数: 34
+
+### 总体评价
+**评分: 39/100**
+
+### 严重问题 (必须修复)
+
+**1. 目标文件 `DashboardPage.tsx` 完全未被修改 (致命)**
+
+Git diff 确认只有 `projectStore.ts` 被修改，恰为 T-002 定义的入口文件 `DashboardPage.tsx` 没有任何改动。6 项验收条件全部未达成：
+
+| 验收条件 | 状态 | 说明 |
+|----------|------|------|
+| 移除无操作按钮 ("了解" alert) | ❌ | `InitTemplatePrompt` 在第 283 行仍显示 `alert('了解更多功能...')` |
+| 初始化进行中显示加载状态 | ❌ | `isInitializing` 在 store 中已添加但 UI 完全不消费，无加载指示 |
+| 初始化成功后显示成功反馈 | ❌ | 已有 `ConfigCompleteNotification` 组件但与本迭代改动无关，自动初始化无 UI 反馈 |
+| 初始化失败显示错误信息和重试按钮 | ❌ | 无错误展示，无重试按钮，store 中 `ensureConfigInitialized` 为内部函数无法被 UI 调用 |
+| 无 console 错误 | ❓ | 不可验证，但旧 alert 仍在 |
+| UI 交互流畅 | ❌ | 自动初始化在 store 层静默发生，用户无感知 |
+
+**2. Store 缺少 `retryInitialize` action**
+
+验收条件明确要求 "手动调用 refreshConfig + init_project_config"。当前 `ensureConfigInitialized` 是模块私有函数，UI 无法调用重试。需要新增公开的 `retryInitialize` action。
+
+**3. 零测试覆盖新代码**
+
+新增的 `isConfigIncomplete` 导出函数和 `ensureConfigInitialized` 逻辑无任何测试。此问题在之前各迭代（#24-#33）已被反复指出。
+
+### 一般问题 (建议修复)
+
+**`ensureConfigInitialized` 未处理竞态**
+
+当 `isInitializing` 为 true 时，`ensureConfigInitialized` 仍可直接被调用。应添加 guard 阻止重叠调用。
+
+### 建议改进 (可选)
+
+- Store 层的 `isInitializing` 状态和自动初始化逻辑方向正确，可作为基础供正确的 UI 实现复用
+
+### 审核结论
+- ❌ **阻塞** — 目标文件未修改，0/6 验收条件达成
+
+### 自检验证
+
+根据日志，实施 Agent 本迭代的改动仅有 `projectStore.ts` 的 30 行增加。未执行 `DashboardPage.tsx` 相关修改，无法评估自检情况。
+
+---
+
+## Learnings
+
+- **踩坑**: 本迭代再次出现完全相同的"只改 store 不改 UI"问题，与迭代日志中记录的规律一致。这是 Issue #84 的持续性重复失败模式，已在迭代 #24-#34 中发生至少 8 次以上。
+- **模式**: 审核 UI 子任务时，`git diff HEAD -- <target_file>` 必须在审核的第一步执行。本迭代如果提前使用，可在 3 秒内发现目标文件未被触及。
+- **经验**: 对于持续重复失败的实现模式（连续 ≥3 次相同方向错误），应考虑大幅调整 prompts、增加强制检查规则，而非每次仅给出逐次修复反馈。

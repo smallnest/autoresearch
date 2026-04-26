@@ -1,0 +1,57 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+Let me read the current state of the relevant files to understand what needs to change.
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+Let me also check the current store interface to make sure my plan is comprehensive.
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=949, limit=40][0m
+[0m✱ [0mGrep "onLearnMore|InitTemplatePrompt"[90m in desktop_app/src · 6 matches[0m
+[0m✱ [0mGrep "retryInitialize"[90m in desktop_app/src · 0 matches[0m
+## 修复计划
+
+审核发现两个致命问题：
+1. `DashboardPage.tsx` 中 `InitTemplatePrompt` 组件未修改（仍包含 `onLearnMore`/"了解"按钮）
+2. `projectStore.ts` 缺少 `retryInitialize` action
+
+### 任务拆解
+
+#### Task 1: projectStore.ts — 添加 `retryInitialize` action
+
+**改动位置**: `desktop_app/src/stores/projectStore.ts`
+
+1. 在 `ProjectState` 接口中新增 `retryInitialize: () => Promise<void>`
+2. 在 store 实现体中新增 `retryInitialize` action：
+   - 守卫：`projectPath` 和 `config` 存在且 `isTauri`
+   - 设置 `isInitializing: true, error: null`
+   - 直接调用 `tauriInvoke<ProjectConfig>('init_project_config', { projectPath })`
+   - 成功：`set({ config: newConfig })`，再调用 `refreshConfig(projectPath)`
+   - 失败：`set({ error: normalizeProjectError(e) })`
+   - finally：`set({ isInitializing: false })`
+
+#### Task 2: DashboardPage.tsx — 重写 InitTemplatePrompt 组件
+
+**改动位置**: `desktop_app/src/pages/DashboardPage.tsx`
+
+**InitTemplatePrompt 组件** (lines 242-293):
+- 移除 `onLearnMore` prop 声明
+- 从 `useProjectStore` 中读取 `isInitializing`, `error`, `retryInitialize`
+- **初始化中状态** (`isInitializing === true`): 蓝色卡片 + 旋转动画 + "正在初始化配置..."
+- **错误状态** (`error !== null`): 红色卡片 + 错误信息 + "重试"按钮 → 调用 `retryInitialize`
+- **默认状态** (配置不完整，非初始化中，无错误): 琥珀色卡片 + "是否从模板初始化？" + "稍后" + "立即初始化"按钮 → 调用 `retryInitialize`
+- 移除"了解"按钮和 `alert` 调用
+
+**ProjectInfoScreen 组件** (lines 317-491):
+- 移除 `handleLearnMore` 函数
+- 更新 `InitTemplatePrompt` 调用：仅传 `onLater={handleLater}`，移除 `onLearnMore`
+- 移除 `handleLearnMore` 的声明
+
+**导出组件 DashboardPage** (lines 494-507): 无需改动
+
+#### 自检
+
+- [ ] `git diff HEAD --name-only` 确认两个文件都已修改
+- [ ] 无 `alert()` 残留
+- [ ] `onLearnMore` 无剩余引用

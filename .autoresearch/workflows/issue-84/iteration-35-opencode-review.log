@@ -1,0 +1,164 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts 2>/dev/null || echo "no diff"
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD --name-only
+desktop_app/src/stores/projectStore.ts
+[0m
+[0m✱ [0mGrep "InitTemplatePrompt|isInitializing|retryInitialize|ensureConfig"[90m in desktop_app/src · 10 matches[0m
+Let me also check if there are any other files that were modified in this iteration.
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代次数: 当前迭代
+
+### 总体评价
+**评分: 40/100**
+
+### 严重问题 (必须修复)
+
+该实现存在与历史迭代完全相同的致命缺陷：**只改了 store，没有改 UI**。
+
+1. **`DashboardPage.tsx` 未被触碰** — `git diff HEAD --name-only` 显示唯一修改是 `projectStore.ts`，但子任务 T-002 的核心交付物是更新 `InitTemplatePrompt` 组件。该文件完全没有被修改。
+
+2. **`InitTemplatePrompt` 仍为旧版纯提示 UI**（`DashboardPage.tsx:243-293`）：
+   - "了解"按钮及其 `alert('了解更多功能将在后续版本中实现')` 仍存在 — 违反验收条件"不再显示无操作按钮"
+   - 未使用 store 的 `isInitializing` 状态 — 违反验收条件"初始化进行中时显示加载/进度状态"
+   - 未展示初始化失败的错误信息和重试按钮 — 违反验收条件"初始化失败时显示错误信息和重试按钮"
+
+3. **Store 缺少 `retryInitialize` action** — `ensureConfigInitialized` 是模块级私有函数，UI 无法在初始化失败后手动调用重试。Store 需要暴露一个 `retryInitialize(projectPath: string)` action。
+
+### 一般问题 (建议修复)
+
+- `ensureConfigInitialized` 的 catch 块用了 `console.warn` 透传原始错误，建议统一走 `normalizeProjectError` 处理后设到 `error` 状态（目前已设 error，但仍应移除 `console.warn`）
+- 浏览器 fallback 的 `selectProject` 和 `loadProject` 路径未调用 `ensureConfigInitialized`，建议补充
+
+### 需要实现的具体改动
+
+**1. `projectStore.ts`** — 添加 `retryInitialize` action：
+```typescript
+// 在 ProjectState 接口中添加
+retryInitialize: (projectPath: string) => Promise<void>;
+
+// 在 store 工厂中添加实现
+retryInitialize: async (projectPath: string) => {
+  set({ isInitializing: true, error: null });
+  try {
+    const config = await tauriInvoke<ProjectConfig>('init_project_config', { projectPath });
+    if (get().projectPath === projectPath) {
+      set({ config });
+    }
+  } catch (e) {
+    if (get().projectPath === projectPath) {
+      set({ error: normalizeProjectError(e) });
+    }
+  } finally {
+    if (get().projectPath === projectPath) {
+      set({ isInitializing: false });
+    }
+  }
+}
+```
+
+**2. `DashboardPage.tsx`** — 更新 `InitTemplatePrompt`：
+- 移除 `onLearnMore` prop 和"了解"按钮
+- 导入 `useProjectStore` 获取 `isInitializing`、`error`、`retryInitialize`、`projectPath`
+- 当 `isInitializing` 时显示加载 spinner
+- 当 `error` 非空时显示错误信息和重试按钮
+- 将 `ProjectInfoScreen` 的 `handleLearnMore` 一并移除
+- 初始化成功后 `ConfigCompleteNotification` 已能处理成功反馈
+
+### 审核结论
+- 阻塞 — 目标文件 `DashboardPage.tsx` 未被修改，必须修复
+
+### 自检验证
+
+- 实现者未执行自检：`DashboardPage.tsx` 未被触碰因此无法通过任何 UI 验收条件
+
+---
+
+## Learnings
+
+- **踩坑**: 本迭代再次出现完全相同的"只改 store 不改 UI"问题。`DashboardPage.tsx` 作为 T-002 唯一定义的目标文件，`git diff HEAD --name-only` 即可在 3 秒内发现其未被修改。
+- **模式**: UI 类型子任务的审核确认必须在第一步 `git diff HEAD -- <target_file>`，确认目标文件已被修改后再深入审查代码质量。
+- **经验**: Store 在添加初始化逻辑的同时，必须暴露 `retryInitialize` action 以便 UI 消费。Store action 设计应站在 UI 消费侧思考。

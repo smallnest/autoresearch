@@ -1,0 +1,247 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log --oneline --all | head -40
+dc48a57 Merge pull request #87 from smallnest/feature/issue-85
+5789954 feat: implement issue #85 - [desktop-app] 启动任务失败时无有效错误信息，无法排查原因
+56e0aac Merge pull request #86 from smallnest/feature/issue-38
+186bc28 feat: implement issue #38 - [desktop-app] PR 操作（合并/关闭）
+35d031a Merge pull request #82 from smallnest/feature/issue-37
+545a3ee feat: implement issue #37 - [desktop-app] PR 信息查看与 Diff 展示
+78492cf Merge pull request #81 from smallnest/feature/issue-36
+dcb6d21 feat: implement issue #36 - [desktop-app] 历史详情查看与日志导出
+0d9c341 Merge pull request #80 from smallnest/feature/issue-35
+9cb22cc feat: implement issue #35 - [desktop-app] 处理历史列表
+c190f24 Merge pull request #79 from smallnest/feature/issue-34
+c78e166 feat: implement issue #34 - [desktop-app] 配置文件编辑器
+9665586 On feature/issue-34: autoresearch-temp-continue-34-1777115688
+65dca0d index on feature/issue-34: 33ed825 Merge pull request #78 from smallnest/feature/issue-33
+cad518d untracked files on feature/issue-34: 33ed825 Merge pull request #78 from smallnest/feature/issue-33
+33ed825 Merge pull request #78 from smallnest/feature/issue-33
+a303498 feat: implement issue #33 - [desktop-app] 评分趋势折线图
+f1aadaf Merge pull request #77 from smallnest/feature/issue-73
+ae6246d feat: implement issue #73 - [desktop-app] 项目配置模板初始化
+1be412f Merge pull request #76 from smallnest/feature/issue-74
+53e0316 feat: implement issue #74 - [desktop-app] UI 全面中文化
+d78f2a3 fix: resolve merge conflict in results.tsv
+aced020 Merge pull request #75 from smallnest/feature/issue-32
+3afed69 feat: implement issue #32 - [desktop-app] 评分提取与展示
+2b95b58 Merge pull request #72 from smallnest/feature/issue-31
+2c13800 feat: implement issue #31 - [desktop-app] 迭代进度与阶段展示
+fb22e38 fix: add missing log after agent fix completion
+b08c7a0 Merge pull request #71 from smallnest/feature/issue-30
+f35710b feat: implement issue #30 - [desktop-app] 实时日志查看器
+365da9e feat: implement issue #29 - [desktop-app] 运行参数配置 UI
+ffc70f8 feat: implement issue #29 - [desktop-app] 运行参数配置 UI
+3b9e83b Merge pull request #70 from smallnest/feature/issue-29
+5985c36 feat: implement issue #29 - [desktop-app] 运行参数配置 UI
+a414939 Merge pull request #69 from smallnest/feature/issue-28
+2fcb949 feat: implement issue #28 - [desktop-app] run.sh 进程管理（启动/停止）
+f74495c fix: remove local keyword used outside function
+4776bdd chore: [desktop-app] reduce issues page size from 20 to 10
+3a30517 feat: [desktop-app] add front-end pagination for issues list (20 per page)
+4a049f7 fix: [desktop-app] match uppercase state values from gh CLI (OPEN/CLOSED)
+a95f36e feat: [desktop-app] show check icon and closed badge for closed issues
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD --name-only
+desktop_app/src/stores/projectStore.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git branch -a | head -20
+feature/issue-2
+  feature/issue-25
+  feature/issue-26
+  feature/issue-34
+  feature/issue-50
+  feature/issue-51
+  feature/issue-6
+* feature/issue-84
+  feature/issue-9
+  master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/feature/issue-1
+  remotes/origin/feature/issue-13
+  remotes/origin/feature/issue-2
+  remotes/origin/feature/issue-22
+  remotes/origin/feature/issue-25
+  remotes/origin/feature/issue-27
+  remotes/origin/feature/issue-28
+  remotes/origin/feature/issue-29
+  remotes/origin/feature/issue-30
+[0m
+[0m✱ [0mGlob "**/*test*"[90m in desktop_app/src · 0 matches[0m
+Let me check the full scope of changes across the entire branch.
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git log feature/issue-84 --oneline --not master
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff master...HEAD -- desktop_app/src/pages/DashboardPage.tsx | head -100
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff master...HEAD -- desktop_app/src/stores/projectStore.ts
+(no output)
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-32-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m✱ [0mGrep "retryInitialize|retry_init"[90m in desktop_app/src · 0 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/log.md
+现在我有了完整的图景。以下是审核报告。
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 当前子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+- 迭代次数: 31+
+
+### 总体评价
+**评分: 34/100** — 未达标
+
+### 各维度评分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 10 | 3.5 |
+| 测试质量 | 25% | 0 | 0.0 |
+| 代码质量 | 20% | 50 | 10.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | 100% | | **33.5 → 34** |
+
+### 严重问题 (必须修复)
+
+**1. DashboardPage.tsx 完全未被修改**
+
+`git diff HEAD --name-only` 确认唯一修改是 `desktop_app/src/stores/projectStore.ts`。`DashboardPage.tsx` 零变更。T-002 的全部验收条件均未满足。该问题已跨 30+ 次迭代被重复发现但从未修复（参见 iter-22 至 iter-31 的审核记录）。
+
+**2. InitTemplatePrompt 仍包含旧版 "了解" 按钮和 alert**
+
+`DashboardPage.tsx:283-287`：
+```tsx
+<button onClick={onLearnMore} ...>了解</button>
+```
+对应 handler `handleLearnMore` 在第 346 行调用 `alert('了解更多功能将在后续版本中实现')`。违反 AC 1。
+
+**3. 未展示初始化加载/进度状态**
+
+组件未从 store 解构 `isInitializing`，无任何加载动画或进度提示。违反 AC 2。
+
+**4. 未展示初始化成功反馈**
+
+当 `config` 完整时 `ConfigCompleteNotification` 已存在（第 296-314 行），但其触发条件 `isConfigComplete` 与 `ensureConfigInitialized` 的返回值之间无直接 UI 联动——store 的初始化结果不会触发 UI 反馈动画或自动隐藏。违反 AC 3。
+
+**5. 未展示初始化错误信息和重试按钮**
+
+组件没有使用 `store.error` 显示初始化失败的 UI。store 也未暴露 `retryInitialize` action（`grep retryInitialize` 无结果），UI 即使想实现重试按钮也缺少 store 接口。违反 AC 4。
+
+**6. store 缺少 `retryInitialize` action**
+
+`projectStore.ts` 未导出任何 `retryInitialize` action。前一迭代的 Learnings 已明确指出需在 store 层预先准备好该 action 供 UI 消费，但当前实现仍未添加。
+
+**7. store 不可测试（无工厂模式）**
+
+`projectStore` 不遵循项目中其他 store 的 `createXStore(overrides)` 工厂模式，硬编码 `isTauri` 检测和 `tauriInvoke`，导致单元测试完全不可行。该问题已被标记 20+ 次迭代但始终未修复。
+
+**8. 无任何测试文件**
+
+`desktop_app/` 下无 `projectStore` 或 `DashboardPage` 的测试文件。`ensureConfigInitialized`、`isConfigIncomplete`、`normalizeProjectError` 等纯函数均未被覆盖。测试质量维度不适用豁免——TypeScript store 和 React 组件完全支持测试。
+
+**9. `loadRecentProjects` 遗漏 `ensureConfigInitialized`**
+
+`projectStore.ts:192-196` 的 auto-load 分支是唯一缺少 `ensureConfigInitialized` 调用的项目加载路径。该问题自 iteration 8 起已被标记，跨越 20+ 次迭代未修复。
+
+### 审核结论
+
+- [x] 阻塞 — 实现方向偏离：Agent 重复只改 store 不改 UI，T-002 需求文件未被触及。需要强制修改 `DashboardPage.tsx` 中的 `InitTemplatePrompt` 组件，同时补全 store 的 `retryInitialize` action 和 `loadRecentProjects` 的初始化串联。
+
+### 实现者自检确认
+
+- [ ] 实现者已执行编译/类型检查 — 不可验证，文件未触及
+- [ ] 实现者已执行 Lint 检查 — 不可验证
+- [ ] 实现者已运行相关测试 — 无测试存在
+- [ ] 实现者已确认测试覆盖 — 无测试存在

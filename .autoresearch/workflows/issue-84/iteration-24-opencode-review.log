@@ -1,0 +1,184 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m✱ [0mGlob "desktop_app/tests/**/*dashboard*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*.test.*"[90m 12 matches[0m
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && ls .autoresearch/workflows/issue-84/ 2>/dev/null || echo "No issue-84 workflow found"
+hard-gate-1.log
+hard-gate-10.log
+hard-gate-11.log
+hard-gate-12.log
+hard-gate-13.log
+hard-gate-14.log
+hard-gate-15.log
+hard-gate-16.log
+hard-gate-17.log
+hard-gate-18.log
+hard-gate-19.log
+hard-gate-2.log
+hard-gate-20.log
+hard-gate-21.log
+hard-gate-23.log
+hard-gate-4.log
+hard-gate-6.log
+hard-gate-7.log
+hard-gate-8.log
+hard-gate-9.log
+iteration-1-claude.log
+iteration-10-opencode-review.log
+iteration-10-opencode.log
+iteration-11-opencode-review.log
+iteration-11-opencode.log
+iteration-12-opencode-review.log
+iteration-12-opencode.log
+iteration-13-opencode-review.log
+iteration-13-opencode.log
+iteration-14-opencode-review.log
+iteration-14-opencode.log
+iteration-15-opencode-review.log
+iteration-15-opencode.log
+iteration-16-opencode-review.log
+iteration-16-opencode.log
+iteration-17-opencode-review.log
+iteration-17-opencode.log
+iteration-18-opencode-review.log
+iteration-18-opencode.log
+iteration-19-opencode-review.log
+iteration-19-opencode.log
+iteration-2-opencode-review.log
+iteration-2-opencode.log
+iteration-20-opencode-review.log
+iteration-20-opencode.log
+iteration-21-opencode-review.log
+iteration-21-opencode.log
+iteration-22-opencode-review.log
+iteration-23-opencode-review.log
+iteration-23-opencode.log
+iteration-24-opencode-review.log
+iteration-3-claude-review.log
+iteration-3-claude.log
+iteration-4-opencode-review.log
+iteration-4-opencode.log
+iteration-5-claude-review.log
+iteration-6-opencode-review.log
+iteration-6-opencode.log
+iteration-7-opencode-review.log
+iteration-7-opencode.log
+iteration-8-opencode-review.log
+iteration-8-opencode.log
+iteration-9-opencode-review.log
+iteration-9-opencode.log
+log.md
+planning.log
+progress.md
+tasks.json
+terminal.log
+[0m
+Let me also check for any existing test files and the GitHub Issue content.
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m→ [0mRead desktop_app/tests/uiLocalization.test.mjs
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && grep -n "init_project_config\|init_project_config_sync" desktop_app/src-tauri/src/lib.rs | head -20
+949:async fn init_project_config(project_path: String) -> Result<ProjectConfig, String> {
+952:        init_project_config_sync(base, &project_path)
+971:fn init_project_config_sync(base: &Path, project_path: &str) -> Result<ProjectConfig, String> {
+2779:            init_project_config,
+2816:        init_project_config_sync, parse_iteration_from_log_md, parse_iteration_from_terminal,
+2854:    fn init_project_config_creates_missing_template_files() {
+2857:        let config = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+2888:    fn init_project_config_only_fills_missing_files() {
+2896:        let config = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+2923:    fn init_project_config_rejects_non_directory_project_path() {
+2931:        let error = init_project_config_sync(&file_path, file_path.to_string_lossy().as_ref())
+2942:    fn init_project_config_reports_conflicting_config_paths() {
+2947:        let error = init_project_config_sync(&project_dir, project_dir.to_string_lossy().as_ref())
+[0m
+[0m✱ [0mGrep "isInitializing"[90m in desktop_app/src · 4 matches[0m
+Now I have a clear picture. Let me also verify the Rust backend for `init_project_config` to understand what happens on failure.
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代: 当前
+- 当前子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+
+### 总体评价
+**评分: 40/100** — 未达标
+
+### 各维度评分
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 20 | 7.0 |
+| 测试质量 | 25% | 20 | 5.0 |
+| 代码质量 | 20% | 40 | 8.0 |
+| 安全性 | 10% | 100 | 10.0 |
+| 性能 | 10% | 100 | 10.0 |
+| **总分** | 100% | | **40.0** |
+
+### 严重问题 (必须修复)
+
+**1. InitTemplatePrompt 组件未做任何实质性改动（AC 1, 2, 3, 4 均未满足）**
+
+当前 `InitTemplatePrompt` 组件（`DashboardPage.tsx:243-293`）与原始版本几乎一致：
+- 仍保留"了解"按钮并调用 `alert()` (line 283-287, 347)，违反 **AC 1**
+- 未消费 store 的 `isInitializing` 状态（`isInitializing` 仅在 `projectStore.ts` 中设置，`DashboardPage.tsx` 中任何地方均未引用），违反 **AC 2**
+- 初始化失败时，`ensureConfigInitialized` 已正确设置 `store.error`，但 `InitTemplatePrompt` 不读取也不显示该错误，违反 **AC 4**
+- 无重试按钮调用 `refreshConfig` + `init_project_config`，违反 **AC 4**
+
+唯一正确工作的路径是自动初始化成功 → `ConfigCompleteNotification` 显示（`DashboardPage.tsx:383`），这条路径在 T-001 已实现，不属于 T-002 的改动。
+
+**2. `ProjectInfoScreen` 未从 store 获取 `isInitializing` 和 `error`**
+
+`DashboardPage.tsx:324` 只解构了 `selectProject`，未获取 `isInitializing` 和 `error`，导致 `InitTemplatePrompt` 无法感知初始化状态。修复需要：
+```tsx
+const { selectProject, isInitializing, error, refreshConfig } = useProjectStore();
+```
+
+**3. `InitTemplatePrompt` 需要改为有状态的初始化状态反馈组件**
+
+根据 AC 和描述，建议改为：
+```tsx
+function InitTemplatePrompt({ onLater }: { onLater: () => void }): JSX.Element {
+  const { isInitializing, error, refreshConfig } = useProjectStore();
+  const handleRetry = async () => {
+    const path = useProjectStore.getState().projectPath;
+    if (!path) return;
+    // refreshConfig re-reads filesystem state
+    await refreshConfig(path);
+    // then re-attempt init
+    const config = await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
+    useProjectStore.setState({ config });
+  };
+  if (isInitializing) {
+    return <div>...loading spinner...</div>;
+  }
+  if (error) {
+    return <div>...error + retry button...</div>;
+  }
+  // ... original prompt without "了解" button
+}
+```
+
+注意：上述 `handleRetry` 中需要调用 `tauriInvoke`，但因为 `InitTemplatePrompt` 不能直接访问 Tauri（组件中不应硬编码 `tauriInvoke`），更合理的做法是在 store 中暴露一个 `retryInit(projectPath)` action。
+
+### 一般问题 (建议修复)
+
+**4. 缺失 `projectStore.test.mjs` 测试文件**
+
+`projectStore.ts` 是仓库中唯一没有测试的主 store（其他 5 个主 store 均有 `.test.mjs`）。`ensureConfigInitialized`、`isConfigIncomplete`、`normalizeProjectError` 三个导出函数以及 `selectProject`/`loadProject`/`loadRecentProjects` 三条初始化路径均无测试覆盖。这导致 T-001 的 `loadRecentProjects` 遗漏点经历了 8 次迭代才最终修复。
+
+**5. `projectStore` 未使用工厂模式**
+
+与项目约定不符（`src/CLAUDE.md` 和 `tests/CLAUDE.md` 均有明确要求）。硬编码 `isTauri` 检测和 `tauriInvoke` 导入导致单元测试不可行。建议参照 `runStore.ts` 的 `createRunStore(overrides)` 模式重构。
+
+### 审核结论
+- [ ] **阻塞** — 4 项验收条件中的 4 项未满足，需大幅修改后重新审核
+
+### 实现者自检确认
+- [ ] 实现者未完成自检 — `InitTemplatePrompt` 组件代码无实质性功能变更

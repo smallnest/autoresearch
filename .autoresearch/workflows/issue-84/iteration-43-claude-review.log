@@ -1,0 +1,125 @@
+好的，TypeScript 编译通过。现在我已掌握了完整情况。以下是我的审核报告：
+
+---
+
+## 审核报告
+
+### Issue
+- 编号: #84
+- 标题: [desktop-app] 选择新项目时未自动初始化 .autoresearch 配置文件
+- 迭代次数: 43 (T-002 子任务)
+- 当前子任务: T-002 - 更新 Dashboard 页面 InitTemplatePrompt 组件
+
+---
+
+### 总体评价
+
+**评分: 15/100**
+
+T-002 子任务的核心目标是修改 `DashboardPage.tsx` 中的 `InitTemplatePrompt` 组件，但从 iteration 1 到 iteration 43（40+ 轮迭代），`DashboardPage.tsx` **从未被修改过**。这是一个致命问题——`git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx` 为空。
+
+---
+
+### 严重问题 (必须修复)
+
+#### 问题 1: DashboardPage.tsx 未做任何修改 — T-002 核心目标完全未实现
+
+**位置**: `desktop_app/src/pages/DashboardPage.tsx`
+
+**问题描述**:
+T-002 的验收条件明确要求修改 `InitTemplatePrompt` 组件：
+1. 移除无功能的"了解"按钮和 alert → **未做**
+2. 初始化进行中时显示加载/进度状态 → **未做**
+3. 初始化成功后显示成功反馈 → **未做**
+4. 初始化失败时显示错误信息和重试按钮 → **未做**
+5. `isInitializing` 从 store 读取并显示 → **未做**
+
+当前 `InitTemplatePrompt` 仍然是原始的无功能提示，带有"了解"按钮调用 `alert()`：
+
+```tsx
+// DashboardPage.tsx:345-349 — 未修改
+const handleLearnMore = () => {
+  alert('了解更多功能将在后续版本中实现');
+  setShowInitPrompt(false);
+};
+```
+
+组件接口仍然是 `onLater` / `onLearnMore` 回调，完全没有接入 store 的 `isInitializing`、`error` 状态：
+
+```tsx
+// DashboardPage.tsx:243-249 — 未修改
+function InitTemplatePrompt({
+  onLater,
+  onLearnMore,
+}: {
+  onLater: () => void;
+  onLearnMore: () => void;
+}): JSX.Element {
+```
+
+**原因**: 这正是 T-002 子任务要完成的工作，40+ 轮迭代全部只修改了 store 而未触及 UI 文件。
+
+#### 问题 2: 缺少 retryInitialize action — UI 重试按钮无对应 action 可调用
+
+**位置**: `desktop_app/src/stores/projectStore.ts`
+
+**问题描述**:
+`ensureConfigInitialized` 是一个模块级私有函数，而非 store action。验收条件要求"初始化失败时显示重试按钮（手动调用 refreshConfig + init_project_config）"，但 store 没有暴露一个可供 UI 调用的 `retryInitialize` action。
+
+`refreshConfig` 只调用 `detect_project_config`（检测），不会调用 `init_project_config`（初始化），所以即使 UI 做了重试按钮，调 `refreshConfig` 也无法实现重试初始化的语义。
+
+---
+
+### 一般问题 (建议修复)
+
+#### 问题 3: ensureConfigInitialized 的 set 类型签名过于宽泛
+
+**位置**: `desktop_app/src/stores/projectStore.ts:74`
+
+```ts
+set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
+```
+
+Zustand 的 `set` 函数签名还有第三个参数 `shouldReplace?`，这里直接透传 `set` 本身而非重新签名会更安全。不过这是一个次要问题。
+
+#### 问题 4: loadRecentProjects 不触发自动初始化
+
+**位置**: `desktop_app/src/stores/projectStore.ts:186-214`
+
+`loadRecentProjects` 在检测到最近项目后直接 `set({ config })`，没有经过 `ensureConfigInitialized`。这意味着如果用户启动应用时自动加载的最近项目缺少配置，不会触发自动初始化。虽然这属于 T-001 的范畴，但 T-002 的 UI 也需要感知这种场景。
+
+---
+
+### Store 改动质量评价 (T-001 部分)
+
+store 层的改动质量本身不错：
+- `isInitializing` 状态正确添加
+- `isConfigIncomplete()` 导出函数逻辑正确
+- `ensureConfigInitialized()` 在 `selectProject` 和 `loadProject` 中正确集成
+- 错误处理使用 `normalizeProjectError` 归一化
+- TypeScript 编译通过
+
+但这是 T-001 (已完成) 的工作，不属于 T-002 的审核范围。
+
+---
+
+### 审核结论
+
+- [x] 阻塞 - 存在严重问题，需要重新设计/实现
+
+**下一步行动**:
+需要直接修改 `DashboardPage.tsx` 中的 `InitTemplatePrompt` 组件（或创建新的状态反馈组件），使其：
+1. 从 store 读取 `isInitializing` 和 `error`
+2. 初始化中显示加载状态
+3. 初始化成功后显示成功反馈
+4. 初始化失败时显示错误信息和重试按钮
+5. 移除"了解"按钮和 `alert()`
+6. 在 store 中暴露 `retryInitialize` action 供重试按钮调用
+
+---
+
+## Learnings
+
+- **踩坑**: 连续 40+ 轮迭代都只改 store 不改 DashboardPage.tsx。这是一个系统性问题——实现 Agent 没有执行 `git diff HEAD --name-only` 来验证目标文件是否已被修改。审核时应将此作为第一项检查。
+- **经验**: T-002 的验收条件全部指向 UI 层变更，store 改动属于 T-001。审核子任务时必须区分"前置条件"（store 改动）和"本任务目标"（UI 改动），不能因为前置条件已完成就判定任务通过。
+- **模式**: 对于 UI 类型子任务，`git diff HEAD --name-only` 检查目标 UI 文件是否出现在 diff 中，是最低成本的实现验证手段。如果目标 UI 文件不在 diff 中，可以直接给 0-20 分而无需进一步审查。

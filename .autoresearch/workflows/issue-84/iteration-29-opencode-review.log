@@ -1,0 +1,138 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx
+(no output)
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+现在我有了完整的上下文。让我确认一下实际的 git diff 范围（T-002 的变更范围）：
+## 审核报告
+
+### Issue
+- 编号: #84
+- 子任务: T-002
+
+### 总体评价
+**评分: 35/100**
+
+### 严重问题 (必须修复)
+
+**1. DashboardPage.tsx 未做任何修改（致命问题）**
+
+`git diff HEAD -- desktop_app/src/pages/DashboardPage.tsx` 输出为空。T-002 的全部验收条件均未满足：
+
+- `InitTemplatePrompt` 仍然保留着"了解"按钮和 `alert('了解更多功能将在后续版本中实现')` — 验收条件要求**移除* 
+- 未使用 store 的 `isInitializing` 状态 — 验收条件要求"初始化进行中时显示加载/进度状态"
+- 未显示初始化成功反馈 — 验收条件要求"初始化成功后显示成功反馈"
+- 未显示初始化失败的重试按钮 — 验收条件要求"初始化失败时显示错误信息和重试按钮"
+
+**2. Store 缺少 `retryInitialize` action**
+
+即使修改了 UI，也无法实现"重试"功能，因为没有公开的 action 让组件调用。`ensureConfigInitialized` 是模块级私有函数，未被暴露到 store 接口。重试需要：1) 暴露 `retryInitialize` action；2) 组件在失败时调用它。
+
+### 评分明细
+
+| 维度 | 权重 | 得分 | 加权 | 说明 |
+|------|------|------|------|------|
+| 正确性 | 35% | 10 | 3.5 | UI 层完全未实现，6 个验收条件全部未通过 |
+| 测试质量 | 25% | 0 | 0.0 | 无 UI 测试，且因 UI 层无变更不适用豁免 |
+| 代码质量 | 20% | 60 | 12.0 | 已有 store 代码质量尚可，但 T-002 变更完全缺失 |
+| 安全性 | 10% | 100 | 10.0 | 无新增安全问题 |
+| 性能 | 10% | 100 | 10.0 | 无性能问题 |
+| **总分** | **100%** | | **35.5** | |
+
+### 审核结论
+- 需要修改
+
+### 修复建议
+
+1. **修改 `InitTemplatePrompt` 组件**（`DashboardPage.tsx:242-293`）：接收 `isInitializing`、`config`、`error`、`retryInitialize` 等 props/from store，根据状态切换显示 loading / 成功 / 失败重试 UI
+2. **移除**原来的"了解"按钮和 `alert`
+3. **在 `projectStore` 中添加 `retryInitialize` action**：调用 `refreshConfig` + `init_project_config`，供失败重试使用
+4. 参考跨迭代经验：T-001 (store) 已完成，T-002 (UI) 从未被触及，此迭代再次重演
+
+## Learnings
+
+- **模式**: T-002 在 28+ 次迭代中持续不被实现 — Agent 修改了 store (`projectStore.ts`) 但完全忽略了 UI 文件 (`DashboardPage.tsx`)。审核需强制检查 `git diff` 是否覆盖所有子任务目标文件。
+- **踩坑**: store 新增了 `isInitializing` 字段和 `ensureConfigInitialized` 逻辑，但没有对外暴露 `retryInitialize` action，导致 UI 即使想实现重试也无处调用。
+- **经验**: 依赖 store 状态的 UI 变更，应在 store 中同时准备好所有 UI 需要的 action，再修改 UI 组件。当前缺少 `retryInitialize` action，UI 实现会被阻塞。

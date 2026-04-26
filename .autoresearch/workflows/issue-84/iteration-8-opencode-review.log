@@ -1,0 +1,173 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/src/stores/projectStore.ts
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-6-opencode.log
+[0m→ [0mRead desktop_app/src/stores/runStore.ts
+[0m✱ [0mGlob "desktop_app/tests/projectStore*"[90m 0 matches[0m
+[0m✱ [0mGlob "desktop_app/tests/*.test.*"[90m 12 matches[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+[0m✱ [0mGrep "init_project_config"[90m in desktop_app/src-tauri · 14 matches[0m
+Let me gather more information to do a thorough review.
+[0m→ [0mRead desktop_app/tests/runStore.test.mjs
+[0m→ [0mRead desktop_app/tests/historyStore.test.mjs[90m [limit=50][0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=940, limit=60][0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch/desktop_app && cat package.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps({k:v for k,v in d.get('scripts',{}).items() if k in ('test','typecheck','build','lint','check')}, indent=2))"
+{
+  "build": "tsc && vite build",
+  "test": "node --test --experimental-strip-types tests/*.test.mjs",
+  "lint": "eslint .",
+  "typecheck": "tsc --noEmit"
+}
+[0m
+Now let me check the existing test infrastructure and verify the `normalizeUserFacingError` helper:
+## 审核报告
+
+### Issue
+- 编号: #84 (T-001)
+- 当前迭代次数: 8 (基于 progress.md 记录)
+
+### 总体评价
+
+功能逻辑基本正确，5/6 验收条件通过代码审查验证。但 `loadRecentProjects` 未接入自动初始化（迭代 6 已指出但未修复），零测试覆盖，且始终未遵循项目约定的工厂模式，导致连续 6 次迭代评分均低于 85 阈值。
+
+**评分: 66/100**
+
+计算明细：
+- 正确性(35%): 85 → 29.75
+- 测试质量(25%): 10 → 2.50
+- 代码质量(20%): 70 → 14.00
+- 安全性(10%): 100 → 10.00
+- 性能(10%): 100 → 10.00
+
+### 功能验收逐条确认
+
+| # | 验收条件 | 状态 | 说明 |
+|---|---------|------|------|
+| 1 | selectProject 检测到配置缺失时自动调用 init_project_config | ✅ | `ensureConfigInitialized` 正常调用 |
+| 2 | init_project_config 返回的 ProjectConfig 正确更新到 store.config | ✅ | 返回值经 `const config = await ...` 传递给 `set({ config })` |
+| 3 | 新增 isInitializing 状态字段，初始化期间 true，完成后 false | ✅ | 接口定义、初始状态、set(true)/finally(false) 均正确 |
+| 4 | loadProject 方法同样支持自动初始化 | ✅ | 与 selectProject 使用相同模式 |
+| 5 | 初始化失败时 error 被正确设置，不阻塞用户操作 | ✅ | catch 内 set error + return 原始 config，不中断流程 |
+| 6 | TypeScript 类型检查通过 | ❓ | 未验证 |
+
+### 严重问题 (必须修复)
+
+1. **`loadRecentProjects` 未接入 `ensureConfigInitialized`** (`projectStore.ts:193-196`)
+   - 问题：`loadRecentProjects` 在 Tauri 分支调用 `detect_project_config` 后直接 `set({ projectPath, config })`，未检查配置完整性或调用自动初始化。用户打开应用自动加载最近项目时，缺失的 `.autoresearch/` 配置文件不会被补齐。
+   - 迭代 6 的计划（iteration-6-opencode.log:47-49）已明确指出此问题，但未被修复。
+   - 修复：在第 193-196 行 `detect_project_config` 后追加 `ensureConfigInitialized` 调用，与 `selectProject`/`loadProject` 保持一致。
+
+2. **零测试覆盖**
+   - 整个 `projectStore.ts` 无任何测试文件。项目已有 12 个 `.test.mjs` 文件、成熟的工厂注入测试模式（见 `runStore.test.mjs`、`historyStore.test.mjs`），但 `projectStore` 新增的 `isConfigIncomplete`、`ensureConfigInitialized` 以及改造后的 `selectProject`/`loadProject`/`loadRecentProjects` 均无覆盖率。
+   - 测试质量维度得分 10/100，是总分未达标的主因。
+
+### 一般问题 (建议修复)
+
+3. **未遵循项目约定的工厂模式**
+   - `projectStore.ts` 仍是项目中唯一不使用工厂模式 + 依赖注入的 store。`isTauri` 和 `tauriInvoke` 为模块级单例，导致测试难以注入 mock。`ensureConfigInitialized` 将 Zustand 的 `set` 直接作为参数传入，耦合了测试不友好的 API 签名。
+   - 对比：`runStore.ts:120-128`、`historyStore.ts`、`iterationStore.ts` 均使用 `createXxxStore(overrides)` 模式。
+   - 项目 CLAUDE.md 已在多处明确约定此模式（`desktop_app/src/CLAUDE.md:35-38`、`tests/CLAUDE.md:5-8`）。
+   - 这是迭代 1-7 连续指出的问题，每次评分均因此扣分。参见 `progress.md` 迭代 7 的 Learnings 部分。
+
+4. **`ensureConfigInitialized` 的函数签名耦合**
+   - `ensureConfigInitialized` 接收 Zustand 的 `set` 函数直接操作 state。更好的做法是返回 `{ config, error }` 由调用方决定如何更新 state，保持纯函数风格。
+
+### 审核结论
+
+- ❌ **阻塞** — 零测试覆盖 + `loadRecentProjects` 遗漏 = 不达标。需在本次迭代同时修复两个严重问题。
+
+### 自检验证
+
+审核前回顾：实现者未完成以下自检项：
+- [ ] 实现者已执行编译/类型检查
+- [ ] 实现者已运行相关测试（尚无测试）
+- [ ] 测试覆盖为零
+
+---
+
+## Learnings
+
+- **模式**: `loadRecentProjects` 是 `selectProject`/`loadProject` 之外的第三条项目加载路径，审核时必须同时检查三条路径的 `ensureConfigInitialized` 接入情况，不能只检查显式声明的两个方法。
+- **踩坑**: 尽管 `ensureConfigInitialized` 正确设置了 `error` 状态（验收条件 5 的要求），但外层 `selectProject`/`loadProject` 的 `set({ isLoading: true, error: null })`（line 103/157）会在每次调用时先清除旧 error。如果上次 init 失败后的 error 还未被用户读取就被下一次 `selectProject` 清除，可能造成信息丢失。这是当前设计的固有行为，非本次迭代引入的 bug，但可作为后续改进项。
+- **经验**: 连续 6 次迭代均因"无工厂模式 + 无测试"被扣分，但实现者始终只做最小修复。对于这种明确的标准化问题，审核时应直接将其提升为阻塞级别，而非持续标记为一般问题。

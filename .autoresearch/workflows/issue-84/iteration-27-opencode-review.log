@@ -1,0 +1,182 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m→ [0mRead desktop_app/src/pages/DashboardPage.tsx
+[0m→ [0mRead desktop_app/src/stores/projectStore.ts
+[0m→ [0mRead .autoresearch/workflows/issue-84/planning.log
+[0m
+[0m$ [0mcd /Users/chaoyuepan/ai/autoresearch && git diff HEAD -- desktop_app/
+diff --git a/desktop_app/src/stores/projectStore.ts b/desktop_app/src/stores/projectStore.ts
+index 42a269c..86f559b 100644
+--- a/desktop_app/src/stores/projectStore.ts
++++ b/desktop_app/src/stores/projectStore.ts
+@@ -21,6 +21,7 @@ interface ProjectState {
+   config: ProjectConfig | null;
+   recentProjects: string[];
+   isLoading: boolean;
++  isInitializing: boolean;
+   error: string | null;
+   selectProject: () => Promise<void>;
+   loadProject: (_path: string) => Promise<void>;
+@@ -62,6 +63,30 @@ function saveRecentToStorage(path: string) {
+   }
+ }
+ 
++export function isConfigIncomplete(config: ProjectConfig | null): boolean {
++  if (!config) return true;
++  return !config.has_autoresearch_dir || !config.has_program_md || !config.has_agents_dir;
++}
++
++async function ensureConfigInitialized(
++  path: string,
++  config: ProjectConfig,
++  set: (partial: Partial<ProjectState> | ((state: ProjectState) => Partial<ProjectState>)) => void,
++): Promise<ProjectConfig> {
++  if (!isConfigIncomplete(config)) return config;
++  set({ isInitializing: true });
++  try {
++    return await tauriInvoke<ProjectConfig>('init_project_config', { projectPath: path });
++  } catch (initError) {
++    // Set error so UI can display failure feedback, but don't block the user
++    console.warn('Auto-init project config failed:', initError);
++    set({ error: normalizeProjectError(initError) });
++    return config;
++  } finally {
++    set({ isInitializing: false });
++  }
++}
++
+ export function normalizeProjectError(error: unknown): string {
+   return normalizeUserFacingError(error, '加载项目失败，请重试。');
+ }
+@@ -71,6 +96,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+   config: null,
+   recentProjects: [],
+   isLoading: false,
++  isInitializing: false,
+   error: null,
+ 
+   selectProject: async () => {
+@@ -79,9 +105,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+       if (isTauri) {
+         const path = await tauriInvoke<string | null>('select_project_dir');
+         if (path) {
+-          const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++          const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+             projectPath: path,
+           });
++          const config = await ensureConfigInitialized(path, detected, set);
+           await tauriInvoke('save_recent_project', { path });
+           set((state) => ({
+             projectPath: path,
+@@ -130,9 +157,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
+     set({ isLoading: true, error: null });
+     try {
+       if (isTauri) {
+-        const config = await tauriInvoke<ProjectConfig>('detect_project_config', {
++        const detected = await tauriInvoke<ProjectConfig>('detect_project_config', {
+           projectPath: path,
+         });
++        const config = await ensureConfigInitialized(path, detected, set);
+         await tauriInvoke('save_recent_project', { path });
+         set((state) => ({
+           projectPath: path,
+[0m
+[0m✱ [0mGlob "desktop_app/tests/**/*test*"[90m 12 matches[0m
+Let me check the git diff and test files.
+[0m✱ [0mGrep "projectStore|project_test|init_config|isConfigIncomplete|ensureConfigInitialized|isInitializing"[90m in desktop_app/tests · 4 matches[0m
+[0m→ [0mRead desktop_app/src/stores/uiError.ts
+[0m
+[0m$ [0mls -t /Users/chaoyuepan/ai/autoresearch/.autoresearch/workflows/issue-84/ | head -20
+iteration-27-opencode-review.log
+terminal.log
+progress.md
+hard-gate-26.log
+log.md
+iteration-26-opencode.log
+iteration-26-opencode-review.log
+hard-gate-25.log
+iteration-25-opencode.log
+iteration-25-opencode-review.log
+hard-gate-24.log
+iteration-24-opencode.log
+iteration-24-opencode-review.log
+hard-gate-23.log
+iteration-23-opencode.log
+iteration-23-opencode-review.log
+tasks.json
+iteration-22-opencode-review.log
+hard-gate-21.log
+iteration-21-opencode.log
+[0m
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-27-opencode-review.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/hard-gate-26.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/iteration-26-opencode.log
+[0m→ [0mRead .autoresearch/workflows/issue-84/log.md
+[0m→ [0mRead .autoresearch/workflows/issue-84/tasks.json
+## 审核报告
+
+### Issue
+- 编号: #84
+- 迭代次数: 26 (当前迭代)
+
+### 总体评价
+**评分: 35/100**
+
+当前状态：T-002 的 UI 层完全未实现。`DashboardPage.tsx` 零改动，`InitTemplatePrompt` 仍为原始代码。T-001 store 层改动方向正确，但缺少 `retryInitialize` action 且 `loadRecentProjects` 未串联初始化。
+
+### 严重问题 (必须修复)
+
+1. **`InitTemplatePrompt` 完全未修改** (`DashboardPage.tsx:243-293`)
+   - 仍包含 `onLearnMore` prop 和 "了解" 按钮
+   - 仍包含 `alert('了解更多功能将在后续版本中实现')` — 验收条件明确要求移除
+   - 未接入 store 的 `isInitializing`、`error` 等状态
+
+2. **缺少 `retryInitialize` action** (`projectStore.ts`)
+   - 验收条件要求"初始化失败时显示错误信息和重试按钮"，但 store 没有暴露重试的 action
+   - 需要新增一个 `retryInitialize` action，内部调用 `refreshConfig()` 后如仍不完整则调 `init_project_config`
+
+3. **`ProjectInfoScreen` 未接入 store 状态** (`DashboardPage.tsx:323-492`)
+   - 未从 store 解构 `isInitializing`、`error`、`refreshConfig` 等字段
+   - `showInitPrompt` 状态控制与初始化状态无关联
+
+4. **`loadRecentProjects` 未串联自动初始化** (`projectStore.ts:186-214`)
+   - Tauri 路径中自动检测配置后，未调用 `ensureConfigInitialized`
+   - 应用启动自动加载项目时不会自动初始化
+
+5. **缺少测试覆盖**
+   - `isConfigIncomplete()`、`ensureConfigInitialized()`、`normalizeProjectError()` 均无测试
+   - 新增 store 逻辑无单元测试覆盖核心路径和错误路径
+
+### 一般问题 (建议修复)
+
+1. **`ConfigCompleteNotification` 无自动隐藏机制** (`DashboardPage.tsx:296-314`)
+   - 验收条件要求"初始化成功后显示成功反馈并自动隐藏"，当前组件无 `useEffect` + `setTimeout` 实现
+
+2. **`ProjectInfoScreen` 中 `handleLearnMore` 直接使用 `alert()`**
+   - 不仅违反验收条件，且 `alert()` 不是 Tauri 项目的推荐做法
+
+3. **`isInitializing` 在 `ProjectState` 接口中已定义但未在 `ensureConfigInitialized` 外被消费**
+   - store 暴露了状态但无组件使用
+
+### 审核结论
+- [ ] 阻塞 — T-002 功能完全未实现，需要重新实现
+
+### 自检验证
+
+| 检查项 | 结果 |
+|--------|------|
+| 编译/类型检查 | 未执行 |
+| Lint 检查 | 未执行 |
+| 相关测试 | 未运行 |
+| 测试覆盖 | 无新增测试 |
+
+> 实现者未执行任何自检。
+
+---
+
+## Learnings
+
+- **模式**: 跨迭代显示此 Issue 的核心问题在于 Agent 总是只改 store 不改 UI。T-001 (store 层) 已迭代多次达标，但 T-002 (UI 层) 从未被触及。审核应严格检查 git diff 是否覆盖所有子任务文件。
+- **踩坑**: `loadRecentProjects` 在 Tauri 路径的 auto-load 分支中遗漏了初始化串联，这是一个边界问题——只有通过"最近项目"自动加载时触发，手动 `selectProject` 和 `loadProject` 已正确串联。
+- **经验**: 对于依赖 store 状态的 UI 变更，应先在 store 中准备好所有需要的 action（如 `retryInitialize`），再修改 UI 组件。当前迭代缺少 store action 导致 UI 修改无法验证。
