@@ -227,7 +227,7 @@ export default function LogViewer({
 
   const rawText =
     selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
-      ? outputLines.join('\n')
+      ? (isCurrentIssueRunning ? outputLines.join('\n') : '')
       : (sourceContents[selectedSourceId]?.text ?? '');
   const totalEntries = useMemo(
     () => buildLogEntries(rawText),
@@ -441,7 +441,7 @@ export default function LogViewer({
               : selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
                 ? isCurrentIssueRunning
                   ? '等待新的运行输出...'
-                  : '当前没有运行中的实时输出，可切换到历史日志文件。'
+                  : '当前没有运行中的实时输出。'
                 : '该日志文件当前为空。'}
           </div>
         )}

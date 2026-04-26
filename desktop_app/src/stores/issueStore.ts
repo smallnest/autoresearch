@@ -223,7 +223,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
   },
 
   selectIssue: (_number: number | null) => {
-    set({ selectedIssueNumber: _number });
+    set({ selectedIssueNumber: _number, issueDetail: null, detailError: null, detailLoading: false });
   },
 
   clearIssueDetail: () => {

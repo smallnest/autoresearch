@@ -354,8 +354,21 @@ function IssuesPage(): JSX.Element {
   // --- Detail panel resize handle ---
   const MIN_DETAIL_WIDTH = 320;
   const MAX_DETAIL_WIDTH = 1080;
-  const [detailWidth, setDetailWidth] = useState(384);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [detailWidth, setDetailWidth] = useState(0);
   const dragRef = useRef({ isDragging: false, startX: 0, startWidth: 0 });
+
+  // Initialize detailWidth to 50% of container on first layout
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || detailWidth > 0) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const half = Math.round(entry.contentRect.width * 2 / 3);
+      setDetailWidth((prev) => prev === 0 ? Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, half)) : prev);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [detailWidth]);
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -428,7 +441,7 @@ function IssuesPage(): JSX.Element {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Issues</h1>
           <p className="text-sm text-gray-500">
-            管理和追踪 GitHub 未关闭 Issues（{filteredIssues.length} / {issues.length}）
+            管理和追踪未关闭的 GitHub Issues（{filteredIssues.length} / {issues.length}）
           </p>
         </div>
 
@@ -498,7 +511,7 @@ function IssuesPage(): JSX.Element {
         </div>
       )}
 
-      <div className="flex flex-col xl:flex-row">
+      <div ref={containerRef} className="flex flex-col xl:flex-row">
         <section className="min-w-0 flex-1 overflow-hidden xl:pr-4">
           {/* Search bar */}
           <div className="mb-4">

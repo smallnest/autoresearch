@@ -230,7 +230,7 @@ function IssueDetailPanel({
     Boolean(projectPath) && isSupported && !isRunActive;
   const canStop = isSupported && isRunActive;
   const showRunMeta =
-    activeIssueNumber !== null &&
+    activeIssueNumber === issue.number &&
     (isRunActive || runStatus === 'finished' || runStatus === 'error');
 
   return (
@@ -262,14 +262,16 @@ function IssueDetailPanel({
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getRunStatusClass(runStatus)}`}
-                >
-                  {(runStatus === 'running' || runStatus === 'stopping') && (
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
-                  )}
-                  {getRunStatusLabel(runStatus)}
-                </span>
+                {(isCurrentIssueRunning || activeIssueNumber === issue.number) && (
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getRunStatusClass(runStatus)}`}
+                  >
+                    {(runStatus === 'running' || runStatus === 'stopping') && (
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
+                    )}
+                    {getRunStatusLabel(runStatus)}
+                  </span>
+                )}
                 {showRunMeta && (
                   <span className="text-xs text-gray-500">
                     当前任务 #{activeIssueNumber}
@@ -346,7 +348,7 @@ function IssueDetailPanel({
             </div>
           )}
 
-          {runError && (
+          {runError && activeIssueNumber === issue.number && (
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {runError}
             </div>

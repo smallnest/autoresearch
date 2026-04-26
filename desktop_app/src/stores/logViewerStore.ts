@@ -234,19 +234,21 @@ export function createLogViewerStore(
         ? ''
         : previousState.selectedSourceId;
 
-      set((state) => ({
-        currentIssueNumber: _issueNumber,
-        sourcesRequestKey: requestKey,
-        isLoadingSources: true,
-        error: null,
-        autoScroll: issueChanged ? true : state.autoScroll,
-        hasPendingScroll: issueChanged ? false : state.hasPendingScroll,
-        selectedSourceId: issueChanged
-          ? DEFAULT_SELECTED_SOURCE_ID
-          : state.selectedSourceId,
-        sourceContents: issueChanged ? {} : state.sourceContents,
-        searchQuery: issueChanged ? '' : state.searchQuery,
-      }));
+      if (issueChanged) {
+        set(() => ({
+          currentIssueNumber: _issueNumber,
+          sourcesRequestKey: requestKey,
+          isLoadingSources: true,
+          error: null,
+          autoScroll: true,
+          hasPendingScroll: false,
+          selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
+          sourceContents: {},
+          searchQuery: '',
+        }));
+      } else {
+        set({ sourcesRequestKey: requestKey });
+      }
 
       if (!deps.isTauri) {
         set({
@@ -281,6 +283,14 @@ export function createLogViewerStore(
         }
 
         set((state) => {
+          const sourcesUnchanged =
+            state.sources.length === sources.length &&
+            state.sources.every((s, i) => s.id === sources[i].id && s.label === sources[i].label);
+
+          if (sourcesUnchanged && selectedSourceId === state.selectedSourceId) {
+            return { isLoadingSources: false };
+          }
+
           const nextSourceContents =
             selectedSourceId === state.selectedSourceId ||
             selectedSourceId === DEFAULT_SELECTED_SOURCE_ID
@@ -306,11 +316,15 @@ export function createLogViewerStore(
           return;
         }
 
+        // "Workflow logs for Issue #N not found" is expected for unprocessed issues
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const isNotFound = /Workflow logs for Issue #\d+ not found/i.test(errMsg);
+
         set({
           sources: [createLiveSource()],
           selectedSourceId: DEFAULT_SELECTED_SOURCE_ID,
           isLoadingSources: false,
-          error: normalizeLogViewerError(error),
+          error: isNotFound ? null : normalizeLogViewerError(error),
         });
       }
     },
@@ -330,8 +344,6 @@ export function createLogViewerStore(
       set({
         currentIssueNumber: currentIssueNumber ?? _issueNumber,
         contentRequestKey: requestKey,
-        isLoadingContent: true,
-        error: null,
       });
 
       try {
@@ -348,13 +360,18 @@ export function createLogViewerStore(
           return;
         }
 
-        set((state) => ({
-          sourceContents: {
-            ...state.sourceContents,
-            [content.source_id]: content,
-          },
-          isLoadingContent: false,
-        }));
+        set((state) => {
+          const existing = state.sourceContents[content.source_id];
+          if (existing && existing.text === content.text) {
+            return state;
+          }
+          return {
+            sourceContents: {
+              ...state.sourceContents,
+              [content.source_id]: content,
+            },
+          };
+        });
       } catch (error) {
         if (
           get().currentIssueNumber !== _issueNumber ||
@@ -364,7 +381,6 @@ export function createLogViewerStore(
         }
 
         set({
-          isLoadingContent: false,
           error: normalizeLogViewerError(error),
         });
       }

@@ -251,8 +251,21 @@ function HistoryPage(): JSX.Element {
   // --- Detail panel resize handle ---
   const MIN_DETAIL_WIDTH = 400;
   const MAX_DETAIL_WIDTH = 1080;
-  const [detailWidth, setDetailWidth] = useState(600);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [detailWidth, setDetailWidth] = useState(0);
   const dragRef = useRef({ isDragging: false, startX: 0, startWidth: 0 });
+
+  // Initialize detailWidth to 50% of container on first layout
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || detailWidth > 0) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const half = Math.round(entry.contentRect.width * 2 / 3);
+      setDetailWidth((prev) => prev === 0 ? Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, half)) : prev);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [detailWidth]);
 
   const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -264,7 +277,7 @@ function HistoryPage(): JSX.Element {
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!dragRef.current.isDragging) return;
-      const delta = e.clientX - dragRef.current.startX;
+      const delta = dragRef.current.startX - e.clientX;
       const next = Math.min(MAX_DETAIL_WIDTH, Math.max(MIN_DETAIL_WIDTH, dragRef.current.startWidth + delta));
       setDetailWidth(next);
     };
@@ -291,7 +304,7 @@ function HistoryPage(): JSX.Element {
   }
 
   return (
-    <div className="flex h-full">
+    <div ref={containerRef} className="flex h-full">
       {/* Left: List */}
       <div className={`p-6 ${selectedIssue != null ? 'flex-1' : 'w-full'} overflow-y-auto`}>
         {/* Header */}
