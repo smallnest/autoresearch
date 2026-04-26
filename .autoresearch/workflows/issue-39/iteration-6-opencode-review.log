@@ -1,0 +1,96 @@
+[0m
+> plan · deepseek-v4-flash
+[0m
+[0m# [0mTodos
+[ ] Review Issue #39 implementation - examine current code state
+[ ] Check T-003 subtask: close_requested event handling
+[ ] Check tray icon and menu implementation
+[ ] Check Cmd+Q handling and macOS Dock behavior
+[ ] Check test coverage and type checking
+[ ] Generate final audit report with score
+[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs
+[0m→ [0mRead desktop_app/src-tauri/src/main.rs
+[0m✱ [0mGlob "desktop_app/src-tauri/**/*.rs"[90m in . · 3 matches[0m
+[0m✱ [0mGlob ".autoresearch/workflows/issue-39/**/*"[90m in . · 22 matches[0m
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=1590][0m
+[0m→ [0mRead .autoresearch/workflows/issue-39/progress.md
+[0m→ [0mRead .autoresearch/workflows/issue-39/log.md
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=3056][0m
+[0m→ [0mRead .autoresearch/workflows/issue-39/tasks.json
+[0m→ [0mRead .autoresearch/workflows/issue-39/planning.log
+[0m→ [0mRead .autoresearch/workflows/issue-39/iteration-6-opencode-review.log
+[0m→ [0mRead desktop_app/src-tauri/src/lib.rs[90m [offset=4468][0m
+[0m→ [0mRead .autoresearch/workflows/issue-39/iteration-5-claude.log
+Let me check the latest iteration log, the remaining test file, and additional configuration files.
+[0m→ [0mRead desktop_app/src-tauri/tauri.conf.json
+[0m→ [0mRead desktop_app/src-tauri/Cargo.toml
+[0m→ [0mRead .autoresearch/workflows/issue-39/.last_score
+Let me check the config and the `tauri.conf.json` to see the current state of T-003 fixes.
+[0m→ [0mRead desktop_app/src-tauri/capabilities/default.json
+[0m✱ [0mGrep "tray-stop-task|tray.*stop"[90m in desktop_app · 2 matches[0m
+[0m→ [0mRead desktop_app/src/stores/runStore.ts[90m [offset=155, limit=30][0m
+[0m→ [0mRead .autoresearch/workflows/issue-39/hard-gate-5.log
+[0m→ [0mRead .autoresearch/workflows/issue-39/hard-gate-3.log
+[0m
+[0m# [0mTodos
+[x] Review Issue #39 implementation - examine current code state
+[x] Check T-003 subtask: close_requested event handling
+[x] Check tray icon and menu implementation
+[x] Check Cmd+Q handling and macOS Dock behavior
+[x] Check test coverage and type checking
+[ ] Generate final audit report with score
+[0m
+## 审核报告
+
+### Issue
+- 编号: #39
+- 标题: [desktop-app] 系统托盘集成
+- 子任务: T-003 - 关闭窗口最小化到托盘而非退出
+- 迭代: 6（审查）
+
+---
+
+### 总体评价
+
+**评分: 91/100**
+
+T-003 功能已**完整实现**。之前的迭代 5 修复了迭代 4 审核中发现的 4 个严重问题，当前代码符合所有验收条件。迭代 6 的审核日志为空（review 未完成），本报告为最终的全面审查。
+
+#### 各维度得分
+
+| 维度 | 权重 | 得分 | 加权 |
+|------|------|------|------|
+| 正确性 | 35% | 95 | 33.25 |
+| 测试质量 | 25% | 75 | 18.75 |
+| 代码质量 | 20% | 95 | 19.00 |
+| 安全性 | 10% | 100 | 10.00 |
+| 性能 | 10% | 100 | 10.00 |
+| **总分** | 100% | | **91.00** |
+
+---
+
+### 验收条件检查
+
+| 条件 | 状态 | 验证方式 |
+|------|------|----------|
+| 点击关闭按钮时窗口隐藏而非退出 | ✅ | `on_window_event` 中拦截 `CloseRequested`，`api.prevent_close()` + `window.hide()` |
+| 隐藏后托盘图标仍然存在 | ✅ | 托盘图标在 `setup` 中创建，独立于窗口生命周期 |
+| 通过托盘图标/菜单恢复显示窗口 | ✅ | 点击图标 + `show_window` 菜单项均调用 `window.show()` + `set_focus()` |
+| Cmd+Q 可真正退出应用 | ✅ | app menu 绑定 `CmdOrCtrl+Q`，设置 `should_exit` 标志后 `window.close()` |
+| macOS Dock 行为正常 | ✅ | `tauri.conf.json` 无 `LSUIElement`，不从 Dock 隐藏 |
+| `npx tsc --noEmit` 通过 | ✅ | 迭代 5 日志确认通过 |
+
+### 实现自检确认
+
+- ✅ 编译/类型检查通过（迭代 5 通过了 `cargo check` 和 `npx tsc --noEmit`）
+- ✅ Lint 无新增警告
+- ✅ 前端 `runStore.ts` 已添加 `tray-stop-task` 事件监听
+- ✅ `capabilities/default.json` 包含 `core:tray:default`
+- ✅ `tauri.conf.json` 无 `trayIcon`（避免与 `TrayIconBuilder` 重复）
+
+### 新增 Learnings
+
+- **模式**: Tauri v2 中"关闭到托盘"的三件套：(1) `on_window_event` 拦截 `CloseRequested`，(2) `AtomicBool` 退出标志区分隐藏 vs 退出，(3) app menu 的 `CmdOrCtrl+Q` 加速键绕过拦截
+- **踩坑**: `TrayIconBuilder::new()` 创建的托盘无 ID，`tray_by_id()` 找不到；必须用 `TrayIconBuilder::with_id("main-tray")`
+- **状态管理**: `ShouldExit(Arc<AtomicBool>)` 通过 `app.manage()` 注入 Tauri 状态系统，使 `on_window_event` 和 `on_menu_event` 可共享同一退出标志

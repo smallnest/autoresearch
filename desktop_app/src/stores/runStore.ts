@@ -25,7 +25,7 @@ interface StartRunRequest {
 }
 
 type UnlistenFn = () => void;
-type RunEventName = 'run-output' | 'run-exit';
+type RunEventName = 'run-output' | 'run-exit' | 'tray-stop-task';
 type RunEventCallback<TPayload> = (event: { payload: TPayload }) => void;
 
 interface RunStoreDeps {
@@ -166,6 +166,9 @@ export function createRunStore(overrides: Partial<RunStoreDeps> = {}) {
                 ? null
                 : `运行失败${exitCode === null ? '' : `（退出码 ${exitCode}）`}`,
           }));
+        }),
+        deps.listen('tray-stop-task', () => {
+          get().stopRun();
         }),
       ]);
 

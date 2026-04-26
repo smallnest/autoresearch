@@ -1979,6 +1979,9 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
     // Reset the killed flag
     get_was_killed().store(false, Ordering::SeqCst);
 
+    // Enable the "停止当前任务" tray menu item
+    update_tray_stop_menu(&app, true);
+
     emit_iteration_progress(&app).await;
 
     // Clone app handle for the spawned task
@@ -2003,6 +2006,9 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
             let mut state_guard = state_clone.lock().await;
             state_guard.process = None;
         }
+
+        // Disable the "停止当前任务" tray menu item
+        update_tray_stop_menu(&app_clone, false);
 
         // Only emit exit event if we weren't killed by stop_run
         // (stop_run emits its own event)
@@ -2923,12 +2929,122 @@ fn set_executable_permissions_recursive(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Managed state to distinguish "close to tray" from "really quit".
+struct ShouldExit(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+/// Build the tray context menu with the stop_task item enabled or disabled.
+fn build_tray_menu(
+    app: &tauri::AppHandle,
+    stop_enabled: bool,
+) -> Result<tauri::menu::Menu<tauri::Wry>, tauri::Error> {
+    let show_item =
+        tauri::menu::MenuItemBuilder::with_id("show_window", "显示主窗口").build(app)?;
+    let stop_item = tauri::menu::MenuItemBuilder::with_id("stop_task", "停止当前任务")
+        .enabled(stop_enabled)
+        .build(app)?;
+    let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let quit_item = tauri::menu::MenuItemBuilder::with_id("quit", "退出").build(app)?;
+
+    tauri::menu::MenuBuilder::new(app)
+        .items(&[&show_item, &stop_item, &separator, &quit_item])
+        .build()
+}
+
+/// Update the tray menu to reflect whether a run task is active.
+fn update_tray_stop_menu(app: &tauri::AppHandle, stop_enabled: bool) {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        if let Ok(menu) = build_tray_menu(app, stop_enabled) {
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let should_exit = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            let menu = build_tray_menu(&handle, false)?;
+
+            // Use with_id("main-tray") so tray_by_id("main-tray") finds this icon
+            let _tray = tauri::tray::TrayIconBuilder::with_id("main-tray")
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Autoresearch Desktop")
+                .menu(&menu)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show_window" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "stop_task" => {
+                            let _ = app.emit("tray-stop-task", ());
+                        }
+                        "quit" => {
+                            // Set exit flag so on_window_event allows real close
+                            let should_exit = app.state::<ShouldExit>();
+                            should_exit.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.close();
+                            }
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // Manage ShouldExit state so on_window_event can check it
+            app.manage(ShouldExit(should_exit.clone()));
+
+            // Add app menu with Cmd+Q accelerator for macOS quit
+            let quit_menu_item =
+                tauri::menu::MenuItemBuilder::with_id("quit_app", "Quit Autoresearch")
+                    .accelerator("CmdOrCtrl+Q")
+                    .build(app)?;
+            let app_menu = tauri::menu::MenuBuilder::new(app)
+                .items(&[&quit_menu_item])
+                .build()?;
+            app.set_menu(app_menu)?;
+
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            if event.id.as_ref() == "quit_app" {
+                let should_exit = app.state::<ShouldExit>();
+                should_exit.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.close();
+                }
+            }
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let should_exit = window.state::<ShouldExit>();
+                if should_exit.0.load(std::sync::atomic::Ordering::SeqCst) {
+                    // Tray menu or Cmd+Q requested quit — allow close
+                } else {
+                    // Close button clicked — hide to tray instead
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             select_project_dir,
             detect_project_config,

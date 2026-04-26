@@ -1,0 +1,71 @@
+现在我已获取到所有需要的信息。这是我对子任务分解的分析：
+
+**主要观察：**
+- 这是一个 Tauri v2 桌面应用，目前**没有托盘相关代码**
+- `Cargo.toml` 中的 `tauri` 特性列表为空 — 需要 `"tray-icon"` 特性
+- `tauri.conf.json` 没有 `trayIcon` 部分
+- `capabilities/default.json` 没有托盘权限
+- `lib.rs` 是一个 5282 行的单体文件，包含所有应用逻辑
+- 问题需要：关闭到托盘、右键上下文菜单、点击显示、退出逻辑、Tauri 权限
+
+**分解策略：**
+1. T-001: 配置和基础设施（Cargo 特性、tauri.conf.json、capabilities）— 无需应用逻辑
+2. T-002: 托盘图标设置和菜单构建（Rust 代码：TrayIconBuilder、菜单项、事件处理）— 核心功能
+3. T-003: 窗口关闭行为（拦截关闭→隐藏而非退出，Cmd+Q 退出）— 行为逻辑
+
+这很自然地分成了 3 个子任务：配置 → 核心托盘 → 行为。每个任务都是可独立验证的，并且可以在一次迭代中完成。
+
+```json
+{
+  "issueNumber": 39,
+  "subtasks": [
+    {
+      "id": "T-001",
+      "title": "配置 Tauri tray-icon 功能与权限",
+      "description": "为 Tauri 应用添加系统托盘所需的配置和权限声明：1) 在 Cargo.toml 的 tauri 依赖中启用 \"tray-icon\" feature；2) 在 tauri.conf.json 中添加 trayIcon 配置项（指定图标路径和 tooltip）；3) 在 capabilities/default.json 中添加 tray 权限；4) 准备托盘图标资源文件（可复用现有 icons/ 中的小尺寸图标）。",
+      "acceptanceCriteria": [
+        "Cargo.toml 中 tauri 依赖包含 features = [\"tray-icon\"]",
+        "tauri.conf.json 包含 trayIcon 配置（id、iconPath、tooltip）",
+        "capabilities/default.json 包含 tray 相关权限",
+        "cargo check 编译通过，无错误",
+        "已有图标资源可用于托盘显示"
+      ],
+      "priority": 1,
+      "type": "code",
+      "passes": false
+    },
+    {
+      "id": "T-002",
+      "title": "实现托盘图标创建与右键菜单",
+      "description": "在 lib.rs 的 run() 函数中，使用 TrayIconBuilder 创建系统托盘图标，并构建右键菜单：1) 使用 tauri::menu::MenuBuilder 创建菜单，包含「显示主窗口」「停止当前任务」（条件显示）和「退出」三个菜单项；2) 使用 tauri::tray::TrayIconBuilder 设置图标、tooltip 和菜单；3) 在 setup 闭包中完成托盘图标的初始化和事件监听；4) 点击托盘图标时恢复显示主窗口；5) 点击「退出」菜单项时执行 app.exit(0)。",
+      "acceptanceCriteria": [
+        "应用启动后 macOS 菜单栏出现托盘图标",
+        "右键托盘图标显示菜单，包含「显示主窗口」和「退出」选项",
+        "当有运行中任务时，菜单显示「停止当前任务」选项",
+        "点击托盘图标可恢复显示主窗口",
+        "点击「退出」菜单项能真正退出应用",
+        "cargo clippy 无警告"
+      ],
+      "priority": 2,
+      "type": "ui",
+      "passes": false
+    },
+    {
+      "id": "T-003",
+      "title": "关闭窗口最小化到托盘而非退出",
+      "description": "实现窗口关闭时最小化到系统托盘而非退出应用：1) 监听窗口 close_requested 事件，阻止默认关闭行为，改为隐藏窗口；2) 确保点击托盘图标或菜单中的「显示主窗口」能恢复窗口；3) Cmd+Q 全局快捷键应触发真正的退出流程（通过托盘菜单退出）；4) 在 macOS 上保持正常 Dock 图标行为（不设置 LSUIElement）。",
+      "acceptanceCriteria": [
+        "点击窗口关闭按钮时窗口隐藏而非退出应用",
+        "隐藏后托盘图标仍然存在",
+        "通过托盘图标/菜单可恢复显示窗口",
+        "Cmd+Q 可真正退出应用",
+        "macOS Dock 中应用图标行为正常",
+        "npx tsc --noEmit 类型检查通过"
+      ],
+      "priority": 3,
+      "type": "ui",
+      "passes": false
+    }
+  ]
+}
+```

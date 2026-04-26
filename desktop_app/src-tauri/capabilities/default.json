@@ -9,6 +9,7 @@
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
-    "store:default"
+    "store:default",
+    "core:tray:default"
   ]
 }

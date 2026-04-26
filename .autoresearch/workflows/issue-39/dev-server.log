@@ -1,0 +1,10 @@
+
+> desktop_app@0.1.0 dev
+> vite
+
+error when starting dev server:
+Error: Port 1420 is already in use
+    at Server.onError$1 (file:///Users/chaoyuepan/ai/autoresearch/desktop_app/node_modules/.pnpm/vite@7.3.2_jiti@2.6.1_lightningcss@1.32.0/node_modules/vite/dist/node/chunks/config.js:14933:28)
+    at Server.emit (node:events:508:28)
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
