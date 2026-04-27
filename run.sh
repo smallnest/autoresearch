@@ -348,9 +348,10 @@ annealing_delay() {
 # 检测 Agent 输出是否包含致命错误（区分代码讨论中的 "error" 与真正的运行时错误）
 has_fatal_error() {
     local log_file="$1"
-    # 仅匹配行首的错误模式，避免误判代码中讨论 "error handling" 等正常内容
-    local pattern='^(Error|ERROR|Fatal|Panic|Exception)[: ]'
-    pattern+='|^(timeout|rate.limit|authentication|unauthorized|API.key).*error'
+    # 仅匹配非缩进、非代码行的错误模式，避免误判代码中讨论 "error handling" 等正常内容
+    # 先排除缩进行(代码块)和常见代码模式行，再匹配 CLI/系统错误输出
+    local pattern='(Error|ERROR|Fatal|Panic|Exception)[: ]'
+    pattern+='|(timeout|rate.limit|authentication|unauthorized|API.key).*error'
     pattern+='|context.length.exceeded'
     pattern+='|maximum.context.length'
     pattern+='|token.limit.exceeded'
@@ -366,13 +367,18 @@ has_fatal_error() {
     pattern+='|DNS.resolution'
     pattern+='|Timed.out'
     pattern+='|Command.timed.out'
-    grep -qE "$pattern" "$log_file" 2>/dev/null
+    # 排除缩进行(空格/tab开头)和代码特征行，同时排除 Codex 内部非致命 telemetry 错误
+    grep -vE '^[[:space:]]' "$log_file" 2>/dev/null \
+        | grep -vE '(fmt\.|strings\.|errors\.|io\.|net/http|func |type |struct|\*http\.|//.*return|//.*if|//.*error|\+\s*(func|type|var|const) )' \
+        | grep -vE 'codex_core::session: failed to record rollout' \
+        | grep -qE "$pattern"
 }
 
 # 检测 Agent 输出是否包含 API/网络级别的失败（区分于可恢复的内容错误）
 has_api_failure() {
     local log_file="$1"
-    # 这些模式表示 API 调用本身失败，而非代码内容问题
+    # 仅匹配非缩进、非代码行的 API/网络失败模式，避免误判代码中的字符串（如 "status 503"）
+    # 先排除缩进行(代码块)和常见代码模式行，再匹配 CLI 错误输出
     local pattern='status.4[0-9][0-9]'
     pattern+='|status.5[0-9][0-9]'
     pattern+='|HTTP.4[0-9][0-9]'
@@ -382,7 +388,10 @@ has_api_failure() {
     pattern+='|request.failed'
     pattern+='|response.is.empty'
     pattern+='|no.response.received'
-    grep -qE "$pattern" "$log_file" 2>/dev/null
+    # 排除缩进行(空格/tab开头)和代码特征行
+    grep -vE '^[[:space:]]' "$log_file" 2>/dev/null \
+        | grep -vE '(fmt\.|strings\.|errors\.|io\.|net/http|func |type |struct|\*http\.|//.*return|//.*if|//.*error|\+\s*(func|type|var|const) )' \
+        | grep -qE "$pattern"
 }
 
 # 超时包裹器：优先使用 GNU timeout/gtimeout，回退到 shell 原生方案
@@ -709,7 +718,7 @@ run_with_retry() {
         if [ "$agent" = "codex" ]; then
             timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         elif [ "$agent" = "opencode" ]; then
-            timeout_wrapper "$AGENT_TIMEOUT" opencode run "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" opencode run --dangerously-skip-permissions "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         else
             timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         fi
