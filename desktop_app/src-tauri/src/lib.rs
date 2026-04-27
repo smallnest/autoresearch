@@ -1491,7 +1491,7 @@ fn list_issues_sync(project_path: &str) -> Result<IssuesResult, String> {
     }
 
     // Execute gh issue list
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args([
             "issue",
             "list",
@@ -1702,7 +1702,7 @@ fn get_issue_detail_sync(project_path: &str, issue_number: i64) -> Result<IssueD
     }
 
     // Execute gh issue view
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args([
             "issue",
             "view",
@@ -1737,7 +1737,7 @@ fn list_prs_sync(project_path: &str) -> Result<Vec<GhPullRequest>, String> {
         return Err(format!("Path is not a directory: {project_path}"));
     }
 
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args([
             "pr",
             "list",
@@ -1778,7 +1778,7 @@ fn get_pr_detail_sync(project_path: &str, pr_number: i64) -> Result<PrDetail, St
         return Err(format!("Path is not a directory: {project_path}"));
     }
 
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args([
             "pr",
             "view",
@@ -1825,7 +1825,7 @@ fn get_pr_diff_sync(project_path: &str, pr_number: i64) -> Result<PrDiff, String
         return Err(format!("Path is not a directory: {project_path}"));
     }
 
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args(["pr", "diff", &pr_number.to_string()])
         .current_dir(base)
         .output()
@@ -1868,7 +1868,7 @@ fn merge_pr_sync(project_path: &str, pr_number: i64) -> Result<PrActionResponse,
         return Err(format!("Path is not a directory: {project_path}"));
     }
 
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args(["pr", "merge", &pr_number.to_string(), "--merge"])
         .current_dir(base)
         .output()
@@ -1924,7 +1924,7 @@ fn close_pr_sync(project_path: &str, pr_number: i64) -> Result<PrActionResponse,
         return Err(format!("Path is not a directory: {project_path}"));
     }
 
-    let output = Command::new("gh")
+    let output = shell_command("gh")
         .args(["pr", "close", &pr_number.to_string()])
         .current_dir(base)
         .output()
@@ -2102,7 +2102,15 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
         .stderr(StdStdio::piped())
         .kill_on_drop(false); // Don't kill on drop - we want to manage the process lifecycle
 
-    // Set environment variables
+    // Forward the full shell environment to the child process.
+    // GUI apps on macOS inherit a minimal launchd environment that lacks API keys,
+    // authentication tokens, and custom PATH entries from the user's shell profile.
+    let shell_env = get_shell_env_all();
+    for (key, value) in &shell_env {
+        cmd.env(key, value);
+    }
+
+    // Set app-specific environment variables (these override shell env if set)
     for (key, value) in &env_vars {
         cmd.env(key, value);
     }
@@ -2238,24 +2246,39 @@ async fn start_run(app: tauri::AppHandle, request: StartRunRequest) -> Result<()
 #[tauri::command]
 async fn stop_run(app: tauri::AppHandle) -> Result<(), String> {
     let state = get_run_state();
-    let mut state_guard = state.lock().await;
+    let state_guard = state.lock().await;
 
-    let process = state_guard.process.take().ok_or("No run is in progress")?;
+    let process = state_guard.process.as_ref().ok_or("No run is in progress")?;
     let pid = process.pid;
 
     // Mark that we're killing via stop_run, so the wait task doesn't emit duplicate event
     get_was_killed().store(true, Ordering::SeqCst);
 
     // Send SIGTERM to the process group
-    // Use the PID as PGID since we set it in pre_exec
     let pgid = pid as i32;
-
-    // Use nix to send signal to process group
     use nix::sys::signal::{killpg, Signal};
     use nix::unistd::Pid;
 
-    match killpg(Pid::from_raw(pgid), Signal::SIGTERM) {
+    let kill_result = killpg(Pid::from_raw(pgid), Signal::SIGTERM);
+
+    drop(state_guard); // Release lock before async wait
+
+    match kill_result {
         Ok(()) => {
+            // Wait briefly for the process to exit, then escalate to SIGKILL
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            // Check if process is still running
+            let still_running = {
+                let state_guard = state.lock().await;
+                state_guard.process.is_some()
+            };
+
+            if still_running {
+                // Escalate to SIGKILL
+                let _ = killpg(Pid::from_raw(pgid), Signal::SIGKILL);
+            }
+
             emit_iteration_progress(&app).await;
             // Emit exit event with killed flag
             let exit_event = RunExitEvent {
@@ -2266,9 +2289,14 @@ async fn stop_run(app: tauri::AppHandle) -> Result<(), String> {
             Ok(())
         }
         Err(e) => {
-            // Restore process state on error
-            state_guard.process = Some(process);
+            // Restore killed flag on error
             get_was_killed().store(false, Ordering::SeqCst);
+            // Process may have already exited — still emit run-exit so UI doesn't get stuck
+            let exit_event = RunExitEvent {
+                exit_code: None,
+                killed: true,
+            };
+            let _ = app.emit("run-exit", &exit_event);
             Err(format!("Failed to stop process: {e}"))
         }
     }
@@ -3177,7 +3205,7 @@ fn get_shell_path() -> String {
         // Spawn a login shell to get the user's full PATH as seen in Terminal.
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         let result = Command::new(&shell)
-            .args(["-l", "-c", "echo $PATH"])
+            .args(["-l", "-i", "-c", "echo $PATH"])
             .output();
 
         if let Ok(output) = result {
@@ -3252,6 +3280,69 @@ fn get_shell_path() -> String {
     {
         std::env::var("PATH").unwrap_or_default()
     }
+}
+
+/// Retrieves all environment variables from the user's login shell as (key, value) pairs.
+/// This is used to forward the full shell environment to child processes spawned by the GUI app,
+/// which otherwise only inherits a minimal launchd environment on macOS.
+fn get_shell_env_all() -> Vec<(String, String)> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let output = Command::new(&shell)
+        .args(["-l", "-i", "-c", "env"])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            stdout
+                .lines()
+                .filter_map(|line| {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        return None;
+                    }
+                    trimmed.split_once('=').map(|(k, v)| (k.to_string(), v.to_string()))
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Creates a `Command` for the given program with the shell-enriched PATH and
+/// relevant environment variables set. This ensures CLI tools like `gh` are
+/// findable and authenticated even when running as a macOS GUI app.
+fn shell_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.env("PATH", get_shell_path());
+    // Forward GitHub authentication tokens from the shell environment if not
+    // already set in the current process. GUI apps launched from Finder/Dock
+    // do not inherit these from the user's shell session.
+    for var in ["GITHUB_TOKEN", "GH_TOKEN"] {
+        if std::env::var(var).is_err() {
+            if let Ok(val) = get_shell_env(var) {
+                cmd.env(var, val);
+            }
+        }
+    }
+    cmd
+}
+
+/// Retrieves a single environment variable value from the user's login shell.
+fn get_shell_env(var: &str) -> Result<String, String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let output = Command::new(&shell)
+        .args(["-l", "-i", "-c", &format!("echo ${var}")])
+        .output()
+        .map_err(|e| format!("Failed to query shell env: {e}"))?;
+
+    if output.status.success() {
+        let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !val.is_empty() && val != format!("${var}") {
+            return Ok(val);
+        }
+    }
+    Err(format!("{var} not found in shell environment"))
 }
 
 /// Checks if a CLI tool is available on the system PATH.

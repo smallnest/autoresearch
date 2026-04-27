@@ -29,7 +29,7 @@ async function setupNotificationClickHandler(navigate: ReturnType<typeof useNavi
     const { onAction } = await import("@tauri-apps/plugin-notification");
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
 
-    await onAction((notification) => {
+    await onAction((notification: { extra?: Record<string, unknown> }) => {
       // Bring the app window to the foreground
       const mainWindow = getCurrentWindow();
       mainWindow.show();

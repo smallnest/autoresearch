@@ -9,8 +9,8 @@ import {
 export const RUN_CONFIG_STORE_KEY = 'autoresearch-run-config';
 
 export const MIN_MAX_ITERATIONS = 1;
-export const MAX_MAX_ITERATIONS = 50;
-export const DEFAULT_MAX_ITERATIONS = 16;
+export const MAX_MAX_ITERATIONS = 100;
+export const DEFAULT_MAX_ITERATIONS = 42;
 
 export const MIN_PASSING_SCORE = 1;
 export const MAX_PASSING_SCORE = 100;

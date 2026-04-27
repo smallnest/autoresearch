@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, type StateStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 
 // Hardcoded list of available agents
 export const AVAILABLE_AGENTS = ['claude', 'codex', 'opencode'] as const;
@@ -79,7 +79,8 @@ interface AgentState {
 interface AgentStoreDeps {
   isTauri: boolean;
   invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-  storage?: StateStorage;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  storage?: any;
 }
 
 const isTauri =
@@ -213,7 +214,7 @@ export function createAgentStore(overrides: Partial<AgentStoreDeps> = {}) {
       {
         name: 'autoresearch-agents',
         // Only persist selectedAgents; detection results are re-computed on each launch
-        partialize: (state) => ({ selectedAgents: state.selectedAgents }),
+        partialize: (state) => ({ selectedAgents: state.selectedAgents } as AgentState),
         ...(deps.storage ? { storage: deps.storage } : {}),
       }
     )
