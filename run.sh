@@ -981,7 +981,7 @@ check_dependencies() {
      missing=1
  else
      # 检查 icafe-cli 登录状态
-     if ! icafe-cli whoami &> /dev/null 2>&1; then
+     if ! icafe-cli login status &> /dev/null 2>&1; then
          error "icafe-cli 未登录，请先运行 icafe-cli login"
          missing=1
      else
@@ -993,7 +993,7 @@ check_dependencies() {
      missing=1
  else
      # 检查 icode-cli 登录状态
-     if ! icode-cli whoami &> /dev/null 2>&1; then
+     if ! icode-cli login status &> /dev/null 2>&1; then
          error "icode-cli 未登录，请先运行 icode-cli login"
          missing=1
      else
