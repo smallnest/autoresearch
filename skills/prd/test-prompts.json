@@ -13,5 +13,20 @@
     "id": 3,
     "prompt": "创建一个PRD，给我们的内部工具加批量导入功能",
     "expected": "应区分内部工具场景（无普通C端用户），PRD应聚焦批量操作的错误处理、进度反馈、部分失败策略等企业场景关注点"
+  },
+  {
+    "id": 4,
+    "prompt": "帮我写一个用户登录功能的PRD，并创建Issues",
+    "expected": "PRD生成并确认后，应展示Issue拆解列表供用户审核，然后询问创建模式（GitHub/本地/百度iCafe），根据模式收集参数（本地需问文件夹路径，百度需问--space），创建后输出汇总"
+  },
+  {
+    "id": 5,
+    "prompt": "写一个购物车功能的PRD，拆解成iCafe卡片，space是mall-platform",
+    "expected": "PRD确认后直接进入Issue拆解，识别用户指定百度iCafe模式和space参数，使用icafe-cli card create创建卡片，输出包含卡片序号的汇总"
+  },
+  {
+    "id": 6,
+    "prompt": "创建PRD并保存为本地Issues，放在docs/issues目录下",
+    "expected": "PRD确认后进入Issue拆解，识别用户指定本地模式及文件夹路径docs/issues，如果目录不存在则自动创建，保存issue-NNN-*.md文件"
   }
 ]

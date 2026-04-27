@@ -1,12 +1,12 @@
 ---
 name: prd
-description: "Generate a Product Requirements Document (PRD) for a new feature. Use when planning a feature, starting a new project, or when asked to create a PRD. Triggers on: create a prd, write prd for, plan this feature, requirements for, spec out, 写PRD, 需求文档, 需求分析, 规格说明."
+description: "Generate a Product Requirements Document (PRD) for a new feature, then decompose it into implementable Issues. Use when planning a feature, starting a new project, or when asked to create a PRD. Triggers on: create a prd, write prd for, plan this feature, requirements for, spec out, 写PRD, 需求文档, 需求分析, 规格说明."
 user-invocable: true
 ---
 
-# PRD Generator
+# PRD Generator + Issue Decomposer
 
-Create detailed Product Requirements Documents that are clear, actionable, and suitable for implementation.
+Create detailed Product Requirements Documents that are clear, actionable, and suitable for implementation. After PRD is confirmed, decompose it into small, independent Issues and create them in the user's chosen platform.
 
 ---
 
@@ -17,8 +17,11 @@ Create detailed Product Requirements Documents that are clear, actionable, and s
 3. Generate a structured PRD based on answers
 4. **Present PRD to user for review** — ask "Please review the PRD. Let me know if any adjustments are needed, or reply OK to confirm."
 5. Apply any adjustments, then save to `tasks/prd-[feature-name].md`
+6. **Decompose PRD into Issues** — break each User Story into one or more independent, implementable Issues
+7. **Ask user to choose Issue creation mode** — GitHub / Local / Baidu iCafe
+8. **Create Issues** in the chosen platform
 
-**Important:** Do NOT start implementing. Just create the PRD.
+**Important:** Do NOT start implementing. Just create the PRD and Issues.
 
 ---
 
@@ -67,6 +70,10 @@ This lets users respond with "1A, 2C, 3B" for quick iteration. Remember to inden
 | feature-name is hard to extract from input | Ask the user directly: "Suggested PRD filename is prd-XXX.md, please confirm or modify" |
 | User requests PRD changes after review | Apply changes and re-save without re-running the clarification flow |
 | PRD content exceeds 500 lines | Suggest the user consider splitting into multiple sub-feature PRDs |
+| User declines Issue creation | Just save the PRD, skip Step 3 |
+| `gh` CLI not authenticated for GitHub mode | Show error, suggest `gh auth login`, offer to switch to Local mode |
+| `icafe-cli` / `icode-cli` not installed for baidu mode | Show error, suggest installation, offer to switch to Local mode |
+| Issue folder does not exist for Local mode | Auto-create the folder |
 
 ---
 
@@ -147,6 +154,163 @@ Remaining questions or areas needing clarification.
 - **Format:** Markdown (`.md`)
 - **Location:** `tasks/`
 - **Filename:** `prd-[feature-name].md` (kebab-case)
+
+---
+
+## Step 3: Issue Decomposition & Creation
+
+After the PRD is saved, decompose it into implementable Issues and create them.
+
+### 3.1 Decompose PRD into Issues
+
+Based on the PRD's User Stories and Functional Requirements, generate a list of Issues. Follow these rules:
+
+- **One Issue per User Story** — each US-XXX becomes at least one Issue
+- **Split large stories** — if a US has 5+ acceptance criteria or spans frontend + backend, split into 2-3 smaller Issues with clear dependencies
+- **Merge tiny stories** — if a US has only 1-2 trivial criteria, merge it with a related US into a single Issue
+- **Each Issue must be independently implementable** — a single agent session should be able to complete it
+- **Number Issues sequentially** starting from 1
+
+**Issue format:**
+
+```
+Issue #N: [Title]
+---
+Description: [From US description, with context]
+Acceptance Criteria:
+- [ ] [From US acceptance criteria]
+- [ ] ...
+Dependencies: [None / Issue #X]
+Type: [backend / frontend / fullstack / ui / infra]
+Priority: [high / medium / low]
+```
+
+**Present the Issue list to the user for review:**
+
+```
+📋 Generated N Issues from PRD:
+
+#1: Add priority field to database (backend, high)
+#2: Display priority indicator on task cards (frontend, high) — depends on #1
+#3: Add priority selector to task edit (frontend, medium) — depends on #1
+#4: Filter tasks by priority (frontend, medium) — depends on #1, #2
+
+Please review. You can:
+- Remove issues: "remove #3"
+- Merge issues: "merge #2 and #3"
+- Add issues: "add an issue for sorting by priority"
+- Adjust: "change #2 priority to high"
+- Confirm: reply OK to proceed
+```
+
+Wait for user confirmation before creating any Issues.
+
+### 3.2 Ask User to Choose Creation Mode
+
+After user confirms the Issue list, ask:
+
+```
+Choose where to create these Issues:
+
+A. GitHub (via gh CLI)
+B. Local (save as .md files)
+C. Baidu iCafe (via icafe-cli)
+
+Your choice:
+```
+
+### 3.3 Mode-Specific Parameters & Creation
+
+#### Mode A: GitHub
+
+**Prerequisites:** `gh` CLI installed and authenticated.
+
+**Actions:**
+1. For each Issue, run:
+   ```bash
+   gh issue create --title "[Title]" --body "[Description + Acceptance Criteria]" --label "[type]" --label "priority: [priority]"
+   ```
+2. If labels don't exist, create them first or skip the `--label` flag
+3. Report created Issue numbers and URLs
+
+#### Mode B: Local
+
+**Ask user:**
+```
+Where should I save the Issue files? (default: .autoresearch/issues)
+```
+
+**Actions:**
+1. If the specified folder does not exist, create it with `mkdir -p`
+2. For each Issue #N, save a file named `issue-NNN-[slug].md` (zero-padded to 3 digits):
+   ```markdown
+   # [Title]
+
+   ## Description
+   [Description from Issue]
+
+   ## Acceptance Criteria
+   - [ ] [criterion 1]
+   - [ ] [criterion 2]
+
+   ## Dependencies
+   [None / Issue #X]
+
+   ## Type
+   [backend / frontend / fullstack / ui / infra]
+
+   ## Priority
+   [high / medium / low]
+   ```
+3. Report created file paths
+
+#### Mode C: Baidu iCafe
+
+**Ask user:**
+```
+Please provide the iCafe space prefix code (--space):
+```
+
+Optionally ask:
+```
+Target branch for iCode CR? (default: master)
+```
+
+**Prerequisites:** `icafe-cli` installed and logged in.
+
+**Actions:**
+1. For each Issue, run:
+   ```bash
+   icafe-cli card create --space [SPACE] --title "[Title]" --description "[Description + Acceptance Criteria]" --cardtype "[Task/Bug/Story]"
+   ```
+   - Map Issue `type` to iCafe card type: `bug` → `Bug`, `ui`/`frontend` → `Story`, others → `Task`
+   - Map `priority`: high → `高`, medium → `中`, low → `低`
+2. If iCafe card creation fails for an Issue, log the error and continue with remaining Issues
+3. Report created card sequence numbers
+
+### 3.4 Summary Report
+
+After all Issues are created, print a summary:
+
+```
+✅ Issue creation complete!
+
+Mode: [GitHub / Local / Baidu iCafe]
+PRD: tasks/prd-[feature-name].md
+Issues created: N
+
+#  | Title                                    | Identifier
+---|------------------------------------------|------------
+1  | Add priority field to database           | #42 (GitHub) / issue-001-*.md (Local) / #22210 (iCafe)
+2  | Display priority indicator               | #43 / issue-002-*.md / #22211
+3  | Add priority selector                    | #44 / issue-003-*.md / #22212
+4  | Filter tasks by priority                 | #45 / issue-004-*.md / #22213
+
+💡 Tip: You can now run autoresearch on each Issue:
+  ./run.sh 42                    # GitHub mode
+  ./run.sh 1                     # Local mode
+  ./run.sh --issue-source=baidu --space=[SPACE] 22210  # Baidu iCafe mode
+```
 
 ---
 
@@ -249,3 +413,12 @@ Before saving the PRD:
 - [ ] Functional requirements are numbered and unambiguous
 - [ ] Non-goals section defines clear boundaries
 - [ ] Saved to `tasks/prd-[feature-name].md`
+
+Before finishing Issue creation:
+
+- [ ] Decomposed PRD into independent, implementable Issues
+- [ ] Presented Issue list to user for review and confirmation
+- [ ] Asked user to choose creation mode (GitHub / Local / Baidu iCafe)
+- [ ] Collected mode-specific parameters (folder path for Local, --space for Baidu iCafe)
+- [ ] Created all Issues and reported results
+- [ ] Printed summary with autoresearch usage tips
