@@ -5,7 +5,7 @@
 
 ![宣传视频](docs/autoresearch-promo-cn.gif)
 
-基于 [karpathy/autoresearch](https://github.com/karpathy/autoresearch) 思想实现的通用的全自动化开发工具。支持 **GitHub Issue** 和**本地 Issue** 两种模式，适用于任意 Git 项目（Go、Node.js、Python、Rust、Java 等）。
+基于 [karpathy/autoresearch](https://github.com/karpathy/autoresearch) 思想实现的通用的全自动化开发工具。支持 **GitHub Issue**、**本地 Issue** 和**百度 iCafe** 三种模式，适用于任意 Git 项目（Go、Node.js、Python、Rust、Java 等）。
 
 使用 autoresearch 实现本项目 Issue#2：
 [![asciicast](https://asciinema.org/a/KdHGFHK6pcelUdPg.svg)](https://asciinema.org/a/KdHGFHK6pcelUdPg)
@@ -19,6 +19,7 @@
 - [项目架构](#项目架构)
 - [工作流程](#工作流程)
 - [本地 Issue 模式](#本地-issue-模式)
+- [百度 iCafe 模式](#百度-icafe-模式)
 - [工具配置](#工具配置)
 - [与 ralph 对比](#与-ralph-对比)
 
@@ -50,6 +51,9 @@ autoresearch/run.sh -c 42 10
 
 # 处理本地 Issue #8（从 .autoresearch/issues/ 读取）
 autoresearch/run.sh --issues-dir=.autoresearch/issues 8
+
+# 百度 iCafe 模式（卡片 #22210）
+autoresearch/run.sh --issue-source=baidu --space=cloud-iCafe 22210
 ```
 
 ## 前置条件
@@ -58,6 +62,8 @@ autoresearch/run.sh --issues-dir=.autoresearch/issues 8
 
 ```bash
 gh auth status          # GitHub CLI（仅 GitHub 模式需要）
+icafe-cli whoami        # iCafe CLI（仅百度模式需要）
+icode-cli whoami        # iCode CLI（仅百度模式需要）
 which claude            # Claude Code CLI
 which codex             # OpenAI Codex CLI
 which opencode          # OpenCode CLI
@@ -75,7 +81,7 @@ which opencode          # OpenCode CLI
 
 | 组件 | 说明 |
 |------|------|
-| **GitHub Issue / 本地 Issue** | 触发输入 |
+| **GitHub Issue / 本地 Issue / 百度 iCafe** | 触发输入 |
 | **run.sh** | 核心运行器 |
 | **Claude / Codex / OpenCode** | 三个 Agent 轮转审核 |
 | **Score ≥ 85?** | 评分门控 |
@@ -221,14 +227,15 @@ EOF
 
 ### 与 GitHub 模式对比
 
-| | GitHub 模式 | 本地模式 |
-|---|---|---|
-| Issue 来源 | `gh issue view` | 本地 `.md` 文件 |
-| 需要 `gh` CLI | 是 | 否 |
-| 需要 GitHub remote | 是 | 否 |
-| 推送/PR/合并 | 自动执行 | 不执行 |
-| 评论/关闭 Issue | 自动执行 | 不执行 |
-| 结果记录 | PR 评论 + 关闭 Issue | 追加到文件末尾 |
+| | GitHub 模式 | 本地模式 | 百度 iCafe 模式 |
+|---|---|---|---|
+| Issue 来源 | `gh issue view` | 本地 `.md` 文件 | `icafe-cli card get` |
+| 需要 `gh` CLI | 是 | 否 | 否 |
+| 需要 GitHub remote | 是 | 否 | 否 |
+| 需要 `icafe-cli` / `icode-cli` | 否 | 否 | 是 |
+| 推送/PR/合并 | 自动执行 | 不执行 | `push_cr` + `submit_review` |
+| 评论/关闭 Issue | 自动执行 | 不执行 | 自动执行 |
+| 结果记录 | PR 评论 + 关闭 Issue | 追加到文件末尾 | CR 评论 + 关闭卡片 |
 
 ### 模式自动切换
 
@@ -246,7 +253,79 @@ EOF
 
 ---
 
-## 工具配置
+## 百度 iCafe 模式
+
+百度模式使用 [iCafe](https://icafe.baidu.com/)（卡片管理）和 [iCode](https://icode.baidu.com/)（代码评审）替代 GitHub Issue/PR 流程，适合百度内部项目。
+
+### 前置条件
+
+```bash
+# 安装并登录 icafe-cli
+icafe-cli login
+
+# 安装并登录 icode-cli
+icode-cli login
+
+# 项目 git remote 需指向 icode.baidu.com
+git remote -v
+# origin  https://icode.baidu.com/path/to/repo (fetch)
+```
+
+### 快速开始
+
+```bash
+# 显式指定 baidu 模式 + 空间
+./run.sh --issue-source=baidu --space=cloud-iCafe 22210
+
+# 指定最大迭代次数
+./run.sh --issue-source=baidu --space=cloud-iCafe 22210 16
+
+# 指定 CR 目标分支（默认自动检测远程 HEAD，回退到 master）
+./run.sh --issue-source=baidu --space=cloud-iCafe --target-branch=develop 22210
+
+# 使用环境变量设置空间
+export ICAFE_SPACE=cloud-iCafe
+./run.sh --issue-source=baidu 22210
+```
+
+### 自动检测
+
+如果同时满足以下两个条件，即使不指定 `--issue-source=baidu`，也会自动切换到百度模式：
+
+1. Git remote 包含 `icode.baidu.com`
+2. `--space` 参数或 `ICAFE_SPACE` 环境变量已设置
+
+```bash
+# 在 iCode 仓库中，设置环境变量即可自动识别
+export ICAFE_SPACE=cloud-iCafe
+./run.sh 22210  # 自动检测为 baidu 模式
+```
+
+### 工作流程
+
+```
+iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 评分 +2 → 合入 → 关闭卡片
+```
+
+与 GitHub 模式的主要区别：
+
+| 步骤 | GitHub 模式 | 百度 iCafe 模式 |
+|------|------------|----------------|
+| 获取 Issue | `gh issue view` | `icafe-cli card get` |
+| Commit 消息 | `feat: implement issue #N` | `{space}-{seq} [{type}] {title}` |
+| 创建 PR | `gh pr create` | `icode-cli git push_cr` |
+| 合并 | `gh pr merge` | `icode-cli api submit_review` |
+| 关闭 Issue | `gh issue close` | `icafe-cli card update --status 已关闭` |
+| 评论 | `gh issue comment` | `icafe-cli comment create` |
+
+### 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `--issue-source=baidu` | 指定百度模式（也可自动检测） |
+| `--space=<prefixCode>` | iCafe 空间前缀代码（baidu 模式必需） |
+| `--target-branch=<name>` | iCode CR 目标分支（默认自动检测） |
+| `ICAFE_SPACE` | 环境变量，等效于 `--space` |
 
 ### 项目自定义配置
 
@@ -272,6 +351,9 @@ EOF
 | `-a <agents>` | `claude,codex,opencode` | 指定启用 agents 及顺序 |
 | `-c` | 关闭 | 继续模式，从上次中断的迭代继续 |
 | `--issues-dir=<path>` | `.autoresearch/issues` | 本地 Issue 目录（启用本地模式） |
+| `--issue-source=<mode>` | `github` | Issue 来源：`github` / `local` / `baidu` |
+| `--space=<prefixCode>` | - | iCafe 空间前缀代码（baidu 模式必需） |
+| `--target-branch=<name>` | 自动检测 | iCode CR 目标分支 |
 | `PASSING_SCORE` | 85 | 达标评分线（百分制） |
 | `MAX_CONSECUTIVE_FAILURES` | 3 | 连续失败停止阈值 |
 | `MAX_RETRIES` | 5 | 单次 agent 调用重试次数 |
@@ -302,7 +384,7 @@ EOF
 
 | 维度 | **autoresearch** | **ralph** |
 |------|-----------------|-----------|
-| **驱动方式** | GitHub Issue / 本地 Issue | PRD（`prd.json`） |
+| **驱动方式** | GitHub Issue / 本地 Issue / 百度 iCafe | PRD（`prd.json`） |
 | **Agent 模型** | 多 Agent 轮转交叉审核 | 单 Agent 反复迭代 |
 | **质量门禁** | 硬门禁（Build/Lint/Test）+ 软门禁（LLM 评分） | 纯工具链检查 |
 | **审核机制** | 不同 Agent 交叉审核 | 无独立审核 |
@@ -315,7 +397,7 @@ EOF
 **autoresearch 优势：**
 - 双轨质量门禁覆盖更广
 - 多 Agent 交叉审核提供不同视角
-- GitHub 端到端自动化闭环，也支持本地项目无 GitHub 运行
+- GitHub 端到端自动化闭环，也支持本地项目和百度 iCafe/iCode 运行
 - 上下文溢出自动交接
 - Continue 模式支持中断恢复
 
