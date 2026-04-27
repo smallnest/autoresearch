@@ -4,7 +4,7 @@
 # 通用版本 - 可处理任意 Git + GitHub 项目
 #
 # 用法:
-#   ./run.sh [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] <issue_number> [max_iterations]
+#   ./run.sh [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] [--issue-source=<mode>] [--space=<prefixCode>] [--target-branch=<name>] <issue_number> [max_iterations]
 #
 # 示例:
 #   ./run.sh 42                              # 处理当前目录项目的 Issue #42
@@ -14,6 +14,7 @@
 #   ./run.sh -a claude 42                    # 单 agent 模式
 #   ./run.sh -a claude,opencode,codex 42     # 自定义 agent 顺序
 # ./run.sh --no-archive 42 # 跳过归档（调试用）
+#   ./run.sh --issue-source=baidu --space=cloud-iCafe 22210  # 百度 iCafe 模式
 #
 # 环境变量配置:
 # AGENT_TIMEOUT: agent 调用超时秒数 (默认: 600)
@@ -89,12 +90,22 @@ source "$BRANCH_CLEANUP_LIB"
 FEATURE_UI_VERIFY=1
 FEATURE_HARD_GATE=1
 
-# Issue 来源模式: "github" (默认) 或 "local" (本地文件)
+# Issue 来源模式: "github" (默认) | "local" (本地文件) | "baidu" (iCafe + iCode)
 ISSUE_SOURCE="github"
 # 本地 Issue 目录 (由 --issues-dir 设置或自动检测)
 ISSUES_DIR=""
 # 本地 Issue 文件路径 (由 get_local_issue_info 设置)
 ISSUE_FILE=""
+# 百度 iCafe 空间前缀代码 (由 --space 设置或 ICAFE_SPACE 环境变量)
+ICAFE_SPACE="${ICAFE_SPACE:-}"
+# 百度 iCafe 卡片类型 (由 get_baidu_issue_info 设置)
+ICAFE_CARD_TYPE=""
+# 百度 iCode CR 目标分支 (由 --target-branch 设置或自动检测)
+ICODE_TARGET_BRANCH=""
+# 百度 iCode CR 编号 (由 push_cr 流程设置)
+ICODE_CR_NUMBER=""
+# 百度 iCode 仓库路径 (由 check_project 从 remote URL 提取)
+ICODE_REPO=""
 
 # 共享库：核心逻辑
 for _lib in scoring context progress subtask prompt ui_verify; do
@@ -821,9 +832,9 @@ run_with_retry() {
 }
 
 usage() {
-    echo "用法: $0 [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] <issue_number> [max_iterations]"
+    echo "用法: $0 [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] [--issue-source=<mode>] [--space=<prefixCode>] [--target-branch=<name>] <issue_number> [max_iterations]"
     echo ""
-    echo "通用自动化 Issue 处理工具，支持任意 Git + GitHub 项目。"
+    echo "通用自动化 Issue 处理工具，支持 GitHub / 本地 / 百度 iCafe 三种来源。"
     echo ""
     echo "参数:"
     echo "  -p <path>        项目路径 (默认: 当前目录)"
@@ -834,7 +845,10 @@ usage() {
     echo "  --no-ui-verify   禁用 UI 验证 (默认启用)"
     echo "  --no-hard-gate   禁用硬门禁检查 (build/lint/test 预检, 默认启用)"
     echo "  --issues-dir=<path>  本地 Issue 目录 (启用本地模式，不使用 GitHub)"
-    echo "  issue_number     Issue 编号 (GitHub 或本地)"
+    echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu"
+    echo "  --space=<prefixCode>   iCafe 空间前缀代码 (baidu 模式必需，也可用 ICAFE_SPACE 环境变量)"
+    echo "  --target-branch=<name> iCode CR 目标分支 (默认: 自动检测远程 HEAD 分支，回退到 master)"
+    echo "  issue_number     Issue 编号 (GitHub / 本地 / iCafe 卡片序号)"
     echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
     echo ""
     echo "配置 (环境变量):"
@@ -861,6 +875,8 @@ usage() {
     echo "  $0 -c 42                              # 继续处理 Issue #42"
     echo "  $0 -c 42 10                           # 继续处理，追加 10 次迭代"
     echo "  $0 --issues-dir=.autoresearch/issues 8  # 处理本地 Issue #8"
+    echo "  $0 --issue-source=baidu --space=cloud-iCafe 22210  # 百度 iCafe 模式"
+    echo "  $0 --issue-source=baidu --space=cloud-iCafe --target-branch=develop 22210 16"
     echo "  PASSING_SCORE=90 $0 42                # 提高达标线到 90"
     exit 1
 }
@@ -890,17 +906,33 @@ check_project() {
             error "未找到 git remote origin"
             exit 1
         fi
+    elif echo "$remote_url" | grep -q 'icode\.baidu\.com'; then
+        # 百度 iCode 仓库
+        if [ "$ISSUE_SOURCE" = "baidu" ]; then
+            log "百度 iCode 仓库检测: $remote_url"
+            # 从 iCode remote URL 提取仓库路径 (格式: https://icode.baidu.com/path/to/repo 或 git@icode.baidu.com:path/to/repo)
+            if echo "$remote_url" | grep -q '^https\?://'; then
+                ICODE_REPO=$(echo "$remote_url" | sed 's|^[^:]*://||' | sed 's|\.git$||')
+            else
+                ICODE_REPO=$(echo "$remote_url" | sed 's|^[^:]*:||' | sed 's|\.git$||')
+            fi
+            log "iCode 仓库路径: $ICODE_REPO"
+        else
+            log "检测到 iCode remote，但未启用 baidu 模式 (使用 --issue-source=baidu --space=<space>)"
+        fi
     elif ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com'; then
         if [ "$ISSUE_SOURCE" = "local" ]; then
             log "本地 Issue 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
+        elif [ "$ISSUE_SOURCE" = "baidu" ]; then
+            log "百度 iCafe 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
         else
             error "origin 不是 GitHub 仓库: $remote_url"
             exit 1
         fi
     fi
 
-    # 拉取 autoresearch 最新代码（continue 模式和本地模式跳过，避免冲突）
-    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ]; then
+    # 拉取 autoresearch 最新代码（continue 模式、本地模式和百度模式跳过，避免冲突）
+    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ]; then
         local autoresearch_dir
         autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
         if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
@@ -937,9 +969,37 @@ check_dependencies() {
      missing=1
  fi
 
- if [ "$ISSUE_SOURCE" != "local" ] && ! command -v gh &> /dev/null; then
+ if [ "$ISSUE_SOURCE" = "github" ] && ! command -v gh &> /dev/null; then
  error "gh (GitHub CLI) 未安装"
  missing=1
+ fi
+
+ # 百度模式依赖检查
+ if [ "$ISSUE_SOURCE" = "baidu" ]; then
+ if ! command -v icafe-cli &> /dev/null; then
+     error "icafe-cli 未安装 (baidu 模式必需，请参考 https://icode.baidu.com/articles/help/icafe-cli)"
+     missing=1
+ else
+     # 检查 icafe-cli 登录状态
+     if ! icafe-cli whoami &> /dev/null 2>&1; then
+         error "icafe-cli 未登录，请先运行 icafe-cli login"
+         missing=1
+     else
+         log "icafe-cli 依赖检查通过"
+     fi
+ fi
+ if ! command -v icode-cli &> /dev/null; then
+     error "icode-cli 未安装 (baidu 模式必需，请参考 https://icode.baidu.com/articles/help/icode-cli)"
+     missing=1
+ else
+     # 检查 icode-cli 登录状态
+     if ! icode-cli whoami &> /dev/null 2>&1; then
+         error "icode-cli 未登录，请先运行 icode-cli login"
+         missing=1
+     else
+         log "icode-cli 依赖检查通过"
+     fi
+ fi
  fi
 
  # 只检查启用的 agent 是否已安装
@@ -1002,8 +1062,29 @@ check_dependencies() {
  log "依赖检查通过"
 }
 
-# 检测本地 Issue 模式 (在 check_project 之前调用)
-detect_local_issue_mode() {
+# 检测 Issue 来源模式 (在 check_project 之前调用)
+detect_issue_source_mode() {
+    # 如果显式指定 baidu 模式
+    if [ "$ISSUE_SOURCE" = "baidu" ]; then
+        if [ -z "$ICAFE_SPACE" ]; then
+            error "baidu 模式需要指定 --space=<prefixCode> 或设置 ICAFE_SPACE 环境变量"
+            exit 1
+        fi
+        log "百度 iCafe 模式 (空间: $ICAFE_SPACE)"
+        return 0
+    fi
+
+    # 自动检测 baidu 模式: git remote 包含 icode.baidu.com 且 ICAFE_SPACE 已设置
+    if [ "$ISSUE_SOURCE" = "github" ] && [ -n "$ICAFE_SPACE" ]; then
+        local remote_url
+        remote_url=$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || true)
+        if echo "$remote_url" | grep -q 'icode\.baidu\.com'; then
+            ISSUE_SOURCE="baidu"
+            log "百度 iCafe 模式 (自动检测: remote 含 icode.baidu.com 且 ICAFE_SPACE 已设置, 空间: $ICAFE_SPACE)"
+            return 0
+        fi
+    fi
+
     # 如果 --issues-dir 已设置，强制本地模式
     if [ -n "$ISSUES_DIR" ]; then
         ISSUE_SOURCE="local"
@@ -1160,10 +1241,79 @@ EOF
     return 0
 }
 
+# 检测 iCode CR 目标分支
+detect_icode_target_branch() {
+    if [ -n "$ICODE_TARGET_BRANCH" ]; then
+        echo "$ICODE_TARGET_BRANCH"
+        return 0
+    fi
+
+    # 尝试从 git remote 推断
+    local head_branch
+    head_branch=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+    if [ -n "$head_branch" ]; then
+        echo "$head_branch"
+        return 0
+    fi
+
+    # 回退到 master
+    echo "master"
+}
+
+# 从百度 iCafe 获取 Issue 信息
+get_baidu_issue_info() {
+    local issue_number=$1
+
+    log "获取 iCafe 卡片 #$issue_number 信息 (空间: $ICAFE_SPACE)..."
+
+    # 调用 icafe-cli 获取卡片信息
+    local card_info
+    card_info=$(icafe-cli card get --space "$ICAFE_SPACE" --sequence "$issue_number" --brief 2>&1)
+
+    if [ $? -ne 0 ]; then
+        error "无法获取 iCafe 卡片 #$issue_number: $card_info"
+        error "提示: 请检查空间名称 ($ICAFE_SPACE) 和卡片序号是否正确"
+        exit 1
+    fi
+
+    # 解析 JSON 响应
+    ISSUE_TITLE=$(echo "$card_info" | jq -r '.title // empty')
+    ISSUE_BODY=$(echo "$card_info" | jq -r '.description // empty')
+    ISSUE_STATE=$(echo "$card_info" | jq -r '.status // empty')
+    ICAFE_CARD_TYPE=$(echo "$card_info" | jq -r '.cardType // "Task"')
+
+    # iCafe 描述是 HTML 格式，去除 HTML 标签
+    if [ -n "$ISSUE_BODY" ]; then
+        ISSUE_BODY=$(echo "$ISSUE_BODY" | sed 's/<[^>]*>//g' | sed 's/&nbsp;/ /g' | sed 's/&lt;/</g' | sed 's/&gt;/>/g' | sed 's/&amp;/\&/g' | sed 's/&quot;/"/g')
+    fi
+
+    ISSUE_LABELS=""
+    ISSUE_FILE=""
+    ISSUE_INFO="$card_info"
+
+    # 验证卡片状态 (已关闭的卡片不应再处理)
+    # iCafe 状态可能是中文，如 "已关闭"、"开发中" 等
+    if echo "$ISSUE_STATE" | grep -qiE '已关闭|closed'; then
+        error "iCafe 卡片 #$issue_number 状态为 ${ISSUE_STATE}，已关闭"
+        exit 1
+    fi
+
+    log "iCafe 卡片标题: $ISSUE_TITLE"
+    log "iCafe 卡片类型: $ICAFE_CARD_TYPE"
+    log "iCafe 卡片状态: $ISSUE_STATE"
+    return 0
+}
+
 get_issue_info() {
     local issue_number=$1
 
     log "获取 Issue #$issue_number 信息..."
+
+    # 百度 iCafe 模式
+    if [ "$ISSUE_SOURCE" = "baidu" ]; then
+        get_baidu_issue_info "$issue_number"
+        return 0
+    fi
 
     # 优先尝试本地 Issue
     if get_local_issue_info "$issue_number"; then
@@ -1181,6 +1331,7 @@ get_issue_info() {
     if [ $? -ne 0 ]; then
         error "无法获取 Issue #$issue_number: $ISSUE_INFO"
         error "提示: 如果要使用本地 Issue，请在 .autoresearch/issues/ 目录下放置 issue-NNN-xxx.md 文件"
+        error "提示: 如果要使用百度 iCafe，请使用 --issue-source=baidu --space=<prefixCode>"
         exit 1
     fi
 
@@ -2322,6 +2473,15 @@ while getopts "p:a:c-:" opt; do
                 issues-dir=*)
                     ISSUES_DIR="${OPTARG#issues-dir=}"
                     ;;
+                issue-source=*)
+                    ISSUE_SOURCE="${OPTARG#issue-source=}"
+                    ;;
+                space=*)
+                    ICAFE_SPACE="${OPTARG#space=}"
+                    ;;
+                target-branch=*)
+                    ICODE_TARGET_BRANCH="${OPTARG#target-branch=}"
+                    ;;
                 *) usage ;;
             esac
             ;;
@@ -2360,7 +2520,7 @@ fi
 log_console "Agent 列表: ${AGENT_NAMES[*]} (初始实现: ${AGENT_NAMES[0]})"
 
 # 检测本地 Issue 模式 (必须在 check_project 之前，因为需要设置 ISSUE_SOURCE)
-detect_local_issue_mode
+detect_issue_source_mode
 
 # 检查项目环境
 check_project
@@ -2375,6 +2535,9 @@ get_issue_info "$ISSUE_NUMBER"
 if [ "$ISSUE_SOURCE" = "local" ]; then
     ISSUE_REF="本地 Issue #$ISSUE_NUMBER"
     log_console "📂 Issue 来源: 本地文件 ($ISSUE_FILE)"
+elif [ "$ISSUE_SOURCE" = "baidu" ]; then
+    ISSUE_REF="百度 iCafe 卡片 #$ISSUE_NUMBER (空间: $ICAFE_SPACE)"
+    log_console "📂 Issue 来源: 百度 iCafe (空间: $ICAFE_SPACE, 卡片: #$ISSUE_NUMBER)"
 else
     ISSUE_REF="GitHub Issue #$ISSUE_NUMBER"
 fi
@@ -2859,6 +3022,11 @@ if check_score_passed "$FINAL_SCORE"; then
         COMMIT_MSG="feat: implement local issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
 $FINAL_REVIEW_REPORT"
+    elif [ "$ISSUE_SOURCE" = "baidu" ]; then
+        # iCafe 自动绑定格式: {space}-{sequence} [{type}] {title}
+        COMMIT_MSG="$ICAFE_SPACE-$ISSUE_NUMBER [$ICAFE_CARD_TYPE] $ISSUE_TITLE
+
+$FINAL_REVIEW_REPORT"
     else
         COMMIT_MSG="feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
@@ -2882,6 +3050,118 @@ Closes #$ISSUE_NUMBER"
         log_console "📊 评分: $FINAL_SCORE/100"
         log_console "🔄 迭代次数: $ITERATION"
         log_console "📝 结果已追加到: $ISSUE_FILE"
+
+        SCRIPT_COMPLETED_NORMALLY=1
+        exit 0
+    fi
+
+    # ===== 百度 iCafe/iCode 模式: push_cr/评分/合入/关闭卡片 =====
+    if [ "$ISSUE_SOURCE" = "baidu" ]; then
+        log_console "百度模式: 推送代码并创建 CR..."
+
+        # 检测目标分支
+        local target_branch
+        target_branch=$(detect_icode_target_branch)
+        log "iCode CR 目标分支: $target_branch"
+
+        # 推送代码并创建 CR
+        local push_cr_output
+        push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1)
+
+        if [ $? -ne 0 ]; then
+            log_console "⚠️ icode-cli git push_cr 失败: $push_cr_output"
+            record_final_result "$ISSUE_NUMBER" "push_cr_failed" "$ITERATION" "$FINAL_SCORE"
+            SCRIPT_COMPLETED_NORMALLY=1
+            exit 1
+        fi
+
+        log "push_cr 输出: $push_cr_output"
+
+        # 从 push_cr 输出中解析 CR 编号
+        ICODE_CR_NUMBER=$(echo "$push_cr_output" | grep -oE '[0-9]+' | tail -1)
+
+        if [ -z "$ICODE_CR_NUMBER" ]; then
+            log_console "⚠️ 无法从 push_cr 输出中解析 CR 编号"
+            log_console "push_cr 输出: $push_cr_output"
+            record_final_result "$ISSUE_NUMBER" "cr_parse_failed" "$ITERATION" "$FINAL_SCORE"
+            SCRIPT_COMPLETED_NORMALLY=1
+            exit 1
+        fi
+
+        log_console "✅ CR 已创建: #$ICODE_CR_NUMBER"
+
+        # 评分 +2
+        log_console "评分 CR #$ICODE_CR_NUMBER (+2)..."
+        if ! icode-cli api set_review_score --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" --score 2 2>&1; then
+            log_console "⚠️ CR 评分失败，尝试继续合入"
+        fi
+
+        # 提交合入
+        log_console "提交合入 CR #$ICODE_CR_NUMBER..."
+        local submit_output
+        submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1)
+
+        if [ $? -ne 0 ]; then
+            log_console "⚠️ CR 合入失败: $submit_output"
+            log_console "CR 编号: #$ICODE_CR_NUMBER，请手动合入"
+        else
+            log_console "✅ CR #$ICODE_CR_NUMBER 已合入"
+        fi
+
+        # 关闭 iCafe 卡片
+        log_console "关闭 iCafe 卡片 #$ISSUE_NUMBER..."
+
+        # 检查可用的状态转换
+        local next_statuses
+        next_statuses=$(icafe-cli card next-statuses --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" 2>&1 || true)
+        log "卡片可转换状态: $next_statuses"
+
+        # 尝试更新卡片状态为"已关闭"
+        if icafe-cli card update --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" --status "已关闭" 2>&1; then
+            log_console "✅ iCafe 卡片已关闭"
+        else
+            log_console "⚠️ 关闭卡片失败，可能需要手动关闭"
+        fi
+
+        # 添加评论到卡片
+        log_console "添加评论到 iCafe 卡片 #$ISSUE_NUMBER..."
+        local log_summary=""
+        if [ -f "$WORK_DIR/log.md" ]; then
+            log_summary=$(cat "$WORK_DIR/log.md")
+        fi
+
+        # 构建子任务摘要
+        local subtask_summary=""
+        if has_subtasks; then
+            local tasks_file
+            tasks_file=$(get_tasks_file)
+            local total passed
+            total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+            passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+            subtask_summary="- 子任务: ${passed}/${total} 完成"
+        fi
+
+        icafe-cli comment create --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" --content "$(cat <<EOF
+## autoresearch 自动处理完成
+
+- **CR**: #$ICODE_CR_NUMBER
+- **评分**: $FINAL_SCORE/100
+- **迭代次数**: $ITERATION
+- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[@]})
+$subtask_summary
+
+该卡片已由 autoresearch 自动实现、审核并合入。
+EOF
+)" 2>/dev/null || log "警告: 添加评论失败"
+
+        log_console ""
+        log_console "  ╔══════════════════════════════════════╗"
+        log_console "  ║    百度模式处理完成！iCafe + iCode   ║"
+        log_console "  ╚══════════════════════════════════════╝"
+        log_console ""
+        log_console "✅ CR: #$ICODE_CR_NUMBER"
+        log_console "📂 iCafe 卡片: #$ISSUE_NUMBER (空间: $ICAFE_SPACE)"
+        log_console "🔗 状态: 已合入并关闭"
 
         SCRIPT_COMPLETED_NORMALLY=1
         exit 0
