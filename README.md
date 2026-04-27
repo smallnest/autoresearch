@@ -415,3 +415,5 @@ iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 
 - [snarktank/ralph](https://github.com/snarktank/ralph)
 - [karpathy/autoresearch](https://github.com/karpathy/autoresearch)（原版思想）
 - [达尔文.skill](https://github.com/alchaincyf/darwin-skill): 使用 autoresearch 优化Skill, 花叔出品
+- [TheGreenCedar/codex-autoresearch](https://github.com/TheGreenCedar/codex-autoresearch): A codex plugin for running optimization loops inside a codebase. 
+- [pi-autoresearch](https://github.com/davebcn87/pi-autoresearch): Autonomous experiment loop extension for pi agent
