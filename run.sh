@@ -348,55 +348,20 @@ annealing_delay() {
 # 检测 Agent 输出是否包含致命错误（区分代码讨论中的 "error" 与真正的运行时错误）
 has_fatal_error() {
     local log_file="$1"
-    # 匹配 API/模型级别的致命错误，排除工具操作级别的非致命错误（如文件不存在、权限拒绝等）
-    # Agent 日志中常有 "Error: File not found" / "read failed" 等工具操作错误，这些不是致命错误
-    local pattern='context.length.exceeded'
-    pattern+='|maximum.context.length'
-    pattern+='|token.limit.exceeded'
-    pattern+='|model.is.overloaded'
-    pattern+='|server.error'
-    pattern+='|service.unavailable'
-    pattern+='|internal.server.error'
-    pattern+='|too.many.requests'
-    pattern+='|quota.exceeded'
-    pattern+='|billing.hard.limit'
-    pattern+='|connection.refused'
-    pattern+='|network.error'
-    pattern+='|DNS.resolution'
-    pattern+='|Timed.out'
-    pattern+='|Command.timed.out'
-    pattern+='|authentication.error'
-    pattern+='|unauthorized.access'
-    pattern+='|API.key.(invalid|missing|expired)'
-    pattern+='|rate.limit.exceeded'
-    pattern+='|Fatal.error'
-    pattern+='|Panic[: ]'
-    # 排除缩进行(代码块)和代码特征行
-    grep -vE '^[[:space:]]' "$log_file" 2>/dev/null \
-        | grep -vE '(fmt\.|strings\.|errors\.|io\.|net/http|func |type |struct|\*http\.|//.*return|//.*if|//.*error|\+\s*(func|type|var|const) )' \
-        | grep -vE '(File not found|read failed|Permission denied|No such file|command not found|auto.reject)' \
-        | grep -vE 'codex_core::session: failed to record rollout' \
-        | grep -qE "$pattern"
+    # 只检查日志头尾 20 行：CLI/模型级错误只出现在头尾，中间是代码内容
+    # 避免对全文匹配导致代码中的 error/Exception 字符串被误判
+    local head_tail
+    head_tail=$(head -20 "$log_file" 2>/dev/null; tail -20 "$log_file" 2>/dev/null)
+    echo "$head_tail" | grep -qE 'context.length.exceeded|maximum.context.length|token.limit.exceeded|model.is.overloaded|server.error|service.unavailable|internal.server.error|too.many.requests|quota.exceeded|billing.hard.limit|connection.refused|network.error|DNS.resolution|Timed.out|Command.timed.out|authentication.error|unauthorized.access|API.key.(invalid|missing|expired)|rate.limit.exceeded|Fatal.error|Panic[: ]|ProviderModelNotFoundError|SyntaxError.*EOF'
 }
 
 # 检测 Agent 输出是否包含 API/网络级别的失败（区分于可恢复的内容错误）
 has_api_failure() {
     local log_file="$1"
-    # 仅匹配非缩进、非代码行的 API/网络失败模式，避免误判代码中的字符串（如 "status 503"）
-    # 先排除缩进行(代码块)和常见代码模式行，再匹配 CLI 错误输出
-    local pattern='status.4[0-9][0-9]'
-    pattern+='|status.5[0-9][0-9]'
-    pattern+='|HTTP.4[0-9][0-9]'
-    pattern+='|HTTP.5[0-9][0-9]'
-    pattern+='|curl.*error'
-    pattern+='|fetch.failed'
-    pattern+='|request.failed'
-    pattern+='|response.is.empty'
-    pattern+='|no.response.received'
-    # 排除缩进行(空格/tab开头)和代码特征行
-    grep -vE '^[[:space:]]' "$log_file" 2>/dev/null \
-        | grep -vE '(fmt\.|strings\.|errors\.|io\.|net/http|func |type |struct|\*http\.|//.*return|//.*if|//.*error|\+\s*(func|type|var|const) )' \
-        | grep -qE "$pattern"
+    # 只检查日志头尾 20 行：API 错误只出现在头尾，中间是代码内容
+    local head_tail
+    head_tail=$(head -20 "$log_file" 2>/dev/null; tail -20 "$log_file" 2>/dev/null)
+    echo "$head_tail" | grep -qE 'status.4[0-9][0-9]|status.5[0-9][0-9]|HTTP.4[0-9][0-9]|HTTP.5[0-9][0-9]|curl.*error|fetch.failed|request.failed|response.is.empty|no.response.received'
 }
 
 # 超时包裹器：优先使用 GNU timeout/gtimeout，回退到 shell 原生方案
@@ -776,19 +741,14 @@ run_with_retry() {
             continue
         fi
 
-        # Check for fatal errors in output
+        # Check for fatal errors in output (only when exit code was 0 — non-zero already handled above)
+        # Agent 日志中包含大量代码内容和工具操作错误（如 "Error: File not found"），
+        # 这些不是 API/模型级别的致命错误。退出码为 0 说明 agent 自身认为执行成功，
+        # 此时只检测导致输出不可用的真正致命情况。
         if has_fatal_error "$log_file"; then
+            log_console "❌ $agent 调用失败 (检测到致命错误)"
             local error_tail
             error_tail=$(tail -10 "$log_file" 2>/dev/null)
-
-            # Special handling for Codex invalid tool call: trim prompt and retry once
-            if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
-                log_console "⚠️ Codex 生成无效 tool call 参数，裁剪 prompt 重试"
-                prompt=$(trim_prompt_for_codex_retry "$prompt")
-                continue
-            fi
-
-            log_console "❌ $agent 调用失败 (检测到致命错误)"
             if [ -n "$error_tail" ]; then
                 log_console "错误信息:"
                 echo "$error_tail" | while read -r line; do log_console "  $line"; done
@@ -796,19 +756,11 @@ run_with_retry() {
             continue
         fi
 
-        # Check for API failures in output
+        # Check for API failures in output (only when exit code was 0)
         if has_api_failure "$log_file"; then
+            log_console "❌ $agent 调用失败 (API 错误)"
             local error_tail
             error_tail=$(tail -10 "$log_file" 2>/dev/null)
-
-            # Special handling for Codex invalid tool call in API failure path
-            if [ "$agent" = "codex" ] && has_invalid_tool_call "$log_file"; then
-                log_console "⚠️ Codex 生成无效 tool call 参数，裁剪 prompt 重试"
-                prompt=$(trim_prompt_for_codex_retry "$prompt")
-                continue
-            fi
-
-            log_console "❌ $agent 调用失败 (API 错误)"
             if [ -n "$error_tail" ]; then
                 log_console "错误信息:"
                 echo "$error_tail" | while read -r line; do log_console "  $line"; done
