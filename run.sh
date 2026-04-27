@@ -89,6 +89,13 @@ source "$BRANCH_CLEANUP_LIB"
 FEATURE_UI_VERIFY=1
 FEATURE_HARD_GATE=1
 
+# Issue 来源模式: "github" (默认) 或 "local" (本地文件)
+ISSUE_SOURCE="github"
+# 本地 Issue 目录 (由 --issues-dir 设置或自动检测)
+ISSUES_DIR=""
+# 本地 Issue 文件路径 (由 get_local_issue_info 设置)
+ISSUE_FILE=""
+
 # 共享库：核心逻辑
 for _lib in scoring context progress subtask prompt ui_verify; do
     _lib_path="$SCRIPT_DIR/lib/${_lib}.sh"
@@ -826,7 +833,8 @@ usage() {
     echo "  --no-archive     跳过归档其他 Issue 的 workflows 数据 (调试用)"
     echo "  --no-ui-verify   禁用 UI 验证 (默认启用)"
     echo "  --no-hard-gate   禁用硬门禁检查 (build/lint/test 预检, 默认启用)"
-    echo "  issue_number     GitHub Issue 编号"
+    echo "  --issues-dir=<path>  本地 Issue 目录 (启用本地模式，不使用 GitHub)"
+    echo "  issue_number     Issue 编号 (GitHub 或本地)"
     echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
     echo ""
     echo "配置 (环境变量):"
@@ -852,6 +860,7 @@ usage() {
     echo "  $0 -p /path/to/project 42 10          # 最多迭代 10 次"
     echo "  $0 -c 42                              # 继续处理 Issue #42"
     echo "  $0 -c 42 10                           # 继续处理，追加 10 次迭代"
+    echo "  $0 --issues-dir=.autoresearch/issues 8  # 处理本地 Issue #8"
     echo "  PASSING_SCORE=90 $0 42                # 提高达标线到 90"
     exit 1
 }
@@ -875,17 +884,23 @@ check_project() {
     remote_url=$(git remote get-url origin 2>/dev/null || true)
 
     if [ -z "$remote_url" ]; then
-        error "未找到 git remote origin"
-        exit 1
+        if [ "$ISSUE_SOURCE" = "local" ]; then
+            log "本地 Issue 模式，跳过 GitHub remote 检查"
+        else
+            error "未找到 git remote origin"
+            exit 1
+        fi
+    elif ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com'; then
+        if [ "$ISSUE_SOURCE" = "local" ]; then
+            log "本地 Issue 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
+        else
+            error "origin 不是 GitHub 仓库: $remote_url"
+            exit 1
+        fi
     fi
 
-    if ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com'; then
-        error "origin 不是 GitHub 仓库: $remote_url"
-        exit 1
-    fi
-
-    # 拉取 autoresearch 最新代码（continue 模式跳过，避免冲突）
-    if [ $CONTINUE_MODE -eq 0 ]; then
+    # 拉取 autoresearch 最新代码（continue 模式和本地模式跳过，避免冲突）
+    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ]; then
         local autoresearch_dir
         autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
         if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
@@ -922,7 +937,7 @@ check_dependencies() {
      missing=1
  fi
 
- if ! command -v gh &> /dev/null; then
+ if [ "$ISSUE_SOURCE" != "local" ] && ! command -v gh &> /dev/null; then
  error "gh (GitHub CLI) 未安装"
  missing=1
  fi
@@ -987,15 +1002,185 @@ check_dependencies() {
  log "依赖检查通过"
 }
 
+# 检测本地 Issue 模式 (在 check_project 之前调用)
+detect_local_issue_mode() {
+    # 如果 --issues-dir 已设置，强制本地模式
+    if [ -n "$ISSUES_DIR" ]; then
+        ISSUE_SOURCE="local"
+        if [[ "$ISSUES_DIR" != /* ]]; then
+            ISSUES_DIR="$PROJECT_ROOT/$ISSUES_DIR"
+        fi
+        log "本地 Issue 模式 (指定目录: $ISSUES_DIR)"
+        return 0
+    fi
+
+    # 自动检测: 检查默认目录是否有匹配的 issue 文件
+    local default_dir="$PROJECT_ROOT/.autoresearch/issues"
+    if [ -d "$default_dir" ]; then
+        local padded_number
+        padded_number=$(printf "%03d" "$ISSUE_NUMBER" 2>/dev/null) || true
+        if ls "$default_dir"/issue-${padded_number}-*.md &>/dev/null 2>&1 || \
+           ls "$default_dir"/issue-${ISSUE_NUMBER}-*.md &>/dev/null 2>&1; then
+            ISSUE_SOURCE="local"
+            ISSUES_DIR="$default_dir"
+            log "本地 Issue 模式 (自动检测: $ISSUES_DIR)"
+            return 0
+        fi
+    fi
+
+    ISSUE_SOURCE="github"
+}
+
+# 从本地文件获取 Issue 信息
+get_local_issue_info() {
+    local issue_number=$1
+    local issues_dir="$ISSUES_DIR"
+
+    if [ -z "$issues_dir" ]; then
+        issues_dir="$PROJECT_ROOT/.autoresearch/issues"
+    fi
+
+    # 相对路径转绝对路径
+    if [[ "$issues_dir" != /* ]]; then
+        issues_dir="$PROJECT_ROOT/$issues_dir"
+    fi
+
+    if [ ! -d "$issues_dir" ]; then
+        return 1
+    fi
+
+    # 查找匹配的 issue 文件: issue-NNN-*.md
+    local padded_number
+    padded_number=$(printf "%03d" "$issue_number" 2>/dev/null) || true
+
+    local issue_file=""
+    # 优先匹配零填充格式: issue-008-*.md
+    issue_file=$(ls "$issues_dir"/issue-${padded_number}-*.md 2>/dev/null | head -1) || true
+
+    # 回退: 不带零填充格式: issue-8-*.md
+    if [ -z "$issue_file" ]; then
+        issue_file=$(ls "$issues_dir"/issue-${issue_number}-*.md 2>/dev/null | head -1) || true
+    fi
+
+    if [ -z "$issue_file" ] || [ ! -f "$issue_file" ]; then
+        return 1
+    fi
+
+    log "找到本地 Issue 文件: $issue_file"
+
+    # 解析标题: 第一个 "# " 开头的行
+    ISSUE_TITLE=""
+    ISSUE_BODY=""
+    local found_title=0
+    local body_lines=""
+
+    while IFS= read -r line; do
+        if [ $found_title -eq 0 ] && [[ "$line" =~ ^#[[:space:]]+ ]]; then
+            ISSUE_TITLE="${line#\# }"
+            ISSUE_TITLE="${ISSUE_TITLE#\#}"
+            found_title=1
+        elif [ $found_title -eq 1 ]; then
+            body_lines="${body_lines}${line}"$'\n'
+        fi
+    done < "$issue_file"
+
+    # 没有标题行时，用文件名作为标题，整个文件内容作为 body
+    if [ $found_title -eq 0 ]; then
+        local basename
+        basename=$(basename "$issue_file" .md)
+        ISSUE_TITLE="${basename#issue-[0-9]*-}"
+        ISSUE_BODY=$(cat "$issue_file")
+    else
+        ISSUE_BODY="${body_lines%$'\n'}"
+    fi
+
+    # 设置兼容性全局变量
+    ISSUE_STATE="OPEN"
+    ISSUE_LABELS=""
+    ISSUE_SOURCE="local"
+    ISSUE_FILE="$issue_file"
+    ISSUE_INFO=""
+
+    log "本地 Issue 标题: $ISSUE_TITLE"
+    return 0
+}
+
+# 将处理结果追加到本地 Issue 文件
+append_result_to_local_issue() {
+    if [ -z "$ISSUE_FILE" ] || [ ! -f "$ISSUE_FILE" ]; then
+        log "警告: 本地 Issue 文件不存在，跳过结果追加"
+        return 1
+    fi
+
+    # 构建子任务摘要
+    local subtask_summary=""
+    if has_subtasks; then
+        local tasks_file
+        tasks_file=$(get_tasks_file)
+        local total passed
+        total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+        passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+        subtask_summary="- 子任务: ${passed}/${total} 完成"
+    fi
+
+    # 构建 UI 验证摘要
+    local ui_summary=""
+    if [ -f "$WORK_DIR/ui-verify-result.json" ]; then
+        local ui_pass_status
+        ui_pass_status=$(jq -r '.pass // "N/A"' "$WORK_DIR/ui-verify-result.json" 2>/dev/null)
+        ui_summary="- UI 验证: $ui_pass_status"
+    fi
+
+    # 构建日志摘要
+    local log_summary=""
+    if [ -f "$WORK_DIR/log.md" ]; then
+        log_summary=$(cat "$WORK_DIR/log.md")
+    fi
+
+    cat >> "$ISSUE_FILE" << EOF
+
+---
+
+## 自动处理结果
+
+- **评分**: $FINAL_SCORE/100
+- **迭代次数**: $ITERATION
+- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[@]})
+- **分支**: $BRANCH_NAME
+- **完成时间**: $(date '+%Y-%m-%d %H:%M:%S')
+$subtask_summary
+$ui_summary
+
+${log_summary}
+
+该 Issue 已由 autoresearch 自动实现。
+EOF
+
+    log "结果已追加到: $ISSUE_FILE"
+    return 0
+}
+
 get_issue_info() {
     local issue_number=$1
 
     log "获取 Issue #$issue_number 信息..."
 
+    # 优先尝试本地 Issue
+    if get_local_issue_info "$issue_number"; then
+        log "使用本地 Issue 模式"
+        log "Issue 标题: $ISSUE_TITLE"
+        log "Issue 标签: ${ISSUE_LABELS:-无} (本地模式无标签)"
+        return 0
+    fi
+
+    # 回退到 GitHub
+    ISSUE_SOURCE="github"
+
     ISSUE_INFO=$(gh issue view $issue_number --json number,title,body,state,labels 2>&1)
 
     if [ $? -ne 0 ]; then
         error "无法获取 Issue #$issue_number: $ISSUE_INFO"
+        error "提示: 如果要使用本地 Issue，请在 .autoresearch/issues/ 目录下放置 issue-NNN-xxx.md 文件"
         exit 1
     fi
 
@@ -1003,6 +1188,7 @@ get_issue_info() {
     ISSUE_BODY=$(echo "$ISSUE_INFO" | jq -r '.body')
     ISSUE_STATE=$(echo "$ISSUE_INFO" | jq -r '.state')
     ISSUE_LABELS=$(echo "$ISSUE_INFO" | jq -r '.labels[].name' | tr '\n' ',' | sed 's/,$//')
+    ISSUE_FILE=""
 
     if [ "$ISSUE_STATE" != "OPEN" ]; then
         error "Issue #$issue_number 状态为 ${ISSUE_STATE}，不是 OPEN"
@@ -1096,7 +1282,7 @@ setup_work_directory() {
 - 项目: $PROJECT_ROOT
 - 语言: $(detect_language)
 - 开始时间: $(date '+%Y-%m-%d %H:%M:%S')
-- 标签: $ISSUE_LABELS
+- 标签: ${ISSUE_LABELS:-无}
 
 ## 迭代记录
 
@@ -1180,7 +1366,7 @@ run_planning_phase() {
     local program_instructions
     program_instructions=$(get_program_instructions)
 
-    local prompt="规划 GitHub Issue #$issue_number 的子任务拆分
+    local prompt="规划 $ISSUE_REF 的子任务拆分
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
@@ -1327,7 +1513,7 @@ run_codex() {
     subtask_section=$(get_subtask_section)
 
     if [ -z "$previous_feedback" ]; then
-        prompt="实现 GitHub Issue #$issue_number
+        prompt="实现 $ISSUE_REF
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
@@ -1431,7 +1617,7 @@ run_claude() {
     subtask_section=$(get_subtask_section)
 
     if [ -z "$previous_feedback" ]; then
-        prompt="实现 GitHub Issue #$issue_number
+        prompt="实现 $ISSUE_REF
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
@@ -1535,7 +1721,7 @@ run_opencode() {
     subtask_section=$(get_subtask_section)
 
     if [ -z "$previous_feedback" ]; then
-        prompt="实现 GitHub Issue #$issue_number
+        prompt="实现 $ISSUE_REF
 
 项目路径: $PROJECT_ROOT
 项目语言: $(detect_language)
@@ -2133,6 +2319,9 @@ while getopts "p:a:c-:" opt; do
                 no-archive) NO_ARCHIVE=1 ;;
                 no-ui-verify) FEATURE_UI_VERIFY=0 ;;
                 no-hard-gate) FEATURE_HARD_GATE=0 ;;
+                issues-dir=*)
+                    ISSUES_DIR="${OPTARG#issues-dir=}"
+                    ;;
                 *) usage ;;
             esac
             ;;
@@ -2170,6 +2359,9 @@ fi
 
 log_console "Agent 列表: ${AGENT_NAMES[*]} (初始实现: ${AGENT_NAMES[0]})"
 
+# 检测本地 Issue 模式 (必须在 check_project 之前，因为需要设置 ISSUE_SOURCE)
+detect_local_issue_mode
+
 # 检查项目环境
 check_project
 
@@ -2178,6 +2370,14 @@ check_dependencies
 
 # 获取 Issue 信息
 get_issue_info "$ISSUE_NUMBER"
+
+# Issue 引用字符串 (用于 prompt)
+if [ "$ISSUE_SOURCE" = "local" ]; then
+    ISSUE_REF="本地 Issue #$ISSUE_NUMBER"
+    log_console "📂 Issue 来源: 本地文件 ($ISSUE_FILE)"
+else
+    ISSUE_REF="GitHub Issue #$ISSUE_NUMBER"
+fi
 
 # 设置工作目录
 setup_work_directory "$ISSUE_NUMBER"
@@ -2639,9 +2839,13 @@ if check_score_passed "$FINAL_SCORE"; then
     log_console "📊 评分: $FINAL_SCORE/100"
     log_console "🔄 迭代次数: $ITERATION"
 
-    # 自动提交 PR 并合并
+    # 自动提交
     log_console ""
-    log_console "📦 自动提交 PR 并合并..."
+    if [ "$ISSUE_SOURCE" = "local" ]; then
+        log_console "📦 本地模式: 提交更改并记录结果..."
+    else
+        log_console "📦 自动提交 PR 并合并..."
+    fi
     log_console ""
 
     cd "$PROJECT_ROOT"
@@ -2651,14 +2855,39 @@ if check_score_passed "$FINAL_SCORE"; then
     git add -A
 
     # 构建 commit message：包含审核报告
-    COMMIT_MSG="feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
+    if [ "$ISSUE_SOURCE" = "local" ]; then
+        COMMIT_MSG="feat: implement local issue #$ISSUE_NUMBER - $ISSUE_TITLE
+
+$FINAL_REVIEW_REPORT"
+    else
+        COMMIT_MSG="feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
 $FINAL_REVIEW_REPORT
 
 Closes #$ISSUE_NUMBER"
+    fi
 
     git commit -m "$COMMIT_MSG" 2>/dev/null || log_console "没有需要提交的更改"
 
+    # ===== 本地模式: 追加结果到 Issue 文件 =====
+    if [ "$ISSUE_SOURCE" = "local" ]; then
+        append_result_to_local_issue
+
+        log_console ""
+        log_console "  ╔══════════════════════════════════════╗"
+        log_console "  ║      本地模式处理完成！              ║"
+        log_console "  ╚══════════════════════════════════════╝"
+        log_console ""
+        log_console "🎉 分支: $BRANCH_NAME (本地)"
+        log_console "📊 评分: $FINAL_SCORE/100"
+        log_console "🔄 迭代次数: $ITERATION"
+        log_console "📝 结果已追加到: $ISSUE_FILE"
+
+        SCRIPT_COMPLETED_NORMALLY=1
+        exit 0
+    fi
+
+    # ===== GitHub 模式: 推送/PR/合并/关闭 =====
     if ! push_branch_with_recovery; then
         record_final_result "$ISSUE_NUMBER" "push_failed" "$ITERATION" "$FINAL_SCORE"
         SCRIPT_COMPLETED_NORMALLY=1
