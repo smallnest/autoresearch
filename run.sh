@@ -348,11 +348,9 @@ annealing_delay() {
 # 检测 Agent 输出是否包含致命错误（区分代码讨论中的 "error" 与真正的运行时错误）
 has_fatal_error() {
     local log_file="$1"
-    # 仅匹配非缩进、非代码行的错误模式，避免误判代码中讨论 "error handling" 等正常内容
-    # 先排除缩进行(代码块)和常见代码模式行，再匹配 CLI/系统错误输出
-    local pattern='(Error|ERROR|Fatal|Panic|Exception)[: ]'
-    pattern+='|(timeout|rate.limit|authentication|unauthorized|API.key).*error'
-    pattern+='|context.length.exceeded'
+    # 匹配 API/模型级别的致命错误，排除工具操作级别的非致命错误（如文件不存在、权限拒绝等）
+    # Agent 日志中常有 "Error: File not found" / "read failed" 等工具操作错误，这些不是致命错误
+    local pattern='context.length.exceeded'
     pattern+='|maximum.context.length'
     pattern+='|token.limit.exceeded'
     pattern+='|model.is.overloaded'
@@ -367,9 +365,16 @@ has_fatal_error() {
     pattern+='|DNS.resolution'
     pattern+='|Timed.out'
     pattern+='|Command.timed.out'
-    # 排除缩进行(空格/tab开头)和代码特征行，同时排除 Codex 内部非致命 telemetry 错误
+    pattern+='|authentication.error'
+    pattern+='|unauthorized.access'
+    pattern+='|API.key.(invalid|missing|expired)'
+    pattern+='|rate.limit.exceeded'
+    pattern+='|Fatal.error'
+    pattern+='|Panic[: ]'
+    # 排除缩进行(代码块)和代码特征行
     grep -vE '^[[:space:]]' "$log_file" 2>/dev/null \
         | grep -vE '(fmt\.|strings\.|errors\.|io\.|net/http|func |type |struct|\*http\.|//.*return|//.*if|//.*error|\+\s*(func|type|var|const) )' \
+        | grep -vE '(File not found|read failed|Permission denied|No such file|command not found|auto.reject)' \
         | grep -vE 'codex_core::session: failed to record rollout' \
         | grep -qE "$pattern"
 }
