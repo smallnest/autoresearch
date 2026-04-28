@@ -3026,12 +3026,10 @@ Closes #$ISSUE_NUMBER"
         log_console "百度模式: 推送代码并创建 CR..."
 
         # 检测目标分支
-        local target_branch
         target_branch=$(detect_icode_target_branch)
         log "iCode CR 目标分支: $target_branch"
 
         # 推送代码并创建 CR
-        local push_cr_output
         push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1)
 
         if [ $? -ne 0 ]; then
@@ -3064,7 +3062,6 @@ Closes #$ISSUE_NUMBER"
 
         # 提交合入
         log_console "提交合入 CR #$ICODE_CR_NUMBER..."
-        local submit_output
         submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1)
 
         if [ $? -ne 0 ]; then
@@ -3078,7 +3075,6 @@ Closes #$ISSUE_NUMBER"
         log_console "关闭 iCafe 卡片 #$ISSUE_NUMBER..."
 
         # 检查可用的状态转换
-        local next_statuses
         next_statuses=$(icafe-cli card next-statuses --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" 2>&1 || true)
         log "卡片可转换状态: $next_statuses"
 
@@ -3091,17 +3087,15 @@ Closes #$ISSUE_NUMBER"
 
         # 添加评论到卡片
         log_console "添加评论到 iCafe 卡片 #$ISSUE_NUMBER..."
-        local log_summary=""
+        log_summary=""
         if [ -f "$WORK_DIR/log.md" ]; then
             log_summary=$(cat "$WORK_DIR/log.md")
         fi
 
         # 构建子任务摘要
-        local subtask_summary=""
+        subtask_summary=""
         if has_subtasks; then
-            local tasks_file
             tasks_file=$(get_tasks_file)
-            local total passed
             total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
             passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
             subtask_summary="- 子任务: ${passed}/${total} 完成"
