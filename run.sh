@@ -1257,10 +1257,10 @@ get_baidu_issue_info() {
     ISSUE_FILE=""
     ISSUE_INFO="$card_info"
 
-    # 验证卡片状态 (已关闭的卡片不应再处理)
-    # iCafe 状态可能是中文，如 "已关闭"、"开发中" 等
-    if echo "$ISSUE_STATE" | grep -qiE '已关闭|closed'; then
-        error "iCafe 卡片 #$issue_number 状态为 ${ISSUE_STATE}，已关闭"
+    # 验证卡片状态 (已完成/已关闭的卡片不应再处理)
+    # iCafe 状态可能是中文，如 "已完成"、"已关闭"、"开发中" 等
+    if echo "$ISSUE_STATE" | grep -qiE '已完成|已关闭|closed'; then
+        error "iCafe 卡片 #$issue_number 状态为 ${ISSUE_STATE}，已结束"
         exit 1
     fi
 
@@ -3194,15 +3194,29 @@ Closes #$ISSUE_NUMBER"
         # 关闭 iCafe 卡片
         log_console "关闭 iCafe 卡片 #$ISSUE_NUMBER..."
 
-        # 检查可用的状态转换
+        # 检查可用的状态转换，自动选择可达的终态
         next_statuses=$(icafe-cli card next-statuses --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" 2>&1 || true)
         log "卡片可转换状态: $next_statuses"
 
-        # 尝试更新卡片状态为"已关闭"
-        if icafe-cli card update --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" --status "已关闭" 2>&1; then
-            log_console "✅ iCafe 卡片已关闭"
+        # 按优先级选择终态：已完成 > 已关闭 > 从可达状态中选第一个
+        close_status=""
+        if echo "$next_statuses" | grep -q '"已完成"'; then
+            close_status="已完成"
+        elif echo "$next_statuses" | grep -q '"已关闭"'; then
+            close_status="已关闭"
         else
-            log_console "⚠️ 关闭卡片失败，可能需要手动关闭"
+            # 从 next-statuses 结果中提取第一个可达状态名
+            close_status=$(echo "$next_statuses" | grep -oE '"statusName"\s*:\s*"[^"]+"' | head -1 | grep -oE '"[^"]+"$' | tr -d '"')
+        fi
+
+        if [ -n "$close_status" ]; then
+            if icafe-cli card update --space "$ICAFE_SPACE" --sequence "$ISSUE_NUMBER" --status "$close_status" 2>&1; then
+                log_console "✅ iCafe 卡片状态已更新为: $close_status"
+            else
+                log_console "⚠️ 更新卡片状态失败 (尝试: $close_status)，可能需要手动操作"
+            fi
+        else
+            log_console "⚠️ 无可用的状态转换，可能需要手动关闭"
         fi
         set_phase "close_card"
 
