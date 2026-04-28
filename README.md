@@ -1,4 +1,5 @@
 # Autoresearch for Software Development
+![](docs/autoresearch.png)
 
 > 全自动化软件开发工具，你只需负责喝茶和睡觉。
 > 一觉醒来，Features 全自动高质量的实现了。
