@@ -2294,6 +2294,29 @@ record_final_result() {
 EOF
 }
 
+# ==================== 阶段追踪 ====================
+# 记录当前执行到的阶段，供 continue 模式恢复时跳过已完成步骤
+# 阶段: iteration (迭代循环) -> commit (git commit) ->
+#        push_cr (百度推CR) / push (GitHub推分支) ->
+#        score_cr (百度评分) -> submit_cr (百度合入) ->
+#        close_card (百度关卡片) / create_pr (GitHub建PR) -> done
+
+set_phase() {
+    local phase="$1"
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        echo "$phase" > "$WORK_DIR/.phase"
+        log "阶段更新: $phase"
+    fi
+}
+
+get_phase() {
+    if [ -n "$WORK_DIR" ] && [ -f "$WORK_DIR/.phase" ]; then
+        cat "$WORK_DIR/.phase"
+    else
+        echo ""
+    fi
+}
+
 # ==================== 继续模式：恢复状态 ====================
 
 find_last_iteration() {
@@ -2336,6 +2359,22 @@ restore_continue_state() {
         FINAL_SCORE=$(cat "$WORK_DIR/.last_score" | tr -cd '0-9')
         [ -z "$FINAL_SCORE" ] && FINAL_SCORE=0
         log_console "上次评分: $FINAL_SCORE/100"
+    fi
+
+    # ===== 阶段恢复：检查是否质量门已过，直接跳到中断的后处理步骤 =====
+    local saved_phase
+    saved_phase=$(get_phase)
+    if [ -n "$saved_phase" ] && [ "$saved_phase" != "iteration" ] && check_score_passed "$FINAL_SCORE"; then
+        log_console "📌 检测到上次已通过质量门 (phase=$saved_phase)，跳过迭代循环"
+
+        # 恢复 CR 编号（百度模式）
+        if [ -f "$WORK_DIR/.cr_number" ]; then
+            ICODE_CR_NUMBER=$(cat "$WORK_DIR/.cr_number")
+            log_console "📋 恢复 CR 编号: #$ICODE_CR_NUMBER"
+        fi
+
+        SKIP_TO_PHASE="$saved_phase"
+        return
     fi
 
     # 继续模式重置连续失败计数
@@ -2521,6 +2560,7 @@ PREVIOUS_FEEDBACK=""
 FINAL_SCORE=0
 CONSECUTIVE_ITERATION_FAILURES=0
 CONTEXT_RETRIES=0
+SKIP_TO_PHASE=""
 
 if [ $CONTINUE_MODE -eq 1 ]; then
     restore_continue_state
@@ -2558,6 +2598,48 @@ if [ $CONTINUE_MODE -eq 1 ]; then
     fi
 fi
 
+# ===== 阶段恢复：质量门已过时跳过迭代循环，直接进入后处理 =====
+if [ -n "$SKIP_TO_PHASE" ]; then
+    log_console "⏩ 跳过迭代循环，直接从阶段 [$SKIP_TO_PHASE] 继续"
+    echo "" >> "$WORK_DIR/log.md"
+    echo "### 继续运行: 跳过迭代循环 (phase=$SKIP_TO_PHASE)" >> "$WORK_DIR/log.md"
+    echo "- 跳过时间: $(date '+%Y-%m-%d %H:%M:%S')" >> "$WORK_DIR/log.md"
+
+    cd "$PROJECT_ROOT"
+
+    case "$SKIP_TO_PHASE" in
+        commit)
+            # 已 commit 但未推送，进入推送流程
+            ;;
+        push_cr)
+            # 百度模式: CR 已创建但后续步骤中断
+            if [ -z "$ICODE_CR_NUMBER" ]; then
+                log_console "⚠️ CR 编号丢失，回退到 commit 阶段重新推送"
+                set_phase "commit"
+            fi
+            ;;
+        score_cr|submit_cr|close_card)
+            # 已部分完成，从当前阶段继续
+            ;;
+        push)
+            # GitHub 模式: 已推送但未建 PR
+            ;;
+        create_pr)
+            # GitHub 模式: PR 已创建
+            ;;
+        *)
+            log_console "⚠️ 未知阶段: $SKIP_TO_PHASE，从 commit 阶段重新开始"
+            set_phase "commit"
+            ;;
+    esac
+
+    goto_final_processing=1
+else
+    goto_final_processing=0
+fi
+
+if [ $goto_final_processing -eq 0 ]; then
+
 # ==================== 规划阶段 ====================
 
 # 非继续模式时执行规划阶段
@@ -2572,6 +2654,7 @@ if [ $CONTINUE_MODE -eq 0 ]; then
 fi
 
 # ==================== 迭代循环 ====================
+set_phase "iteration"
 
 # Agent 列表: 第一个用于初始实现，后续按顺序轮流审核
 # 有子任务时: 每个子任务独立进入实现→审核→修复循环
@@ -2960,6 +3043,8 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
     fi
 done
 
+fi  # goto_final_processing == 0 的结束
+
 # ==================== 最终处理 ====================
 
 if check_score_passed "$FINAL_SCORE"; then
@@ -2985,29 +3070,39 @@ if check_score_passed "$FINAL_SCORE"; then
 
     cd "$PROJECT_ROOT"
 
-    # 提交所有更改
-    log_console "提交更改..."
-    git add -A
+    # 提交所有更改（commit 阶段之前才执行）
+    if [ "$SKIP_TO_PHASE" != "commit" ] && [ "$SKIP_TO_PHASE" != "push_cr" ] && \
+       [ "$SKIP_TO_PHASE" != "score_cr" ] && [ "$SKIP_TO_PHASE" != "submit_cr" ] && \
+       [ "$SKIP_TO_PHASE" != "close_card" ] && [ "$SKIP_TO_PHASE" != "push" ] && \
+       [ "$SKIP_TO_PHASE" != "create_pr" ]; then
+        log_console "提交更改..."
+        git add -A
 
-    # 构建 commit message：包含审核报告
-    if [ "$ISSUE_SOURCE" = "local" ]; then
-        COMMIT_MSG="feat: implement local issue #$ISSUE_NUMBER - $ISSUE_TITLE
+        # 构建 commit message
+        if [ "$ISSUE_SOURCE" = "local" ]; then
+            COMMIT_MSG="feat: implement local issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
 $FINAL_REVIEW_REPORT"
-    elif [ "$ISSUE_SOURCE" = "baidu" ]; then
-        # iCafe 自动绑定格式: {space}-{sequence} [{type}] {title}
-        COMMIT_MSG="$ICAFE_SPACE-$ISSUE_NUMBER [$ICAFE_CARD_TYPE] $ISSUE_TITLE
+        elif [ "$ISSUE_SOURCE" = "baidu" ]; then
+            # 百度模式: Change-Id 在首行，summary <100字，不含审核报告避免 Gerrit 格式问题
+            # 自己生成 Change-Id 放首行，避免 commit-msg hook 追加到末尾时前面内容过长导致格式问题
+            _change_id="I$(echo "$ISSUE_NUMBER$(date +%s%N)$$" | git hash-object --stdin 2>/dev/null || echo "$(date +%s)$$")"
+            COMMIT_SUMMARY="$ICAFE_SPACE-$ISSUE_NUMBER [$ICAFE_CARD_TYPE] score=$FINAL_SCORE iter=$ITERATION"
+            COMMIT_MSG="Change-Id: $_change_id
 
-$FINAL_REVIEW_REPORT"
-    else
-        COMMIT_MSG="feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
+$COMMIT_SUMMARY"
+        else
+            COMMIT_MSG="feat: implement issue #$ISSUE_NUMBER - $ISSUE_TITLE
 
 $FINAL_REVIEW_REPORT
 
 Closes #$ISSUE_NUMBER"
-    fi
+        fi
 
-    git commit -m "$COMMIT_MSG" 2>/dev/null || log_console "没有需要提交的更改"
+        git commit -m "$COMMIT_MSG" 2>/dev/null || log_console "没有需要提交的更改"
+        set_phase "commit"
+
+    fi  # commit 阶段 guard 结束
 
     # ===== 本地模式: 追加结果到 Issue 文件 =====
     if [ "$ISSUE_SOURCE" = "local" ]; then
@@ -3029,52 +3124,71 @@ Closes #$ISSUE_NUMBER"
 
     # ===== 百度 iCafe/iCode 模式: push_cr/评分/合入/关闭卡片 =====
     if [ "$ISSUE_SOURCE" = "baidu" ]; then
-        log_console "百度模式: 推送代码并创建 CR..."
 
-        # 检测目标分支
-        target_branch=$(detect_icode_target_branch)
-        log "iCode CR 目标分支: $target_branch"
+        # --- push_cr 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "score_cr" ] && [ "$SKIP_TO_PHASE" != "submit_cr" ] && \
+           [ "$SKIP_TO_PHASE" != "close_card" ]; then
+            log_console "百度模式: 推送代码并创建 CR..."
 
-        # 推送代码并创建 CR
-        push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1)
+            # 检测目标分支
+            target_branch=$(detect_icode_target_branch)
+            log "iCode CR 目标分支: $target_branch"
 
-        if [ $? -ne 0 ]; then
-            log_console "⚠️ icode-cli git push_cr 失败: $push_cr_output"
-            record_final_result "$ISSUE_NUMBER" "push_cr_failed" "$ITERATION" "$FINAL_SCORE"
-            SCRIPT_COMPLETED_NORMALLY=1
-            exit 1
-        fi
+            # 推送代码并创建 CR（用 || true 避免 set -e 提前退出，跳过错误处理）
+            push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1) || true
+            push_cr_exit=$?
 
-        log "push_cr 输出: $push_cr_output"
+            if [ $push_cr_exit -ne 0 ]; then
+                log_console "⚠️ icode-cli git push_cr 失败: $push_cr_output"
+                record_final_result "$ISSUE_NUMBER" "push_cr_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
 
-        # 从 push_cr 输出中解析 CR 编号
-        ICODE_CR_NUMBER=$(echo "$push_cr_output" | grep -oE '[0-9]+' | tail -1)
+            log "push_cr 输出: $push_cr_output"
 
-        if [ -z "$ICODE_CR_NUMBER" ]; then
-            log_console "⚠️ 无法从 push_cr 输出中解析 CR 编号"
-            log_console "push_cr 输出: $push_cr_output"
-            record_final_result "$ISSUE_NUMBER" "cr_parse_failed" "$ITERATION" "$FINAL_SCORE"
-            SCRIPT_COMPLETED_NORMALLY=1
-            exit 1
-        fi
+            # 从 push_cr 输出中解析 CR 编号
+            ICODE_CR_NUMBER=$(echo "$push_cr_output" | grep -oE '[0-9]+' | tail -1)
 
-        log_console "✅ CR 已创建: #$ICODE_CR_NUMBER"
+            if [ -z "$ICODE_CR_NUMBER" ]; then
+                log_console "⚠️ 无法从 push_cr 输出中解析 CR 编号"
+                log_console "push_cr 输出: $push_cr_output"
+                record_final_result "$ISSUE_NUMBER" "cr_parse_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
 
-        # 评分 +2
-        log_console "评分 CR #$ICODE_CR_NUMBER (+2)..."
-        if ! icode-cli api set_review_score --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" --score 2 2>&1; then
-            log_console "⚠️ CR 评分失败，尝试继续合入"
-        fi
-
-        # 提交合入
-        log_console "提交合入 CR #$ICODE_CR_NUMBER..."
-        submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1)
-
-        if [ $? -ne 0 ]; then
-            log_console "⚠️ CR 合入失败: $submit_output"
-            log_console "CR 编号: #$ICODE_CR_NUMBER，请手动合入"
+            log_console "✅ CR 已创建: #$ICODE_CR_NUMBER"
+            set_phase "push_cr"
+            echo "$ICODE_CR_NUMBER" > "$WORK_DIR/.cr_number"
         else
-            log_console "✅ CR #$ICODE_CR_NUMBER 已合入"
+            log_console "⏩ 跳过 push_cr，使用已有 CR #$ICODE_CR_NUMBER"
+        fi
+
+        # --- score_cr 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "submit_cr" ] && [ "$SKIP_TO_PHASE" != "close_card" ]; then
+            # 评分 +2
+            log_console "评分 CR #$ICODE_CR_NUMBER (+2)..."
+            if ! icode-cli api set_review_score --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" --score 2 2>&1; then
+                log_console "⚠️ CR 评分失败，尝试继续合入"
+            fi
+            set_phase "score_cr"
+        fi
+
+        # --- submit_cr 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "close_card" ]; then
+            # 提交合入
+            log_console "提交合入 CR #$ICODE_CR_NUMBER..."
+            submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1) || true
+            submit_exit=$?
+
+            if [ $submit_exit -ne 0 ]; then
+                log_console "⚠️ CR 合入失败: $submit_output"
+                log_console "CR 编号: #$ICODE_CR_NUMBER，请手动合入"
+            else
+                log_console "✅ CR #$ICODE_CR_NUMBER 已合入"
+            fi
+            set_phase "submit_cr"
         fi
 
         # 关闭 iCafe 卡片
@@ -3090,6 +3204,7 @@ Closes #$ISSUE_NUMBER"
         else
             log_console "⚠️ 关闭卡片失败，可能需要手动关闭"
         fi
+        set_phase "close_card"
 
         # 添加评论到卡片
         log_console "添加评论到 iCafe 卡片 #$ISSUE_NUMBER..."
@@ -3134,10 +3249,13 @@ EOF
     fi
 
     # ===== GitHub 模式: 推送/PR/合并/关闭 =====
-    if ! push_branch_with_recovery; then
-        record_final_result "$ISSUE_NUMBER" "push_failed" "$ITERATION" "$FINAL_SCORE"
-        SCRIPT_COMPLETED_NORMALLY=1
-        exit 1
+    if [ "$SKIP_TO_PHASE" != "create_pr" ]; then
+        if ! push_branch_with_recovery; then
+            record_final_result "$ISSUE_NUMBER" "push_failed" "$ITERATION" "$FINAL_SCORE"
+            SCRIPT_COMPLETED_NORMALLY=1
+            exit 1
+        fi
+        set_phase "push"
     fi
 
     # 创建 PR
@@ -3186,6 +3304,7 @@ EOF
     if echo "$PR_URL" | grep -q "https://github.com"; then
         PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
         log_console "✅ PR 已创建: $PR_URL"
+        set_phase "create_pr"
 
         # 合并 PR（不删除本地分支，我们自己处理）
         log_console "合并 PR #$PR_NUMBER..."
