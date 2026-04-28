@@ -1242,15 +1242,19 @@ get_baidu_issue_info() {
         exit 1
     fi
 
-    # 解析 JSON 响应
-    ISSUE_TITLE=$(echo "$card_info" | jq -r '.title // empty')
-    ISSUE_BODY=$(echo "$card_info" | jq -r '.description // empty')
-    ISSUE_STATE=$(echo "$card_info" | jq -r '.status // empty')
-    ICAFE_CARD_TYPE=$(echo "$card_info" | jq -r '.cardType // "Task"')
+    # 解析 JSON 响应（数据在 .cards[0] 下）
+    local card=".cards[0]"
+    ISSUE_TITLE=$(echo "$card_info" | jq -r "${card}.title // empty")
+    ISSUE_BODY=$(echo "$card_info" | jq -r "${card}.detail // empty")
+    ISSUE_STATE=$(echo "$card_info" | jq -r "${card}.status // empty")
+    ICAFE_CARD_TYPE=$(echo "$card_info" | jq -r "${card}.type.name // \"Task\"")
 
-    # iCafe 描述是 HTML 格式，去除 HTML 标签
+    # iCafe 描述是 HTML 格式，可能双重转义（\u0026lt; → &lt; → <），先解码再去除标签
     if [ -n "$ISSUE_BODY" ]; then
-        ISSUE_BODY=$(echo "$ISSUE_BODY" | sed 's/<[^>]*>//g' | sed 's/&nbsp;/ /g' | sed 's/&lt;/</g' | sed 's/&gt;/>/g' | sed 's/&amp;/\&/g' | sed 's/&quot;/"/g')
+        # 第一轮：反转义 HTML 实体
+        ISSUE_BODY=$(echo "$ISSUE_BODY" | sed 's/&lt;/</g' | sed 's/&gt;/>/g' | sed 's/&amp;/\&/g' | sed 's/&quot;/"/g' | sed 's/&nbsp;/ /g')
+        # 第二轮：去除 HTML 标签
+        ISSUE_BODY=$(echo "$ISSUE_BODY" | sed 's/<[^>]*>//g')
     fi
 
     ISSUE_LABELS=""
