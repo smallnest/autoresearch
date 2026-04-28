@@ -7,11 +7,14 @@
 #   ./run_all.sh [run.sh 的所有参数（不含 issue 编号）]
 #
 # 示例:
-#   ./run_all.sh                                    # 处理当前项目所有 open issue
+#   ./run_all.sh                                    # 处理当前项目所有 open issue（自动 continue）
 #   ./run_all.sh -p /path/to/project               # 处理指定项目的所有 open issue
 #   ./run_all.sh -a claude,codex                    # 指定 agents
 #   ./run_all.sh -p /path/to/project -a claude 16   # 指定 agents + 最大迭代数
 #   ./run_all.sh --no-archive --no-ui-verify        # 跳过归档和 UI 验证
+#
+# 注意: 对每个 issue 默认使用 -c (continue) 模式调用 run.sh。
+#       首次运行的 issue 会正常从头开始，中断后重跑会自动续跑。
 #
 # 环境变量:
 #   RUN_ALL_LABEL:    只处理带有此 label 的 issues (可选)
@@ -118,7 +121,7 @@ for ISSUE_NUM in "${ISSUE_NUMBERS[@]}"; do
     echo " 处理 Issue #$ISSUE_NUM: $ISSUE_TITLE"
     echo "========================================"
 
-    if bash "$RUN_SH" "${RUN_ARGS[@]}" "$ISSUE_NUM"; then
+    if bash "$RUN_SH" -c "${RUN_ARGS[@]}" "$ISSUE_NUM"; then
         echo "✓ Issue #$ISSUE_NUM 处理完成"
         ((SUCCESS++)) || true
     else
