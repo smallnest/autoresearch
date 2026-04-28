@@ -3516,6 +3516,15 @@ EOF
         log_console "📂 iCafe 卡片: #$ISSUE_NUMBER (空间: $ICAFE_SPACE)"
         log_console "🔗 状态: 已合入并关闭"
 
+        # 清理：丢弃 feature 分支未提交的更改，切回主分支
+        cd "$PROJECT_ROOT"
+        git checkout -- . 2>/dev/null || true
+        git clean -fd .autoresearch/ 2>/dev/null || true
+        main_branch=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+        [ -z "$main_branch" ] && main_branch="master"
+        git checkout "$main_branch" 2>/dev/null || true
+        log_console "🧹 已切回 $main_branch 分支"
+
         SCRIPT_COMPLETED_NORMALLY=1
         exit 0
     fi
