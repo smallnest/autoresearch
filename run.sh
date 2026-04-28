@@ -2615,7 +2615,13 @@ run_review_and_fix() {
         if has_subtasks; then
             local current_subtask_id
             current_subtask_id=$(get_current_subtask_id)
-            if [ -n "$current_subtask_id" ]; then
+            if [ -z "$current_subtask_id" ]; then
+                # 所有子任务已通过（current_subtask_id 为空说明没有 passes=false 的子任务）
+                if all_subtasks_passed; then
+                    log_console "🎉 所有子任务已通过！"
+                    ALL_SUBTASKS_DONE=1
+                fi
+            else
                 # UI 类型子任务：先进行浏览器验证
                 if is_ui_subtask; then
                     local subtask_title
