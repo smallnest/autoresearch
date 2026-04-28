@@ -2294,6 +2294,261 @@ record_final_result() {
 EOF
 }
 
+# ==================== 生成 Summary HTML ====================
+generate_summary_html() {
+    local html_file="$WORK_DIR/summary.html"
+    local log_file="$WORK_DIR/log.md"
+
+    # 提取开始/结束时间
+    local start_time=""
+    local end_time=""
+    if [ -f "$log_file" ]; then
+        start_time=$(grep -oE '开始时间: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' "$log_file" | head -1 | sed 's/开始时间: //')
+        end_time=$(grep -oE '结束时间: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' "$log_file" | tail -1 | sed 's/结束时间: //')
+    fi
+
+    # 计算用时
+    local duration=""
+    if [ -n "$start_time" ] && [ -n "$end_time" ]; then
+        local start_ts end_ts
+        start_ts=$(date -j -f "%Y-%m-%d %H:%M:%S" "$start_time" "+%s" 2>/dev/null || echo 0)
+        end_ts=$(date -j -f "%Y-%m-%d %H:%M:%S" "$end_time" "+%s" 2>/dev/null || echo 0)
+        local diff=$((end_ts - start_ts))
+        if [ $diff -gt 0 ]; then
+            local mins=$((diff / 60))
+            local secs=$((diff % 60))
+            if [ $mins -gt 60 ]; then
+                local hours=$((mins / 60))
+                mins=$((mins % 60))
+                duration="${hours}h ${mins}m ${secs}s"
+            else
+                duration="${mins}m ${secs}s"
+            fi
+        fi
+    fi
+    [ -z "$duration" ] && duration="N/A"
+
+    # 解析 progress.md 中的迭代数据
+    local progress_file="$WORK_DIR/progress.md"
+    local iter_rows=""
+    if [ -f "$progress_file" ]; then
+        local tmp_rows
+        tmp_rows=$(LC_ALL=C awk '
+        /^## Iteration [0-9]/ {
+            if (iter != "") {
+                gsub(/"/, "\\&quot;", findings)
+                gsub(/</, "\\&lt;", findings)
+                gsub(/>/, "\\&gt;", findings)
+                gsub(/\x1b\[[0-9;]*m/, "", findings)
+                findings = substr(findings, 1, 300)
+                printf "ITER_ROW\t%s\t%s\t%s\t%s\t%s\n", iter, agent, type, score, findings
+            }
+            iter = $0; sub(/.*Iteration /, "", iter); sub(/ .*/, "", iter)
+            agent = ""; type = ""; score = ""; findings = ""; in_findings = 0
+        }
+        /- \*\*Agent\*\*:|^  \*\*Agent\*\*:/ {
+            agent = $0; sub(/.*\*\*Agent\*\*: */, "", agent); gsub(/`/, "", agent)
+            in_findings = 0
+        }
+        /- \*\*类型\*\*:|^  \*\*类型\*\*:/ {
+            type = $0; sub(/.*\*\*类型\*\*: */, "", type)
+            in_findings = 0
+        }
+        /- \*\*评分\*\*:|^  \*\*评分\*\*:/ {
+            score = $0; sub(/.*\*\*评分\*\*: */, "", score)
+            if (score !~ /N\/A/) { gsub(/[^0-9]/, "", score) }
+            else { score = "N/A" }
+            in_findings = 0
+        }
+        /- \*\*经验与发现\*\*:|## Learnings/ {
+            in_findings = 1; next
+        }
+        /^## / && !/^## Iteration/ { in_findings = 0 }
+        in_findings && NF > 0 {
+            if (findings != "") findings = findings " "
+            line = $0
+            gsub(/^- /, "", line); gsub(/^  /, "", line)
+            gsub(/\x1b\[[0-9;]*m/, "", line)
+            if (line != "" && line !~ /^\[/) findings = findings line
+        }
+        END {
+            if (iter != "") {
+                gsub(/"/, "\\&quot;", findings)
+                gsub(/</, "\\&lt;", findings)
+                gsub(/>/, "\\&gt;", findings)
+                gsub(/\x1b\[[0-9;]*m/, "", findings)
+                findings = substr(findings, 1, 300)
+                printf "ITER_ROW\t%s\t%s\t%s\t%s\t%s\n", iter, agent, type, score, findings
+            }
+        }
+        ' "$progress_file")
+
+        # 将 awk 输出转为 HTML 行
+        if [ -n "$tmp_rows" ]; then
+            while IFS=$'\t' read -r tag iter_num iter_agent iter_type iter_score iter_findings; do
+                [ "$tag" != "ITER_ROW" ] && continue
+                local score_color="#94a3b8"
+                case "$iter_score" in
+                    [0-9]|[0-4][0-9]) score_color="#ef4444" ;;
+                    [5-6][0-9]) score_color="#f59e0b" ;;
+                    [7-8][0-9]) score_color="#3b82f6" ;;
+                    9[0-9]|100) score_color="#22c55e" ;;
+                esac
+                local score_display="${iter_score:-N/A}"
+                iter_rows="$iter_rows
+            <tr>
+              <td style=\"text-align:center;font-weight:600\">$iter_num</td>
+              <td><span style=\"display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#f1f5f9;color:#475569;text-transform:capitalize\">$iter_agent</span></td>
+              <td style=\"color:#64748b\">$iter_type</td>
+              <td style=\"text-align:center\"><span style=\"font-weight:700;color:$score_color\">$score_display</span></td>
+              <td style=\"color:#64748b;font-size:13px\">$iter_findings</td>
+            </tr>"
+            done <<< "$tmp_rows"
+        fi
+    fi
+
+    # 解析子任务
+    local subtask_rows=""
+    local tasks_file="$WORK_DIR/tasks.json"
+    local subtask_count=0
+    local subtask_passed=0
+    if [ -f "$tasks_file" ] && command -v jq &>/dev/null; then
+        subtask_count=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null || echo 0)
+        subtask_passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null || echo 0)
+        for i in $(seq 0 $((subtask_count - 1)) 2>/dev/null); do
+            local tid title passes
+            tid=$(jq -r ".subtasks[$i].id" "$tasks_file" 2>/dev/null)
+            title=$(jq -r ".subtasks[$i].title" "$tasks_file" 2>/dev/null | sed 's/"/\&quot;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+            passes=$(jq -r ".subtasks[$i].passes" "$tasks_file" 2>/dev/null)
+            if [ "$passes" = "true" ]; then
+                subtask_rows="$subtask_rows
+            <tr>
+              <td style=\"font-weight:600;color:#475569\">$tid</td>
+              <td style=\"color:#334155\">$title</td>
+              <td style=\"text-align:center\"><span style=\"display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:600;background:#dcfce7;color:#16a34a\">PASS</span></td>
+            </tr>"
+            else
+                subtask_rows="$subtask_rows
+            <tr>
+              <td style=\"font-weight:600;color:#475569\">$tid</td>
+              <td style=\"color:#334155\">$title</td>
+              <td style=\"text-align:center\"><span style=\"display:inline-block;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:600;background:#fef2f2;color:#dc2626\">FAIL</span></td>
+            </tr>"
+            fi
+        done
+    fi
+
+    # 最终评分颜色
+    local final_score_color="#94a3b8"
+    case "$FINAL_SCORE" in
+        [0-9]|[0-4][0-9]) final_score_color="#ef4444" ;;
+        [5-6][0-9]) final_score_color="#f59e0b" ;;
+        [7-8][0-9]) final_score_color="#3b82f6" ;;
+        9[0-9]|100) final_score_color="#22c55e" ;;
+    esac
+
+    # 状态
+    local final_status="completed"
+    local status_color="#22c55e"
+    local status_bg="#dcfce7"
+    grep -q '状态: completed' "$log_file" 2>/dev/null || { final_status="failed"; status_color="#ef4444"; status_bg="#fef2f2"; }
+
+    # 子任务进度
+    local subtask_summary_html=""
+    if [ "$subtask_count" -gt 0 ] 2>/dev/null; then
+        subtask_summary_html="
+    <div style=\"background:white;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08)\">
+      <h3 style=\"margin:0 0 16px 0;font-size:16px;font-weight:700;color:#1e293b\">Subtasks <span style=\"font-weight:400;color:#94a3b8;font-size:14px\">$subtask_passed/$subtask_count passed</span></h3>
+      <table style=\"width:100%;border-collapse:collapse\">
+        <thead><tr style=\"border-bottom:2px solid #f1f5f9\">
+          <th style=\"text-align:left;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em\">ID</th>
+          <th style=\"text-align:left;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em\">Title</th>
+          <th style=\"text-align:center;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em\">Status</th>
+        </tr></thead>
+        <tbody>$subtask_rows</tbody>
+      </table>
+    </div>"
+    fi
+
+    # 迭代表格
+    local iter_table_html=""
+    if [ -n "$iter_rows" ]; then
+        iter_table_html="
+    <div style=\"background:white;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08)\">
+      <h3 style=\"margin:0 0 16px 0;font-size:16px;font-weight:700;color:#1e293b\">Iterations <span style=\"font-weight:400;color:#94a3b8;font-size:14px\">$ITERATION total</span></h3>
+      <table style=\"width:100%;border-collapse:collapse\">
+        <thead><tr style=\"border-bottom:2px solid #f1f5f9\">
+          <th style=\"text-align:center;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;width:60px\">#</th>
+          <th style=\"text-align:left;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;width:100px\">Agent</th>
+          <th style=\"text-align:left;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;width:120px\">Type</th>
+          <th style=\"text-align:center;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;width:70px\">Score</th>
+          <th style=\"text-align:left;padding:8px 12px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em\">Key Findings</th>
+        </tr></thead>
+        <tbody>$iter_rows</tbody>
+      </table>
+    </div>"
+    fi
+
+    cat > "$html_file" << HTMLEOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Issue #$ISSUE_NUMBER Summary</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; background:#f8fafc; color:#334155; line-height:1.6; padding:32px 16px; }
+  .container { max-width:800px; margin:0 auto; }
+  .header { background:white; border-radius:16px; padding:32px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:24px; }
+  .header h1 { font-size:24px; font-weight:800; color:#0f172a; margin-bottom:4px; }
+  .header .subtitle { font-size:14px; color:#94a3b8; }
+  .score-ring { width:88px; height:88px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; float:right; margin:-8px 0 0 16px; border:4px solid $final_score_color; color:$final_score_color; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px; }
+  .card { background:white; border-radius:12px; padding:16px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+  .card .label { font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; }
+  .card .value { font-size:18px; font-weight:700; color:#1e293b; }
+  .section { margin-bottom:24px; }
+  .section h3 { margin:0 0 12px 0; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; }
+  td,th { padding:10px 12px; }
+  tbody tr { border-bottom:1px solid #f1f5f9; }
+  tbody tr:last-child { border-bottom:none; }
+  .footer { text-align:center; padding:24px; color:#94a3b8; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="score-ring">$FINAL_SCORE</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <h1>Issue #$ISSUE_NUMBER</h1>
+      <span style="display:inline-block;padding:4px 14px;border-radius:12px;font-size:12px;font-weight:700;background:$status_bg;color:$status_color;text-transform:uppercase">$final_status</span>
+    </div>
+    <div class="subtitle">$ISSUE_TITLE</div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Duration</div><div class="value">$duration</div></div>
+    <div class="card"><div class="label">Iterations</div><div class="value">$ITERATION</div></div>
+    <div class="card"><div class="label">Passing Score</div><div class="value">$PASSING_SCORE</div></div>
+    <div class="card"><div class="label">Branch</div><div class="value" style="font-size:13px">$BRANCH_NAME</div></div>
+  </div>
+
+  $subtask_summary_html
+
+  $iter_table_html
+
+  <div class="footer">Generated by autoresearch &middot; $(date '+%Y-%m-%d %H:%M')</div>
+</div>
+</body>
+</html>
+HTMLEOF
+
+    log_console "📄 Summary: $html_file"
+}
+
 # ==================== 阶段追踪 ====================
 # 记录当前执行到的阶段，供 continue 模式恢复时跳过已完成步骤
 # 阶段: iteration (迭代循环) -> commit (git commit) ->
@@ -3049,6 +3304,9 @@ fi  # goto_final_processing == 0 的结束
 
 if check_score_passed "$FINAL_SCORE"; then
     record_final_result "$ISSUE_NUMBER" "completed" "$ITERATION" "$FINAL_SCORE"
+
+    # 生成 Summary HTML
+    generate_summary_html
 
     echo ""
     log_console "  ╔══════════════════════════════════════╗"
