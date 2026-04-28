@@ -1499,25 +1499,19 @@ Issue 内容: $ISSUE_BODY
 
 输出格式要求：在输出的最后，必须输出一个 JSON 代码块（用 \`\`\`json 和 \`\`\` 包裹），格式如下：
 
+⚠️ IMPORTANT: You MUST replace ALL placeholder values (e.g. [PLACEHOLDER]) with actual, specific content derived from the Issue. Never output placeholder text as-is.
+
 \`\`\`json
 {
   \"issueNumber\": $issue_number,
   \"subtasks\": [
     {
       \"id\": \"T-001\",
-      \"title\": \"子任务标题\",
-      \"description\": \"详细描述此子任务需要完成的工作\",
-      \"acceptanceCriteria\": [\"验收条件1\", \"验收条件2\"],
+      \"title\": \"[用一句话概括此子任务的核心目标]\",
+      \"description\": \"[详细描述此子任务需要完成的具体工作]\",
+      \"acceptanceCriteria\": [\"[可验证的验收条件1]\", \"[可验证的验收条件2]\"],
       \"priority\": 1,
       \"type\": \"code\",
-      \"passes\": false
-    },
-    {
-      \"id\": \"T-002\",
-      \"title\": \"子任务标题\",
-      \"description\": \"详细描述\",
-      \"acceptanceCriteria\": [\"验收条件1\"],
-      \"priority\": 2,
       \"passes\": false
     }
   ]
