@@ -6,7 +6,7 @@
 
 ![宣传视频](docs/autoresearch-promo-cn.gif)
 
-基于 [karpathy/autoresearch](https://github.com/karpathy/autoresearch) 思想实现的通用的全自动化开发工具。支持 **GitHub Issue**、**本地 Issue** 和**百度 iCafe** 三种模式，适用于任意 Git 项目（Go、Node.js、Python、Rust、Java 等）。
+基于 [karpathy/autoresearch](https://github.com/karpathy/autoresearch) 思想实现的通用的全自动化开发工具。支持 **GitHub Issue**、**本地 Issue** 和**百度 iCafe** 四种模式，适用于任意 Git 项目（Go、Node.js、Python、Rust、Java 等）。
 
 使用 autoresearch 实现本项目 Issue#2：
 [![asciicast](https://asciinema.org/a/KdHGFHK6pcelUdPg.svg)](https://asciinema.org/a/KdHGFHK6pcelUdPg)
@@ -21,6 +21,7 @@
 - [工作流程](#工作流程)
 - [本地 Issue 模式](#本地-issue-模式)
 - [百度 iCafe 模式](#百度-icafe-模式)
+- [阿里云效 Codeup 模式](#阿里云效-codeup-模式)
 - [工具配置](#工具配置)
 - [与 ralph 对比](#与-ralph-对比)
 
@@ -55,6 +56,9 @@ autoresearch/run.sh --issues-dir=.autoresearch/issues 8
 
 # 百度 iCafe 模式（卡片 #22210）
 autoresearch/run.sh --issue-source=baidu --space=cloud-iCafe 22210
+
+# 阿里云效 Codeup 模式（Issue #42）
+autoresearch/run.sh --issue-source=codeup --codeup-token=xxx --codeup-org=123 --codeup-repo=456 42
 ```
 
 ## 前置条件
@@ -65,6 +69,7 @@ autoresearch/run.sh --issue-source=baidu --space=cloud-iCafe 22210
 gh auth status          # GitHub CLI（仅 GitHub 模式需要）
 icafe-cli whoami        # iCafe CLI（仅百度模式需要）
 icode-cli whoami        # iCode CLI（仅百度模式需要）
+curl --version          # 阿里云效 Codeup 模式需要 curl
 which claude            # Claude Code CLI
 which codex             # OpenAI Codex CLI
 which opencode          # OpenCode CLI
@@ -82,7 +87,7 @@ which opencode          # OpenCode CLI
 
 | 组件 | 说明 |
 |------|------|
-| **GitHub Issue / 本地 Issue / 百度 iCafe** | 触发输入 |
+| **GitHub Issue / 本地 Issue / 百度 iCafe / 阿里云效 Codeup** | 触发输入 |
 | **run.sh** | 核心运行器 |
 | **Claude / Codex / OpenCode** | 三个 Agent 轮转审核 |
 | **Score ≥ 85?** | 评分门控 |
@@ -375,6 +380,71 @@ iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 
 | `agents/*.md` | Agent 提示词模板 |
 | `tests/test_agent_logic.sh` | agent 选择与顺序逻辑测试 |
 
+
+---
+
+## 阿里云效 Codeup 模式
+
+阿里云效 Codeup 模式使用 [Codeup](https://codeup.aliyun.com/)（代码托管）替代 GitHub Issue/PR 流程，适合使用阿里云效的企业项目。
+
+### 前置条件
+
+```bash
+# 需要 Codeup Access Token
+# 在 Codeup 控制台 -> 设置 -> Access Token 中创建
+export CODEUP_TOKEN=your_token_here
+
+# 需要组织 ID 和仓库 ID
+# 在 Codeup 项目设置页面可以看到
+export CODEUP_ORG_ID=your_org_id
+export CODEUP_REPO_ID=your_repo_id
+```
+
+### 快速开始
+
+```bash
+# 显式指定 codeup 模式
+./run.sh --issue-source=codeup --codeup-token=xxx --codeup-org=123 --codeup-repo=456 42
+
+# 使用环境变量
+export CODEUP_TOKEN=xxx
+export CODEUP_ORG_ID=123
+export CODEUP_REPO_ID=456
+./run.sh --issue-source=codeup 42
+
+# 指定 MR 目标分支
+./run.sh --issue-source=codeup --codeup-branch=develop 42
+
+# 批量处理所有未关闭的 Issues
+./run_all.sh --issue-source=codeup --codeup-token=xxx --codeup-org=123 --codeup-repo=456
+```
+
+### 工作流程
+
+```
+Codeup Issue -> Agent 实现 -> 轮转审核+修复 -> 创建 MR -> 合入 -> 关闭 Issue
+```
+
+与 GitHub 模式的主要区别：
+
+| 步骤 | GitHub 模式 | 阿里云效 Codeup 模式 |
+|------|------------|---------------------|
+| 获取 Issue | `gh issue view` | Codeup REST API |
+| 创建 PR | `gh pr create` | Codeup REST API (Create MR) |
+| 合并 | `gh pr merge` | Codeup REST API (Merge MR) |
+| 关闭 Issue | `gh issue close` | Codeup REST API (Close Issue) |
+| 评论 | `gh issue comment` | Codeup REST API (Add Note) |
+
+### 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `--issue-source=codeup` | 指定阿里云效 Codeup 模式 |
+| `--codeup-token=<token>` | Codeup Access Token（也可用 `CODEUP_TOKEN` 环境变量） |
+| `--codeup-org=<org_id>` | Codeup 组织 ID（也可用 `CODEUP_ORG_ID` 环境变量） |
+| `--codeup-repo=<repo_id>` | Codeup 仓库 ID（也可用 `CODEUP_REPO_ID` 环境变量） |
+| `--codeup-branch=<name>` | Codeup MR 目标分支（默认自动检测） |
+
 ---
 
 ## 与 ralph 对比
@@ -398,7 +468,7 @@ iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 
 **autoresearch 优势：**
 - 双轨质量门禁覆盖更广
 - 多 Agent 交叉审核提供不同视角
-- GitHub 端到端自动化闭环，也支持本地项目和百度 iCafe/iCode 运行
+- GitHub 端到端自动化闭环，也支持本地项目、百度 iCafe/iCode 和阿里云效 Codeup 运行
 - 上下文溢出自动交接
 - Continue 模式支持中断恢复
 

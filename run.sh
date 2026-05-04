@@ -90,7 +90,7 @@ source "$BRANCH_CLEANUP_LIB"
 FEATURE_UI_VERIFY=1
 FEATURE_HARD_GATE=1
 
-# Issue 来源模式: "github" (默认) | "local" (本地文件) | "baidu" (iCafe + iCode)
+# Issue 来源模式: "github" (默认) | "local" (本地文件) | "baidu" (iCafe + iCode) | "codeup" (阿里云效)
 ISSUE_SOURCE="github"
 # 本地 Issue 目录 (由 --issues-dir 设置或自动检测)
 ISSUES_DIR=""
@@ -104,6 +104,12 @@ ICAFE_CARD_TYPE=""
 ICODE_TARGET_BRANCH=""
 # 百度 iCode CR 编号 (由 push_cr 流程设置)
 ICODE_CR_NUMBER=""
+# 阿里云效 Codeup 配置 (由 --codeup-* 参数或环境变量设置)
+CODEUP_API_URL="${CODEUP_API_URL:-https://devops.cn-hangzhou.aliyuncs.com}"
+CODEUP_TOKEN="${CODEUP_TOKEN:-}"
+CODEUP_ORG_ID="${CODEUP_ORG_ID:-}"
+CODEUP_REPO_ID="${CODEUP_REPO_ID:-}"
+CODEUP_TARGET_BRANCH="${CODEUP_TARGET_BRANCH:-}"
 # 百度 iCode 仓库路径 (由 check_project 从 remote URL 提取)
 ICODE_REPO=""
 
@@ -800,7 +806,7 @@ run_with_retry() {
 usage() {
     echo "用法: $0 [-p project_path] [-a agents] [-c] [--no-archive] [--no-ui-verify] [--no-hard-gate] [--issue-source=<mode>] [--space=<prefixCode>] [--target-branch=<name>] <issue_number> [max_iterations]"
     echo ""
-    echo "通用自动化 Issue 处理工具，支持 GitHub / 本地 / 百度 iCafe 三种来源。"
+    echo "通用自动化 Issue 处理工具，支持 GitHub / 本地 / 百度 iCafe / 阿里云效 Codeup 四种来源。"
     echo ""
     echo "参数:"
     echo "  -p <path>        项目路径 (默认: 当前目录)"
@@ -811,10 +817,14 @@ usage() {
     echo "  --no-ui-verify   禁用 UI 验证 (默认启用)"
     echo "  --no-hard-gate   禁用硬门禁检查 (build/lint/test 预检, 默认启用)"
     echo "  --issues-dir=<path>  本地 Issue 目录 (启用本地模式，不使用 GitHub)"
-    echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu"
+    echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu | codeup"
     echo "  --space=<prefixCode>   iCafe 空间前缀代码 (baidu 模式必需，也可用 ICAFE_SPACE 环境变量)"
     echo "  --target-branch=<name> iCode CR 目标分支 (默认: 自动检测远程 HEAD 分支，回退到 master)"
-    echo "  issue_number     Issue 编号 (GitHub / 本地 / iCafe 卡片序号)"
+    echo "  --codeup-token=<token> Codeup Access Token (codeup 模式必需，也可用 CODEUP_TOKEN 环境变量)"
+    echo "  --codeup-org=<org_id>  Codeup 组织 ID (codeup 模式必需，也可用 CODEUP_ORG_ID 环境变量)"
+    echo "  --codeup-repo=<repo_id> Codeup 仓库 ID (codeup 模式必需，也可用 CODEUP_REPO_ID 环境变量)"
+    echo "  --codeup-branch=<name> Codeup MR 目标分支 (默认: 自动检测)"
+    echo "  issue_number     Issue 编号 (GitHub / 本地 / iCafe 卡片序号 / Codeup Issue)"
     echo "  max_iterations   最大迭代次数 (默认: $DEFAULT_MAX_ITERATIONS)"
     echo ""
     echo "配置 (环境变量):"
@@ -843,6 +853,7 @@ usage() {
     echo "  $0 --issues-dir=.autoresearch/issues 8  # 处理本地 Issue #8"
     echo "  $0 --issue-source=baidu --space=cloud-iCafe 22210  # 百度 iCafe 模式"
     echo "  $0 --issue-source=baidu --space=cloud-iCafe --target-branch=develop 22210 16"
+    echo "  $0 --issue-source=codeup --codeup-token=xxx --codeup-org=123 --codeup-repo=456 42  # 阿里云效模式"
     echo "  PASSING_SCORE=90 $0 42                # 提高达标线到 90"
     exit 1
 }
@@ -886,19 +897,21 @@ check_project() {
         else
             log "检测到 iCode remote，但未启用 baidu 模式 (使用 --issue-source=baidu --space=<space>)"
         fi
-    elif ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com'; then
+    elif ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com|codeup\.aliyun\.com'; then
         if [ "$ISSUE_SOURCE" = "local" ]; then
             log "本地 Issue 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
         elif [ "$ISSUE_SOURCE" = "baidu" ]; then
             log "百度 iCafe 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
+        elif [ "$ISSUE_SOURCE" = "codeup" ]; then
+            log "阿里云效 Codeup 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
         else
             error "origin 不是 GitHub 仓库: $remote_url"
             exit 1
         fi
     fi
 
-    # 拉取 autoresearch 最新代码（continue 模式、本地模式和百度模式跳过，避免冲突）
-    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ]; then
+    # 拉取 autoresearch 最新代码（continue 模式、本地模式、百度模式和 codeup 模式跳过，避免冲突）
+    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ] && [ "$ISSUE_SOURCE" != "codeup" ]; then
         local autoresearch_dir
         autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
         if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
@@ -1037,6 +1050,24 @@ detect_issue_source_mode() {
             exit 1
         fi
         log "百度 iCafe 模式 (空间: $ICAFE_SPACE)"
+        return 0
+    fi
+
+    # 如果显式指定 codeup 模式
+    if [ "$ISSUE_SOURCE" = "codeup" ]; then
+        if [ -z "$CODEUP_TOKEN" ]; then
+            error "codeup 模式需要指定 --codeup-token=<token> 或设置 CODEUP_TOKEN 环境变量"
+            exit 1
+        fi
+        if [ -z "$CODEUP_ORG_ID" ]; then
+            error "codeup 模式需要指定 --codeup-org=<org_id> 或设置 CODEUP_ORG_ID 环境变量"
+            exit 1
+        fi
+        if [ -z "$CODEUP_REPO_ID" ]; then
+            error "codeup 模式需要指定 --codeup-repo=<repo_id> 或设置 CODEUP_REPO_ID 环境变量"
+            exit 1
+        fi
+        log "阿里云效 Codeup 模式 (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID)"
         return 0
     fi
 
@@ -1274,6 +1305,56 @@ get_baidu_issue_info() {
     return 0
 }
 
+# 阿里云效 Codeup API 辅助函数
+codeup_api() {
+    local method=$1
+    local endpoint=$2
+    local data=$3
+
+    local url="${CODEUP_API_URL}/api/v4${endpoint}"
+    local args=(-s -X "$method" -H "PRIVATE-TOKEN: $CODEUP_TOKEN" -H "Content-Type: application/json")
+
+    if [ -n "$data" ]; then
+        args+=(-d "$data")
+    fi
+
+    curl "${args[@]}" "$url" 2>&1
+}
+
+get_codeup_issue_info() {
+    local issue_number=$1
+
+    log "获取 Codeup Issue #$issue_number 信息 (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID)..."
+
+    # 调用 Codeup API 获取 Issue 信息
+    local issue_info
+    issue_info=$(codeup_api GET "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues/${issue_number}" 2>&1)
+
+    if [ $? -ne 0 ] || echo "$issue_info" | grep -q '"error"'; then
+        error "无法获取 Codeup Issue #$issue_number: $issue_info"
+        error "提示: 请检查组织 ID ($CODEUP_ORG_ID)、仓库 ID ($CODEUP_REPO_ID) 和 Issue 编号是否正确"
+        exit 1
+    fi
+
+    ISSUE_TITLE=$(echo "$issue_info" | jq -r '.title // empty')
+    ISSUE_BODY=$(echo "$issue_info" | jq -r '.description // empty')
+    ISSUE_STATE=$(echo "$issue_info" | jq -r '.state // empty')
+    ISSUE_LABELS=$(echo "$issue_info" | jq -r '.labels[]?.name // empty' | tr '\n' ',' | sed 's/,$//')
+    ISSUE_FILE=""
+    ISSUE_INFO="$issue_info"
+
+    # 验证 Issue 状态
+    if echo "$ISSUE_STATE" | grep -qiE 'closed|done'; then
+        error "Codeup Issue #$issue_number 状态为 ${ISSUE_STATE}，已结束"
+        exit 1
+    fi
+
+    log "Codeup Issue 标题: $ISSUE_TITLE"
+    log "Codeup Issue 状态: $ISSUE_STATE"
+    log "Codeup Issue 标签: ${ISSUE_LABELS:-无}"
+    return 0
+}
+
 get_issue_info() {
     local issue_number=$1
 
@@ -1282,6 +1363,12 @@ get_issue_info() {
     # 百度 iCafe 模式
     if [ "$ISSUE_SOURCE" = "baidu" ]; then
         get_baidu_issue_info "$issue_number"
+        return 0
+    fi
+
+    # 阿里云效 Codeup 模式
+    if [ "$ISSUE_SOURCE" = "codeup" ]; then
+        get_codeup_issue_info "$issue_number"
         return 0
     fi
 
@@ -2740,6 +2827,18 @@ while getopts "p:a:c-:" opt; do
                 target-branch=*)
                     ICODE_TARGET_BRANCH="${OPTARG#target-branch=}"
                     ;;
+                codeup-token=*)
+                    CODEUP_TOKEN="${OPTARG#codeup-token=}"
+                    ;;
+                codeup-org=*)
+                    CODEUP_ORG_ID="${OPTARG#codeup-org=}"
+                    ;;
+                codeup-repo=*)
+                    CODEUP_REPO_ID="${OPTARG#codeup-repo=}"
+                    ;;
+                codeup-branch=*)
+                    CODEUP_TARGET_BRANCH="${OPTARG#codeup-branch=}"
+                    ;;
                 *) usage ;;
             esac
             ;;
@@ -2796,6 +2895,9 @@ if [ "$ISSUE_SOURCE" = "local" ]; then
 elif [ "$ISSUE_SOURCE" = "baidu" ]; then
     ISSUE_REF="百度 iCafe 卡片 #$ISSUE_NUMBER (空间: $ICAFE_SPACE)"
     log_console "📂 Issue 来源: 百度 iCafe (空间: $ICAFE_SPACE, 卡片: #$ISSUE_NUMBER)"
+elif [ "$ISSUE_SOURCE" = "codeup" ]; then
+    ISSUE_REF="阿里云效 Codeup Issue #$ISSUE_NUMBER (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID)"
+    log_console "📂 Issue 来源: 阿里云效 Codeup (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID, Issue: #$ISSUE_NUMBER)"
 else
     ISSUE_REF="GitHub Issue #$ISSUE_NUMBER"
 fi
@@ -3512,6 +3614,150 @@ EOF
         log_console ""
         log_console "✅ CR: #$ICODE_CR_NUMBER"
         log_console "📂 iCafe 卡片: #$ISSUE_NUMBER (空间: $ICAFE_SPACE)"
+        log_console "🔗 状态: 已合入并关闭"
+
+        # 清理：丢弃 feature 分支未提交的更改，切回主分支
+        cd "$PROJECT_ROOT"
+        git checkout -- . 2>/dev/null || true
+        git clean -fd .autoresearch/ 2>/dev/null || true
+        main_branch=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+        [ -z "$main_branch" ] && main_branch="master"
+        git checkout "$main_branch" 2>/dev/null || true
+        log_console "🧹 已切回 $main_branch 分支"
+
+        SCRIPT_COMPLETED_NORMALLY=1
+        exit 0
+    fi
+
+    # ===== 阿里云效 Codeup 模式: 推送/MR/合入/关闭 Issue =====
+    if [ "$ISSUE_SOURCE" = "codeup" ]; then
+
+        # --- 推送分支阶段 ---
+        if [ "$SKIP_TO_PHASE" != "create_mr" ]; then
+            log_console "Codeup 模式: 推送代码到远程..."
+            if ! push_branch_with_recovery; then
+                record_final_result "$ISSUE_NUMBER" "push_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
+            set_phase "push"
+        fi
+
+        # --- 创建 MR 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "merge_mr" ] && [ "$SKIP_TO_PHASE" != "close_issue" ]; then
+            log_console "创建 Codeup Merge Request..."
+
+            # 检测目标分支
+            target_branch="$CODEUP_TARGET_BRANCH"
+            if [ -z "$target_branch" ]; then
+                target_branch=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+                [ -z "$target_branch" ] && target_branch="master"
+            fi
+            log "Codeup MR 目标分支: $target_branch"
+
+            # 构建子任务摘要
+            subtask_summary=""
+            if has_subtasks; then
+                tasks_file=$(get_tasks_file)
+                total=$(jq '.subtasks | length' "$tasks_file" 2>/dev/null)
+                passed=$(jq '[.subtasks[] | select(.passes == true)] | length' "$tasks_file" 2>/dev/null)
+                subtask_summary="- 子任务: ${passed}/${total} 完成"
+            fi
+
+            # 获取当前分支名
+            current_branch=$(git branch --show-current 2>/dev/null || echo "main")
+
+            # 创建 MR
+            mr_data=$(jq -n \
+                --arg title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" \
+                --arg source "$current_branch" \
+                --arg target "$target_branch" \
+                --arg description "## Summary
+- Implements #$ISSUE_NUMBER
+- Score: $FINAL_SCORE/100
+- Iterations: $ITERATION
+$subtask_summary
+
+## Test plan
+- [x] All tests pass
+- [x] Code review completed with score >= $PASSING_SCORE
+
+Closes #$ISSUE_NUMBER" \
+                '{title: $title, source_branch: $source, target_branch: $target, description: $description}')
+
+            mr_output=$(codeup_api POST "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/merge_requests" "$mr_data" 2>&1)
+            mr_exit=$?
+
+            if [ $mr_exit -ne 0 ] || echo "$mr_output" | grep -q '"error"'; then
+                log_console "⚠️ Codeup MR 创建失败: $mr_output"
+                record_final_result "$ISSUE_NUMBER" "mr_create_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
+
+            CODEUP_MR_IID=$(echo "$mr_output" | jq -r '.iid // empty')
+            if [ -z "$CODEUP_MR_IID" ]; then
+                log_console "⚠️ 无法从 API 响应中解析 MR 编号"
+                log_console "API 响应: $mr_output"
+                record_final_result "$ISSUE_NUMBER" "mr_parse_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
+
+            log_console "✅ Codeup MR 已创建: #$CODEUP_MR_IID"
+            set_phase "create_mr"
+        else
+            log_console "⏩ 跳过创建 MR，使用已有 MR #$CODEUP_MR_IID"
+        fi
+
+        # --- 合入 MR 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "close_issue" ]; then
+            log_console "合入 Codeup MR #$CODEUP_MR_IID..."
+            merge_data='{"should_remove_source_branch": true}'
+            merge_output=$(codeup_api PUT "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/merge_requests/${CODEUP_MR_IID}/merge" "$merge_data" 2>&1) || true
+            merge_exit=$?
+
+            if [ $merge_exit -ne 0 ] || echo "$merge_output" | grep -q '"error"'; then
+                log_console "⚠️ Codeup MR 合入失败: $merge_output"
+                log_console "MR 编号: #$CODEUP_MR_IID，请手动合入"
+            else
+                log_console "✅ Codeup MR #$CODEUP_MR_IID 已合入"
+            fi
+            set_phase "merge_mr"
+        fi
+
+        # --- 关闭 Issue 阶段 ---
+        log_console "关闭 Codeup Issue #$ISSUE_NUMBER..."
+        close_data='{"state_event": "close"}'
+        close_output=$(codeup_api PUT "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues/${ISSUE_NUMBER}" "$close_data" 2>&1) || true
+
+        if echo "$close_output" | grep -q '"error"'; then
+            log_console "⚠️ 关闭 Codeup Issue 失败: $close_output"
+        else
+            log_console "✅ Codeup Issue #$ISSUE_NUMBER 已关闭"
+        fi
+        set_phase "close_issue"
+
+        # --- 添加评论到 Issue ---
+        log_console "添加评论到 Codeup Issue #$ISSUE_NUMBER..."
+        comment_data=$(jq -n \
+            --arg score "$FINAL_SCORE" \
+            --arg iteration "$ITERATION" \
+            --arg agents "${AGENT_NAMES[*]}" \
+            --arg mr_iid "$CODEUP_MR_IID" \
+            '{
+                body: "## autoresearch 自动处理完成\n\n- **MR**: #$mr_iid\n- **评分**: \($score)/100\n- **迭代次数**: \($iteration)\n- **实现方式**: autoresearch 多 agent 迭代 (\($agents))\n\n该 Issue 已由 autoresearch 自动实现、审核并合入。"
+            }')
+
+        codeup_api POST "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues/${ISSUE_NUMBER}/notes" "$comment_data" 2>/dev/null || log "警告: 添加评论失败"
+
+        log_console ""
+        log_console "  ╔══════════════════════════════════════════╗"
+        log_console "  ║    Codeup 模式处理完成！阿里云效         ║"
+        log_console "  ╚══════════════════════════════════════════╝"
+        log_console ""
+        log_console "✅ MR: #$CODEUP_MR_IID"
+        log_console "📂 Codeup Issue: #$ISSUE_NUMBER"
         log_console "🔗 状态: 已合入并关闭"
 
         # 清理：丢弃 feature 分支未提交的更改，切回主分支
