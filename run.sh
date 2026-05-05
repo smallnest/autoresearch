@@ -105,8 +105,9 @@ ICODE_TARGET_BRANCH=""
 # 百度 iCode CR 编号 (由 push_cr 流程设置)
 ICODE_CR_NUMBER=""
 # 阿里云效 Codeup 配置 (由 --codeup-* 参数或环境变量设置)
-CODEUP_API_URL="${CODEUP_API_URL:-https://devops.cn-hangzhou.aliyuncs.com}"
-CODEUP_TOKEN="${CODEUP_TOKEN:-}"
+# 使用 Alibaba Cloud SDK (codeup_cli.py) 替代 REST API
+CODEUP_AK_ID="${CODEUP_AK_ID:-}"
+CODEUP_AK_SECRET="${CODEUP_AK_SECRET:-}"
 CODEUP_ORG_ID="${CODEUP_ORG_ID:-}"
 CODEUP_REPO_ID="${CODEUP_REPO_ID:-}"
 CODEUP_TARGET_BRANCH="${CODEUP_TARGET_BRANCH:-}"
@@ -820,7 +821,8 @@ usage() {
     echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu | codeup"
     echo "  --space=<prefixCode>   iCafe 空间前缀代码 (baidu 模式必需，也可用 ICAFE_SPACE 环境变量)"
     echo "  --target-branch=<name> iCode CR 目标分支 (默认: 自动检测远程 HEAD 分支，回退到 master)"
-    echo "  --codeup-token=<token> Codeup Access Token (codeup 模式必需，也可用 CODEUP_TOKEN 环境变量)"
+    echo "  --codeup-ak-id=<ak_id>   阿里云 Access Key ID (codeup 模式必需，也可用 CODEUP_AK_ID 环境变量)"
+    echo "  --codeup-ak-secret=<ak>  阿里云 Access Key Secret (codeup 模式必需，也可用 CODEUP_AK_SECRET 环境变量)"
     echo "  --codeup-org=<org_id>  Codeup 组织 ID (codeup 模式必需，也可用 CODEUP_ORG_ID 环境变量)"
     echo "  --codeup-repo=<repo_id> Codeup 仓库 ID (codeup 模式必需，也可用 CODEUP_REPO_ID 环境变量)"
     echo "  --codeup-branch=<name> Codeup MR 目标分支 (默认: 自动检测)"
@@ -853,7 +855,7 @@ usage() {
     echo "  $0 --issues-dir=.autoresearch/issues 8  # 处理本地 Issue #8"
     echo "  $0 --issue-source=baidu --space=cloud-iCafe 22210  # 百度 iCafe 模式"
     echo "  $0 --issue-source=baidu --space=cloud-iCafe --target-branch=develop 22210 16"
-    echo "  $0 --issue-source=codeup --codeup-token=xxx --codeup-org=123 --codeup-repo=456 42  # 阿里云效模式"
+    echo "  $0 --issue-source=codeup --codeup-ak-id=xxx --codeup-ak-secret=yyy --codeup-org=123 --codeup-repo=456 42  # 阿里云效模式"
     echo "  PASSING_SCORE=90 $0 42                # 提高达标线到 90"
     exit 1
 }
@@ -1055,8 +1057,12 @@ detect_issue_source_mode() {
 
     # 如果显式指定 codeup 模式
     if [ "$ISSUE_SOURCE" = "codeup" ]; then
-        if [ -z "$CODEUP_TOKEN" ]; then
-            error "codeup 模式需要指定 --codeup-token=<token> 或设置 CODEUP_TOKEN 环境变量"
+        if [ -z "$CODEUP_AK_ID" ]; then
+            error "codeup 模式需要指定 --codeup-ak-id=<ak_id> 或设置 CODEUP_AK_ID 环境变量"
+            exit 1
+        fi
+        if [ -z "$CODEUP_AK_SECRET" ]; then
+            error "codeup 模式需要指定 --codeup-ak-secret=<ak_secret> 或设置 CODEUP_AK_SECRET 环境变量"
             exit 1
         fi
         if [ -z "$CODEUP_ORG_ID" ]; then
@@ -1305,20 +1311,13 @@ get_baidu_issue_info() {
     return 0
 }
 
-# 阿里云效 Codeup API 辅助函数
-codeup_api() {
-    local method=$1
-    local endpoint=$2
-    local data=$3
+# 阿里云效 Codeup SDK 辅助函数 (通过 codeup_cli.py 调用 Alibaba Cloud SDK)
+CODEUP_CLI="$SCRIPT_DIR/codeup_cli.py"
 
-    local url="${CODEUP_API_URL}/api/v4${endpoint}"
-    local args=(-s -X "$method" -H "PRIVATE-TOKEN: $CODEUP_TOKEN" -H "Content-Type: application/json")
-
-    if [ -n "$data" ]; then
-        args+=(-d "$data")
-    fi
-
-    curl "${args[@]}" "$url" 2>&1
+codeup_cli() {
+    # Wrapper to call codeup_cli.py with environment variables
+    export CODEUP_AK_ID CODEUP_AK_SECRET CODEUP_ORG_ID
+    python3 "$CODEUP_CLI" "$@" 2>&1
 }
 
 get_codeup_issue_info() {
@@ -1326,20 +1325,20 @@ get_codeup_issue_info() {
 
     log "获取 Codeup Issue #$issue_number 信息 (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID)..."
 
-    # 调用 Codeup API 获取 Issue 信息
+    # 调用 codeup_cli.py 获取工作项信息
     local issue_info
-    issue_info=$(codeup_api GET "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues/${issue_number}" 2>&1)
+    issue_info=$(codeup_cli get_issue "$issue_number" 2>&1)
 
     if [ $? -ne 0 ] || echo "$issue_info" | grep -q '"error"'; then
         error "无法获取 Codeup Issue #$issue_number: $issue_info"
-        error "提示: 请检查组织 ID ($CODEUP_ORG_ID)、仓库 ID ($CODEUP_REPO_ID) 和 Issue 编号是否正确"
+        error "提示: 请检查 AK/SK、组织 ID ($CODEUP_ORG_ID)、仓库 ID ($CODEUP_REPO_ID) 和 Issue 编号是否正确"
         exit 1
     fi
 
     ISSUE_TITLE=$(echo "$issue_info" | jq -r '.title // empty')
     ISSUE_BODY=$(echo "$issue_info" | jq -r '.description // empty')
     ISSUE_STATE=$(echo "$issue_info" | jq -r '.state // empty')
-    ISSUE_LABELS=$(echo "$issue_info" | jq -r '.labels[]?.name // empty' | tr '\n' ',' | sed 's/,$//')
+    ISSUE_LABELS=$(echo "$issue_info" | jq -r '.labels[]? // empty' | tr '\n' ',' | sed 's/,$//')
     ISSUE_FILE=""
     ISSUE_INFO="$issue_info"
 
@@ -2827,8 +2826,11 @@ while getopts "p:a:c-:" opt; do
                 target-branch=*)
                     ICODE_TARGET_BRANCH="${OPTARG#target-branch=}"
                     ;;
-                codeup-token=*)
-                    CODEUP_TOKEN="${OPTARG#codeup-token=}"
+                codeup-ak-id=*)
+                    CODEUP_AK_ID="${OPTARG#codeup-ak-id=}"
+                    ;;
+                codeup-ak-secret=*)
+                    CODEUP_AK_SECRET="${OPTARG#codeup-ak-secret=}"
                     ;;
                 codeup-org=*)
                     CODEUP_ORG_ID="${OPTARG#codeup-org=}"
@@ -3629,7 +3631,7 @@ EOF
         exit 0
     fi
 
-    # ===== 阿里云效 Codeup 模式: 推送/MR/合入/关闭 Issue =====
+    # ===== 阿里云效 Codeup 模式: 推送/MR/合入/关闭 Issue (通过 codeup_cli.py) =====
     if [ "$ISSUE_SOURCE" = "codeup" ]; then
 
         # --- 推送分支阶段 ---
@@ -3667,12 +3669,8 @@ EOF
             # 获取当前分支名
             current_branch=$(git branch --show-current 2>/dev/null || echo "main")
 
-            # 创建 MR
-            mr_data=$(jq -n \
-                --arg title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" \
-                --arg source "$current_branch" \
-                --arg target "$target_branch" \
-                --arg description "## Summary
+            # 构建 MR 描述
+            mr_description="## Summary
 - Implements #$ISSUE_NUMBER
 - Score: $FINAL_SCORE/100
 - Iterations: $ITERATION
@@ -3682,10 +3680,10 @@ $subtask_summary
 - [x] All tests pass
 - [x] Code review completed with score >= $PASSING_SCORE
 
-Closes #$ISSUE_NUMBER" \
-                '{title: $title, source_branch: $source, target_branch: $target, description: $description}')
+Closes #$ISSUE_NUMBER"
 
-            mr_output=$(codeup_api POST "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/merge_requests" "$mr_data" 2>&1)
+            # 通过 codeup_cli.py 创建 MR
+            mr_output=$(codeup_cli create_mr "$CODEUP_REPO_ID" "$current_branch" "$target_branch" "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" "$mr_description" 2>&1)
             mr_exit=$?
 
             if [ $mr_exit -ne 0 ] || echo "$mr_output" | grep -q '"error"'; then
@@ -3713,8 +3711,7 @@ Closes #$ISSUE_NUMBER" \
         # --- 合入 MR 阶段 ---
         if [ "$SKIP_TO_PHASE" != "close_issue" ]; then
             log_console "合入 Codeup MR #$CODEUP_MR_IID..."
-            merge_data='{"should_remove_source_branch": true}'
-            merge_output=$(codeup_api PUT "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/merge_requests/${CODEUP_MR_IID}/merge" "$merge_data" 2>&1) || true
+            merge_output=$(codeup_cli merge_mr "$CODEUP_REPO_ID" "$CODEUP_MR_IID" 2>&1) || true
             merge_exit=$?
 
             if [ $merge_exit -ne 0 ] || echo "$merge_output" | grep -q '"error"'; then
@@ -3728,8 +3725,7 @@ Closes #$ISSUE_NUMBER" \
 
         # --- 关闭 Issue 阶段 ---
         log_console "关闭 Codeup Issue #$ISSUE_NUMBER..."
-        close_data='{"state_event": "close"}'
-        close_output=$(codeup_api PUT "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues/${ISSUE_NUMBER}" "$close_data" 2>&1) || true
+        close_output=$(codeup_cli close_issue "$ISSUE_NUMBER" 2>&1) || true
 
         if echo "$close_output" | grep -q '"error"'; then
             log_console "⚠️ 关闭 Codeup Issue 失败: $close_output"
@@ -3740,16 +3736,16 @@ Closes #$ISSUE_NUMBER" \
 
         # --- 添加评论到 Issue ---
         log_console "添加评论到 Codeup Issue #$ISSUE_NUMBER..."
-        comment_data=$(jq -n \
-            --arg score "$FINAL_SCORE" \
-            --arg iteration "$ITERATION" \
-            --arg agents "${AGENT_NAMES[*]}" \
-            --arg mr_iid "$CODEUP_MR_IID" \
-            '{
-                body: "## autoresearch 自动处理完成\n\n- **MR**: #$mr_iid\n- **评分**: \($score)/100\n- **迭代次数**: \($iteration)\n- **实现方式**: autoresearch 多 agent 迭代 (\($agents))\n\n该 Issue 已由 autoresearch 自动实现、审核并合入。"
-            }')
+        comment_body="## autoresearch 自动处理完成
 
-        codeup_api POST "/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues/${ISSUE_NUMBER}/notes" "$comment_data" 2>/dev/null || log "警告: 添加评论失败"
+- **MR**: #$CODEUP_MR_IID
+- **评分**: $FINAL_SCORE/100
+- **迭代次数**: $ITERATION
+- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[*]})
+
+该 Issue 已由 autoresearch 自动实现、审核并合入。"
+
+        codeup_cli add_comment "$ISSUE_NUMBER" "$comment_body" 2>/dev/null || log "警告: 添加评论失败"
 
         log_console ""
         log_console "  ╔══════════════════════════════════════════╗"

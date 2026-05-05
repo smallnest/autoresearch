@@ -13,7 +13,7 @@
 #   ./run_all.sh --issue-source=local                        # 本地模式：处理 .autoresearch/issues/ 下的所有文件
 #   ./run_all.sh --issue-source=local --issues-dir=/path     # 本地模式：指定 issue 目录
 #   ./run_all.sh --issue-source=baidu --space=cloud-iCafe    # 百度模式：处理 iCafe 空间中所有未关闭卡片
-#   ./run_all.sh --issue-source=codeup --codeup-token=xxx --codeup-org=123 --codeup-repo=456  # Codeup 模式
+#   ./run_all.sh --issue-source=codeup --codeup-ak-id=xxx --codeup-ak-secret=yyy --codeup-org=123 --codeup-repo=456  # Codeup 模式
 #   ./run_all.sh -a claude,codex                             # 指定 agents
 #   ./run_all.sh --no-archive --no-ui-verify                 # 跳过归档和 UI 验证
 #
@@ -24,7 +24,8 @@
 #   RUN_ALL_LABEL:      只处理带有此 label 的 issues (可选，仅 GitHub 模式)
 #   RUN_ALL_DRY_RUN:    设为 yes 则只列出 issues 不执行 (可选)
 #   ICAFE_SPACE:        iCafe 空间前缀代码 (baidu 模式，也可用 --space)
-#   CODEUP_TOKEN:       Codeup Access Token (codeup 模式，也可用 --codeup-token)
+#   CODEUP_AK_ID:       阿里云 Access Key ID (codeup 模式，也可用 --codeup-ak-id)
+#   CODEUP_AK_SECRET:   阿里云 Access Key Secret (codeup 模式，也可用 --codeup-ak-secret)
 #   CODEUP_ORG_ID:      Codeup 组织 ID (codeup 模式，也可用 --codeup-org)
 #   CODEUP_REPO_ID:     Codeup 仓库 ID (codeup 模式，也可用 --codeup-repo)
 
@@ -44,7 +45,8 @@ ISSUE_SOURCE="github"
 ICAFE_SPACE="${ICAFE_SPACE:-}"
 ISSUES_DIR=""
 TARGET_BRANCH=""
-CODEUP_TOKEN="${CODEUP_TOKEN:-}"
+CODEUP_AK_ID="${CODEUP_AK_ID:-}"
+CODEUP_AK_SECRET="${CODEUP_AK_SECRET:-}"
 CODEUP_ORG_ID="${CODEUP_ORG_ID:-}"
 CODEUP_REPO_ID="${CODEUP_REPO_ID:-}"
 
@@ -63,8 +65,11 @@ for arg in "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; do
         --target-branch=*)
             TARGET_BRANCH="${arg#--target-branch=}"
             ;;
-        --codeup-token=*)
-            CODEUP_TOKEN="${arg#--codeup-token=}"
+        --codeup-ak-id=*)
+            CODEUP_AK_ID="${arg#--codeup-ak-id=}"
+            ;;
+        --codeup-ak-secret=*)
+            CODEUP_AK_SECRET="${arg#--codeup-ak-secret=}"
             ;;
         --codeup-org=*)
             CODEUP_ORG_ID="${arg#--codeup-org=}"
@@ -216,8 +221,12 @@ fetch_baidu_issues() {
 }
 
 fetch_codeup_issues() {
-    if [ -z "$CODEUP_TOKEN" ]; then
-        echo "ERROR: codeup 模式需要指定 --codeup-token=<token> 或设置 CODEUP_TOKEN 环境变量" >&2
+    if [ -z "$CODEUP_AK_ID" ]; then
+        echo "ERROR: codeup 模式需要指定 --codeup-ak-id=<ak_id> 或设置 CODEUP_AK_ID 环境变量" >&2
+        exit 1
+    fi
+    if [ -z "$CODEUP_AK_SECRET" ]; then
+        echo "ERROR: codeup 模式需要指定 --codeup-ak-secret=<ak_secret> 或设置 CODEUP_AK_SECRET 环境变量" >&2
         exit 1
     fi
     if [ -z "$CODEUP_ORG_ID" ]; then
@@ -229,14 +238,19 @@ fetch_codeup_issues() {
         exit 1
     fi
 
-    local api_url="${CODEUP_API_URL:-https://devops.cn-hangzhou.aliyuncs.com}"
+    # 通过 codeup_cli.py (Alibaba Cloud SDK) 获取工作项列表
+    local cli="$SCRIPT_DIR/codeup_cli.py"
+    if [ ! -f "$cli" ]; then
+        echo "ERROR: 找不到 codeup_cli.py: $cli" >&2
+        exit 1
+    fi
     local json
-    json="$(curl -s -H "PRIVATE-TOKEN: $CODEUP_TOKEN"         "${api_url}/api/v4/groups/${CODEUP_ORG_ID}/projects/${CODEUP_REPO_ID}/issues?state=opened&per_page=100" 2>&1)" || {
+    export CODEUP_AK_ID CODEUP_AK_SECRET CODEUP_ORG_ID
+    json="$(python3 "$cli" list_issues --state=opened 2>&1)" || {
         echo "ERROR: 拉取 Codeup Issues 失败: $json" >&2
         exit 1
     }
-
-    # 标准化为 {number, title} 数组
+    # 标准化为 {number, title} 数组 (serial_number 作为 number)
     ISSUES_JSON="$(echo "$json" | jq -c '[.[] | {number: .iid, title: .title}]')"
 }
 
