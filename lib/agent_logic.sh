@@ -5,7 +5,7 @@
 # Returns 0 on success, 1 on invalid input.
 parse_agent_list() {
     local agent_list="$1"
-    local valid_agents="claude codex opencode"
+    local valid_agents="claude codex opencode claude-mimo"
     local parsed=()
     local agent_name=""
 
@@ -37,7 +37,7 @@ parse_agent_list() {
             return 1
         fi
         if ! echo "$valid_agents" | grep -qw "$agent_name"; then
-            AGENT_LIST_ERROR="未知的 agent: $agent_name (支持: claude, codex, opencode)"
+            AGENT_LIST_ERROR="未知的 agent: $agent_name (支持: claude, codex, opencode, claude-mimo)"
             return 1
         fi
     done

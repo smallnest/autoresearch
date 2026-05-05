@@ -3,7 +3,7 @@
 Codeup CLI — Alibaba Cloud Codeup operations via SDK.
 
 Replaces the GitLab-compatible REST API calls that don't work with Codeup.
-Used by autoresearch's run.sh and run_all.sh for Codeup mode.
+Used by autoresearch's run.sh and run_all.sh in Codeup mode.
 
 Environment variables:
   CODEUP_AK_ID      Alibaba Cloud Access Key ID (required)
@@ -13,7 +13,7 @@ Environment variables:
 Usage:
   python3 codeup_cli.py get_issue <workitem_identifier>
   python3 codeup_cli.py list_issues [--state=opened|closed|all] [--page=N] [--per-page=N]
-  python3 codeup_cli.py create_mr <repo_id> <source_branch> <target_branch> <title> <description>
+  python3 codeup_cli.py create_mr <repo_id> <source_branch> <target_branch> <title> <description> [--create-from=API]
   python3 codeup_cli.py merge_mr <repo_id> <mr_iid>
   python3 codeup_cli.py get_mr <repo_id> <mr_iid>
   python3 codeup_cli.py list_mrs <repo_id> [--state=opened|closed|merged|all] [--page=N]
@@ -192,9 +192,14 @@ def _map_status(status_name, logical_status):
 
 
 def cmd_create_mr(args):
-    """Create a Merge Request."""
+    """Create a Merge Request.
+
+    Note: Codeup API requires 'createFrom' field (since 2024+).
+    Valid values: 'API', 'CLIENT', 'Web', etc.
+    The API may return transient 500 errors; we retry up to 3 times.
+    """
     if len(args) < 5:
-        print(json.dumps({"error": "usage: create_mr <repo_id> <source_branch> <target_branch> <title> <description>"}))
+        print(json.dumps({"error": "usage: create_mr <repo_id> <source_branch> <target_branch> <title> <description> [--create-from=API]"}))
         sys.exit(1)
 
     client = get_client()
@@ -205,31 +210,57 @@ def cmd_create_mr(args):
     title = args[3]
     description = args[4]
 
-    try:
-        request = models.CreateMergeRequestRequest(
-            organization_id=org_id,
-            source_branch=source_branch,
-            target_branch=target_branch,
-            title=title,
-            description=description,
-            source_project_id=int(repo_id),
-            target_project_id=int(repo_id),
-        )
-        response = client.create_merge_request(repo_id, request)
-        mr = response.body.result
-        result = {
-            "iid": mr.local_id if hasattr(mr, "local_id") else None,
-            "id": mr.id if hasattr(mr, "id") else None,
-            "title": mr.title if hasattr(mr, "title") else title,
-            "state": mr.state if hasattr(mr, "state") else "opened",
-            "source_branch": source_branch,
-            "target_branch": target_branch,
-            "web_url": mr.web_url if hasattr(mr, "web_url") else "",
-        }
-        print(json.dumps(result, ensure_ascii=False))
-    except Exception as e:
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+    # Parse optional --create-from flag
+    create_from = "API"
+    for i, a in enumerate(args):
+        if a.startswith("--create-from="):
+            create_from = a.split("=", 1)[1]
+
+    # Retry logic for transient 500 errors
+    import time
+    max_retries = 3
+    last_error = None
+    for attempt in range(max_retries):
+        if attempt > 0:
+            time.sleep(2 * attempt)
+        try:
+            request = models.CreateMergeRequestRequest(
+                organization_id=org_id,
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                source_project_id=int(repo_id),
+                target_project_id=int(repo_id),
+                create_from=create_from,
+            )
+            response = client.create_merge_request(repo_id, request)
+            mr = response.body.result
+            result = {
+                "iid": mr.local_id if hasattr(mr, "local_id") else None,
+                "id": mr.id if hasattr(mr, "id") else None,
+                "title": mr.title if hasattr(mr, "title") else title,
+                "state": mr.state if hasattr(mr, "state") else "opened",
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "web_url": mr.web_url if hasattr(mr, "web_url") else "",
+            }
+            print(json.dumps(result, ensure_ascii=False))
+            return
+        except Exception as e:
+            last_error = e
+            err_str = str(e)
+            # Only retry on 500/server errors, not on 400/client errors
+            if "500" in err_str or "SYSTEM_UNKNOWN" in err_str:
+                print(json.dumps({"warning": f"Attempt {attempt+1}/{max_retries} failed (server error), retrying..."}), file=sys.stderr)
+                continue
+            else:
+                # Non-retryable error (400, 403, etc.)
+                print(json.dumps({"error": str(e)}))
+                sys.exit(1)
+    # All retries exhausted
+    print(json.dumps({"error": f"All {max_retries} attempts failed. Last error: {last_error}"}))
+    sys.exit(1)
 
 
 def cmd_merge_mr(args):

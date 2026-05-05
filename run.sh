@@ -696,6 +696,8 @@ run_with_retry() {
             timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         elif [ "$agent" = "opencode" ]; then
             timeout_wrapper "$AGENT_TIMEOUT" opencode run --dangerously-skip-permissions "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+        elif [ "$agent" = "claude-mimo" ]; then
+            timeout_wrapper "$AGENT_TIMEOUT" "$HOME/bin/claude-mimo" -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         else
             timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         fi
@@ -2213,6 +2215,100 @@ $claude_instructions
     echo "- 审核评分 (Claude): $score/100" >> "$WORK_DIR/log.md"
 
     log_console "审核评分: $score/100"
+
+    echo "$review_result"
+    echo "$score" > "$WORK_DIR/.last_score"
+    return 0
+}
+
+run_claude-mimo_review() {
+    local issue_number=$1
+    local iteration=$2
+
+    log "迭代 $iteration: claude-mimo 审核..."
+
+    local claude_instructions_file
+    claude_instructions_file=$(get_agent_instructions "claude")
+
+    local claude_instructions=""
+    if [ -n "$claude_instructions_file" ]; then
+        claude_instructions=$(cat "$claude_instructions_file")
+        log "使用指令文件: $claude_instructions_file"
+    fi
+
+    local subtask_review_section
+    subtask_review_section=$(get_subtask_review_section)
+
+    local prompt="审核 Issue #$issue_number 的实现
+
+项目路径: $PROJECT_ROOT
+项目语言: $(detect_language)
+Issue 标题: $ISSUE_TITLE
+
+$subtask_review_section
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+$(get_progress_section)
+$claude_instructions
+"
+
+    local log_file="$WORK_DIR/iteration-$iteration-claude-mimo-review.log"
+
+    prompt=$(apply_prompt_trimming "$prompt")
+    check_and_compress_prompt "$prompt" "$WORK_DIR"
+    cd "$PROJECT_ROOT"
+    local agent_ret=0
+    run_with_retry claude-mimo "$prompt" "$log_file" || agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 1
+    fi
+
+    local score=0
+    local review_result
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        log "警告: 审核输出文件不存在或为空，默认评分 50"
+        review_result=""
+        score=50
+    else
+        review_result=$(cat "$log_file")
+
+        local sentinel
+        sentinel=$(check_sentinel "$review_result")
+        if [ "$sentinel" = "pass" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+            score=100
+        elif [ "$sentinel" = "fail" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+            score=0
+        else
+            score=$(extract_score "$review_result")
+
+            if [ -z "$score" ] || [ "$score" = "0" ]; then
+                log "警告: 无法从审核结果中提取评分，默认为 50"
+                score=50
+            fi
+        fi
+    fi
+
+    echo "- 审核评分 (claude-mimo): $score/100" >> "$WORK_DIR/log.md"
+
+    log_console "审核评分 (claude-mimo): $score/100"
 
     echo "$review_result"
     echo "$score" > "$WORK_DIR/.last_score"
