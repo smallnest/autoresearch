@@ -1,10 +1,11 @@
 #!/bin/bash
 # autoresearch/run_all.sh - 批量处理所有未关闭的 Issues
 #
-# 根据 --issue-source 参数决定 Issue 来源，支持三种模式：
+# 根据 --issue-source 参数决定 Issue 来源，支持四种模式：
 #   github  — 拉取项目中所有 open 状态的 GitHub Issues (默认)
 #   local   — 扫描本地 .autoresearch/issues/ 目录下的 issue-NNN-*.md 文件
 #   baidu   — 拉取百度 iCafe 空间中未关闭的卡片
+#   codeup  — 拉取阿里云效 Codeup 项目中未关闭的 Issues
 #
 # 用法:
 #   ./run_all.sh                                              # 默认 GitHub 模式，处理所有 open issue
@@ -12,6 +13,7 @@
 #   ./run_all.sh --issue-source=local                        # 本地模式：处理 .autoresearch/issues/ 下的所有文件
 #   ./run_all.sh --issue-source=local --issues-dir=/path     # 本地模式：指定 issue 目录
 #   ./run_all.sh --issue-source=baidu --space=cloud-iCafe    # 百度模式：处理 iCafe 空间中所有未关闭卡片
+#   ./run_all.sh --issue-source=codeup --codeup-ak-id=xxx --codeup-ak-secret=yyy --codeup-org=123 --codeup-repo=456  # Codeup 模式
 #   ./run_all.sh -a claude,codex                             # 指定 agents
 #   ./run_all.sh --no-archive --no-ui-verify                 # 跳过归档和 UI 验证
 #
@@ -22,6 +24,10 @@
 #   RUN_ALL_LABEL:      只处理带有此 label 的 issues (可选，仅 GitHub 模式)
 #   RUN_ALL_DRY_RUN:    设为 yes 则只列出 issues 不执行 (可选)
 #   ICAFE_SPACE:        iCafe 空间前缀代码 (baidu 模式，也可用 --space)
+#   CODEUP_AK_ID:       阿里云 Access Key ID (codeup 模式，也可用 --codeup-ak-id)
+#   CODEUP_AK_SECRET:   阿里云 Access Key Secret (codeup 模式，也可用 --codeup-ak-secret)
+#   CODEUP_ORG_ID:      Codeup 组织 ID (codeup 模式，也可用 --codeup-org)
+#   CODEUP_REPO_ID:     Codeup 仓库 ID (codeup 模式，也可用 --codeup-repo)
 
 set -euo pipefail
 
@@ -39,6 +45,10 @@ ISSUE_SOURCE="github"
 ICAFE_SPACE="${ICAFE_SPACE:-}"
 ISSUES_DIR=""
 TARGET_BRANCH=""
+CODEUP_AK_ID="${CODEUP_AK_ID:-}"
+CODEUP_AK_SECRET="${CODEUP_AK_SECRET:-}"
+CODEUP_ORG_ID="${CODEUP_ORG_ID:-}"
+CODEUP_REPO_ID="${CODEUP_REPO_ID:-}"
 
 # 从 RUN_ARGS 中提取 --issue-source / --space / --issues-dir / --target-branch
 for arg in "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; do
@@ -54,6 +64,18 @@ for arg in "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; do
             ;;
         --target-branch=*)
             TARGET_BRANCH="${arg#--target-branch=}"
+            ;;
+        --codeup-ak-id=*)
+            CODEUP_AK_ID="${arg#--codeup-ak-id=}"
+            ;;
+        --codeup-ak-secret=*)
+            CODEUP_AK_SECRET="${arg#--codeup-ak-secret=}"
+            ;;
+        --codeup-org=*)
+            CODEUP_ORG_ID="${arg#--codeup-org=}"
+            ;;
+        --codeup-repo=*)
+            CODEUP_REPO_ID="${arg#--codeup-repo=}"
             ;;
     esac
 done
@@ -223,6 +245,40 @@ fetch_baidu_issues() {
     ')"
 }
 
+fetch_codeup_issues() {
+    if [ -z "$CODEUP_AK_ID" ]; then
+        echo "ERROR: codeup 模式需要指定 --codeup-ak-id=<ak_id> 或设置 CODEUP_AK_ID 环境变量" >&2
+        exit 1
+    fi
+    if [ -z "$CODEUP_AK_SECRET" ]; then
+        echo "ERROR: codeup 模式需要指定 --codeup-ak-secret=<ak_secret> 或设置 CODEUP_AK_SECRET 环境变量" >&2
+        exit 1
+    fi
+    if [ -z "$CODEUP_ORG_ID" ]; then
+        echo "ERROR: codeup 模式需要指定 --codeup-org=<org_id> 或设置 CODEUP_ORG_ID 环境变量" >&2
+        exit 1
+    fi
+    if [ -z "$CODEUP_REPO_ID" ]; then
+        echo "ERROR: codeup 模式需要指定 --codeup-repo=<repo_id> 或设置 CODEUP_REPO_ID 环境变量" >&2
+        exit 1
+    fi
+
+    # 通过 codeup_cli.py (Alibaba Cloud SDK) 获取工作项列表
+    local cli="$SCRIPT_DIR/codeup_cli.py"
+    if [ ! -f "$cli" ]; then
+        echo "ERROR: 找不到 codeup_cli.py: $cli" >&2
+        exit 1
+    fi
+    local json
+    export CODEUP_AK_ID CODEUP_AK_SECRET CODEUP_ORG_ID
+    json="$(python3 "$cli" list_issues --state=opened 2>&1)" || {
+        echo "ERROR: 拉取 Codeup Issues 失败: $json" >&2
+        exit 1
+    }
+    # 标准化为 {number, title} 数组 (serial_number 作为 number)
+    ISSUES_JSON="$(echo "$json" | jq -c '[.[] | {number: .iid, title: .title}]')"
+}
+
 # ==================== 执行获取 ====================
 echo "========================================"
 echo " autoresearch run_all"
@@ -230,6 +286,9 @@ echo " 来源: $ISSUE_SOURCE"
 echo " 项目: $PROJECT_ROOT"
 if [ "$ISSUE_SOURCE" = "baidu" ]; then
     echo " iCafe 空间: $ICAFE_SPACE"
+elif [ "$ISSUE_SOURCE" = "codeup" ]; then
+    echo " Codeup 组织: $CODEUP_ORG_ID"
+    echo " Codeup 仓库: $CODEUP_REPO_ID"
 fi
 echo "========================================"
 
@@ -237,6 +296,7 @@ case "$ISSUE_SOURCE" in
     github) fetch_github_issues ;;
     local)  fetch_local_issues ;;
     baidu)  fetch_baidu_issues ;;
+    codeup) fetch_codeup_issues ;;
     icode)
         echo "ERROR: iCode 模式无法自动获取 issue 列表。" >&2
         echo "提示: 请在 .autoresearch/issues/ 目录下放置 issue 文件，或使用以下方式之一:" >&2
@@ -246,7 +306,7 @@ case "$ISSUE_SOURCE" in
         exit 1
         ;;
     *)
-        echo "ERROR: 未知 issue-source: $ISSUE_SOURCE (支持: github, local, baidu, icode)" >&2
+        echo "ERROR: 未知 issue-source: $ISSUE_SOURCE (支持: github, local, baidu, codeup, icode)" >&2
         exit 1
         ;;
 esac
