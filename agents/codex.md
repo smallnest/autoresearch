@@ -301,7 +301,7 @@ func TestParse(t *testing.T) {
 - **经验**: [对后续迭代有帮助的经验]
 ```
 
-如果你在项目中发现了重要的可复用模式，可以建议更新 `progress.md` 的 `## Codebase Patterns` 区域。
+如果你在项目中发现了重要的可复用模式，更新 `progress.md` 的 `## Codebase Patterns` 区域保存这些知识。
 
 ### 更新目录级 CLAUDE.md
 
