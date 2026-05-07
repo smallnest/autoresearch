@@ -108,6 +108,31 @@ if [ "$ISSUE_SOURCE" = "github" ] && [ -n "$ICAFE_SPACE" ]; then
     fi
 fi
 
+# 自动检测: remote 是 icode.baidu.com 但没设 ICAFE_SPACE → 自动推导或使用 icode 模式
+# (run.sh 会在内部做更详细的检测，这里只设置 ISSUE_SOURCE 让 run_all.sh 能正确拉取 issue 列表)
+if [ "$ISSUE_SOURCE" = "github" ]; then
+    REMOTE_URL="$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || true)"
+    if echo "$REMOTE_URL" | grep -q 'icode\.baidu\.com'; then
+        # 尝试自动推导 ICAFE_SPACE
+        REPO_PATH="$(echo "$REMOTE_URL" | sed -E 's|.*icode\.baidu\.com[:/][0-9]*/?||; s|\.git$||')"
+        AUTO_SPACE="$(echo "$REPO_PATH" | tr '/' '-')"
+        if command -v icafe-cli &>/dev/null && \
+           icafe-cli card query --space "$AUTO_SPACE" --max-records 1 &>/dev/null 2>&1; then
+            ICAFE_SPACE="$AUTO_SPACE"
+            ISSUE_SOURCE="baidu"
+        else
+            # 无 iCafe 空间，用本地文件模式获取 issue 列表（如果有的话）
+            if [ -d "$PROJECT_ROOT/.autoresearch/issues" ]; then
+                ISSUE_SOURCE="local"
+                ISSUES_DIR="$PROJECT_ROOT/.autoresearch/issues"
+            else
+                # 无法获取 issue 列表，交给 run.sh 的 icode 模式处理单个 issue
+                ISSUE_SOURCE="icode"
+            fi
+        fi
+    fi
+fi
+
 # ==================== Issue 列表获取 ====================
 ISSUES_JSON=""   # JSON 数组: [{"number": N, "title": "..."}, ...]
 
@@ -272,8 +297,16 @@ case "$ISSUE_SOURCE" in
     local)  fetch_local_issues ;;
     baidu)  fetch_baidu_issues ;;
     codeup) fetch_codeup_issues ;;
+    icode)
+        echo "ERROR: iCode 模式无法自动获取 issue 列表。" >&2
+        echo "提示: 请在 .autoresearch/issues/ 目录下放置 issue 文件，或使用以下方式之一:" >&2
+        echo "  1. --issue-source=baidu --space=<space>  (如果有对应的 iCafe 空间)" >&2
+        echo "  2. --issue-source=local --issues-dir=<dir>  (使用本地 issue 文件)" >&2
+        echo "  3. 单独运行: ./run.sh <issue_number>  (处理单个 issue)" >&2
+        exit 1
+        ;;
     *)
-        echo "ERROR: 未知 issue-source: $ISSUE_SOURCE (支持: github, local, baidu, codeup)" >&2
+        echo "ERROR: 未知 issue-source: $ISSUE_SOURCE (支持: github, local, baidu, codeup, icode)" >&2
         exit 1
         ;;
 esac

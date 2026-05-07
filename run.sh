@@ -90,7 +90,7 @@ source "$BRANCH_CLEANUP_LIB"
 FEATURE_UI_VERIFY=1
 FEATURE_HARD_GATE=1
 
-# Issue 来源模式: "github" (默认) | "local" (本地文件) | "baidu" (iCafe + iCode) | "codeup" (阿里云效)
+# Issue 来源模式: "github" (默认) | "local" (本地文件) | "baidu" (iCafe + iCode) | "codeup" (阿里云效) | "icode" (纯 iCode，无 iCafe)
 ISSUE_SOURCE="github"
 # 本地 Issue 目录 (由 --issues-dir 设置或自动检测)
 ISSUES_DIR=""
@@ -820,7 +820,7 @@ usage() {
     echo "  --no-ui-verify   禁用 UI 验证 (默认启用)"
     echo "  --no-hard-gate   禁用硬门禁检查 (build/lint/test 预检, 默认启用)"
     echo "  --issues-dir=<path>  本地 Issue 目录 (启用本地模式，不使用 GitHub)"
-    echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu | codeup"
+    echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu | codeup | icode"
     echo "  --space=<prefixCode>   iCafe 空间前缀代码 (baidu 模式必需，也可用 ICAFE_SPACE 环境变量)"
     echo "  --target-branch=<name> iCode CR 目标分支 (默认: 自动检测远程 HEAD 分支，回退到 master)"
     echo "  --codeup-ak-id=<ak_id>   阿里云 Access Key ID (codeup 模式必需，也可用 CODEUP_AK_ID 环境变量)"
@@ -889,9 +889,9 @@ check_project() {
         fi
     elif echo "$remote_url" | grep -q 'icode\.baidu\.com'; then
         # 百度 iCode 仓库
-        if [ "$ISSUE_SOURCE" = "baidu" ]; then
+        if [ "$ISSUE_SOURCE" = "baidu" ] || [ "$ISSUE_SOURCE" = "icode" ]; then
             log "百度 iCode 仓库检测: $remote_url"
-            # 从 iCode remote URL 提取仓库路径 (格式: https://icode.baidu.com/path/to/repo 或 git@icode.baidu.com:path/to/repo)
+            # 从 iCode remote URL 提取仓库路径
             if echo "$remote_url" | grep -q '^https\?://'; then
                 ICODE_REPO=$(echo "$remote_url" | sed 's|^[^:]*://||' | sed 's|\.git$||')
             else
@@ -899,23 +899,25 @@ check_project() {
             fi
             log "iCode 仓库路径: $ICODE_REPO"
         else
-            log "检测到 iCode remote，但未启用 baidu 模式 (使用 --issue-source=baidu --space=<space>)"
+            log "检测到 iCode remote，但未启用 baidu/icode 模式"
         fi
     elif ! echo "$remote_url" | grep -qE 'github\.com|github\.baidu\.com|codeup\.aliyun\.com'; then
         if [ "$ISSUE_SOURCE" = "local" ]; then
             log "本地 Issue 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
         elif [ "$ISSUE_SOURCE" = "baidu" ]; then
             log "百度 iCafe 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
-        elif [ "$ISSUE_SOURCE" = "codeup" ]; then
-            log "阿里云效 Codeup 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
+    elif [ "$ISSUE_SOURCE" = "codeup" ]; then
+        log "阿里云效 Codeup 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
+    elif [ "$ISSUE_SOURCE" = "icode" ]; then
+        log "纯 iCode 模式，跳过 GitHub remote 校验 (remote: $remote_url)"
         else
             error "origin 不是 GitHub 仓库: $remote_url"
             exit 1
         fi
     fi
 
-    # 拉取 autoresearch 最新代码（continue 模式、本地模式、百度模式和 codeup 模式跳过，避免冲突）
-    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ] && [ "$ISSUE_SOURCE" != "codeup" ]; then
+    # 拉取 autoresearch 最新代码（continue 模式、本地模式、百度模式、codeup 模式和 icode 模式跳过，避免冲突）
+    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ] && [ "$ISSUE_SOURCE" != "codeup" ] && [ "$ISSUE_SOURCE" != "icode" ]; then
         local autoresearch_dir
         autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
         if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
@@ -957,7 +959,7 @@ check_dependencies() {
  missing=1
  fi
 
- # 百度模式依赖检查
+ # 百度模式依赖检查 (icafe-cli)
  if [ "$ISSUE_SOURCE" = "baidu" ]; then
  if ! command -v icafe-cli &> /dev/null; then
      error "icafe-cli 未安装 (baidu 模式必需，请参考 https://icode.baidu.com/articles/help/icafe-cli)"
@@ -971,8 +973,12 @@ check_dependencies() {
          log "icafe-cli 依赖检查通过"
      fi
  fi
+ fi
+
+ # 百度/iCode 模式依赖检查 (icode-cli)
+ if [ "$ISSUE_SOURCE" = "baidu" ] || [ "$ISSUE_SOURCE" = "icode" ]; then
  if ! command -v icode-cli &> /dev/null; then
-     error "icode-cli 未安装 (baidu 模式必需，请参考 https://icode.baidu.com/articles/help/icode-cli)"
+     error "icode-cli 未安装 (baidu/icode 模式必需，请参考 https://icode.baidu.com/articles/help/icode-cli)"
      missing=1
  else
      # 检查 icode-cli 登录状态
@@ -1079,13 +1085,33 @@ detect_issue_source_mode() {
         return 0
     fi
 
-    # 自动检测 baidu 模式: git remote 包含 icode.baidu.com 且 ICAFE_SPACE 已设置
-    if [ "$ISSUE_SOURCE" = "github" ] && [ -n "$ICAFE_SPACE" ]; then
+    # 自动检测 baidu/icode 模式: git remote 包含 icode.baidu.com
+    if [ "$ISSUE_SOURCE" = "github" ]; then
         local remote_url
         remote_url=$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || true)
         if echo "$remote_url" | grep -q 'icode\.baidu\.com'; then
+            if [ -z "$ICAFE_SPACE" ]; then
+                # 自动推导 ICAFE_SPACE: 从 remote path 提取 (baidu/sys-nccl/sys-skills → baidu-sys-nccl-sys-skills)
+                local repo_path
+                repo_path=$(echo "$remote_url" | sed -E 's|.*icode\.baidu\.com[:/][0-9]*/?||; s|\.git$||')
+                local auto_space
+                auto_space=$(echo "$repo_path" | tr '/' '-')
+                log "自动推导 iCafe 空间: $auto_space (从 remote path: $repo_path)"
+
+                # 如果 icafe-cli 可用，验证空间是否存在
+                if command -v icafe-cli &>/dev/null && \
+                   icafe-cli card query --space "$auto_space" --max-records 1 &>/dev/null 2>&1; then
+                    ICAFE_SPACE="$auto_space"
+                    log "iCafe 空间验证通过: $ICAFE_SPACE"
+                else
+                    # icafe-cli 不可用或空间不存在 → 纯 iCode 模式
+                    ISSUE_SOURCE="icode"
+                    log "纯 iCode 模式 (iCafe 空间 $auto_space 不可用或 icafe-cli 不可用)"
+                    return 0
+                fi
+            fi
             ISSUE_SOURCE="baidu"
-            log "百度 iCafe 模式 (自动检测: remote 含 icode.baidu.com 且 ICAFE_SPACE 已设置, 空间: $ICAFE_SPACE)"
+            log "百度 iCafe 模式 (自动检测: remote 含 icode.baidu.com, 空间: $ICAFE_SPACE)"
             return 0
         fi
     fi
@@ -1379,6 +1405,14 @@ get_issue_info() {
         log "Issue 标题: $ISSUE_TITLE"
         log "Issue 标签: ${ISSUE_LABELS:-无} (本地模式无标签)"
         return 0
+    fi
+
+    # icode 模式不能回退到 GitHub
+    if [ "$ISSUE_SOURCE" = "icode" ]; then
+        error "无法获取 Issue #$issue_number: iCode 模式需要本地 Issue 文件"
+        error "提示: 请在 .autoresearch/issues/ 目录下放置 issue-NNN-xxx.md 文件"
+        error "提示: 或使用 --issue-source=baidu --space=<prefixCode> 启用 iCafe 卡片模式"
+        exit 1
     fi
 
     # 回退到 GitHub
@@ -2996,6 +3030,9 @@ elif [ "$ISSUE_SOURCE" = "baidu" ]; then
 elif [ "$ISSUE_SOURCE" = "codeup" ]; then
     ISSUE_REF="阿里云效 Codeup Issue #$ISSUE_NUMBER (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID)"
     log_console "📂 Issue 来源: 阿里云效 Codeup (组织: $CODEUP_ORG_ID, 仓库: $CODEUP_REPO_ID, Issue: #$ISSUE_NUMBER)"
+elif [ "$ISSUE_SOURCE" = "icode" ]; then
+    ISSUE_REF="iCode Issue #$ISSUE_NUMBER"
+    log_console "📂 Issue 来源: iCode (Issue: #$ISSUE_NUMBER)"
 else
     ISSUE_REF="GitHub Issue #$ISSUE_NUMBER"
 fi
@@ -3519,6 +3556,8 @@ if check_score_passed "$FINAL_SCORE"; then
     log_console ""
     if [ "$ISSUE_SOURCE" = "local" ]; then
         log_console "📦 本地模式: 提交更改并记录结果..."
+    elif [ "$ISSUE_SOURCE" = "icode" ]; then
+        log_console "📦 iCode 模式: 提交更改并创建 CR..."
     else
         log_console "📦 自动提交 PR 并合并..."
     fi
@@ -3544,6 +3583,13 @@ $FINAL_REVIEW_REPORT"
             # 自己生成 Change-Id 放首行，避免 commit-msg hook 追加到末尾时前面内容过长导致格式问题
             _change_id="I$(echo "$ISSUE_NUMBER$(date +%s%N)$$" | git hash-object --stdin 2>/dev/null || echo "$(date +%s)$$")"
             COMMIT_SUMMARY="$ICAFE_SPACE-$ISSUE_NUMBER [$ICAFE_CARD_TYPE] score=$FINAL_SCORE iter=$ITERATION"
+            COMMIT_MSG="Change-Id: $_change_id
+
+$COMMIT_SUMMARY"
+        elif [ "$ISSUE_SOURCE" = "icode" ]; then
+            # 纯 iCode 模式: 同样用 Change-Id 格式
+            _change_id="I$(echo "$ISSUE_NUMBER$(date +%s%N)$$" | git hash-object --stdin 2>/dev/null || echo "$(date +%s)$$")"
+            COMMIT_SUMMARY="$ICODE_REPO-$ISSUE_NUMBER score=$FINAL_SCORE iter=$ITERATION"
             COMMIT_MSG="Change-Id: $_change_id
 
 $COMMIT_SUMMARY"
@@ -3860,6 +3906,91 @@ Closes #$ISSUE_NUMBER"
         [ -z "$main_branch" ] && main_branch="master"
         git checkout "$main_branch" 2>/dev/null || true
         log_console "🧹 已切回 $main_branch 分支"
+
+        SCRIPT_COMPLETED_NORMALLY=1
+        exit 0
+    fi
+
+    # ===== 纯 iCode 模式: push_cr/评分/合入（无 iCafe 卡片操作） =====
+    if [ "$ISSUE_SOURCE" = "icode" ]; then
+
+        # --- push_cr 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "score_cr" ] && [ "$SKIP_TO_PHASE" != "submit_cr" ]; then
+            log_console "iCode 模式: 推送代码并创建 CR..."
+
+            # 检测目标分支
+            target_branch=$(detect_icode_target_branch)
+            log "iCode CR 目标分支: $target_branch"
+
+            # 推送代码并创建 CR
+            push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1) || true
+            push_cr_exit=$?
+
+            if [ $push_cr_exit -ne 0 ]; then
+                log_console "⚠️ icode-cli git push_cr 失败: $push_cr_output"
+                record_final_result "$ISSUE_NUMBER" "push_cr_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
+
+            log "push_cr 输出: $push_cr_output"
+
+            # 从 push_cr 输出中解析 CR 编号
+            ICODE_CR_NUMBER=$(echo "$push_cr_output" | grep -oE '[0-9]+' | tail -1)
+
+            if [ -z "$ICODE_CR_NUMBER" ]; then
+                log_console "⚠️ 无法从 push_cr 输出中解析 CR 编号"
+                log_console "push_cr 输出: $push_cr_output"
+                record_final_result "$ISSUE_NUMBER" "cr_parse_failed" "$ITERATION" "$FINAL_SCORE"
+                SCRIPT_COMPLETED_NORMALLY=1
+                exit 1
+            fi
+
+            log_console "✅ CR 已创建: #$ICODE_CR_NUMBER"
+            set_phase "push_cr"
+            echo "$ICODE_CR_NUMBER" > "$WORK_DIR/.cr_number"
+        else
+            log_console "⏩ 跳过 push_cr，使用已有 CR #$ICODE_CR_NUMBER"
+        fi
+
+        # --- score_cr 阶段 ---
+        if [ "$SKIP_TO_PHASE" != "submit_cr" ]; then
+            # 评分 +2
+            log_console "评分 CR #$ICODE_CR_NUMBER (+2)..."
+            if ! icode-cli api set_review_score --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" --score 2 2>&1; then
+                log_console "⚠️ CR 评分失败，尝试继续合入"
+            fi
+            set_phase "score_cr"
+        fi
+
+        # --- submit_cr 阶段 ---
+        log_console "提交合入 CR #$ICODE_CR_NUMBER..."
+        submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1) || true
+        submit_exit=$?
+        if [ $submit_exit -ne 0 ]; then
+            log_console "⚠️ CR 合入失败: $submit_output"
+            log_console "CR 编号: #$ICODE_CR_NUMBER，请手动合入"
+        else
+            log_console "✅ CR #$ICODE_CR_NUMBER 已合入"
+        fi
+        set_phase "submit_cr"
+
+        # 清理：丢弃 feature 分支未提交的更改，切回主分支
+        cd "$PROJECT_ROOT"
+        git checkout -- . 2>/dev/null || true
+        git clean -fd .autoresearch/ 2>/dev/null || true
+        main_branch=$(git remote show origin 2>/dev/null | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+        [ -z "$main_branch" ] && main_branch="master"
+        git checkout "$main_branch" 2>/dev/null || true
+
+        log_console ""
+        log_console "  ╔══════════════════════════════════════╗"
+        log_console "  ║     iCode 模式处理完成！              ║"
+        log_console "  ╚══════════════════════════════════════╝"
+        log_console ""
+        log_console "✅ CR: #$ICODE_CR_NUMBER"
+        log_console "📊 评分: $FINAL_SCORE/100"
+        log_console "🔗 状态: 已合入"
 
         SCRIPT_COMPLETED_NORMALLY=1
         exit 0
