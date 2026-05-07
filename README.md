@@ -45,6 +45,12 @@ autoresearch/run.sh -p /path/to/project 10 16
 # 调整达标线为 90 分
 PASSING_SCORE=90 autoresearch/run.sh 10
 
+# 指定全局 model（所有 agent 使用 opus）
+AGENT_MODEL=opus autoresearch/run.sh 10
+
+# 单独指定某个 agent 的 model（优先级高于 AGENT_MODEL）
+AGENT_MODEL=opus AGENT_MODEL_CLAUDE=sonnet autoresearch/run.sh 10
+
 # 指定启用的 agents 及顺序（首个 agent 做初始实现）
 autoresearch/run.sh -a claude,codex 10
 
@@ -89,7 +95,7 @@ which opencode          # OpenCode CLI
 |------|------|
 | **GitHub Issue / 本地 Issue / 百度 iCafe / 阿里云效 Codeup** | 触发输入 |
 | **run.sh** | 核心运行器 |
-| **Claude / Codex / OpenCode** | 三个 Agent 轮转审核 |
+| **Claude / Codex / OpenCode / Claude-Mimo** | Agent 轮转审核 |
 | **Score ≥ 85?** | 评分门控 |
 | **PASS** | 自动创建 PR → 合并 → 关闭 Issue |
 | **FAIL** | 进入下一轮迭代修复 |
@@ -342,6 +348,7 @@ iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 
 ├── agents/
 │   ├── codex.md          # 自定义 Codex 指令
 │   ├── claude.md         # 自定义 Claude 指令
+│   ├── claude-mimo.md    # 自定义 Claude-Mimo 指令（不设则 fallback 到 claude.md）
 │   └── opencode.md       # 自定义 OpenCode 指令
 ├── issues/               # 本地 Issue 文件（issue-NNN-描述.md）
 ├── program.md            # 自定义实现规则与约束
@@ -361,6 +368,11 @@ iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 
 | `--space=<prefixCode>` | - | iCafe 空间前缀代码（baidu 模式必需） |
 | `--target-branch=<name>` | 自动检测 | iCode CR 目标分支 |
 | `PASSING_SCORE` | 85 | 达标评分线（百分制） |
+| `AGENT_MODEL` | - | 全局默认 model（如 sonnet, opus, o3），不设则用 CLI 默认 |
+| `AGENT_MODEL_CLAUDE` | - | Claude 专用 model（优先级高于 AGENT_MODEL） |
+| `AGENT_MODEL_CODEX` | - | Codex 专用 model |
+| `AGENT_MODEL_OPENCODE` | - | OpenCode 专用 model |
+| `AGENT_MODEL_CLAUDE_MIMO` | - | Claude-Mimo 专用 model |
 | `MAX_CONSECUTIVE_FAILURES` | 3 | 连续失败停止阈值 |
 | `MAX_RETRIES` | 5 | 单次 agent 调用重试次数 |
 

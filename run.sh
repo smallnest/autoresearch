@@ -18,6 +18,11 @@
 #
 # 环境变量配置:
 # AGENT_TIMEOUT: agent 调用超时秒数 (默认: 600)
+# AGENT_MODEL: 全局默认 model (如 sonnet, opus, o3)，不设则用 CLI 默认
+# AGENT_MODEL_CLAUDE: Claude 专用 model (优先级高于 AGENT_MODEL)
+# AGENT_MODEL_CODEX: Codex 专用 model
+# AGENT_MODEL_OPENCODE: OpenCode 专用 model
+# AGENT_MODEL_CLAUDE_MIMO: Claude-Mimo 专用 model
 # UI_VERIFY_ENABLED: 是否启用 UI 验证 (默认: yes)
 # UI_VERIFY_TIMEOUT: dev server 等待超时秒数 (默认: 60)
 # UI_DEV_PORT: dev server 端口 (默认自动检测或使用 3000)
@@ -30,6 +35,7 @@
 #   在项目根目录创建 .autoresearch/ 目录，可以放置:
 #   - .autoresearch/agents/codex.md     自定义 Codex 指令
 #   - .autoresearch/agents/claude.md    自定义 Claude 指令
+#   - .autoresearch/agents/claude-mimo.md 自定义 Claude-Mimo 指令
 #   - .autoresearch/agents/opencode.md  自定义 OpenCode 指令
 #   - .autoresearch/program.md          自定义实现规则与约束
 
@@ -57,6 +63,34 @@ CONTEXT_COMPRESS_THRESHOLD=${CONTEXT_COMPRESS_THRESHOLD:-150000}
 CONTEXT_KEEP_RECENT=${CONTEXT_KEEP_RECENT:-3}
 AGENT_TIMEOUT=${AGENT_TIMEOUT:-600}
 PROMPT_TRIMMED=0  # 上下文溢出后的裁剪级别 (0=无, 1=轻度, 2=中度, 3=重度)
+
+# 获取 agent 的 model 参数（返回空字符串表示使用 CLI 默认）
+# 优先级: AGENT_MODEL_<UPPER_NAME> > AGENT_MODEL > 空
+get_agent_model() {
+    local agent_name=$1
+    local upper_name
+    upper_name=$(echo "$agent_name" | tr '[:lower:]-' '[:upper:]_')
+    local per_agent_var="AGENT_MODEL_${upper_name}"
+    if [ -n "${!per_agent_var}" ]; then
+        echo "${!per_agent_var}"
+        return
+    fi
+    if [ -n "$AGENT_MODEL" ]; then
+        echo "$AGENT_MODEL"
+        return
+    fi
+    echo ""
+}
+
+# 构建 agent 的 --model 参数（仅在指定了 model 时追加）
+agent_model_flag() {
+    local agent_name=$1
+    local model
+    model=$(get_agent_model "$agent_name")
+    if [ -n "$model" ]; then
+        echo "--model $model"
+    fi
+}
 
 # 脚本所在目录（用于查找默认 agents 配置和 program.md）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -693,13 +727,13 @@ run_with_retry() {
         start_spinner "$agent 正在工作中..."
 
         if [ "$agent" = "codex" ]; then
-            timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" codex exec --full-auto $(agent_model_flag "$agent") "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         elif [ "$agent" = "opencode" ]; then
-            timeout_wrapper "$AGENT_TIMEOUT" opencode run --dangerously-skip-permissions "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" opencode run --dangerously-skip-permissions $(agent_model_flag "$agent") "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         elif [ "$agent" = "claude-mimo" ]; then
-            timeout_wrapper "$AGENT_TIMEOUT" "$HOME/bin/claude-mimo" -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" "$HOME/bin/claude-mimo" -p "$prompt" --dangerously-skip-permissions $(agent_model_flag "$agent") > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         else
-            timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+            timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions $(agent_model_flag "$agent") > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         fi
 
         # 停止等待动画
@@ -834,6 +868,11 @@ usage() {
     echo "配置 (环境变量):"
     echo "  PASSING_SCORE=85              达标评分线 (百分制)"
     echo "  AGENT_TIMEOUT=600             agent 调用超时秒数"
+    echo "  AGENT_MODEL=                  全局默认 model (如 sonnet, opus, o3)"
+    echo "  AGENT_MODEL_CLAUDE=           Claude 专用 model (优先级高于 AGENT_MODEL)"
+    echo "  AGENT_MODEL_CODEX=            Codex 专用 model"
+    echo "  AGENT_MODEL_OPENCODE=         OpenCode 专用 model"
+    echo "  AGENT_MODEL_CLAUDE_MIMO=      Claude-Mimo 专用 model"
     echo "  MAX_CONSECUTIVE_FAILURES=3    连续失败最大次数"
     echo "  MAX_CONTEXT_RETRIES=3         上下文溢出自动交接最大次数"
     echo "  CONTEXT_COMPRESS_THRESHOLD=150000  Prompt token 估算阈值（超过则压缩）"
@@ -842,6 +881,7 @@ usage() {
     echo "自定义配置文件 (放在项目目录 .autoresearch/ 下):"
     echo "  agents/codex.md              Codex 指令"
     echo "  agents/claude.md             Claude 指令"
+    echo "  agents/claude-mimo.md        Claude-Mimo 指令 (fallback: claude.md)"
     echo "  agents/opencode.md           OpenCode 指令"
     echo "  program.md                   实现规则与约束"
     echo ""
@@ -1550,6 +1590,21 @@ get_agent_instructions() {
     if [ -f "$default_agent" ]; then
         echo "$default_agent"
         return
+    fi
+
+    # Fallback: for derived agents (e.g. claude-mimo -> claude), strip suffix after last hyphen
+    if [[ "$agent_name" == *-* ]]; then
+        local base_name="${agent_name%-*}"
+        local project_base="$PROJECT_ROOT/.autoresearch/agents/$base_name.md"
+        if [ -f "$project_base" ]; then
+            echo "$project_base"
+            return
+        fi
+        local default_base="$SCRIPT_DIR/agents/$base_name.md"
+        if [ -f "$default_base" ]; then
+            echo "$default_base"
+            return
+        fi
     fi
 
     echo ""
