@@ -79,6 +79,7 @@ curl --version          # 阿里云效 Codeup 模式需要 curl
 which claude            # Claude Code CLI
 which codex             # OpenAI Codex CLI
 which opencode          # OpenCode CLI
+which deepseek-tui      # DeepSeek CLI (npm install -g deepseek-tui)
 ```
 
 项目需有对应语言的构建工具（Go/Node/Python/Rust/Java）。
@@ -95,7 +96,7 @@ which opencode          # OpenCode CLI
 |------|------|
 | **GitHub Issue / 本地 Issue / 百度 iCafe / 阿里云效 Codeup** | 触发输入 |
 | **run.sh** | 核心运行器 |
-| **Claude / Codex / OpenCode / Claude-Mimo** | Agent 轮转审核 |
+| **Claude / Codex / OpenCode / Claude-Mimo / DeepSeek** | Agent 轮转审核 |
 | **Score ≥ 85?** | 评分门控 |
 | **PASS** | 自动创建 PR → 合并 → 关闭 Issue |
 | **FAIL** | 进入下一轮迭代修复 |
@@ -373,6 +374,7 @@ iCafe 卡片 → Agent 实现 → 轮转审核+修复 → icode-cli push_cr → 
 | `AGENT_MODEL_CODEX` | - | Codex 专用 model |
 | `AGENT_MODEL_OPENCODE` | - | OpenCode 专用 model |
 | `AGENT_MODEL_CLAUDE_MIMO` | - | Claude-Mimo 专用 model |
+| `AGENT_MODEL_DEEPSEEK` | - | DeepSeek 专用 model |
 | `MAX_CONSECUTIVE_FAILURES` | 3 | 连续失败停止阈值 |
 | `MAX_RETRIES` | 5 | 单次 agent 调用重试次数 |
 

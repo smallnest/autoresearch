@@ -85,6 +85,7 @@ Agents are external CLIs called via `run_with_retry()` with exponential backoff:
 - **Claude**: `claude -p "$prompt" --dangerously-skip-permissions`
 - **Codex**: `codex exec --full-auto "$prompt"`
 - **OpenCode**: `opencode run "$prompt"`
+- **DeepSeek**: `deepseek-tui --yolo -p "$prompt"`
 
 ### Prompt Assembly
 

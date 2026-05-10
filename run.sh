@@ -23,6 +23,7 @@
 # AGENT_MODEL_CODEX: Codex 专用 model
 # AGENT_MODEL_OPENCODE: OpenCode 专用 model
 # AGENT_MODEL_CLAUDE_MIMO: Claude-Mimo 专用 model
+# AGENT_MODEL_DEEPSEEK: DeepSeek 专用 model
 # UI_VERIFY_ENABLED: 是否启用 UI 验证 (默认: yes)
 # UI_VERIFY_TIMEOUT: dev server 等待超时秒数 (默认: 60)
 # UI_DEV_PORT: dev server 端口 (默认自动检测或使用 3000)
@@ -37,6 +38,7 @@
 #   - .autoresearch/agents/claude.md    自定义 Claude 指令
 #   - .autoresearch/agents/claude-mimo.md 自定义 Claude-Mimo 指令
 #   - .autoresearch/agents/opencode.md  自定义 OpenCode 指令
+#   - .autoresearch/agents/deepseek.md 自定义 DeepSeek 指令
 #   - .autoresearch/program.md          自定义实现规则与约束
 
 set -e
@@ -732,6 +734,8 @@ run_with_retry() {
             timeout_wrapper "$AGENT_TIMEOUT" opencode run --dangerously-skip-permissions $(agent_model_flag "$agent") "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         elif [ "$agent" = "claude-mimo" ]; then
             timeout_wrapper "$AGENT_TIMEOUT" "$HOME/bin/claude-mimo" -p "$prompt" --dangerously-skip-permissions $(agent_model_flag "$agent") > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
+        elif [ "$agent" = "deepseek" ]; then
+            timeout_wrapper "$AGENT_TIMEOUT" deepseek-tui --yolo -p "$prompt" > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         else
             timeout_wrapper "$AGENT_TIMEOUT" claude -p "$prompt" --dangerously-skip-permissions $(agent_model_flag "$agent") > "$log_file" 2>&1 && exit_code=0 || exit_code=$?
         fi
@@ -873,6 +877,7 @@ usage() {
     echo "  AGENT_MODEL_CODEX=            Codex 专用 model"
     echo "  AGENT_MODEL_OPENCODE=         OpenCode 专用 model"
     echo "  AGENT_MODEL_CLAUDE_MIMO=      Claude-Mimo 专用 model"
+    echo "  AGENT_MODEL_DEEPSEEK=        DeepSeek 专用 model"
     echo "  MAX_CONSECUTIVE_FAILURES=3    连续失败最大次数"
     echo "  MAX_CONTEXT_RETRIES=3         上下文溢出自动交接最大次数"
     echo "  CONTEXT_COMPRESS_THRESHOLD=150000  Prompt token 估算阈值（超过则压缩）"
@@ -883,6 +888,7 @@ usage() {
     echo "  agents/claude.md             Claude 指令"
     echo "  agents/claude-mimo.md        Claude-Mimo 指令 (fallback: claude.md)"
     echo "  agents/opencode.md           OpenCode 指令"
+    echo "  agents/deepseek.md           DeepSeek 指令"
     echo "  program.md                   实现规则与约束"
     echo ""
     echo "示例:"
@@ -2493,6 +2499,204 @@ $codex_instructions
     echo "- 审核评分 (Codex): $score/100" >> "$WORK_DIR/log.md"
 
     log_console "审核评分: $score/100"
+
+    echo "$review_result"
+    echo "$score" > "$WORK_DIR/.last_score"
+    return 0
+}
+
+run_deepseek() {
+    local issue_number=$1
+    local iteration=$2
+    local previous_feedback=$3
+
+    log "迭代 $iteration: deepseek 实现..."
+
+    local ds_instructions_file
+    ds_instructions_file=$(get_agent_instructions "deepseek")
+
+    local ds_instructions=""
+    if [ -n "$ds_instructions_file" ]; then
+        ds_instructions=$(cat "$ds_instructions_file")
+        log "使用指令文件: $ds_instructions_file"
+    fi
+
+    local program_instructions
+    program_instructions=$(get_program_instructions)
+
+    local progress_section
+    progress_section=$(get_progress_section)
+
+    local prompt
+    local subtask_section
+    subtask_section=$(get_subtask_section)
+
+    if [ -z "$previous_feedback" ]; then
+        prompt="实现 $ISSUE_REF
+
+项目路径: $PROJECT_ROOT
+项目语言: $(detect_language)
+Issue 标题: $ISSUE_TITLE
+Issue 内容: $ISSUE_BODY
+
+迭代次数: $iteration
+$subtask_section
+$progress_section
+
+---
+请按以下步骤执行:
+
+## 第一步：制定计划
+分析 Issue 需求，制定实现计划，拆解为具体的 tasks/todos，输出任务清单。
+
+## 第二步：逐步实现
+按照任务清单逐步实现，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+实现完成后，在输出末尾添加 ## Learnings 部分，总结本次迭代中发现的关键模式、踩过的坑和可复用的经验。
+
+---
+$program_instructions
+
+$ds_instructions
+"
+    else
+        prompt="根据审核反馈改进 Issue #$issue_number 的实现
+
+项目路径: $PROJECT_ROOT
+项目语言: $(detect_language)
+Issue 标题: $ISSUE_TITLE
+
+审核反馈:
+$previous_feedback
+$subtask_section
+$progress_section
+
+---
+请按以下步骤执行:
+
+## 第一步：制定计划
+分析审核反馈，制定修复计划，拆解为具体的 tasks/todos，输出任务清单。
+
+## 第二步：逐步实现
+按照任务清单逐步修复，每完成一个任务标记为已完成。
+
+## 第三步：总结经验
+修复完成后，在输出末尾添加 ## Learnings 部分，总结本次修复中发现的关键模式和经验。
+
+---
+$ds_instructions
+"
+    fi
+
+    local log_file="$WORK_DIR/iteration-$iteration-deepseek.log"
+
+    prompt=$(apply_prompt_trimming "$prompt")
+    check_and_compress_prompt "$prompt" "$WORK_DIR"
+    cd "$PROJECT_ROOT"
+    local agent_ret=0
+    run_with_retry deepseek "$prompt" "$log_file" || agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
+        return 1
+    fi
+
+    echo "" >> "$WORK_DIR/log.md"
+    echo "### 迭代 $iteration - DeepSeek (实现)" >> "$WORK_DIR/log.md"
+    echo "" >> "$WORK_DIR/log.md"
+    echo "详见: [iteration-$iteration-deepseek.log](./iteration-$iteration-deepseek.log)" >> "$WORK_DIR/log.md"
+    return 0
+}
+
+run_deepseek_review() {
+    local issue_number=$1
+    local iteration=$2
+
+    log "迭代 $iteration: deepseek 审核..."
+
+    local ds_instructions_file
+    ds_instructions_file=$(get_agent_instructions "deepseek")
+
+    local ds_instructions=""
+    if [ -n "$ds_instructions_file" ]; then
+        ds_instructions=$(cat "$ds_instructions_file")
+        log "使用指令文件: $ds_instructions_file"
+    fi
+
+    local subtask_review_section
+    subtask_review_section=$(get_subtask_review_section)
+
+    local prompt="审核 Issue #$issue_number 的实现
+
+项目路径: $PROJECT_ROOT
+项目语言: $(detect_language)
+Issue 标题: $ISSUE_TITLE
+
+$subtask_review_section
+---
+请按照以下指令执行审核。
+
+评分格式要求: 必须在审核报告的总体评价中使用 **评分: X/100** 格式输出分数，其中 X 为 0-100 的整数。
+
+评分维度与权重:
+- 正确性 (35%): 功能是否符合需求、边界情况处理、错误处理
+- 测试质量 (25%): 核心逻辑覆盖、边界测试、错误路径测试
+- 代码质量 (20%): 命名清晰、结构清晰、遵循项目规范
+- 安全性 (10%): 输入验证、无注入风险、无敏感信息泄露
+- 性能 (10%): 无明显性能问题、无不必要的内存分配
+
+评分标准: 90-100 优秀 | 85-89 良好(达标) | 70-84 及格偏上 | 50-69 及格 | 30-49 较差 | 0-29 不合格
+注意: 评分 ≥ 85 才算达标。
+$(get_progress_section)
+$ds_instructions
+"
+
+    local log_file="$WORK_DIR/iteration-$iteration-deepseek-review.log"
+
+    prompt=$(apply_prompt_trimming "$prompt")
+    check_and_compress_prompt "$prompt" "$WORK_DIR"
+    cd "$PROJECT_ROOT"
+    local agent_ret=0
+    run_with_retry deepseek "$prompt" "$log_file" || agent_ret=$?
+    if [ $agent_ret -eq 2 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 2
+    elif [ $agent_ret -ne 0 ]; then
+        echo "0" > "$WORK_DIR/.last_score"
+        return 1
+    fi
+
+    local score=0
+    local review_result
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        log "警告: 审核输出文件不存在或为空，默认评分 50"
+        review_result=""
+        score=50
+    else
+        review_result=$(cat "$log_file")
+
+        local sentinel
+        sentinel=$(check_sentinel "$review_result")
+        if [ "$sentinel" = "pass" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:PASS，直接判定通过"
+            score=100
+        elif [ "$sentinel" = "fail" ]; then
+            log_console "Sentinel 通道: 检测到 AUTORESEARCH_RESULT:FAIL，直接判定不通过"
+            score=0
+        else
+            score=$(extract_score "$review_result")
+
+            if [ -z "$score" ] || [ "$score" = "0" ]; then
+                log "警告: 无法从审核结果中提取评分，默认为 50"
+                score=50
+            fi
+        fi
+    fi
+
+    echo "- 审核评分 (DeepSeek): $score/100" >> "$WORK_DIR/log.md"
+
+    log_console "审核评分 (DeepSeek): $score/100"
 
     echo "$review_result"
     echo "$score" > "$WORK_DIR/.last_score"
