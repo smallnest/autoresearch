@@ -3895,9 +3895,8 @@ Closes #$ISSUE_NUMBER"
             target_branch=$(detect_icode_target_branch)
             log "iCode CR 目标分支: $target_branch"
 
-            # 推送代码并创建 CR（用 || true 避免 set -e 提前退出，跳过错误处理）
-            push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1) || true
-            push_cr_exit=$?
+            # 推送代码并创建 CR（捕获退出码，不影响 set -e）
+            push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1) && push_cr_exit=0 || push_cr_exit=$?
 
             if [ $push_cr_exit -ne 0 ]; then
                 log_console "⚠️ icode-cli git push_cr 失败: $push_cr_output"
@@ -3940,8 +3939,7 @@ Closes #$ISSUE_NUMBER"
         if [ "$SKIP_TO_PHASE" != "close_card" ]; then
             # 提交合入
             log_console "提交合入 CR #$ICODE_CR_NUMBER..."
-            submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1) || true
-            submit_exit=$?
+            submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1) && submit_exit=0 || submit_exit=$?
 
             if [ $submit_exit -ne 0 ]; then
                 log_console "⚠️ CR 合入失败: $submit_output"
@@ -4112,8 +4110,7 @@ Closes #$ISSUE_NUMBER"
         # --- 合入 MR 阶段 ---
         if [ "$SKIP_TO_PHASE" != "close_issue" ]; then
             log_console "合入 Codeup MR #$CODEUP_MR_IID..."
-            merge_output=$(codeup_cli merge_mr "$CODEUP_REPO_ID" "$CODEUP_MR_IID" 2>&1) || true
-            merge_exit=$?
+            merge_output=$(codeup_cli merge_mr "$CODEUP_REPO_ID" "$CODEUP_MR_IID" 2>&1) && merge_exit=0 || merge_exit=$?
 
             if [ $merge_exit -ne 0 ] || echo "$merge_output" | grep -q '"error"'; then
                 log_console "⚠️ Codeup MR 合入失败: $merge_output"
@@ -4181,9 +4178,8 @@ Closes #$ISSUE_NUMBER"
             target_branch=$(detect_icode_target_branch)
             log "iCode CR 目标分支: $target_branch"
 
-            # 推送代码并创建 CR
-            push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1) || true
-            push_cr_exit=$?
+            # 推送代码并创建 CR（捕获退出码，不影响 set -e）
+            push_cr_output=$(icode-cli git push_cr --branch "$target_branch" 2>&1) && push_cr_exit=0 || push_cr_exit=$?
 
             if [ $push_cr_exit -ne 0 ]; then
                 log_console "⚠️ icode-cli git push_cr 失败: $push_cr_output"
@@ -4224,8 +4220,7 @@ Closes #$ISSUE_NUMBER"
 
         # --- submit_cr 阶段 ---
         log_console "提交合入 CR #$ICODE_CR_NUMBER..."
-        submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1) || true
-        submit_exit=$?
+        submit_output=$(icode-cli api submit_review --repo "$ICODE_REPO" -n "$ICODE_CR_NUMBER" 2>&1) && submit_exit=0 || submit_exit=$?
         if [ $submit_exit -ne 0 ]; then
             log_console "⚠️ CR 合入失败: $submit_output"
             log_console "CR 编号: #$ICODE_CR_NUMBER，请手动合入"
