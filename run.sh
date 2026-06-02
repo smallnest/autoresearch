@@ -151,7 +151,7 @@ CODEUP_TARGET_BRANCH="${CODEUP_TARGET_BRANCH:-}"
 ICODE_REPO=""
 
 # 共享库：核心逻辑
-for _lib in scoring context progress subtask prompt ui_verify; do
+for _lib in scoring context progress subtask prompt ui_verify gitea linear; do
     _lib_path="$SCRIPT_DIR/lib/${_lib}.sh"
     if [ ! -f "$_lib_path" ]; then
         echo "ERROR: 缺少库文件: $_lib_path" >&2
@@ -858,7 +858,7 @@ usage() {
     echo "  --no-ui-verify   禁用 UI 验证 (默认启用)"
     echo "  --no-hard-gate   禁用硬门禁检查 (build/lint/test 预检, 默认启用)"
     echo "  --issues-dir=<path>  本地 Issue 目录 (启用本地模式，不使用 GitHub)"
-    echo "  --issue-source=<mode>  Issue 来源: github (默认) | local | baidu | codeup | icode"
+    echo "  --issue-source=<mode>  Issue 来源: github (默认) | gitea | linear | local | baidu | codeup | icode"
     echo "  --space=<prefixCode>   iCafe 空间前缀代码 (baidu 模式必需，也可用 ICAFE_SPACE 环境变量)"
     echo "  --target-branch=<name> iCode CR 目标分支 (默认: 自动检测远程 HEAD 分支，回退到 master)"
     echo "  --codeup-ak-id=<ak_id>   阿里云 Access Key ID (codeup 模式必需，也可用 CODEUP_AK_ID 环境变量)"
@@ -963,7 +963,7 @@ check_project() {
     fi
 
     # 拉取 autoresearch 最新代码（continue 模式、本地模式、百度模式、codeup 模式和 icode 模式跳过，避免冲突）
-    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ] && [ "$ISSUE_SOURCE" != "codeup" ] && [ "$ISSUE_SOURCE" != "icode" ]; then
+    if [ $CONTINUE_MODE -eq 0 ] && [ "$ISSUE_SOURCE" != "local" ] && [ "$ISSUE_SOURCE" != "baidu" ] && [ "$ISSUE_SOURCE" != "codeup" ] && [ "$ISSUE_SOURCE" != "icode" ] && [ "$ISSUE_SOURCE" != "gitea" ] && [ "$ISSUE_SOURCE" != "linear" ]; then
         local autoresearch_dir
         autoresearch_dir="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || true)"
         if [ -n "$autoresearch_dir" ] && git -C "$autoresearch_dir" rev-parse --is-inside-work-tree &> /dev/null; then
@@ -1099,6 +1099,27 @@ check_dependencies() {
 
 # 检测 Issue 来源模式 (在 check_project 之前调用)
 detect_issue_source_mode() {
+    # 如果显式指定 linear 模式
+    if [ "$ISSUE_SOURCE" = "linear" ]; then
+        if [ -z "$LINEAR_API_KEY" ]; then
+            error "linear 模式需要设置 LINEAR_API_KEY 环境变量"
+            exit 1
+        fi
+        log "Linear 模式 (Issue: $ISSUE_NUMBER)"
+        return 0
+    fi
+
+    # 自动检测 Gitea 模式: git remote 包含 Gitea 实例地址 (GITEA_URL)
+    if [ "$ISSUE_SOURCE" = "github" ] && [ -n "$GITEA_URL" ]; then
+        local remote_url
+        remote_url=$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || true)
+        if is_gitea_remote "$remote_url"; then
+            ISSUE_SOURCE="gitea"
+            log "Gitea 模式 (自动检测: remote 匹配 ${GITEA_URL})"
+            return 0
+        fi
+    fi
+
     # 如果显式指定 baidu 模式
     if [ "$ISSUE_SOURCE" = "baidu" ]; then
         if [ -z "$ICAFE_SPACE" ]; then
@@ -1432,6 +1453,18 @@ get_issue_info() {
     local issue_number=$1
 
     log "获取 Issue #$issue_number 信息..."
+
+    # Linear 模式
+    if [ "$ISSUE_SOURCE" = "linear" ]; then
+        get_linear_issue_info "$issue_number"
+        return 0
+    fi
+
+    # Gitea 模式
+    if [ "$ISSUE_SOURCE" = "gitea" ]; then
+        get_gitea_issue_info "$issue_number"
+        return 0
+    fi
 
     # 百度 iCafe 模式
     if [ "$ISSUE_SOURCE" = "baidu" ]; then
@@ -4289,7 +4322,7 @@ $(jq -r '.subtasks[] | "- [\(.passes | if true then "x" else " " end)] \(.id): \
 "
     fi
 
-    PR_URL=$(gh pr create --title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" --body "$(cat <<EOF
+    _pr_body="$(cat <<EOF
 ## Summary
 - Implements #$ISSUE_NUMBER
 - Score: $FINAL_SCORE/100
@@ -4301,21 +4334,126 @@ $subtask_summary$ui_verify_summary
 
 Closes #$ISSUE_NUMBER
 EOF
-)" 2>&1)
+)"
+    _log_summary=""
+    [ -f "$WORK_DIR/log.md" ] && _log_summary=$(cat "$WORK_DIR/log.md")
 
-    if echo "$PR_URL" | grep -q "https://github.com"; then
-        PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-        log_console "✅ PR 已创建: $PR_URL"
-        set_phase "create_pr"
+    _finish_github_pr() {
+        # 切换回主分支
+        cd "$PROJECT_ROOT"
+        local mb
+        mb=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
+        [ -z "$mb" ] && mb="master"
+        local stashed=0
+        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+            log "检测到未提交的更改，暂存..."
+            git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null && stashed=1
+        fi
+        cleanup_merged_branch "$mb" "$BRANCH_NAME"
+        [ $stashed -eq 1 ] && { git stash pop 2>/dev/null || git stash drop 2>/dev/null || true; }
+    }
 
-        # 合并 PR（不删除本地分支，我们自己处理）
-        log_console "合并 PR #$PR_NUMBER..."
-        MERGE_OUTPUT=""
-        if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
-            log_console "⚠️ PR 合并失败，请手动处理"
-            log_console "PR URL: $PR_URL"
-            log "PR merge failed: $MERGE_OUTPUT"
-            cat >> "$WORK_DIR/log.md" << EOF
+    if [ "$ISSUE_SOURCE" = "gitea" ]; then
+        # ── Gitea PR 创建 + 合并 ──────────────────────────────────
+        if gitea_create_and_merge_pr \
+                "$ISSUE_NUMBER" "$ISSUE_TITLE" "$BRANCH_NAME" \
+                "$FINAL_SCORE" "$ITERATION" "$_pr_body"; then
+            _finish_github_pr
+            log_console "添加评论到 Gitea Issue #$ISSUE_NUMBER..."
+            gitea_comment_issue "$ISSUE_NUMBER" "$(cat <<EOF
+## 自动处理完成
+
+- **PR**: ${PR_URL:-N/A} (已合并)
+- **评分**: $FINAL_SCORE/100
+- **迭代次数**: $ITERATION
+- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[*]})
+
+${_log_summary}
+
+该 Issue 已由 autoresearch 自动实现、审核并合并。
+EOF
+)"
+            log_console "关闭 Gitea Issue #$ISSUE_NUMBER..."
+            gitea_close_issue "$ISSUE_NUMBER"
+            log_console ""
+            log_console "  ╔══════════════════════════════════════╗"
+            log_console "  ║      全部完成！Issue 已自动处理      ║"
+            log_console "  ╚══════════════════════════════════════╝"
+            log_console ""
+            log_console "✅ PR: ${PR_URL:-N/A}"
+            log_console "🔗 状态: 已合并并关闭"
+        else
+            log_console "⚠️ Gitea PR 创建失败"
+        fi
+
+    elif [ "$ISSUE_SOURCE" = "linear" ]; then
+        # ── Linear: PR 打到底层 git host，然后更新 Linear ticket ──
+        _linear_remote=$(git -C "$PROJECT_ROOT" remote get-url origin 2>/dev/null || true)
+        _linear_ok=0
+        if is_gitea_remote "$_linear_remote"; then
+            gitea_create_and_merge_pr \
+                "$ISSUE_NUMBER" "$ISSUE_TITLE" "$BRANCH_NAME" \
+                "$FINAL_SCORE" "$ITERATION" "$_pr_body" && _linear_ok=1
+        else
+            _gh_out=$(gh pr create \
+                --title "feat: ${ISSUE_TITLE} (${ISSUE_NUMBER})" \
+                --body "$_pr_body" 2>&1)
+            if echo "$_gh_out" | grep -q "https://github.com"; then
+                PR_URL="$_gh_out"
+                PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+                log_console "✅ PR 已创建: $PR_URL"
+                set_phase "create_pr"
+                gh pr merge "$PR_NUMBER" --merge 2>/dev/null \
+                    && log_console "✅ PR #${PR_NUMBER} 已合并" \
+                    || log_console "⚠️ PR 合并失败，请手动处理: $PR_URL"
+                _linear_ok=1
+            fi
+        fi
+        if [ "$_linear_ok" -eq 1 ]; then
+            _finish_github_pr
+            log_console "更新 Linear ticket ${ISSUE_NUMBER}..."
+            linear_comment_issue "$LINEAR_ISSUE_ID" "$(cat <<EOF
+## autoresearch 完成
+
+- **PR**: ${PR_URL:-N/A} (已合并)
+- **评分**: $FINAL_SCORE/100
+- **迭代次数**: $ITERATION
+- **agents**: ${AGENT_NAMES[*]}
+
+${_log_summary}
+EOF
+)"
+            linear_update_state "$LINEAR_ISSUE_ID" "$LINEAR_TEAM_KEY" "In Review"
+            log_console "✅ Linear ${ISSUE_NUMBER} 已移入 In Review"
+            log_console ""
+            log_console "  ╔══════════════════════════════════════╗"
+            log_console "  ║      全部完成！Issue 已自动处理      ║"
+            log_console "  ╚══════════════════════════════════════╝"
+            log_console ""
+            log_console "✅ PR: ${PR_URL:-N/A}"
+            log_console "🔗 Linear: ${ISSUE_NUMBER} -> In Review"
+        else
+            log_console "⚠️ PR 创建失败，Linear ticket 未更新"
+        fi
+        unset _linear_remote _linear_ok _gh_out
+
+    else
+        # ── GitHub PR 创建 + 合并 ─────────────────────────────────
+        PR_URL=$(gh pr create --title "feat: $ISSUE_TITLE (#$ISSUE_NUMBER)" \
+            --body "$_pr_body" 2>&1)
+
+        if echo "$PR_URL" | grep -q "https://github.com"; then
+            PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            log_console "✅ PR 已创建: $PR_URL"
+            set_phase "create_pr"
+
+            log_console "合并 PR #$PR_NUMBER..."
+            MERGE_OUTPUT=""
+            if ! MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+                log_console "⚠️ PR 合并失败，请手动处理"
+                log_console "PR URL: $PR_URL"
+                log "PR merge failed: $MERGE_OUTPUT"
+                cat >> "$WORK_DIR/log.md" << EOF
 
 ---
 
@@ -4330,67 +4468,42 @@ $MERGE_OUTPUT
 
 请手动合并: gh pr merge $PR_NUMBER --merge
 EOF
-        fi
-
-        # 切换回主分支前，先处理未提交的更改
-        cd "$PROJECT_ROOT"
-        main_branch=$(git remote show origin | grep 'HEAD branch' | cut -d':' -f2 | tr -d ' ')
-        [ -z "$main_branch" ] && main_branch="master"
-
-        # 切换回主分支前，如果有未提交的更改，先 stash
-        stashed=0
-        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-            log "检测到未提交的更改，暂存..."
-            if git stash push -m "autoresearch-temp-$(date +%s)" -- .autoresearch/ 2>/dev/null; then
-                stashed=1
             fi
-        fi
 
-        cleanup_merged_branch "$main_branch" "$BRANCH_NAME"
+            _finish_github_pr
 
-        # 恢复 stash（.autoresearch/ 为临时数据，恢复失败直接 drop）
-        if [ $stashed -eq 1 ]; then
-            if ! git stash pop 2>/dev/null; then
-                log "stash pop 失败（文件冲突），跳过恢复"
-                git stash drop 2>/dev/null || true
-            fi
-        fi
-
-        # 添加评论到 Issue（仅包含总结信息）
-        log_console "添加评论到 Issue #$ISSUE_NUMBER..."
-        log_summary=""
-        if [ -f "$WORK_DIR/log.md" ]; then
-            log_summary=$(cat "$WORK_DIR/log.md")
-        fi
-        gh issue comment "$ISSUE_NUMBER" --body "$(cat <<EOF
+            log_console "添加评论到 Issue #$ISSUE_NUMBER..."
+            gh issue comment "$ISSUE_NUMBER" --body "$(cat <<EOF
 ## 自动处理完成
 
 - **PR**: $PR_URL (已合并)
 - **评分**: $FINAL_SCORE/100
 - **迭代次数**: $ITERATION
-- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[@]})
+- **实现方式**: autoresearch 多 agent 迭代 (${AGENT_NAMES[*]})
 
-${log_summary}
+${_log_summary}
 
 该 Issue 已由 autoresearch 自动实现、审核并合并。
 EOF
 )" 2>/dev/null || log "警告: 添加评论失败"
 
-        # 关闭 Issue
-        log_console "关闭 Issue #$ISSUE_NUMBER..."
-        gh issue close "$ISSUE_NUMBER" --reason completed 2>/dev/null || log_console "⚠️ 关闭 Issue 失败 (可能已通过 PR 自动关闭)"
+            log_console "关闭 Issue #$ISSUE_NUMBER..."
+            gh issue close "$ISSUE_NUMBER" --reason completed 2>/dev/null \
+                || log_console "⚠️ 关闭 Issue 失败 (可能已通过 PR 自动关闭)"
 
-        log_console ""
-        log_console "  ╔══════════════════════════════════════╗"
-        log_console "  ║      全部完成！Issue 已自动处理      ║"
-        log_console "  ╚══════════════════════════════════════╝"
-        log_console ""
-        log_console "✅ PR: $PR_URL"
-        log_console "🔗 状态: 已合并并关闭"
-    else
-        log_console "⚠️ PR 创建失败或已存在"
-        log_console "$PR_URL"
+            log_console ""
+            log_console "  ╔══════════════════════════════════════╗"
+            log_console "  ║      全部完成！Issue 已自动处理      ║"
+            log_console "  ╚══════════════════════════════════════╝"
+            log_console ""
+            log_console "✅ PR: $PR_URL"
+            log_console "🔗 状态: 已合并并关闭"
+        else
+            log_console "⚠️ PR 创建失败或已存在"
+            log_console "$PR_URL"
+        fi
     fi
+    unset _pr_body _log_summary
 
     SCRIPT_COMPLETED_NORMALLY=1
     exit 0
